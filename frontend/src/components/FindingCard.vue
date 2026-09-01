@@ -4,6 +4,7 @@
 import { mdiCheck, mdiChevronDown, mdiChevronUp, mdiClose, mdiPencilOutline } from '@mdi/js'
 import { ref } from 'vue'
 import { api } from '../api'
+import { timestamp } from '../format'
 import { TYPE_LABELS } from '../labels'
 import type { FindingData } from '../types'
 import CzButton from './ui/CzButton.vue'
@@ -48,9 +49,6 @@ async function apply(payload: { status?: string; title?: string; summary?: strin
 	}
 }
 
-function formatTime(seconds: number): string {
-	return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
-}
 </script>
 
 <template>
@@ -118,7 +116,7 @@ function formatTime(seconds: number): string {
 
 			<div v-if="showEvidence" class="cz-convo" style="margin-top: 10px; max-height: 260px">
 				<div v-for="evidence in finding.evidence" :key="evidence.segment_id" class="cz-convo__seg cz-convo__seg--s1">
-					<span class="cz-convo__time">{{ formatTime(evidence.start) }}</span>
+					<span class="cz-convo__time">{{ timestamp(evidence.start) }}</span>
 					<div class="cz-convo__body">
 						<span class="cz-convo__speaker">{{ evidence.speaker || 'SPEAKER' }}</span>
 						<p class="cz-convo__text">“{{ evidence.text }}”</p>

@@ -61,6 +61,12 @@ starts** — see "Consent" below.
   and deleting an assembly deletes its audio, transcripts, live captions and
   exports with it. Deleting one table's transcript deletes that table's live
   captions too — the same speech in a second file.
+* Deleting audio, whether by hand or by the retention sweep, also deletes that
+  assembly's **export archives**. An audio bundle or session export contains a
+  complete second copy of the recordings, and nothing but full assembly
+  deletion used to reclaim one — so the sweep could report the audio purged
+  while an entire copy of it remained on disk. Archives nobody collected are
+  also swept after an hour.
 * **Not implemented:** there is no automatic deletion of transcripts or
   findings, and no data-subject-request tooling. Both are manual today.
 
@@ -70,7 +76,12 @@ Before a table can record, the recorder shows an information screen naming the
 transcription engine, whether that engine is an outside service, how long audio
 is kept, and that speakers are labelled only as "Speaker 1", "Speaker 2". The
 table confirms before recording becomes available. The text is generated from
-the server's live configuration, so it cannot drift from what the app does.
+the server's live configuration, so it cannot drift from what the app does, and
+it is shown in the assembly's own language rather than in English.
+
+The screen offers a decline as well as a confirmation. A screen with only one
+button is not a consent step, and a table with no way to say no previously had
+to work that out by walking away from the phone.
 
 This is an *information and confirmation* step at the table. It is **not** a
 per-individual consent record: Citizens does not store who agreed. If your

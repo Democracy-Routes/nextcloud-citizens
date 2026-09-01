@@ -10,8 +10,9 @@ import {
 	mdiImageOutline,
 	mdiMicrophoneOutline,
 } from '@mdi/js'
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, BASE } from '../api'
+import { describeError } from '../errors'
 import type { ProvidersSummary, SttProvider } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
@@ -151,21 +152,47 @@ async function reload(): Promise<void> {
 	orgName.value = summary.value.organization_name
 	retentionDays.value = summary.value.audio_retention_days ?? 0
 	logoSet.value = summary.value.logo_set
+	// the baseline every later edit is compared against
+	saved.value = snapshot()
 }
 
 onMounted(async () => {
 	try {
 		await reload()
 	} catch (err) {
-		error.value = err instanceof Error ? err.message : String(err)
+		error.value = describeError(err).message
 	}
 })
 
-async function save(): Promise<void> {
-	busy.value = true
-	error.value = ''
-	try {
-		const payload: Record<string, unknown> = {
+/** Warn before a reload or a close throws away unsaved settings.
+ *
+ * Not a substitute for noticing the button says "Save settings" — it is the
+ * backstop for the tab that is currently hidden. */
+function warnIfDirty(event: BeforeUnloadEvent): void {
+	if (!dirty.value) return
+	event.preventDefault()
+	event.returnValue = ''
+}
+
+onMounted(() => window.addEventListener('beforeunload', warnIfDirty))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', warnIfDirty))
+
+/** What the form held when it was last loaded or saved.
+ *
+ * One "Save settings" button persists every field on every tab, and the tabs
+ * are v-show — so an admin who came to change one Vosk URL also committed
+ * whatever was sitting on the AI tab, with nothing on screen saying so.
+ */
+const saved = ref('')
+
+function snapshot(): string {
+	return JSON.stringify(currentPayload())
+}
+
+const dirty = computed(() => saved.value !== '' && saved.value !== snapshot())
+
+function currentPayload(): Record<string, unknown> {
+	return {
 			stt_provider: sttProvider.value,
 			stt_live_enabled: liveEnabled.value,
 			stt_batch_enabled: batchEnabled.value,
@@ -197,7 +224,16 @@ async function save(): Promise<void> {
 			analysis_extra_instructions: analysisExtra.value.trim(),
 			organization_name: orgName.value.trim(),
 			audio_retention_days: Number(retentionDays.value) || 0,
-		}
+	}
+}
+
+async function save(): Promise<void> {
+	busy.value = true
+	error.value = ''
+	try {
+		const payload = currentPayload()
+		// secrets are only sent when actually retyped, so they are deliberately
+		// outside currentPayload() and therefore outside the dirty comparison
 		if (mistralKey.value) payload.mistral_api_key = mistralKey.value
 		if (deepgramKey.value) payload.deepgram_api_key = deepgramKey.value
 		if (whisperKey.value) payload.whisper_api_key = whisperKey.value
@@ -207,9 +243,10 @@ async function save(): Promise<void> {
 		deepgramKey.value = ''
 		whisperKey.value = ''
 		analysisKey.value = ''
+		saved.value = snapshot()
 		toast('Settings saved')
 	} catch (err) {
-		error.value = err instanceof Error ? err.message : String(err)
+		error.value = describeError(err).message
 	} finally {
 		busy.value = false
 	}
@@ -260,9 +297,18 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 				</p>
 			</div>
 			<CzButton variant="primary" :disabled="busy || !summary" @click="save">
-				{{ busy ? 'Saving…' : 'Save settings' }}
+				{{ busy ? 'Saving…' : dirty ? 'Save settings' : 'Saved' }}
 			</CzButton>
 		</div>
+
+		<!-- The tabs are v-show and one button commits all of them, so an admin
+		     who came to change a single Vosk URL also saves whatever is sitting
+		     on a tab they are not looking at. Saying so is cheaper than
+		     splitting the form, and it is the surprise that mattered. -->
+		<p v-if="dirty" class="cz-muted cz-text-sm" style="margin: 0 0 12px">
+			You have unsaved changes. Saving applies every setting on every tab,
+			not only this one.
+		</p>
 
 		<div v-if="error" class="cz-error">{{ error }}</div>
 		<CzSkeleton v-if="!summary && !error" :rows="3" :height="120" />

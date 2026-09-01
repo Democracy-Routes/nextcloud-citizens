@@ -50,6 +50,11 @@ that a human organizer reviews before anything is published.
 * **Institutional reports.** Branded PDF with an executive summary, points of
   consensus and divergence, and participation coverage — publishable back to the
   table phones so participants see their own outcome.
+* **The citizens' half is translated.** The phone recorder — including the
+  consent screen people tap before being recorded — is shown in the assembly's
+  own language, not the phone's, because it is a shared table device. English
+  and Italian today; a missing translation fails the build rather than
+  appearing on somebody's phone.
 * **Data you control.** Per-assembly Files tab to download, export or delete
   audio and transcripts at any time — and with a self-hosted Whisper server or
   Vosk, recordings never leave your infrastructure at all.

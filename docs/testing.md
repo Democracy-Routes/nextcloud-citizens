@@ -9,17 +9,48 @@ Testing is part of implementation, not a final phase (brief §55).
    chunk ordering/dedupe/checksums, provider normalization.
 2. **Integration** (`tests/integration/`, from Milestone 1): API flows against
    a real app instance with a temp SQLite DB and mocked providers.
-3. **Browser** (`tests/browser/`, Playwright, from Milestone 2): organizer and
+3. **Frontend** (`tests/frontend/`, vitest + happy-dom): components and the
+   logic inside them, mounted without a browser — the wake lock, the polling
+   primitive, error mapping, confirm semantics, the i18n catalogues. Fast
+   enough to assert on a single component's behaviour, which Playwright is
+   not.
+4. **Browser** (`tests/browser/`, Playwright, from Milestone 2): organizer and
    recorder UIs, including offline simulation via network emulation.
-4. **Manual gates**: real-phone recording tests over HTTPS (Milestones 2–3,
+5. **Manual gates**: real-phone recording tests over HTTPS (Milestones 2–3,
    brief §66) and the physical multi-phone room test before release (§57).
 
 ## Running
 
 ```bash
-make test     # pytest + ruff inside the app container image
-make lint     # ruff
+make test           # both suites: pytest in the app image, vitest in node:22
+make test-py        # only pytest
+make test-frontend  # only vitest
+make lint           # ruff
 ```
+
+### Guard tests
+
+Several tests exist to stop a whole class of defect coming back, rather than to
+check one behaviour. They scan the source rather than run it, and each one
+exists because the mistake had already been made:
+
+* `test_no_config_reads_in_transaction.py` — provider config is an OCS call to
+  Nextcloud; reading it inside a transaction holds SQLite's single writer slot
+  across the network. Its docstring records the four times this happened.
+* `test_no_long_work_under_the_write_lock.py` — the same rule for archives and
+  PDF rendering, and ordering-aware, since doing that work *before* the first
+  query is the fix rather than the bug.
+* `test_no_unbounded_body_reads.py` — a public route must not buffer a body
+  without a size limit.
+* `test_no_blocking_on_event_loop.py` — blocking work in an `async def` handler
+  freezes the whole server, not just that request.
+* `tests/frontend/no-untranslated-recorder-strings.spec.ts` — no English
+  sentence may reappear in the citizens' recorder.
+* `tests/frontend/i18n.spec.ts` — the catalogues must define the same keys with
+  the same placeholders, so a missing Italian string fails the build rather
+  than surfacing on a phone.
+* `tests/frontend/accessibility.spec.ts` — among other things, no fixed pixel
+  font size, which would ignore the reader's own Nextcloud font setting.
 
 Browser tests (release-blocker offline scenarios, brief §56 A and C):
 

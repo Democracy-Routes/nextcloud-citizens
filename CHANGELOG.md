@@ -4,6 +4,96 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Live-event hardening — 2026-09-01
+
+A sweep through the whole app for things that could stop an assembly or lose
+its record. Every fix has a test that fails without it.
+
+**Things that could lose or block an event**
+
+- **Downloading the audio no longer freezes every phone.** The export endpoints
+  held SQLite's single write lock while copying every recording into a zip, so
+  pressing "Download all audio" mid-event made each table's upload queue for up
+  to a minute and then fail. Reads now use a session that takes no lock.
+  Joining had the same shape — it asked Nextcloud for two settings while
+  holding the lock, worst exactly when twenty tables scan their codes at once.
+- **A phone that dies mid-round no longer loses its live transcript.** Caption
+  sessions were only ever closed by a successful upload finishing, so a phone
+  that never came back kept its session open forever: what it had already heard
+  was never written down, and its transcription provider connection stayed open
+  — and billable — until the container restarted.
+- **A full disk no longer wedges a whole round.** A recording that failed to
+  assemble was stuck in a state nothing could move it out of: it could not be
+  re-recorded, abandoned or retried, and it blocked the round's cross-table
+  analysis permanently. There is now a way out, and a **Retry** button once
+  there is space again.
+- **Re-running the analysis no longer destroys findings on failure.** It
+  deleted the existing ones *before* calling the model, so a rotated API key
+  meant a round that had twelve findings had none, with nothing regenerated.
+- **Export archives are deleted with the audio they contain.** The retention
+  sweep reported recordings purged while a complete copy of them sat in an
+  export archive nothing ever reclaimed.
+
+**On the phones**
+
+- One bad moment on the venue WiFi no longer disconnects a table. Any failed
+  status check used to discard the session and send the table back to the
+  facilitator for a new QR code, and put the audio still on the phone out of
+  reach.
+- An armed phone stays awake. Only the recording screen held a wake lock, so a
+  phone waiting for the facilitator went to sleep, showed as stale, and missed
+  the round starting.
+- A microphone failure no longer loops. It used to bounce the table back into
+  the same round every five seconds with no way out; it now says what is wrong
+  and offers a retry that works without reloading.
+- The recorder no longer claims the server validated audio it never confirmed —
+  and then offers to delete the phone's only copy.
+
+**Italian, and being readable at all**
+
+- **The recorder speaks the assembly's language.** There was no translation
+  layer of any kind: a room of Italian citizens read English instructions, and
+  tapped an English consent screen, to be recorded. The consent screen also now
+  offers a way to decline.
+- Pinch-zoom works. It was blocked outright, and the round's question — the one
+  thing a table reads at arm's length — was the smallest text on the screen.
+- Text follows the reader's own Nextcloud font size instead of fixed pixels,
+  and touch targets meet the 44px minimum on touch devices.
+- Dialogs can be used with a keyboard, messages are announced to screen
+  readers, and icon-only buttons have names.
+
+**Knowing what is going on**
+
+- The Live tab shows when it was last updated, and says so when it cannot reach
+  the server rather than leaving minutes-old numbers looking current.
+- It also reads round state from the server rather than a stale snapshot, so it
+  no longer offers to start a round that is already running.
+- A failed table says *why* it failed and what to do about it, instead of an
+  orange badge with a state name on it.
+- Errors are sentences rather than "HTTP 500", and an unreachable server no
+  longer produces an empty list that invites you to recreate work you already
+  have.
+
+**Destructive actions look destructive**
+
+- The confirm dialog's red styling meant nothing: safe actions like publishing
+  the report were red, and deleting an assembly was a small grey icon. Deleting
+  an assembly now asks for its name; regenerating the QR codes, unpublishing
+  and reopening a session ask at all.
+- Re-running the analysis over findings a person has approved says how many it
+  would destroy.
+
+**Also**
+
+- A public route can no longer be made to buffer an unbounded request body.
+- A background job whose bookkeeping fails is rescheduled instead of being
+  stranded until a restart.
+- The QR sheet is downloaded rather than opened in a tab a pop-up blocker
+  silently swallows.
+- New guard tests scan the source for whole classes of defect — long work under
+  the write lock, unbounded body reads, untranslated recorder strings, missing
+  Italian keys, fixed pixel font sizes.
+
 ### Live captions are deleted when you delete things — 2026-08-31
 
 - **Deleting an assembly left its live captions on the disk.** When captions

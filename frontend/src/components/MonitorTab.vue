@@ -12,6 +12,7 @@ import {
 } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
+import { relativeAge, timestamp } from '../format'
 import { LIVE_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, MonitorTable, RoundMonitor, TranscriptData } from '../types'
@@ -185,31 +186,27 @@ async function showDevice(tableNumber: number): Promise<void> {
 	}
 }
 
-function formatTime(seconds: number): string {
-	const minutes = Math.floor(seconds / 60)
-	const secs = Math.floor(seconds % 60)
-	return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-}
-
 function speakerClass(speaker: string): string {
 	const match = speaker.match(/(\d+)/)
 	if (!match) return ''
 	return `cz-convo__seg--s${((parseInt(match[1], 10) - 1) % 5) + 1}`
 }
 
-function humanAge(seconds: number): string {
-	if (seconds < 90) return `${seconds}s ago`
-	if (seconds < 90 * 60) return `${Math.round(seconds / 60)}m ago`
-	if (seconds < 48 * 3600) return `${Math.round(seconds / 3600)}h ago`
-	return `${Math.round(seconds / 86400)}d ago`
-}
-
 function deviceState(table: MonitorTable): { status: string; label: string } {
 	if (table.armed) return { status: 'CONNECTED', label: 'armed' }
 	if (table.device.connected) return { status: 'CONNECTED', label: 'connected' }
 	if (table.device.seconds_since_contact !== null)
-		return { status: 'STALE', label: humanAge(table.device.seconds_since_contact) }
+		return { status: 'STALE', label: relativeAge(table.device.seconds_since_contact) }
 	return { status: 'IDLE', label: 'no device' }
+}
+
+/** Roughly twenty minutes of audio left, at the recorder's bitrate. Enough
+ * warning to finish the round and swap the phone between rounds. */
+const LOW_STORAGE_MB = 200
+
+function lowStorage(table: MonitorTable): boolean {
+	const free = table.device.status.storage_free_mb
+	return typeof free === 'number' && free < LOW_STORAGE_MB
 }
 
 function pendingChunks(table: MonitorTable): number {
@@ -343,8 +340,19 @@ function pendingChunks(table: MonitorTable): number {
 							<span v-else class="cz-muted">—</span>
 						</td>
 						<td>
-							<CzStatusPill v-if="table.local_recording_safe" status="SAFE" label="✓ safe" />
-							<CzStatusPill v-else-if="table.device.status.storage_ok === false" status="OFFLINE" label="storage error" />
+							<!-- The phone reports free space on every heartbeat, but this
+							     only ever rendered once storage_ok went false — i.e. after
+							     it had already failed. A table about to run out mid-round
+							     is exactly what an organizer can still act on. -->
+							<CzStatusPill
+								v-if="table.device.status.storage_ok === false"
+								status="OFFLINE"
+								label="storage error" />
+							<CzStatusPill
+								v-else-if="lowStorage(table)"
+								status="PROCESSING"
+								:label="`low storage — ${Math.round(table.device.status.storage_free_mb ?? 0)} MB`" />
+							<CzStatusPill v-else-if="table.local_recording_safe" status="SAFE" label="✓ safe" />
 							<span v-else class="cz-muted">unknown</span>
 						</td>
 						<td style="text-align: right">
@@ -399,7 +407,7 @@ function pendingChunks(table: MonitorTable): number {
 							:key="segment.id"
 							class="cz-convo__seg"
 							:class="speakerClass(segment.speaker)">
-							<span class="cz-convo__time">{{ formatTime(segment.start) }}</span>
+							<span class="cz-convo__time">{{ timestamp(segment.start) }}</span>
 							<div class="cz-convo__body">
 								<span v-if="segment.speaker" class="cz-convo__speaker">{{ segment.speaker }}</span>
 								<p class="cz-convo__text">{{ segment.text }}</p>

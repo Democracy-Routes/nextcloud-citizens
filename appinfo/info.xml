@@ -32,6 +32,11 @@ findings that a human organizer reviews before anything is published.
    as PDF, Markdown or JSON. Reports can be published back to the table phones so
    participants see the outcome of their own discussion.
 
+The phone recorder — including the information screen people read before being
+recorded — is shown in the language of the assembly rather than of the phone,
+since it is a device shared by the whole table. English and Italian are
+available today.
+
 ## Data processing — please read
 
 This app records people's voices, which is sensitive personal data.
@@ -78,7 +83,8 @@ This is a **beta release**. The recording, transcription, analysis and reporting
 pipeline is tested end to end. Audio retention is configurable (delete N days after
 an assembly is closed, with a per-assembly override), and the recorder shows each
 table an information screen before recording starts, naming the transcription
-engine, whether it is an outside service, and how long audio is kept.
+engine, whether it is an outside service, and how long audio is kept. That
+screen offers a decline as well as a confirmation.
 
 That screen is an information and confirmation step at the table, **not** a
 per-individual consent record — Citizens does not store who agreed. Organisations

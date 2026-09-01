@@ -14,6 +14,7 @@ import {
 import { computed, ref } from 'vue'
 import { api, BASE } from '../api'
 import { describeError } from '../errors'
+import { bytes, duration } from '../format'
 import { BACKGROUND_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, FileEntry, FilesListing } from '../types'
@@ -152,26 +153,13 @@ async function deleteAllTranscripts(): Promise<void> {
 	}
 }
 
-/** formatBytes returns an em dash for zero, which produced the sentence
+/** bytes() renders an em dash for zero, which produced the sentence
  * "All — of recorded audio will be permanently deleted". */
 const deleteAllMessage = computed(() => {
-	const bytes = listing.value?.totals.audio_bytes ?? 0
-	const scale = bytes > 0 ? `All ${formatBytes(bytes)} of recorded audio` : 'All recorded audio'
+	const total = listing.value?.totals.audio_bytes ?? 0
+	const scale = total > 0 ? `All ${bytes(total)} of recorded audio` : 'All recorded audio'
 	return `${scale} will be permanently deleted and cannot be recovered. Transcripts, findings and the report are kept. Download or export first if you need a copy.`
 })
-
-function formatBytes(bytes: number): string {
-	if (!bytes) return '—'
-	if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-	if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-	return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
-}
-
-function formatDuration(seconds: number | null): string {
-	if (!seconds) return '—'
-	const minutes = Math.floor(seconds / 60)
-	return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
-}
 
 function download(path: string): void {
 	window.open(`${BASE}${path}`, '_blank')
@@ -184,7 +172,7 @@ async function deleteOne(): Promise<void> {
 	busy.value = true
 	try {
 		const result = await api.deleteRecordingAudio(entry.recording_id)
-		toast(`Audio deleted — ${formatBytes(result.freed_bytes)} freed`)
+		toast(`Audio deleted — ${bytes(result.freed_bytes)} freed`)
 		await reload()
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -198,7 +186,7 @@ async function deleteAll(): Promise<void> {
 	busy.value = true
 	try {
 		const result = await api.deleteAssemblyAudio(props.assembly.id)
-		toast(`${result.recordings} recordings cleared — ${formatBytes(result.freed_bytes)} freed`)
+		toast(`${result.recordings} recordings cleared — ${bytes(result.freed_bytes)} freed`)
 		await reload()
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -228,7 +216,7 @@ async function deleteAll(): Promise<void> {
 						<h3>Audio files &amp; exports</h3>
 						<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
 							{{ listing.totals.recordings }} recordings ·
-							{{ formatBytes(listing.totals.audio_bytes) }}
+							{{ bytes(listing.totals.audio_bytes) }}
 							<template v-if="listing.totals.audio_deleted">
 								· {{ listing.totals.audio_deleted }} with audio deleted
 							</template>
@@ -291,12 +279,12 @@ async function deleteAll(): Promise<void> {
 						<tbody>
 							<tr v-for="entry in round.tables" :key="entry.recording_id">
 								<td><span class="cz-posbadge">{{ entry.table_number }}</span></td>
-								<td>{{ formatDuration(entry.duration_seconds) }}</td>
+								<td>{{ duration(entry.duration_seconds) }}</td>
 								<td>
 									<template v-if="entry.audio_deleted_at">
 										<span class="cz-muted">audio deleted</span>
 									</template>
-									<template v-else>{{ formatBytes(entry.size_bytes) }}</template>
+									<template v-else>{{ bytes(entry.size_bytes) }}</template>
 								</td>
 								<td>
 									<CzStatusPill :status="entry.state" />
