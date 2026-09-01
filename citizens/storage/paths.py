@@ -76,6 +76,29 @@ def live_caption_path(root: Path, assembly_id: str, recording_id: str) -> Path:
     return root / "live_captions" / assembly_id / f"{recording_id}.json"
 
 
+def purge_assembly_exports(root: Path, assembly_id: str) -> int:
+    """Remove every generated archive of one assembly. Returns bytes freed.
+
+    An export archive holds a complete second copy of the audio. Nothing but
+    full assembly deletion ever reclaimed it, so the retention sweep reported
+    the audio purged and freed while an entire copy of it sat in
+    exports/<assembly>/audio-*.zip indefinitely — the operator's retention
+    policy saying one thing and the disk another.
+
+    Any deletion of audio also invalidates these archives: a zip cannot be
+    surgically edited, and a stale archive is exactly the copy retention was
+    supposed to remove.
+    """
+    import shutil
+
+    directory = exports_dir(root, assembly_id)
+    if not directory.is_dir():
+        return 0
+    freed = sum(path.stat().st_size for path in directory.glob("*.zip") if path.is_file())
+    shutil.rmtree(directory, ignore_errors=True)
+    return freed
+
+
 def purge_assembly_storage(
     root: Path, assembly_id: str, recorder_session_ids: Sequence[str] = ()
 ) -> None:

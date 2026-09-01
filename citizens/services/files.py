@@ -23,7 +23,12 @@ from citizens.logging_setup import get_logger
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
 from citizens.services.transcription import transcript_payload
-from citizens.storage.paths import exports_dir, live_caption_path, recording_dir
+from citizens.storage.paths import (
+    exports_dir,
+    live_caption_path,
+    purge_assembly_exports,
+    recording_dir,
+)
 
 log = get_logger(__name__)
 
@@ -156,6 +161,10 @@ def delete_recording_audio(session: Session, recording: Recording) -> int:
             pass
     recording.received_chunks = 0
     recording.audio_deleted_at = utcnow()
+    # Any export archive of this assembly still contains this audio in full.
+    # Leaving them is the difference between the retention sweep reporting the
+    # audio deleted and the audio actually being gone.
+    freed += purge_assembly_exports(root, recording.assembly_id)
     log.info("recording_audio_deleted", recording_id=recording.id, freed_bytes=freed)
     return freed
 
@@ -248,6 +257,12 @@ def delete_assembly_audio(session: Session, assembly: Assembly) -> tuple[int, in
             continue
         freed += delete_recording_audio(session, recording)
         count += 1
+    # Unconditionally, not only via the loop above: an assembly whose
+    # recordings were all deleted individually still has export archives, and
+    # the loop skips every one of those recordings. This is the path the
+    # retention sweep takes, so missing it meant reporting the audio purged
+    # while a complete copy of it remained on disk.
+    freed += purge_assembly_exports(_storage_root(), assembly.id)
     return count, freed
 
 
@@ -380,6 +395,12 @@ def _recordings(session: Session, assembly: Assembly) -> list[Recording]:
 def _export_target(assembly: Assembly, kind: str) -> Path:
     directory = exports_dir(_storage_root(), assembly.id)
     directory.mkdir(parents=True, exist_ok=True)
+    # Drop any earlier archive of the same kind. Each is a throwaway build
+    # artifact meant to be streamed and unlinked, but the unlink runs in a
+    # background task that never fires if the client disconnects mid-download —
+    # so on a venue connection they accumulated, each one a full copy.
+    for stale in directory.glob(f"{kind}-*.zip"):
+        stale.unlink(missing_ok=True)
     stamp = utcnow().strftime("%Y%m%d-%H%M%S")
     return directory / f"{kind}-{stamp}.zip"
 

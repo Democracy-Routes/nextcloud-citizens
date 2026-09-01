@@ -12,7 +12,9 @@ Sweeps are best-effort: a failure is logged and retried on the next tick, and
 must never take a recording's audio with it.
 """
 
+import time
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import func, select
 
@@ -184,10 +186,47 @@ def sweep_expired_audio() -> int:
     return purged
 
 
+#: an export archive is a throwaway build artifact; nothing should keep one
+EXPORT_TTL_MINUTES = 60
+
+
+def sweep_stale_exports() -> int:
+    """Remove generated archives nobody collected.
+
+    _zip_response unlinks the archive in a Starlette BackgroundTask once it has
+    been streamed. That task never runs if the client disconnects mid-download,
+    which on a venue connection downloading a multi-gigabyte bundle is the
+    normal outcome rather than the exceptional one. Each abandoned archive is a
+    complete second copy of the assembly's audio.
+
+    Touches no database at all, so it holds no lock.
+    """
+    from citizens.config import get_settings
+
+    root = Path(get_settings().app_persistent_storage) / "exports"
+    if not root.is_dir():
+        return 0
+    cutoff = time.time() - EXPORT_TTL_MINUTES * 60
+    removed = 0
+    for archive in root.glob("*/*.zip"):
+        try:
+            if archive.stat().st_mtime >= cutoff:
+                continue
+            freed = archive.stat().st_size
+            archive.unlink(missing_ok=True)
+        except OSError:
+            log.warning("stale_export_cleanup_failed", path=str(archive), exc_info=True)
+            continue
+        removed += 1
+        log.info("stale_export_removed", path=archive.name, freed_bytes=freed)
+    return removed
+
+
 def run_sweeps() -> None:
     for name, sweep in (
         ("stalled_uploads", sweep_stalled_uploads),
         ("expired_audio", sweep_expired_audio),
+        ("stale_exports", sweep_stale_exports),
     ):
         try:
             sweep()
