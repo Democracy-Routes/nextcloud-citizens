@@ -101,7 +101,7 @@ const nextStep = computed<NextStep | null>(() => {
 			<button class="cz-stat cz-card--hover" style="background: none" @click="emit('navigate', 'participants')">
 				<div class="cz-stat__icon"><SvgIcon :path="mdiAccountGroup" :size="24" /></div>
 				<div>
-					<div class="cz-stat__value">{{ assembly.participant_count }}<span class="cz-muted" style="font-size: 15px; font-weight: 500"> / {{ assembly.expected_participants }}</span></div>
+					<div class="cz-stat__value">{{ assembly.participant_count }}<span class="cz-muted" style="font-size: 0.9375rem; font-weight: 500"> / {{ assembly.expected_participants }}</span></div>
 					<div class="cz-stat__label">Participants</div>
 				</div>
 			</button>
@@ -115,7 +115,7 @@ const nextStep = computed<NextStep | null>(() => {
 			<button class="cz-stat cz-card--hover" style="background: none" @click="emit('navigate', 'rounds')">
 				<div class="cz-stat__icon"><SvgIcon :path="mdiTimelineClockOutline" :size="24" /></div>
 				<div>
-					<div class="cz-stat__value">{{ doneRounds }}<span class="cz-muted" style="font-size: 15px; font-weight: 500"> / {{ assembly.rounds.length }}</span></div>
+					<div class="cz-stat__value">{{ doneRounds }}<span class="cz-muted" style="font-size: 0.9375rem; font-weight: 500"> / {{ assembly.rounds.length }}</span></div>
 					<div class="cz-stat__label">Rounds held</div>
 				</div>
 			</button>
@@ -148,10 +148,10 @@ const nextStep = computed<NextStep | null>(() => {
 					</CzButton>
 				</div>
 			</template>
-			<p v-else-if="assembly.analysis_instructions" style="margin: 0; font-size: 14px; white-space: pre-wrap">
+			<p v-else-if="assembly.analysis_instructions" style="margin: 0; font-size: 0.875rem; white-space: pre-wrap">
 				{{ assembly.analysis_instructions }}
 			</p>
-			<p v-else class="cz-muted" style="margin: 0; font-size: 13.5px">
+			<p v-else class="cz-muted" style="margin: 0; font-size: 0.845rem">
 				Optional context given to the AI when analyzing this assembly — topic,
 				local glossary, focus areas.
 			</p>
@@ -174,13 +174,13 @@ const nextStep = computed<NextStep | null>(() => {
 					<span class="cz-posbadge">{{ round.position }}</span>
 					<div style="min-width: 0">
 						<strong>{{ round.title || 'Untitled round' }}</strong>
-						<p class="cz-muted" style="margin: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+						<p class="cz-muted" style="margin: 0; font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
 							{{ round.question || 'No question set' }}
 						</p>
 					</div>
 				</div>
 				<div class="cz-row" style="flex-wrap: nowrap">
-					<span class="cz-muted" style="font-size: 13px">{{ round.duration_minutes }} min</span>
+					<span class="cz-muted" style="font-size: 0.8125rem">{{ round.duration_minutes }} min</span>
 					<CzStatusPill :status="round.status" />
 				</div>
 			</div>

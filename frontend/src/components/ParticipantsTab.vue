@@ -118,7 +118,7 @@ function initials(participant: Participant): string {
 					<CzButton small :icon="mdiPlaylistPlus" :disabled="busy" @click="prefill">Prefill 50 anonymous</CzButton>
 				</div>
 				<div v-if="showCsv" style="margin-top: 14px">
-					<p class="cz-muted" style="font-size: 13px">
+					<p class="cz-muted" style="font-size: 0.8125rem">
 						Header <code>label,name,email</code> — names and emails are optional. Anonymous labels are enough.
 					</p>
 					<textarea v-model="csvText" rows="8" style="width: 100%; font-family: ui-monospace, monospace"></textarea>

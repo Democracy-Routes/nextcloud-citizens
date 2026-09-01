@@ -157,21 +157,21 @@ const hasContent = () =>
 			<div>
 				<template v-if="isFinal">
 					<strong>Final report · closed {{ closedDate() }}</strong>
-					<span class="cz-muted" style="display: block; font-size: 13px; margin-top: 2px">
+					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 						The session is closed: tables can no longer record, and this is the
 						definitive report. Participants keep reading this version even if you reopen.
 					</span>
 				</template>
 				<template v-else-if="progress?.complete">
 					<strong style="color: var(--cz-green)">All {{ progress.tables_expected }} tables have finished.</strong>
-					<span class="cz-muted" style="display: block; font-size: 13px; margin-top: 2px">
+					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 						Close the session to create the final report and enable the downloads.
 					</span>
 				</template>
 				<template v-else>
 					<strong>Interim report — {{ progress?.tables_complete ?? 0 }} of
 						{{ progress?.tables_expected ?? 0 }} tables have completed all rounds</strong>
-					<span class="cz-muted" style="display: block; font-size: 13px; margin-top: 2px">
+					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 						This is a preview of an assembly still in progress. Closing the session
 						creates the final report and enables the downloads — you can reopen later.
 					</span>
@@ -208,7 +208,7 @@ const hasContent = () =>
 				<CzButton small :icon="mdiCodeJson" :disabled="!isFinal" @click="downloadJson">JSON</CzButton>
 			</div>
 		</div>
-		<p v-if="!isFinal" class="cz-muted" style="margin: -8px 0 16px; font-size: 13px; text-align: right">
+		<p v-if="!isFinal" class="cz-muted" style="margin: -8px 0 16px; font-size: 0.8125rem; text-align: right">
 			Downloads become available once the session is closed.
 		</p>
 
@@ -219,7 +219,7 @@ const hasContent = () =>
 						<template v-if="report.published_at">Published to table phones</template>
 						<template v-else>Not yet published to table phones</template>
 					</h3>
-					<p class="cz-muted" style="margin: 4px 0 0; font-size: 13.5px">
+					<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
 						<template v-if="report.published_at">
 							Recording phones can view this report and download the PDF
 							(approved findings and AI summaries only — drafts stay private).
@@ -253,16 +253,16 @@ const hasContent = () =>
 
 		<template v-else-if="report">
 			<div class="cz-card">
-				<h2 style="font-size: 21px">{{ report.assembly.name }} — Assembly Report</h2>
+				<h2 style="font-size: 1.31rem">{{ report.assembly.name }} — Assembly Report</h2>
 				<p v-if="report.assembly.description" class="cz-muted" style="margin-top: 6px">
 					{{ report.assembly.description }}
 				</p>
-				<p class="cz-muted" style="font-size: 13.5px; margin: 8px 0 0">
+				<p class="cz-muted" style="font-size: 0.845rem; margin: 8px 0 0">
 					{{ report.assembly.participants }} participants ·
 					{{ report.assembly.tables }} tables ·
 					{{ report.assembly.language.toUpperCase() }}
 				</p>
-				<p style="font-size: 14px; margin-top: 12px">{{ report.method }}</p>
+				<p style="font-size: 0.875rem; margin-top: 12px">{{ report.method }}</p>
 			</div>
 
 			<template v-for="round in report.rounds" :key="round.position">
@@ -273,18 +273,18 @@ const hasContent = () =>
 					<p v-if="round.question" class="cz-muted" style="font-style: italic; margin: 4px 0 14px">
 						“{{ round.question }}”
 					</p>
-					<p v-if="round.summary" style="font-size: 14.5px; font-style: italic; margin-bottom: 14px">
-						<span class="cz-muted" style="font-style: normal; font-size: 12px; display: block">AI SUMMARY</span>
+					<p v-if="round.summary" style="font-size: 0.905rem; font-style: italic; margin-bottom: 14px">
+						<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block">AI SUMMARY</span>
 						{{ round.summary }}
 					</p>
 
 					<template v-if="round.cross_table.length">
-						<h4 style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 12px 0 8px">
+						<h4 style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 12px 0 8px">
 							Across all tables
 						</h4>
 						<template v-for="group in groupByType(round.cross_table)" :key="group.type">
 							<h5
-								style="font-size: 13.5px; font-weight: 700; margin: 10px 0 8px"
+								style="font-size: 0.845rem; font-weight: 700; margin: 10px 0 8px"
 								:style="{ color: group.type === 'disagreement' ? 'var(--cz-amber)' : 'var(--cz-primary)' }">
 								{{ group.label }}
 							</h5>
@@ -293,20 +293,20 @@ const hasContent = () =>
 									{{ finding.title }}
 									<span v-if="finding.is_draft" class="cz-pill cz-pill--amber" style="text-transform: none">DRAFT — not reviewed</span>
 								</strong>
-								<p v-if="finding.mentioned_table_count" class="cz-muted" style="font-size: 13px; margin: 2px 0">
+								<p v-if="finding.mentioned_table_count" class="cz-muted" style="font-size: 0.8125rem; margin: 2px 0">
 									Mentioned at {{ finding.mentioned_table_count }} table(s)
 								</p>
-								<p style="margin: 4px 0; font-size: 14.5px">{{ finding.summary }}</p>
+								<p style="margin: 4px 0; font-size: 0.905rem">{{ finding.summary }}</p>
 								<blockquote
 									v-for="(evidence, index) in finding.evidence.slice(0, 3)"
 									:key="index"
-									style="margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--cz-border); font-size: 13.5px; color: var(--cz-text-muted)">
+									style="margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--cz-border); font-size: 0.845rem; color: var(--cz-text-muted)">
 									[{{ evidence.timestamp }}] {{ evidence.speaker || 'Speaker' }}: “{{ evidence.text }}”
 								</blockquote>
 									<p
 										v-if="!finding.evidence.length && finding.evidence_removed"
 										class="cz-muted"
-										style="font-size: 13px; font-style: italic; margin: 4px 0">
+										style="font-size: 0.8125rem; font-style: italic; margin: 4px 0">
 										Evidence removed with the transcript
 									</p>
 							</div>
@@ -315,11 +315,11 @@ const hasContent = () =>
 
 					<template v-for="table in round.tables" :key="table.table_number">
 						<template v-if="table.findings.length || table.summary">
-							<h4 style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 16px 0 8px">
+							<h4 style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 16px 0 8px">
 								Table {{ table.table_number }}
 							</h4>
-							<p v-if="table.summary" style="font-size: 14px; font-style: italic; margin: 0 0 10px">
-								<span class="cz-muted" style="font-style: normal; font-size: 12px; display: block">AI SUMMARY</span>
+							<p v-if="table.summary" style="font-size: 0.875rem; font-style: italic; margin: 0 0 10px">
+								<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block">AI SUMMARY</span>
 								{{ table.summary }}
 							</p>
 							<div v-for="finding in table.findings" :key="finding.id" style="margin-bottom: 14px">
@@ -327,17 +327,17 @@ const hasContent = () =>
 									{{ TYPE_LABELS[finding.type] ?? finding.type }}: {{ finding.title }}
 									<span v-if="finding.is_draft" class="cz-pill cz-pill--amber" style="text-transform: none">DRAFT — not reviewed</span>
 								</strong>
-								<p style="margin: 4px 0; font-size: 14.5px">{{ finding.summary }}</p>
+								<p style="margin: 4px 0; font-size: 0.905rem">{{ finding.summary }}</p>
 								<blockquote
 									v-for="(evidence, index) in finding.evidence.slice(0, 3)"
 									:key="index"
-									style="margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--cz-border); font-size: 13.5px; color: var(--cz-text-muted)">
+									style="margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--cz-border); font-size: 0.845rem; color: var(--cz-text-muted)">
 									[{{ evidence.timestamp }}] {{ evidence.speaker || 'Speaker' }}: “{{ evidence.text }}”
 								</blockquote>
 									<p
 										v-if="!finding.evidence.length && finding.evidence_removed"
 										class="cz-muted"
-										style="font-size: 13px; font-style: italic; margin: 4px 0">
+										style="font-size: 0.8125rem; font-style: italic; margin: 4px 0">
 										Evidence removed with the transcript
 									</p>
 							</div>
@@ -346,7 +346,7 @@ const hasContent = () =>
 				</div>
 			</template>
 
-			<p class="cz-muted" style="font-size: 13px; font-style: italic">
+			<p class="cz-muted" style="font-size: 0.8125rem; font-style: italic">
 				{{ report.methodology_note }}
 			</p>
 		</template>

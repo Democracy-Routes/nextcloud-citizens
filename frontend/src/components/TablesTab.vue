@@ -123,7 +123,7 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 						{{ table.participants.length }} seated
 					</span>
 				</div>
-				<p v-if="table.participants.length === 0" class="cz-muted" style="font-size: 13px">Empty</p>
+				<p v-if="table.participants.length === 0" class="cz-muted" style="font-size: 0.8125rem">Empty</p>
 				<div
 					v-for="participant in table.participants"
 					:key="participant.id"
@@ -136,7 +136,7 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 					<select
 						:value="table.id"
 						title="Move to table"
-						style="padding: 3px 6px; font-size: 13px"
+						style="padding: 3px 6px; font-size: 0.8125rem"
 						@change="
 							move(
 								participant.id,

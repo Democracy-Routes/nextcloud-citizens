@@ -25,9 +25,10 @@ import RoundsTab from './RoundsTab.vue'
 import TablesTab from './TablesTab.vue'
 import MonitorTab from './MonitorTab.vue'
 import CzConfirm from './ui/CzConfirm.vue'
+import CzTabs from './ui/CzTabs.vue'
+import { panelId, tabId } from './ui/tabs'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
-import SvgIcon from './ui/SvgIcon.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ assemblyId: string; freshInvites?: InviteGenerated[] }>()
@@ -104,20 +105,13 @@ async function deleteAssembly(): Promise<void> {
 				</div>
 			</div>
 
-			<div class="cz-tabs" role="tablist">
-				<button
-					v-for="item in TABS"
-					:key="item.id"
-					class="cz-tab"
-					:class="{ 'cz-tab--active': tab === item.id }"
-					role="tab"
-					:aria-selected="tab === item.id"
-					@click="tab = item.id">
-					<SvgIcon :path="item.icon" :size="17" />
-					{{ item.label }}
-				</button>
-			</div>
+			<CzTabs v-model="tab" :tabs="TABS" id-prefix="assembly" />
 
+			<div
+				:id="panelId('assembly', tab)"
+				role="tabpanel"
+				:aria-labelledby="tabId('assembly', tab)"
+				tabindex="0">
 			<OverviewTab
 				v-if="tab === 'overview'"
 				:assembly="assembly"
@@ -136,6 +130,7 @@ async function deleteAssembly(): Promise<void> {
 			<AnalysisTab v-else-if="tab === 'analysis'" :assembly="assembly" />
 			<ReportTab v-else-if="tab === 'report'" :assembly="assembly" @changed="reload" />
 			<FilesTab v-else :assembly="assembly" />
+			</div>
 		</template>
 
 		<CzConfirm

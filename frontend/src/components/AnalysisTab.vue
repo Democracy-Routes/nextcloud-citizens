@@ -146,12 +146,12 @@ const anyAnalyzing = () =>
 				<div v-if="data.cross_table.length || data.round_summary" style="margin-bottom: 24px">
 					<h3 style="margin-bottom: 10px">
 						Across all tables
-						<span v-if="data.tables_with_findings" class="cz-muted" style="font-weight: 400; font-size: 13px">
+						<span v-if="data.tables_with_findings" class="cz-muted" style="font-weight: 400; font-size: 0.8125rem">
 							— aggregated from {{ data.tables_with_findings }} table(s)
 						</span>
 					</h3>
-					<p v-if="data.round_summary" class="cz-card" style="font-size: 14.5px; font-style: italic">
-						<span class="cz-muted" style="font-style: normal; font-size: 12px; display: block; margin-bottom: 4px">AI SUMMARY</span>
+					<p v-if="data.round_summary" class="cz-card" style="font-size: 0.905rem; font-style: italic">
+						<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">AI SUMMARY</span>
 						{{ data.round_summary }}
 					</p>
 					<FindingCard
@@ -164,11 +164,11 @@ const anyAnalyzing = () =>
 				<template v-for="table in data.tables" :key="table.table_number">
 					<div v-if="table.analyzed || table.findings.length" style="margin-bottom: 24px">
 						<h3 style="margin-bottom: 10px">Table {{ table.table_number }}</h3>
-						<p v-if="table.summary" class="cz-card" style="font-size: 14.5px; font-style: italic">
-							<span class="cz-muted" style="font-style: normal; font-size: 12px; display: block; margin-bottom: 4px">AI SUMMARY</span>
+						<p v-if="table.summary" class="cz-card" style="font-size: 0.905rem; font-style: italic">
+							<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">AI SUMMARY</span>
 							{{ table.summary }}
 						</p>
-						<p v-if="table.analyzed && !table.findings.length" class="cz-muted" style="font-size: 13.5px">
+						<p v-if="table.analyzed && !table.findings.length" class="cz-muted" style="font-size: 0.845rem">
 							Analyzed — no substantive findings for the round question in this discussion.
 						</p>
 						<FindingCard
@@ -179,7 +179,7 @@ const anyAnalyzing = () =>
 					</div>
 				</template>
 
-				<p class="cz-muted" style="font-size: 13px">
+				<p class="cz-muted" style="font-size: 0.8125rem">
 					AI findings are drafts until a human approves them; summaries are AI-generated neutral
 					descriptions. Every finding cites transcript evidence; “mentioned at N tables” is never
 					a measure of participant support.

@@ -233,7 +233,7 @@ function pendingChunks(table: MonitorTable): number {
 			class="cz-card cz-nextstep">
 			<div>
 				<strong>This round has finished.</strong>
-				<span class="cz-muted" style="display: block; font-size: 13px; margin-top: 2px">
+				<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 					Armed tables will start recording Round {{ nextUp.position }} automatically.
 				</span>
 			</div>
@@ -247,7 +247,7 @@ function pendingChunks(table: MonitorTable): number {
 			class="cz-card cz-nextstep">
 			<div>
 				<strong>All rounds are done.</strong>
-				<span class="cz-muted" style="display: block; font-size: 13px; margin-top: 2px">
+				<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 					Review the findings in the Analysis tab, then publish the report to the
 					table phones from the Report tab.
 				</span>
@@ -291,7 +291,7 @@ function pendingChunks(table: MonitorTable): number {
 						End round
 					</CzButton>
 				</template>
-				<span v-else class="cz-muted" style="font-size: 13px">
+				<span v-else class="cz-muted" style="font-size: 0.8125rem">
 					Independent tables — each table records on its own schedule
 				</span>
 			</template>
@@ -383,7 +383,7 @@ function pendingChunks(table: MonitorTable): number {
 			<div v-if="transcriptFor" class="cz-card" style="margin-top: 16px">
 				<div class="cz-row cz-row--spread" style="margin-bottom: 8px">
 					<h3>Transcript</h3>
-					<span v-if="transcript" class="cz-muted" style="font-size: 12.5px">
+					<span v-if="transcript" class="cz-muted" style="font-size: 0.78rem">
 						{{ transcript.provider }} · {{ transcript.model }} · {{ transcript.language.toUpperCase() }}
 					</span>
 				</div>

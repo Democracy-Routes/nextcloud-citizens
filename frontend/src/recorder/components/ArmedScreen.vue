@@ -127,11 +127,11 @@ onBeforeUnmount(() => {
 					<p class="rc-eyebrow" style="color: var(--rc-green)">
 						<span class="rc-live" style="color: var(--rc-green); display: inline-flex">ARMED</span>
 					</p>
-					<p style="font-size: 17px; font-weight: 600; margin: 8px 0 4px">
+					<p style="font-size: 1.06rem; font-weight: 600; margin: 8px 0 4px">
 						{{ t('recorder.armed.waiting') }}
 						{{ nextRound ? `Round ${nextRound.position}` : 'the round' }}
 					</p>
-					<p class="rc-muted" style="margin: 0; font-size: 14px">
+					<p class="rc-muted" style="margin: 0; font-size: 0.875rem">
 						{{ t('recorder.armed.waitingHint') }}
 					</p>
 				</div>

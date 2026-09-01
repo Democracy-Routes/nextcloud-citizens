@@ -122,10 +122,10 @@ const add = () =>
 							<div style="min-width: 0">
 								<div class="cz-row" style="gap: 8px">
 									<strong>{{ round.title || 'Untitled round' }}</strong>
-									<span class="cz-muted" style="font-size: 13px">{{ round.duration_minutes }} min</span>
+									<span class="cz-muted" style="font-size: 0.8125rem">{{ round.duration_minutes }} min</span>
 									<CzStatusPill :status="round.status" />
 								</div>
-								<p style="margin: 6px 0 0; font-size: 15px">
+								<p style="margin: 6px 0 0; font-size: 0.9375rem">
 									{{ round.question || 'No question set yet.' }}
 								</p>
 							</div>

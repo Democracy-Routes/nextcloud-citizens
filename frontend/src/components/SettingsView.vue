@@ -307,7 +307,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					</label>
 				</div>
 
-				<p class="cz-muted" style="font-size: 13px; margin: -6px 0 14px">
+				<p class="cz-muted" style="font-size: 0.8125rem; margin: -6px 0 14px">
 					{{ CAPTION_NOTE[sttProvider] }}
 					Captions are provisional — the canonical transcript is always produced from
 					the complete recording after the round.
@@ -379,7 +379,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					<div class="cz-field" style="grid-column: span 2">
 						<label>Live caption endpoint</label>
 						<input v-model="deepgramLiveUrl" type="text" placeholder="wss://api.deepgram.com/v1/listen" />
-						<span class="cz-muted" style="font-size: 12.5px">
+						<span class="cz-muted" style="font-size: 0.78rem">
 							Any server speaking Deepgram's streaming protocol works here — for
 							example a self-hosted WhisperLiveKit, which keeps captions on your
 							own infrastructure.
@@ -391,7 +391,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					<div class="cz-field" style="grid-column: span 2">
 						<label>Endpoint base URL</label>
 						<input v-model="whisperBaseUrl" type="text" placeholder="https://api.openai.com/v1" />
-						<span class="cz-muted" style="font-size: 12.5px">
+						<span class="cz-muted" style="font-size: 0.78rem">
 							Any OpenAI-compatible transcription endpoint: OpenAI itself, or a server you
 							run (Speaches, whisper.cpp, LocalAI, vLLM, WhisperX). With your own server
 							the audio never leaves your infrastructure.
@@ -429,12 +429,12 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 							<SvgIcon :path="testResults.whisper.ok ? mdiCheck : mdiClose" :size="14" />
 							{{ testResults.whisper.message }}
 						</span>
-						<span class="cz-muted" style="font-size: 12.5px">
+						<span class="cz-muted" style="font-size: 0.78rem">
 							Required by OpenAI; most self-hosted servers need none.
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
-						<span class="cz-muted" style="font-size: 12.5px">
+						<span class="cz-muted" style="font-size: 0.78rem">
 							<strong>No speaker separation.</strong> Standard Whisper returns text with
 							timestamps but does not say who spoke, so transcripts and report quotes
 							appear without speaker labels. Servers that add diarization (WhisperX-based,
@@ -454,14 +454,14 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 							<SvgIcon :path="testResults.vosk.ok ? mdiCheck : mdiClose" :size="14" />
 							{{ testResults.vosk.message }}
 						</span>
-						<span class="cz-muted" style="font-size: 12.5px">
+						<span class="cz-muted" style="font-size: 0.78rem">
 							A vosk-server instance you run (for example the alphacep/kaldi-en image on
 							port 2700). No API key, no internet: audio never leaves your network.
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<label>Model for each language</label>
-						<span class="cz-muted" style="font-size: 12.5px; margin-bottom: 10px">
+						<span class="cz-muted" style="font-size: 0.78rem; margin-bottom: 10px">
 							Vosk needs its own model per language, and one server holds several. The
 							language you choose for an assembly picks the model. Type the model
 							<strong>name</strong> — switching model is editing this name. Leave a
@@ -478,7 +478,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 							:key="lang.code"
 							class="cz-modelrow"
 							style="grid-template-columns: 78px 1fr 1fr; margin-bottom: 6px">
-							<span style="font-size: 13.5px; align-self: center">{{ lang.label }}</span>
+							<span style="font-size: 0.845rem; align-self: center">{{ lang.label }}</span>
 							<input
 								v-model="voskModels[lang.code].live"
 								type="text"
@@ -490,7 +490,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								placeholder="same as live"
 								:aria-label="`Final transcript model for ${lang.label}`" />
 						</div>
-						<span class="cz-muted" style="font-size: 12.5px; margin-top: 6px">
+						<span class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
 							A blank final model reuses the live one. A language left entirely blank falls
 							back to whatever model the server started with, so a half-filled table never
 							stops a recording being transcribed.
@@ -499,13 +499,13 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					<div class="cz-field">
 						<label>Model label (optional)</label>
 						<input v-model="voskBatchModel" type="text" placeholder="vosk-model-small-it-0.22" />
-						<span class="cz-muted" style="font-size: 12.5px">
+						<span class="cz-muted" style="font-size: 0.78rem">
 							Recorded with the transcript for reference, and used as the model only for a
 							language with no row above.
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
-						<span class="cz-muted" style="font-size: 12.5px">
+						<span class="cz-muted" style="font-size: 0.78rem">
 							<strong>Offline, but plainer output.</strong> Vosk returns lower-case text
 							without punctuation and does not separate speakers. It is the right choice
 							when nothing may leave the premises; Deepgram or a diarizing Whisper server
@@ -522,7 +522,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 						<input v-model="batchEnabled" type="checkbox" /> Final transcription (canonical)
 					</label>
 				</div>
-				<span class="cz-muted" style="font-size: 12.5px; display: block; margin-top: 8px">
+				<span class="cz-muted" style="font-size: 0.78rem; display: block; margin-top: 8px">
 					<template v-if="liveEnabled && batchEnabled">
 						Tables see captions while they talk, and each recording is transcribed again
 						afterwards from the complete audio. The final transcript is the record and the
@@ -551,7 +551,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					<SvgIcon :path="mdiBrain" :size="22" style="color: var(--cz-primary)" />
 					<h3>AI analysis</h3>
 				</div>
-				<p class="cz-muted" style="font-size: 13.5px; margin-bottom: 14px">
+				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
 					Any OpenAI-compatible endpoint works: Mistral (default), Ollama Cloud, a remote Ollama server, vLLM…
 				</p>
 				<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 14px">
@@ -591,7 +591,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 						v-model="analysisExtra"
 						rows="4"
 						placeholder="E.g. Focus on transport and housing topics. Use formal Italian. Treat 'PUMS' as the city's mobility plan."></textarea>
-					<span class="cz-muted" style="font-size: 12.5px">
+					<span class="cz-muted" style="font-size: 0.78rem">
 						Appended to the built-in prompts for table and round analysis. The output
 						format and the mandatory evidence links cannot be overridden.
 					</span>
@@ -600,14 +600,14 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 				<button
 					type="button"
 					class="cz-linklike"
-					style="background: none; border: none; padding: 0; color: var(--cz-primary); cursor: pointer; font-size: 13px"
+					style="background: none; border: none; padding: 0; color: var(--cz-primary); cursor: pointer; font-size: 0.8125rem"
 					@click="showPrompts = !showPrompts">
 					{{ showPrompts ? 'Hide built-in prompts' : 'Show the built-in prompts your instructions are appended to' }}
 				</button>
 				<div v-if="showPrompts && summary.analysis.default_prompts" style="margin-top: 10px">
-					<p class="cz-muted" style="font-size: 12px; margin-bottom: 4px">TABLE ANALYSIS (read-only)</p>
+					<p class="cz-muted" style="font-size: 0.75rem; margin-bottom: 4px">TABLE ANALYSIS (read-only)</p>
 					<pre class="cz-promptbox">{{ summary.analysis.default_prompts.table }}</pre>
-					<p class="cz-muted" style="font-size: 12px; margin: 10px 0 4px">ROUND AGGREGATION (read-only)</p>
+					<p class="cz-muted" style="font-size: 0.75rem; margin: 10px 0 4px">ROUND AGGREGATION (read-only)</p>
 					<pre class="cz-promptbox">{{ summary.analysis.default_prompts.round }}</pre>
 				</div>
 			</div>
@@ -617,7 +617,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					<SvgIcon :path="mdiDeleteClockOutline" :size="22" style="color: var(--cz-primary)" />
 					<h3>Audio retention</h3>
 				</div>
-				<p class="cz-muted" style="font-size: 13.5px; margin-bottom: 14px">
+				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
 					Delete the raw audio of an assembly this many days after it is
 					<strong>closed</strong>. Transcripts, findings and reports are never
 					removed by this — only the recordings. Individual assemblies can
@@ -627,7 +627,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 				<div class="cz-field" style="max-width: 260px">
 					<label>Days to keep audio after closing</label>
 					<input v-model.number="retentionDays" type="number" min="0" max="3650" />
-					<p class="cz-muted" style="font-size: 12.5px; margin-top: 6px">
+					<p class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
 						{{
 							Number(retentionDays) > 0
 								? `Audio is deleted ${retentionDays} days after an assembly is closed. Table phones are told this before recording.`
@@ -642,7 +642,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					<SvgIcon :path="mdiImageOutline" :size="22" style="color: var(--cz-primary)" />
 					<h3>Organization</h3>
 				</div>
-				<p class="cz-muted" style="font-size: 13.5px; margin-bottom: 14px">
+				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
 					Name and logo appear on the header and footer of PDF reports.
 					Logo: PNG or JPEG, up to 1&nbsp;MB.
 				</p>

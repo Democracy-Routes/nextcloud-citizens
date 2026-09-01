@@ -245,7 +245,21 @@
 
 #citizens-app .cz-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-#citizens-app .cz-btn--small { padding: 5px 11px; font-size: 13px; font-weight: 500; gap: 5px; }
+#citizens-app .cz-btn--small { padding: 5px 11px; font-size: 0.8125rem; font-weight: 500; gap: 5px; }
+
+/* Touch targets. A small button is about 26px tall, which is fine for a mouse
+   and below every guideline for a finger — and every row action in Files,
+   Live, Rounds and Participants is one of these. Only coarse pointers pay the
+   density cost, so the desktop tables the facilitator relies on are unchanged. */
+@media (pointer: coarse) {
+	#citizens-app .cz-btn--small {
+		min-height: 44px;
+		padding: 10px 14px;
+	}
+	#citizens-app .cz-tab {
+		min-height: 44px;
+	}
+}
 #citizens-app .cz-btn--wide { width: 100%; }
 
 /* icon-only buttons */
@@ -547,6 +561,8 @@
 	flex-direction: column;
 	gap: 8px;
 	z-index: 60;
+	/* the CONTAINER stays click-through so it never blocks the page beneath;
+	   each toast re-enables pointer events so it can be dismissed */
 	pointer-events: none;
 }
 
@@ -554,13 +570,15 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 10px 18px;
+	padding: 10px 10px 10px 18px;
 	border-radius: 999px;
 	background: var(--cz-text);
 	color: var(--cz-bg);
-	font-size: 14px;
+	font-size: 0.875rem;
 	font-weight: 600;
 	box-shadow: var(--cz-shadow-lift);
+	pointer-events: auto;
+	max-width: min(90vw, 520px);
 }
 
 #citizens-app .cz-toast--error { background: var(--cz-danger); color: #fff; }
@@ -637,7 +655,7 @@
 }
 
 #citizens-app .cz-qr-url {
-	font-size: 10.5px;
+	font-size: 0.75rem;
 	color: #666;
 	white-space: nowrap;
 	overflow: hidden;
@@ -862,7 +880,6 @@
 	#citizens-app .cz-qr-item { break-inside: avoid; border: 1px solid #000; }
 	#citizens-app .cz-qr-item .cz-btn { display: none; }
 }
-}
 
 /* A view whose last refresh failed. Dimming it is the difference between
    "these numbers are current" and "these numbers are the last ones we got",
@@ -871,3 +888,9 @@
 	opacity: 0.62;
 	transition: opacity 0.2s ease;
 }
+
+/* Type scale. Fixed pixel sizes ignore the reader's own Nextcloud font
+   setting, which is the setting anyone who needs larger text has already
+   found. These are rem so that setting applies. */
+#citizens-app .cz-text-sm { font-size: 0.8125rem; }
+#citizens-app .cz-text-xs { font-size: 0.75rem; }

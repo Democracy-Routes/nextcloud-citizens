@@ -435,7 +435,7 @@ async function clearSynced(): Promise<void> {
 				</template>
 				<button class="rc-btn" style="margin-top: 10px" @click="engine.retryNow()">{{ t('recorder.recording.retryUpload') }}</button>
 			</div>
-			<p v-else class="rc-muted rc-center" style="font-size: 13.5px">
+			<p v-else class="rc-muted rc-center" style="font-size: 0.845rem">
 				{{ t('recorder.recording.keepOpen') }}
 			</p>
 
@@ -465,7 +465,7 @@ async function clearSynced(): Promise<void> {
 			<template v-if="state.phase === 'recording'">
 				<div v-if="showLive" class="rc-card">
 					<p class="rc-eyebrow">{{ t('recorder.recording.liveTranscript') }}</p>
-					<p v-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 14px; margin: 0">
+					<p v-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 0.875rem; margin: 0">
 						{{ liveChecked ? 'Live captions temporarily unavailable. Recording continues safely.' : 'Waiting for captions…' }}
 					</p>
 					<div v-else ref="captionsBox" class="rc-captions">
@@ -501,7 +501,7 @@ async function clearSynced(): Promise<void> {
 				<div class="rc-hero">
 					<div class="rc-hero__icon"><SvgIcon :path="mdiCloudUploadOutline" :size="44" style="color: var(--rc-blue)" /></div>
 					<h1>Synchronizing</h1>
-					<p class="rc-muted" style="margin-top: 10px; font-size: 16px">
+					<p class="rc-muted" style="margin-top: 10px; font-size: 1rem">
 						<span style="font-variant-numeric: tabular-nums">{{ state.ackedChunks }} / {{ state.localChunks }}</span>
 						chunks uploaded
 						<template v-if="state.serverState"><br />Server: {{ state.serverState }}</template>
@@ -555,7 +555,7 @@ async function clearSynced(): Promise<void> {
 						<p class="rc-question" style="margin: 0">
 							{{ nextRound.question || nextRound.title }}
 						</p>
-						<p class="rc-muted" style="margin: 10px 0 0; font-size: 13.5px">
+						<p class="rc-muted" style="margin: 10px 0 0; font-size: 0.845rem">
 							{{ t('recorder.recording.takeABreak') }}
 						</p>
 					</div>
@@ -570,13 +570,13 @@ async function clearSynced(): Promise<void> {
 								<p class="rc-eyebrow" style="margin: 10px 0 2px; color: var(--rc-blue)">
 									{{ t('recorder.preflight.roundSummary', { position: entry.position }) }}
 								</p>
-								<p v-if="entry.summary" style="font-size: 14px; margin: 0">{{ entry.summary }}</p>
-								<p v-else class="rc-muted" style="font-size: 13.5px; margin: 0">
+								<p v-if="entry.summary" style="font-size: 0.875rem; margin: 0">{{ entry.summary }}</p>
+								<p v-else class="rc-muted" style="font-size: 0.845rem; margin: 0">
 									{{ t('recorder.preflight.analyzing') }}
 								</p>
 							</template>
 						</div>
-						<p class="rc-muted rc-center" style="margin-top: 14px; font-size: 13.5px">
+						<p class="rc-muted rc-center" style="margin-top: 14px; font-size: 0.845rem">
 							{{ t('recorder.recording.reportPending') }}
 						</p>
 					</template>

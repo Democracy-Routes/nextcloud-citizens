@@ -17,7 +17,8 @@
  * what they are about to destroy.
  */
 import { mdiAlert, mdiHelpCircleOutline } from '@mdi/js'
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
+import { useFocusTrap } from '../../composables/useFocusTrap'
 import CzButton from './CzButton.vue'
 import SvgIcon from './SvgIcon.vue'
 
@@ -35,6 +36,14 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 
+const dialog = ref<HTMLElement | null>(null)
+const titleId = useId()
+const messageId = useId()
+
+// Cancel is focused first for anything destructive, so a reflex Enter on an
+// unexpected dialog cannot confirm it
+useFocusTrap(dialog, () => emit('cancel'), { initial: 'first' })
+
 const typed = ref('')
 
 const isDanger = computed(() => props.tone !== 'default')
@@ -46,15 +55,21 @@ const blocked = computed(
 
 <template>
 	<div class="cz-modal-mask" @click.self="emit('cancel')">
-		<div class="cz-modal" role="dialog" aria-modal="true">
+		<div
+			ref="dialog"
+			class="cz-modal"
+			role="dialog"
+			aria-modal="true"
+			:aria-labelledby="titleId"
+			:aria-describedby="messageId">
 			<div class="cz-modal__head">
 				<SvgIcon
 					:path="isDanger ? mdiAlert : mdiHelpCircleOutline"
 					:size="22"
 					:class="isDanger ? 'cz-modal__icon--danger' : ''" />
-				<h3>{{ title }}</h3>
+				<h3 :id="titleId">{{ title }}</h3>
 			</div>
-			<p class="cz-modal__message">{{ message }}</p>
+			<p :id="messageId" class="cz-modal__message">{{ message }}</p>
 
 			<label v-if="confirmWord" class="cz-modal__typeit">
 				<span>{{ $t('confirm.typeToConfirm', { word: confirmWord }) }}</span>

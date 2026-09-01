@@ -141,5 +141,8 @@
 	"confirm": {
 		"cancel": "Cancel",
 		"typeToConfirm": "Type “{word}” to confirm"
+	},
+	"toast": {
+		"dismiss": "Dismiss"
 	}
 }

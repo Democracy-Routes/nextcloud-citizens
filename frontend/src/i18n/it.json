@@ -141,5 +141,8 @@
 	"confirm": {
 		"cancel": "Annulla",
 		"typeToConfirm": "Digitate «{word}» per confermare"
+	},
+	"toast": {
+		"dismiss": "Chiudi"
 	}
 }

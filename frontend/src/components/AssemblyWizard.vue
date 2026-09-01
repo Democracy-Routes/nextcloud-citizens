@@ -102,7 +102,7 @@ async function submit(): Promise<void> {
 							<input v-model="recordingMode" type="radio" value="orchestrated" />
 							Live event (orchestrated)
 						</span>
-						<span class="cz-muted" style="font-weight: 400; font-size: 12.5px">
+						<span class="cz-muted" style="font-weight: 400; font-size: 0.78rem">
 							You start and end each round for all tables at once; phones record simultaneously.
 						</span>
 					</label>
@@ -111,7 +111,7 @@ async function submit(): Promise<void> {
 							<input v-model="recordingMode" type="radio" value="independent" />
 							Independent tables
 						</span>
-						<span class="cz-muted" style="font-weight: 400; font-size: 12.5px">
+						<span class="cz-muted" style="font-weight: 400; font-size: 0.78rem">
 							Each table records the shared questions on its own schedule — even days apart.
 						</span>
 					</label>
@@ -123,7 +123,7 @@ async function submit(): Promise<void> {
 					v-model="analysisInstructions"
 					rows="2"
 					placeholder="E.g. This assembly is about urban mobility. 'PUMS' means the city's mobility plan."></textarea>
-				<span class="cz-muted" style="font-size: 12.5px">
+				<span class="cz-muted" style="font-size: 0.78rem">
 					Given to the AI when analyzing this assembly's discussions — topic context,
 					local glossary, focus areas.
 				</span>

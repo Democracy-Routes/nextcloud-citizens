@@ -279,7 +279,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 				<p class="rc-question" style="margin: 0">{{ selectedRound.question || selectedRound.title }}</p>
 				<div v-if="openRounds.length > 1" style="margin-top: 14px">
 					<select
-						style="width: 100%; padding: 11px; border-radius: 10px; background: var(--rc-surface-2); color: var(--rc-text); border: 1px solid var(--rc-border); font-size: 16px"
+						style="width: 100%; padding: 11px; border-radius: 10px; background: var(--rc-surface-2); color: var(--rc-text); border: 1px solid var(--rc-border); font-size: 1rem"
 						:value="selectedRound.id"
 						@change="selectedRound = session.rounds.find((r) => r.id === ($event.target as HTMLSelectElement).value) ?? selectedRound">
 						<option
@@ -303,8 +303,8 @@ const STATE_CLASS: Record<CheckState, string> = {
 					<p class="rc-eyebrow" style="margin: 10px 0 2px; color: var(--rc-blue)">
 						{{ t('recorder.preflight.roundSummary', { position: entry.position }) }}
 					</p>
-					<p v-if="entry.summary" style="font-size: 14px; margin: 0">{{ entry.summary }}</p>
-					<p v-else class="rc-muted" style="font-size: 13.5px; margin: 0">{{ t('recorder.preflight.analyzing') }}</p>
+					<p v-if="entry.summary" style="font-size: 0.875rem; margin: 0">{{ entry.summary }}</p>
+					<p v-else class="rc-muted" style="font-size: 0.845rem; margin: 0">{{ t('recorder.preflight.analyzing') }}</p>
 				</template>
 				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 					{{ t('recorder.armed.viewReport') }}

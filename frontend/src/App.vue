@@ -115,7 +115,13 @@ async function onDeleted(): Promise<void> {
 				class="cz-navitem"
 				:class="{ 'cz-navitem--active': assembly.id === selectedId }"
 				@click="open(assembly.id)">
-				<span class="cz-dot" :class="`cz-dot--${STATUS_TONE[assembly.status] ?? 'gray'}`"></span>
+				<!-- the assembly's state was conveyed by hue and nothing else -->
+				<span
+					class="cz-dot"
+					:class="`cz-dot--${STATUS_TONE[assembly.status] ?? 'gray'}`"
+					role="img"
+					:aria-label="assembly.status.replaceAll('_', ' ').toLowerCase()"
+					:title="assembly.status.replaceAll('_', ' ').toLowerCase()"></span>
 				<span class="cz-navitem__body">
 					<span class="cz-navitem__name">{{ assembly.name }}</span>
 					<span class="cz-navitem__meta">
@@ -129,7 +135,7 @@ async function onDeleted(): Promise<void> {
 			<p
 				v-else-if="loaded && assemblies.length === 0"
 				class="cz-muted"
-				style="padding: 12px; font-size: 13px">
+				style="padding: 12px; font-size: 0.8125rem">
 				No assemblies yet.
 			</p>
 		</nav>

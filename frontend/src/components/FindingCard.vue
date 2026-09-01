@@ -79,10 +79,10 @@ function formatTime(seconds: number): string {
 						<span v-if="finding.scope === 'round' && finding.mentioned_table_count" class="cz-pill cz-pill--gray" style="text-transform: none">
 							Mentioned at {{ finding.mentioned_table_count }} table(s)
 						</span>
-						<span v-if="finding.support" class="cz-muted" style="font-size: 12.5px">support: {{ finding.support }}</span>
+						<span v-if="finding.support" class="cz-muted" style="font-size: 0.78rem">support: {{ finding.support }}</span>
 					</div>
 					<strong>{{ finding.title }}</strong>
-					<p style="margin: 4px 0 0; font-size: 14.5px">{{ finding.summary }}</p>
+					<p style="margin: 4px 0 0; font-size: 0.905rem">{{ finding.summary }}</p>
 				</div>
 				<CzStatusPill :status="STATUS_MAP[finding.status] ?? 'PROCESSING'" :label="finding.status.replaceAll('_', ' ').toLowerCase()" />
 			</div>

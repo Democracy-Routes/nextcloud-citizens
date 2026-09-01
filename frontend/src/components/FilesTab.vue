@@ -200,7 +200,7 @@ async function deleteAll(): Promise<void> {
 				<div class="cz-row cz-row--spread">
 					<div style="flex: 1; min-width: 240px">
 						<h3>Audio files &amp; exports</h3>
-						<p class="cz-muted" style="margin: 4px 0 0; font-size: 13.5px">
+						<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
 							{{ listing.totals.recordings }} recordings ·
 							{{ formatBytes(listing.totals.audio_bytes) }}
 							<template v-if="listing.totals.audio_deleted">
@@ -237,7 +237,7 @@ async function deleteAll(): Promise<void> {
 						</CzButton>
 					</div>
 				</div>
-				<p class="cz-muted" style="margin: 12px 0 0; font-size: 13px">
+				<p class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
 					The full session export bundles metadata, audio, transcripts and the report —
 					enough to move this assembly to another server. Deleting audio keeps transcripts,
 					findings and the report.
@@ -280,7 +280,7 @@ async function deleteAll(): Promise<void> {
 									<span
 										v-if="entry.transcript_source === 'live'"
 										class="cz-muted"
-										style="font-size: 11.5px; margin-left: 6px"
+										style="font-size: 0.72rem; margin-left: 6px"
 										title="From the live captions, not a transcription of the finished audio">
 										live
 									</span>
