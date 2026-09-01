@@ -162,9 +162,9 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     if transcript is None:
         raise AnalysisError("No transcript for this recording", permanent=True)
 
-    _delete_existing(session, recording_id=recording.id, scope="table", only_drafts=True)
-
     if not transcript.segments:
+        # nothing can fail after this point, so replacing here is safe
+        _delete_existing(session, recording_id=recording.id, scope="table", only_drafts=True)
         recording.analysis_summary = "No speech was detected in this recording."
         log.info("analysis_empty_transcript", recording_id=recording.id)
         return 0
@@ -197,6 +197,14 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
         TABLE_SYSTEM, language, store, assembly.analysis_instructions if assembly else ""
     )
     result = chat_json(base_url, key, model, system_prompt, user_prompt, TableAnalysis)
+
+    # Only now that the model has answered. Deleting before the call meant a
+    # permanent failure — a rotated key answering 401, or output that fails
+    # validation three times — destroyed the existing findings and regenerated
+    # nothing: PermanentJobError does not roll back (see jobs/runner.py). The
+    # delete and the inserts below are one transaction, so re-analysis either
+    # replaces the findings or leaves them untouched.
+    _delete_existing(session, recording_id=recording.id, scope="table", only_drafts=True)
     recording.analysis_summary = result.summary
 
     stored = 0
@@ -244,8 +252,9 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
             )
         ).scalars()
     )
-    _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
     if not table_findings:
+        # nothing can fail after this point, so replacing here is safe
+        _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
         summaries = [
             f"Table {rec.table_number}: {rec.analysis_summary}"
             for rec in session.execute(
@@ -289,6 +298,9 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
         ROUND_SYSTEM, language, store, assembly.analysis_instructions if assembly else ""
     )
     result = chat_json(base_url, key, model, system_prompt, user_prompt, RoundAnalysis)
+
+    # after the model answers, for the reason given in analyze_table
+    _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
     round_.analysis_summary = result.summary
 
     stored = 0
