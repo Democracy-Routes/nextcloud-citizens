@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
 from citizens.db.models import Assembly, Participant, RecorderSession
-from citizens.db.session import get_db
+from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.security.identity import CurrentUser
 from citizens.services import assemblies as svc
@@ -22,10 +22,14 @@ from citizens.storage.paths import purge_assembly_storage
 router = APIRouter()
 
 DB = Annotated[Session, Depends(get_db)]
+# round_monitor is polled every few seconds by every open organizer tab for the
+# whole length of an event. Taking SQLite's writer slot for it competes with
+# the phones' chunk uploads for no reason: it only reads.
+ReadDB = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get("/assemblies", response_model=list[schemas.AssemblyOut])
-def list_assemblies(user: CurrentUser, session: DB):
+def list_assemblies(user: CurrentUser, session: ReadDB):
     return list(
         session.execute(
             select(Assembly).where(Assembly.created_by == user).order_by(Assembly.created_at.desc())
@@ -47,7 +51,7 @@ def create_assembly(data: schemas.AssemblyCreate, user: CurrentUser, session: DB
 
 
 @router.get("/assemblies/{assembly_id}", response_model=schemas.AssemblyDetail)
-def get_assembly(assembly_id: str, user: CurrentUser, session: DB):
+def get_assembly(assembly_id: str, user: CurrentUser, session: ReadDB):
     return _detail(session, svc.get_owned_assembly(session, assembly_id, user))
 
 
@@ -117,13 +121,13 @@ def end_round(round_id: str, user: CurrentUser, session: DB):
 
 
 @router.get("/rounds/{round_id}/monitor")
-def round_monitor(round_id: str, user: CurrentUser, session: DB):
+def round_monitor(round_id: str, user: CurrentUser, session: ReadDB):
     round_ = svc.get_owned_round(session, round_id, user)
     return rounds_svc.round_monitor(session, round_)
 
 
 @router.get("/assemblies/{assembly_id}/participants", response_model=list[schemas.ParticipantOut])
-def list_participants(assembly_id: str, user: CurrentUser, session: DB):
+def list_participants(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = svc.get_owned_assembly(session, assembly_id, user)
     return assembly.participants
 
@@ -156,7 +160,7 @@ def delete_participant(participant_id: str, user: CurrentUser, session: DB):
 
 
 @router.get("/rounds/{round_id}/tables", response_model=list[schemas.TableOut])
-def round_tables(round_id: str, user: CurrentUser, session: DB):
+def round_tables(round_id: str, user: CurrentUser, session: ReadDB):
     round_ = svc.get_owned_round(session, round_id, user)
     return svc.tables_with_participants(session, round_)
 

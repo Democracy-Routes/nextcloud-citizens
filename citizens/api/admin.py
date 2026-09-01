@@ -164,10 +164,14 @@ def update_providers(data: ProvidersUpdate, store: Store, user: AdminUser, sessi
     _validate_endpoints(values)
     changed = provider_config.set_settings(store, values)
     provider_config.invalidate_snapshot()
+    # Read the summary back BEFORE the audit row opens the write transaction:
+    # providers_summary() is an OCS call to Nextcloud, and holding SQLite's
+    # single writer slot across it blocks every phone uploading a chunk.
+    summary = provider_config.providers_summary(store)
     record_audit_event(
         session, "providers_updated", actor=user, data={"fields": changed}
     )
-    return provider_config.providers_summary(store)
+    return summary
 
 
 class TestIn(BaseModel):

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from citizens.api.downloads import download_headers
 from citizens.db.models.base import utcnow
-from citizens.db.session import get_db
+from citizens.db.session import get_db, get_read_db
 from citizens.security.identity import CurrentUser
 from citizens.services import lifecycle
 from citizens.services.assemblies import get_owned_assembly
@@ -22,6 +22,10 @@ from citizens.services.report_pdf import render_pdf
 router = APIRouter()
 
 DB = Annotated[Session, Depends(get_db)]
+# Rendering a report reads every transcript and finding, and the PDF path also
+# asks Nextcloud for the organization name over OCS. None of that may happen
+# while holding SQLite's single writer slot.
+ReadDB = Annotated[Session, Depends(get_read_db)]
 
 
 def _report_filename(name: str, ext: str) -> str:
@@ -41,7 +45,7 @@ def _require_closed(assembly) -> None:
 def assembly_report(
     assembly_id: str,
     user: CurrentUser,
-    session: DB,
+    session: ReadDB,
     include_drafts: Annotated[bool, Query()] = False,
 ):
     assembly = get_owned_assembly(session, assembly_id, user)
@@ -52,7 +56,7 @@ def assembly_report(
 def assembly_report_markdown(
     assembly_id: str,
     user: CurrentUser,
-    session: DB,
+    session: ReadDB,
     include_drafts: Annotated[bool, Query()] = False,
 ):
     assembly = get_owned_assembly(session, assembly_id, user)
@@ -69,7 +73,7 @@ def assembly_report_markdown(
 def assembly_report_pdf(
     assembly_id: str,
     user: CurrentUser,
-    session: DB,
+    session: ReadDB,
     include_drafts: Annotated[bool, Query()] = False,
 ):
     assembly = get_owned_assembly(session, assembly_id, user)
@@ -120,7 +124,7 @@ def refresh_final_report(assembly_id: str, user: CurrentUser, session: DB):
 
 
 @router.get("/assemblies/{assembly_id}/progress")
-def assembly_progress(assembly_id: str, user: CurrentUser, session: DB):
+def assembly_progress(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)
     return lifecycle.assembly_progress(session, assembly)
 

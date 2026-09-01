@@ -26,6 +26,7 @@ from citizens.security.rate_limit import (
     client_ip,
     token_key,
 )
+from citizens.services import provider_config
 from citizens.services import recording as rec_svc
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import data_handling_summary, live_stt_snapshot
@@ -78,11 +79,19 @@ class JoinIn(BaseModel):
 def join(data: JoinIn, request: Request, session: DB):
     JOIN_TOKEN_LIMITER.check(token_key(data.token))
     JOIN_IP_LIMITER.check(client_ip(request))
+    # Both of these can refresh a 30-second cache by calling Nextcloud over
+    # OCS. Read them BEFORE the first statement: create_session_from_invite
+    # opens the write transaction, and SQLite's single writer slot must not be
+    # held across an HTTPS round-trip while the room is scanning QR codes.
+    handling = data_handling_summary()
+    analysis_enabled = provider_config.analysis_enabled_cached()
     recorder_session, bearer = rec_svc.create_session_from_invite(session, data.token)
     return {
         "session_token": bearer,
         "expires_at": recorder_session.expires_at,
-        **_assembly_state(session, recorder_session),
+        **_assembly_state(
+            session, recorder_session, handling=handling, analysis_enabled=analysis_enabled
+        ),
     }
 
 
@@ -197,13 +206,13 @@ def _published_report(session: Session, recorder_session: RecorderSession) -> tu
 
 
 @router.get("/recorder/report")
-def published_report(recorder_session: RecorderSess, session: DB):
+def published_report(recorder_session: ReadingSess, session: ReadDB):
     _, report = _published_report(session, recorder_session)
     return report
 
 
 @router.get("/recorder/report.pdf")
-def published_report_pdf(recorder_session: RecorderSess, session: DB):
+def published_report_pdf(recorder_session: ReadingSess, session: ReadDB):
     from fastapi.responses import Response
 
     from citizens.services.branding import logo_path, organization_name
@@ -264,13 +273,26 @@ def ship_logs(data: LogsIn, recorder_session: RecorderSess):
     return {"accepted": len(data.entries), "truncated": False}
 
 
-def _assembly_state(session: Session, recorder_session: RecorderSession) -> dict:
+def _assembly_state(
+    session: Session,
+    recorder_session: RecorderSession,
+    handling: dict | None = None,
+    analysis_enabled: bool | None = None,
+) -> dict:
+    """Everything a phone needs about its assembly.
+
+    `handling` and `analysis_enabled` may be passed by a caller that already
+    read them outside its transaction (see join); left None they are read here,
+    which is correct for the status poll because that runs on a read session.
+    """
     assembly = session.get(Assembly, recorder_session.assembly_id)
     if assembly is None:
         raise HTTPException(status_code=404, detail="Assembly not found")
     # this table's recording state per round, so the phone can lock finished
     # rounds and offer only un-recorded ones — plus this table's own AI
     # summary once analysis lands (shown on the final screen)
+    if handling is None:
+        handling = data_handling_summary()
     recorded_rounds: dict[str, str] = {}
     table_summaries: dict[str, str] = {}
     for recording in session.execute(
@@ -291,15 +313,15 @@ def _assembly_state(session: Session, recorder_session: RecorderSession) -> dict
             "recording_mode": assembly.recording_mode,
         },
         # phones learn about report availability through the status poll
-        "report_available": _report_available(session, assembly),
+        "report_available": _report_available(session, assembly, analysis_enabled),
         # what the table is told before recording starts (brief §43): engine
         # name, whether it is a hosted service, and how long audio is kept
         "data_handling": {
-            **data_handling_summary(),
+            **handling,
             "audio_retention_days": (
                 assembly.audio_retention_days
                 if assembly.audio_retention_days is not None
-                else data_handling_summary().get("audio_retention_days", 0)
+                else handling.get("audio_retention_days", 0)
             ),
         },
         "table_number": recorder_session.table_number,
@@ -319,7 +341,9 @@ def _assembly_state(session: Session, recorder_session: RecorderSession) -> dict
     }
 
 
-def _report_available(session: Session, assembly: Assembly) -> bool:
+def _report_available(
+    session: Session, assembly: Assembly, analysis_enabled: bool | None = None
+) -> bool:
     """Published explicitly — or, for independent assemblies, every table has
     completed every round (the organizer may still publish earlier)."""
     if assembly.report_published_at is not None:
@@ -329,4 +353,4 @@ def _report_available(session: Session, assembly: Assembly) -> bool:
     # a closed session with a frozen report stays readable through a reopen
     if assembly.final_report_json:
         return True
-    return rec_svc.assembly_complete(session, assembly)
+    return rec_svc.assembly_complete(session, assembly, analysis_enabled)

@@ -11,7 +11,7 @@ from starlette.background import BackgroundTask
 
 from citizens.api.downloads import NO_STORE
 from citizens.db.models import Recording
-from citizens.db.session import get_db
+from citizens.db.session import get_db, get_read_db, session_scope
 from citizens.security.identity import CurrentUser
 from citizens.services import files as files_svc
 from citizens.services.assemblies import get_owned_assembly
@@ -20,6 +20,12 @@ from citizens.services.audit import record_audit_event
 router = APIRouter()
 
 DB = Annotated[Session, Depends(get_db)]
+# Reads go through a session that does NOT take SQLite's single writer slot.
+# Building an audio bundle copies every recording byte-for-byte and a session
+# export also renders the PDF; holding the write lock across that starved every
+# phone still uploading chunks, which surfaced as "database is locked" 500s
+# mid-event.
+ReadDB = Annotated[Session, Depends(get_read_db)]
 
 
 def _owned_recording(session: Session, recording_id: str, user: str) -> Recording:
@@ -31,13 +37,13 @@ def _owned_recording(session: Session, recording_id: str, user: str) -> Recordin
 
 
 @router.get("/assemblies/{assembly_id}/files")
-def list_files(assembly_id: str, user: CurrentUser, session: DB):
+def list_files(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)
     return files_svc.list_files(session, assembly)
 
 
 @router.get("/recordings/{recording_id}/audio")
-def download_audio(recording_id: str, user: CurrentUser, session: DB):
+def download_audio(recording_id: str, user: CurrentUser, session: ReadDB):
     recording = _owned_recording(session, recording_id, user)
     path = files_svc.canonical_path(recording)
     if path is None:
@@ -61,19 +67,30 @@ def download_audio(recording_id: str, user: CurrentUser, session: DB):
     )
 
 
+def _audit_after_build(event: str, assembly_id: str, user: str) -> None:
+    """Record the download in its own short transaction.
+
+    The build above runs on a read session precisely so it holds no lock; the
+    audit row is the one write these endpoints need, and it must not extend
+    back over the archive build.
+    """
+    with session_scope() as write_session:
+        record_audit_event(write_session, event, "assembly", assembly_id, actor=user)
+
+
 @router.get("/assemblies/{assembly_id}/audio.zip")
-def download_all_audio(assembly_id: str, user: CurrentUser, session: DB):
+def download_all_audio(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)
     archive = files_svc.build_audio_zip(session, assembly)
-    record_audit_event(session, "audio_bundle_downloaded", "assembly", assembly.id, actor=user)
+    _audit_after_build("audio_bundle_downloaded", assembly.id, user)
     return _zip_response(archive, f"{_slug(assembly.name)}-audio.zip")
 
 
 @router.get("/assemblies/{assembly_id}/export.zip")
-def download_session_export(assembly_id: str, user: CurrentUser, session: DB):
+def download_session_export(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)
     archive = files_svc.build_session_export(session, assembly)
-    record_audit_event(session, "session_exported", "assembly", assembly.id, actor=user)
+    _audit_after_build("session_exported", assembly.id, user)
     return _zip_response(archive, f"{_slug(assembly.name)}-session-export.zip")
 
 

@@ -88,12 +88,19 @@ COMPLETED_STATES = (
 )
 
 
-def assembly_complete(session: Session, assembly) -> bool:
+def assembly_complete(session: Session, assembly, analysis_enabled: bool | None = None) -> bool:
     """True when EVERY table has a completed recording for EVERY round.
 
     Drives the independent-mode auto-availability of the report on phones:
     with analysis enabled, every round must also carry its cross-table AI
-    summary so the auto-shown report is never empty."""
+    summary so the auto-shown report is never empty.
+
+    `analysis_enabled` lets a caller that already read the setting pass it in.
+    Reading it here is an OCS call to Nextcloud, and /public/join runs this
+    while holding SQLite's writer slot — twenty tables scanning QR codes in the
+    same minute is exactly when that starves the chunk uploads. Left at None it
+    reads the (30 s cached) setting itself, so every other caller is unchanged.
+    """
     expected = set(range(1, assembly.default_table_count + 1))
     if not expected or not assembly.rounds:
         return False
@@ -105,7 +112,9 @@ def assembly_complete(session: Session, assembly) -> bool:
         )
     ).scalars():
         completed_by_round.setdefault(recording.round_id, set()).add(recording.table_number)
-    analysis_on = provider_config.analysis_enabled_cached()
+    if analysis_enabled is None:
+        analysis_enabled = provider_config.analysis_enabled_cached()
+    analysis_on = analysis_enabled
     for round_ in assembly.rounds:
         if not expected.issubset(completed_by_round.get(round_.id, set())):
             return False

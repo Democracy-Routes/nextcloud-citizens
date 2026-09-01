@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from citizens.api.downloads import download_headers
 from citizens.config import get_settings
 from citizens.db.models import RecorderSession, Recording
-from citizens.db.session import get_db
+from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.security.identity import CurrentUser
@@ -25,10 +25,13 @@ from citizens.storage.paths import device_log_path
 router = APIRouter()
 
 DB = Annotated[Session, Depends(get_db)]
+# Listing invites and rendering the QR sheet are reads; the sheet in particular
+# renders a PDF, which must not hold the writer slot while tables are joining.
+ReadDB = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get("/assemblies/{assembly_id}/invites", response_model=list[schemas.InviteOut])
-def list_invites(assembly_id: str, user: CurrentUser, session: DB):
+def list_invites(assembly_id: str, user: CurrentUser, session: ReadDB):
     get_owned_assembly(session, assembly_id, user)
     return invite_svc.list_invites(session, assembly_id)
 
@@ -66,7 +69,7 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     "/assemblies/{assembly_id}/invites/links",
     response_model=list[schemas.InviteGenerated],
 )
-def invite_links(assembly_id: str, user: CurrentUser, session: DB):
+def invite_links(assembly_id: str, user: CurrentUser, session: ReadDB):
     """Re-materialized QR sheet for the active invites (tokens are stored
     encrypted with the app secret; invites from before that existed are
     omitted and need a regenerate)."""
@@ -75,7 +78,7 @@ def invite_links(assembly_id: str, user: CurrentUser, session: DB):
 
 
 @router.get("/assemblies/{assembly_id}/invites/sheet.pdf")
-def invite_sheet_pdf(assembly_id: str, user: CurrentUser, session: DB):
+def invite_sheet_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
     """The printable QR sheet: four tables per A4 page, with cut lines.
 
     Built here rather than with the browser's print, which silently dropped
@@ -123,7 +126,7 @@ def device_logs(
     assembly_id: str,
     table_number: int,
     user: CurrentUser,
-    session: DB,
+    session: ReadDB,
     tail: Annotated[int, Query(ge=1, le=1000)] = 200,
 ):
     """Tail of the latest device's shipped client log for one table."""

@@ -58,7 +58,16 @@ def _offending_calls(path: pathlib.Path) -> list[str]:
 
 @pytest.mark.parametrize(
     "relative_path",
-    ["citizens/jobs/sweep.py", "citizens/jobs/runner.py", "citizens/jobs/handlers.py"],
+    [
+        "citizens/jobs/sweep.py",
+        "citizens/jobs/runner.py",
+        "citizens/jobs/handlers.py",
+        "citizens/api/public_recorder.py",
+        "citizens/api/files.py",
+        "citizens/api/reports.py",
+        "citizens/api/recorders.py",
+        "citizens/api/admin.py",
+    ],
 )
 def test_background_work_never_reads_config_inside_a_transaction(relative_path):
     """The regression that 500'd a live recording: the retention sweep opened a
