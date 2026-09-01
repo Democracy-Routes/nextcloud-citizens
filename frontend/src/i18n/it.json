@@ -121,5 +121,16 @@
 		"report": {
 			"mentionedAt": "Citato a {count} tavolo | Citato a {count} tavolo | Citato a {count} tavoli"
 		}
+	},
+	"error": {
+		"network": "Impossibile raggiungere Nextcloud. Verificate la connessione e riprovate.",
+		"permission": "Non avete i permessi per farlo.",
+		"notFound": "Non esiste più: potrebbe essere stato eliminato.",
+		"tooLarge": "Il file è troppo grande per essere caricato.",
+		"busy": "Il server è occupato. Riprovate tra poco.",
+		"server": "Si è verificato un problema sul server. Non è stato modificato nulla: riprovate.",
+		"unknown": "Qualcosa è andato storto. Riprovate o ricaricate la pagina.",
+		"details": "Dettagli tecnici",
+		"retry": "Riprova"
 	}
 }

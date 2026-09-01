@@ -3,11 +3,13 @@
 <script setup lang="ts">
 import { mdiAccountVoice, mdiCog, mdiMenu, mdiPlus } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
+import { describeError, type UiError } from './errors'
 import { api, ApiError } from './api'
 import AssemblyDetail from './components/AssemblyDetail.vue'
 import AssemblyWizard from './components/AssemblyWizard.vue'
 import SettingsView from './components/SettingsView.vue'
 import CzButton from './components/ui/CzButton.vue'
+import CzError from './components/ui/CzError.vue'
 import CzToasts from './components/ui/CzToasts.vue'
 import SvgIcon from './components/ui/SvgIcon.vue'
 import type { Assembly, InviteGenerated } from './types'
@@ -20,7 +22,14 @@ const view = ref<View>({ name: 'empty' })
 const isAdmin = ref(false)
 const sidebarOpen = ref(false)
 // QR codes generated at creation: handed to the detail view exactly once
-const freshInvites = ref<InviteGenerated[]>([])
+/** QR codes from a just-created assembly, handed to the detail view.
+ *
+ * Keyed by assembly, because it is app-level state consumed by whatever mounts
+ * next: if @invites-consumed never fired (QrTab throwing on mount was enough),
+ * the NEXT assembly opened was forced onto its QR tab and shown the previous
+ * assembly's codes under its own name.
+ */
+const freshInvites = ref<{ assemblyId: string; invites: InviteGenerated[] } | null>(null)
 
 const STATUS_TONE: Record<string, string> = {
 	DRAFT: 'gray', READY: 'blue', ACTIVE: 'red', PROCESSING: 'amber', REVIEW: 'blue', COMPLETE: 'green',
@@ -28,12 +37,20 @@ const STATUS_TONE: Record<string, string> = {
 
 const selectedId = computed(() => (view.value.name === 'detail' ? view.value.id : ''))
 
+const loadError = ref<UiError | null>(null)
+
 async function loadAssemblies(selectFirst = false): Promise<void> {
 	try {
 		assemblies.value = await api.listAssemblies()
+		loadError.value = null
 		if (selectFirst && view.value.name === 'empty' && assemblies.value.length > 0) {
 			view.value = { name: 'detail', id: assemblies.value[0].id }
 		}
+	} catch (err) {
+		// Without this the list stayed empty and the app said "No assemblies
+		// yet", inviting the facilitator to create the assembly they already
+		// had — during the event, with the API merely unreachable.
+		loadError.value = describeError(err)
 	} finally {
 		loaded.value = true
 	}
@@ -59,6 +76,7 @@ function open(id: string): void {
 }
 
 function openCreate(): void {
+	freshInvites.value = null
 	view.value = { name: 'create' }
 	sidebarOpen.value = false
 }
@@ -69,9 +87,12 @@ function openSettings(): void {
 }
 
 async function onCreated(id: string, invites: InviteGenerated[]): Promise<void> {
-	freshInvites.value = invites
-	await loadAssemblies()
+	freshInvites.value = { assemblyId: id, invites }
+	// Switch FIRST. Reloading the sidebar before switching meant that a failure
+	// there left the wizard on screen with its button enabled, and the next
+	// click created a second assembly.
 	view.value = { name: 'detail', id }
+	await loadAssemblies()
 }
 
 async function onDeleted(): Promise<void> {
@@ -102,7 +123,13 @@ async function onDeleted(): Promise<void> {
 					</span>
 				</span>
 			</button>
-			<p v-if="loaded && assemblies.length === 0" class="cz-muted" style="padding: 12px; font-size: 13px">
+			<div v-if="loadError" style="padding: 10px">
+				<CzError :error="loadError" @retry="loadAssemblies()" />
+			</div>
+			<p
+				v-else-if="loaded && assemblies.length === 0"
+				class="cz-muted"
+				style="padding: 12px; font-size: 13px">
 				No assemblies yet.
 			</p>
 		</nav>
@@ -124,7 +151,13 @@ async function onDeleted(): Promise<void> {
 			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">Assemblies</CzButton>
 		</div>
 
-		<div v-if="view.name === 'empty'" class="cz-page">
+		<div v-if="view.name === 'empty' && loadError" class="cz-page">
+			<!-- the list failed to load; there may well BE assemblies, so do not
+			     invite the facilitator to create one they already have -->
+			<CzError :error="loadError" @retry="loadAssemblies(true)" />
+		</div>
+
+		<div v-else-if="view.name === 'empty'" class="cz-page">
 			<div class="cz-empty" style="padding-top: 12vh">
 				<div class="cz-empty__icon"><SvgIcon :path="mdiAccountVoice" :size="44" /></div>
 				<h3 class="cz-empty__title">Welcome to Citizens</h3>
@@ -149,9 +182,9 @@ async function onDeleted(): Promise<void> {
 			v-else-if="view.name === 'detail'"
 			:key="view.id"
 			:assembly-id="view.id"
-			:fresh-invites="freshInvites"
+			:fresh-invites="freshInvites?.assemblyId === view.id ? freshInvites.invites : []"
 			@changed="loadAssemblies()"
-			@invites-consumed="freshInvites = []"
+			@invites-consumed="freshInvites = null"
 			@deleted="onDeleted" />
 	</main>
 

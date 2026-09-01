@@ -4,10 +4,13 @@
 import { mdiContentCopy, mdiPrinter, mdiQrcode, mdiRefresh, mdiCancel } from '@mdi/js'
 import { onMounted, ref } from 'vue'
 import { api, BASE } from '../api'
+import { describeError, type UiError } from '../errors'
 import type { AssemblyDetail, Invite, InviteGenerated } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzError from './ui/CzError.vue'
+import CzSkeleton from './ui/CzSkeleton.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail; initialGenerated?: InviteGenerated[] }>()
@@ -19,9 +22,21 @@ const generated = ref<InviteGenerated[]>(props.initialGenerated ?? [])
 const error = ref('')
 const busy = ref(false)
 const confirmRevoke = ref(false)
+const loaded = ref(false)
+const loadError = ref<UiError | null>(null)
 
 async function reload(): Promise<void> {
-	invites.value = await api.listInvites(props.assembly.id)
+	try {
+		invites.value = await api.listInvites(props.assembly.id)
+		loadError.value = null
+	} catch (err) {
+		// this tab is opened at the door, minutes before the event: an
+		// unexplained empty list is the worst possible moment for one
+		loadError.value = describeError(err)
+		loaded.value = true
+		return
+	}
+	loaded.value = true
 	// tokens are stored encrypted server-side, so the sheet can always be
 	// re-materialized (invites predating that storage come back empty)
 	if (!generated.value.length && invites.value.some((i) => i.active)) {
@@ -88,7 +103,8 @@ const hasActive = () => invites.value.some((i) => i.active)
 
 <template>
 	<div>
-		<div v-if="error" class="cz-error">{{ error }}</div>
+		<CzError v-if="loadError" :error="loadError" @retry="reload" />
+		<div v-else-if="error" class="cz-error">{{ error }}</div>
 
 		<div class="cz-card">
 			<div class="cz-row cz-row--spread">
@@ -124,8 +140,12 @@ const hasActive = () => invites.value.some((i) => i.active)
 			</p>
 		</div>
 
+		<!-- until the first load resolves, "No QR codes yet" is a guess — and
+		     the one moment it is shown is while the facilitator is at the door -->
+		<CzSkeleton v-if="!loaded && !loadError" :rows="3" :height="90" />
+
 		<CzEmptyState
-			v-if="!generated.length && !invites.length"
+			v-else-if="!generated.length && !invites.length"
 			:icon="mdiQrcode"
 			title="No QR codes yet"
 			hint="Generate one recording code per table, print the sheet, and place one code on each physical table.">

@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiBrain, mdiCogOutline, mdiCreation, mdiRefresh } from '@mdi/js'
+import { mdiBrain, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiRefresh } from '@mdi/js'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import type { AssemblyDetail, RoundFindings } from '../types'
@@ -89,7 +89,15 @@ const anyAnalyzing = () =>
 			</template>
 		</div>
 
-		<CzSkeleton v-if="!data && !error" :rows="4" />
+		<!-- an assembly with no rounds has nothing to poll for, so the skeleton
+		     shimmered forever and the tab looked permanently broken -->
+		<CzEmptyState
+			v-if="!roundId"
+			:icon="mdiClipboardTextOutline"
+			title="This assembly has no rounds yet"
+			hint="Add a round on the Rounds tab; findings appear here once its tables have been analyzed." />
+
+		<CzSkeleton v-else-if="!data && !error" :rows="4" />
 
 		<template v-else-if="data">
 			<CzEmptyState

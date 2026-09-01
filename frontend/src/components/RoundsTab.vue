@@ -11,8 +11,10 @@ import {
 } from '@mdi/js'
 import { ref } from 'vue'
 import { api } from '../api'
+import { useAsyncAction } from '../composables/useAsyncAction'
 import type { AssemblyDetail } from '../types'
 import CzButton from './ui/CzButton.vue'
+import CzError from './ui/CzError.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
@@ -36,14 +38,12 @@ function startEdit(roundId: string): void {
 	editDuration.value = round.duration_minutes
 }
 
+const { busy, error: actionError, run: runGuarded } = useAsyncAction()
+
 async function run(action: () => Promise<unknown>): Promise<void> {
-	error.value = ''
-	try {
-		await action()
-		emit('changed')
-	} catch (err) {
-		error.value = err instanceof Error ? err.message : String(err)
-	}
+	// the guard is the point: the reorder arrows had none, so a double-click
+	// fired two PUTs and the round could end up two places away
+	if (await runGuarded(action)) emit('changed')
 }
 
 const saveEdit = () =>
@@ -74,7 +74,8 @@ const add = () =>
 
 <template>
 	<div>
-		<div v-if="error" class="cz-error">{{ error }}</div>
+		<CzError v-if="actionError" :error="actionError" />
+		<div v-else-if="error" class="cz-error">{{ error }}</div>
 
 		<CzEmptyState
 			v-if="assembly.rounds.length === 0"
@@ -117,15 +118,15 @@ const add = () =>
 							</div>
 						</div>
 						<div class="cz-row" style="flex-wrap: nowrap">
-							<CzButton small variant="tertiary" :icon="mdiChevronUp" :disabled="round.position === 1" title="Move up" @click="move(round.id, round.position - 1)" />
-							<CzButton small variant="tertiary" :icon="mdiChevronDown" :disabled="round.position === assembly.rounds.length" title="Move down" @click="move(round.id, round.position + 1)" />
+							<CzButton small variant="tertiary" :icon="mdiChevronUp" :disabled="busy || round.position === 1" title="Move up" @click="move(round.id, round.position - 1)" />
+							<CzButton small variant="tertiary" :icon="mdiChevronDown" :disabled="busy || round.position === assembly.rounds.length" title="Move down" @click="move(round.id, round.position + 1)" />
 							<CzButton small variant="tertiary" :icon="mdiPencilOutline" title="Edit" @click="startEdit(round.id)" />
-							<CzButton small variant="tertiary" :icon="mdiDeleteOutline" title="Delete" @click="deleteId = round.id" />
+							<CzButton small variant="tertiary" :icon="mdiDeleteOutline" title="Delete" :disabled="busy" @click="deleteId = round.id" />
 						</div>
 					</div>
 				</template>
 			</div>
-			<CzButton :icon="mdiPlus" @click="add">Add round</CzButton>
+			<CzButton :icon="mdiPlus" :disabled="busy" @click="add">Add round</CzButton>
 		</template>
 
 		<CzConfirm

@@ -4,9 +4,11 @@
 import { mdiContentCopy, mdiShuffleVariant, mdiTableFurniture } from '@mdi/js'
 import { onMounted, ref, watch } from 'vue'
 import { api } from '../api'
+import { describeError, type UiError } from '../errors'
 import type { AssemblyDetail, Table } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzError from './ui/CzError.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
@@ -16,14 +18,21 @@ const tables = ref<Table[]>([])
 const loaded = ref(false)
 const error = ref('')
 const busy = ref(false)
+const loadError = ref<UiError | null>(null)
 
 async function reload(): Promise<void> {
 	if (!roundId.value) {
 		loaded.value = true
 		return
 	}
-	tables.value = await api.roundTables(roundId.value)
-	loaded.value = true
+	try {
+		tables.value = await api.roundTables(roundId.value)
+		loadError.value = null
+	} catch (err) {
+		loadError.value = describeError(err)
+	} finally {
+		loaded.value = true
+	}
 }
 
 onMounted(reload)
@@ -32,13 +41,16 @@ watch(roundId, () => {
 	void reload()
 })
 
-async function run(action: () => Promise<Table[]>): Promise<void> {
+async function run(action: () => Promise<Table[]>): Promise<boolean> {
+	if (busy.value) return false
 	busy.value = true
 	error.value = ''
 	try {
 		tables.value = await action()
+		return true
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
+		return false
 	} finally {
 		busy.value = false
 	}
@@ -46,15 +58,30 @@ async function run(action: () => Promise<Table[]>): Promise<void> {
 
 const randomize = () => run(() => api.randomize(roundId.value))
 const copyPrevious = () => run(() => api.copyPrevious(roundId.value))
-const move = (participantId: string, toTableId: string) =>
-	run(() => api.moveParticipant(roundId.value, participantId, toTableId))
+/** Move a participant, and put the dropdown back if the server refuses.
+ *
+ * The select is bound with :value, so a failed move left the vnode prop
+ * unchanged — Vue therefore had nothing to patch and the DOM kept showing the
+ * new table. The facilitator saw somebody seated where the server did not have
+ * them, and only a reload disagreed.
+ */
+async function move(
+	participantId: string,
+	toTableId: string,
+	element: HTMLSelectElement,
+	fromTableId: string,
+): Promise<void> {
+	const moved = await run(() => api.moveParticipant(roundId.value, participantId, toTableId))
+	if (!moved) element.value = fromTableId
+}
 
 const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 </script>
 
 <template>
 	<div>
-		<div v-if="error" class="cz-error">{{ error }}</div>
+		<CzError v-if="loadError" :error="loadError" @retry="reload" />
+		<div v-else-if="error" class="cz-error">{{ error }}</div>
 
 		<div class="cz-row" style="margin-bottom: 16px">
 			<select v-model="roundId" style="min-width: 220px">
@@ -110,7 +137,14 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 						:value="table.id"
 						title="Move to table"
 						style="padding: 3px 6px; font-size: 13px"
-						@change="move(participant.id, ($event.target as HTMLSelectElement).value)">
+						@change="
+							move(
+								participant.id,
+								($event.target as HTMLSelectElement).value,
+								$event.target as HTMLSelectElement,
+								table.id,
+							)
+						">
 						<option v-for="target in tables" :key="target.id" :value="target.id">T{{ target.number }}</option>
 					</select>
 				</div>

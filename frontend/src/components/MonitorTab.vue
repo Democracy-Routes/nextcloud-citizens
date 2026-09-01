@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiClipboardTextOutline,
 	mdiConsoleLine,
 	mdiMonitorEye,
 	mdiPlay,
@@ -14,6 +15,7 @@ import { api } from '../api'
 import type { AssemblyDetail, MonitorTable, RoundMonitor, TranscriptData } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
+import CzEmptyState from './ui/CzEmptyState.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import SvgIcon from './ui/SvgIcon.vue'
@@ -283,7 +285,13 @@ function pendingChunks(table: MonitorTable): number {
 			@confirm="startRound"
 			@cancel="confirmStartUnready = false" />
 
-		<CzSkeleton v-if="!monitor" :rows="5" />
+		<CzEmptyState
+			v-if="!roundId"
+			:icon="mdiClipboardTextOutline"
+			title="This assembly has no rounds yet"
+			hint="Add a round on the Rounds tab to start recording." />
+
+		<CzSkeleton v-else-if="!monitor" :rows="5" />
 
 		<template v-else>
 			<table class="cz-table">

@@ -10,8 +10,11 @@ import {
 } from '@mdi/js'
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
+import { describeError, type UiError } from '../errors'
+import { useAsyncAction } from '../composables/useAsyncAction'
 import type { Participant } from '../types'
 import CzButton from './ui/CzButton.vue'
+import CzError from './ui/CzError.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
@@ -28,22 +31,29 @@ const newName = ref('')
 const csvText = ref('')
 const showCsv = ref(false)
 const removeTarget = ref<Participant | null>(null)
+const loadError = ref<UiError | null>(null)
 
 async function reload(): Promise<void> {
-	participants.value = await api.listParticipants(props.assemblyId)
-	loaded.value = true
+	try {
+		participants.value = await api.listParticipants(props.assemblyId)
+		loadError.value = null
+	} catch (err) {
+		loadError.value = describeError(err)
+	} finally {
+		loaded.value = true
+	}
 }
 
 onMounted(reload)
 
+const { busy, error: actionError, run: runGuarded } = useAsyncAction()
+
 async function run(action: () => Promise<unknown>): Promise<void> {
-	error.value = ''
-	try {
-		await action()
+	// pressing Enter twice used to add the participant twice, and a
+	// double-clicked CSV import added fifty people twice
+	if (await runGuarded(action)) {
 		await reload()
 		emit('changed')
-	} catch (err) {
-		error.value = err instanceof Error ? err.message : String(err)
 	}
 }
 
@@ -92,7 +102,9 @@ function initials(participant: Participant): string {
 
 <template>
 	<div>
-		<div v-if="error" class="cz-error">{{ error }}</div>
+		<CzError v-if="loadError" :error="loadError" @retry="reload" />
+		<CzError v-else-if="actionError" :error="actionError" />
+		<div v-else-if="error" class="cz-error">{{ error }}</div>
 		<CzSkeleton v-if="!loaded" :rows="4" />
 
 		<template v-else>
@@ -100,10 +112,10 @@ function initials(participant: Participant): string {
 				<div class="cz-row">
 					<input v-model="newLabel" type="text" placeholder="Label (e.g. P001)" style="width: 140px" @keyup.enter="addOne" />
 					<input v-model="newName" type="text" placeholder="Name (optional)" style="width: 200px" @keyup.enter="addOne" />
-					<CzButton variant="primary" small :icon="mdiAccountPlus" :disabled="!newLabel.trim()" @click="addOne">Add</CzButton>
+					<CzButton variant="primary" small :icon="mdiAccountPlus" :disabled="busy || !newLabel.trim()" @click="addOne">Add</CzButton>
 					<span style="flex: 1"></span>
 					<CzButton small :icon="mdiFileDelimitedOutline" @click="showCsv = !showCsv">CSV import</CzButton>
-					<CzButton small :icon="mdiPlaylistPlus" @click="prefill">Prefill 50 anonymous</CzButton>
+					<CzButton small :icon="mdiPlaylistPlus" :disabled="busy" @click="prefill">Prefill 50 anonymous</CzButton>
 				</div>
 				<div v-if="showCsv" style="margin-top: 14px">
 					<p class="cz-muted" style="font-size: 13px">
@@ -111,7 +123,7 @@ function initials(participant: Participant): string {
 					</p>
 					<textarea v-model="csvText" rows="8" style="width: 100%; font-family: ui-monospace, monospace"></textarea>
 					<div class="cz-row" style="margin-top: 8px; justify-content: flex-end">
-						<CzButton variant="primary" small :disabled="!csvText.trim()" @click="importCsv">Import participants</CzButton>
+						<CzButton variant="primary" small :disabled="busy || !csvText.trim()" @click="importCsv">Import participants</CzButton>
 					</div>
 				</div>
 			</div>
@@ -135,7 +147,7 @@ function initials(participant: Participant): string {
 							<td>{{ participant.name || '—' }}</td>
 							<td class="cz-muted">{{ participant.email || '—' }}</td>
 							<td style="text-align: right">
-								<CzButton small variant="tertiary" :icon="mdiDeleteOutline" title="Remove" @click="removeTarget = participant" />
+								<CzButton small variant="tertiary" :icon="mdiDeleteOutline" title="Remove" :disabled="busy" @click="removeTarget = participant" />
 							</td>
 						</tr>
 					</tbody>

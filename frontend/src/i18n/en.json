@@ -121,5 +121,16 @@
 		"report": {
 			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables"
 		}
+	},
+	"error": {
+		"network": "Nextcloud cannot be reached. Check the connection and try again.",
+		"permission": "You do not have permission to do that.",
+		"notFound": "That no longer exists — it may have been deleted.",
+		"tooLarge": "That file is too large to upload.",
+		"busy": "The server is busy. Try again in a moment.",
+		"server": "The server had a problem. Nothing was changed — try again.",
+		"unknown": "Something went wrong. Try again, or reload the page.",
+		"details": "Technical details",
+		"retry": "Try again"
 	}
 }
