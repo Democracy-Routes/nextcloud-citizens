@@ -6,18 +6,21 @@ import {
 	mdiDownloadOutline,
 	mdiFolderZipOutline,
 	mdiMusicNoteOutline,
+	mdiRefresh,
 	mdiPackageVariantClosed,
 	mdiTextBoxRemoveOutline,
 	mdiTextSearch,
 } from '@mdi/js'
 import { computed, ref } from 'vue'
 import { api, BASE } from '../api'
+import { describeError } from '../errors'
 import { BACKGROUND_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, FileEntry, FilesListing } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzFailureNote from './ui/CzFailureNote.vue'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
@@ -64,9 +67,15 @@ const working = computed(() =>
 	),
 )
 
-const polling = usePolling(async () => {
-	if (working.value) await reload()
-}, { intervalMs: BACKGROUND_MS })
+const polling = usePolling(
+	async () => {
+		// Always load the first time. Gating the whole poll on `working` meant
+		// the tab never loaded at all, because nothing is "working" while the
+		// listing is still null.
+		if (listing.value === null || working.value) await reload()
+	},
+	{ intervalMs: BACKGROUND_MS },
+)
 
 const hasAudio = computed(() =>
 	(listing.value?.rounds ?? []).some((round) => round.tables.some((t) => t.audio_available)),
@@ -75,6 +84,23 @@ const hasAudio = computed(() =>
 const hasTranscripts = computed(() =>
 	(listing.value?.rounds ?? []).some((round) => round.tables.some((t) => t.has_transcript)),
 )
+
+/** The way out of a recording stuck after a failed assembly.
+ *
+ * The endpoint existed with nothing calling it, so a table wedged by a full
+ * disk still had no route back once space was freed. */
+async function retryAssembly(entry: FileEntry): Promise<void> {
+	busy.value = true
+	try {
+		await api.retryAssembly(entry.recording_id)
+		toast(`Assembling table ${entry.table_number} again`)
+		await reload()
+	} catch (err) {
+		error.value = describeError(err).message
+	} finally {
+		busy.value = false
+	}
+}
 
 async function retranscribe(): Promise<void> {
 	const entry = confirmRetranscribe.value
@@ -272,7 +298,10 @@ async function deleteAll(): Promise<void> {
 									</template>
 									<template v-else>{{ formatBytes(entry.size_bytes) }}</template>
 								</td>
-								<td><CzStatusPill :status="entry.state" /></td>
+								<td>
+									<CzStatusPill :status="entry.state" />
+									<CzFailureNote :state="entry.state" :error-code="entry.error_code" />
+								</td>
 								<td>
 									<span :class="entry.has_transcript ? 'cz-ok' : 'cz-muted'">
 										{{ entry.has_transcript ? '✓' : '—' }}
@@ -302,6 +331,16 @@ async function deleteAll(): Promise<void> {
 											:disabled="busy || !entry.audio_available"
 											@click="confirmOne = entry">
 											Audio
+										</CzButton>
+										<CzButton
+											v-if="entry.can_retry_assembly"
+											small
+											variant="tertiary"
+											:icon="mdiRefresh"
+											title="Try assembling the audio again"
+											:disabled="busy"
+											@click="retryAssembly(entry)">
+											Retry
 										</CzButton>
 										<CzButton
 											small

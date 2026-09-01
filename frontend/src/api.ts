@@ -169,6 +169,10 @@ export const api = {
 
 	getTranscript: (recordingId: string) =>
 		request<TranscriptData>('GET', `/api/v1/recordings/${recordingId}/transcript`),
+	/** Try assembling a recording's audio again — the way out of a failure
+	 * that left it stuck, once the disk has room. */
+	retryAssembly: (recordingId: string) =>
+		request<{ state: string }>('POST', `/api/v1/recordings/${recordingId}/assemble`),
 	requestTranscription: (recordingId: string) =>
 		request<{ queued: boolean }>('POST', `/api/v1/recordings/${recordingId}/transcribe`),
 	deviceLogs: (assemblyId: string, tableNumber: number, tail = 200) =>

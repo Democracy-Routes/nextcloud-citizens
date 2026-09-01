@@ -46,6 +46,10 @@ export interface FileEntry {
 	recording_id: string
 	table_number: number
 	state: string
+	/** Why it failed, when it did — a bare failed pill said nothing actionable. */
+	error_code?: string
+	updated_at?: string | null
+	can_retry_assembly?: boolean
 	mime_type: string
 	duration_seconds: number | null
 	size_bytes: number

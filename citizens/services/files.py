@@ -105,6 +105,16 @@ def list_files(session: Session, assembly: Assembly) -> dict:
                 "has_transcript": recording.id in transcribed,
                 "transcript_source": transcribed.get(recording.id, ""),
                 "can_retranscribe": path is not None,
+                # WHY a table failed, not just that it did. A bare orange pill
+                # told the organizer nothing they could act on — and the states
+                # differ entirely in what to do next: a full disk needs space
+                # freeing and a retry, invalid audio needs the table to record
+                # again.
+                "error_code": recording.error_code or "",
+                "updated_at": recording.updated_at.isoformat() if recording.updated_at else None,
+                "can_retry_assembly": recording.state in (
+                    "ASSEMBLING", "AUDIO_INVALID", "UPLOAD_INCOMPLETE"
+                ),
             }
         )
     return {
