@@ -18,6 +18,7 @@ from citizens.api.admin import router as admin_router
 from citizens.api.assemblies import router as assemblies_router
 from citizens.api.files import router as files_router
 from citizens.api.findings import router as findings_router
+from citizens.api.limits import BodySizeLimitMiddleware
 from citizens.api.public_recorder import router as public_recorder_router
 from citizens.api.recorder_page import router as recorder_page_router
 from citizens.api.recorders import router as recorders_router
@@ -103,6 +104,10 @@ def create_app(with_auth: bool = True) -> FastAPI:
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     if with_auth:
         app.add_middleware(AppAPIAuthMiddleware)
+    # Added after the auth middleware so it runs BEFORE it: the recorder routes
+    # are public, and an over-large body must be refused without first being
+    # buffered into memory to be authenticated.
+    app.add_middleware(BodySizeLimitMiddleware)
 
     @app.middleware("http")
     async def request_logging(request: Request, call_next):

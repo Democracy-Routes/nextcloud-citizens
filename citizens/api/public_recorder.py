@@ -30,7 +30,7 @@ from citizens.services import provider_config
 from citizens.services import recording as rec_svc
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import data_handling_summary, live_stt_snapshot
-from citizens.services.recording import RERECORDABLE_STATES
+from citizens.services.recording import MAX_CHUNK_BYTES, RERECORDABLE_STATES
 from citizens.storage.paths import device_log_path
 
 router = APIRouter(prefix="/public")
@@ -111,6 +111,25 @@ def start(data: StartIn, recorder_session: RecorderSess, session: DB):
     return {"recording_id": recording.id, "state": recording.state}
 
 
+async def _read_capped_body(request: Request) -> bytes:
+    """Read the request body, refusing anything over one chunk's worth.
+
+    Content-Length is the normal path — the recorder always sets it, so an
+    oversized upload is rejected before a single byte is read. The streaming
+    branch is the backstop for a chunked or lying client, and it aborts as soon
+    as the accumulated body passes the limit rather than at the end.
+    """
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_CHUNK_BYTES:
+        raise HTTPException(status_code=413, detail="Chunk too large")
+    buffer = bytearray()
+    async for part in request.stream():
+        buffer.extend(part)
+        if len(buffer) > MAX_CHUNK_BYTES:
+            raise HTTPException(status_code=413, detail="Chunk too large")
+    return bytes(buffer)
+
+
 @router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}")
 async def upload_chunk(
     recording_id: str,
@@ -129,7 +148,14 @@ async def upload_chunk(
     # Resolving the session as a dependency held that slot for the whole body
     # read, so one phone on congested venue WiFi stalled every other table
     # until they hit busy_timeout and got "database is locked".
-    body = await request.body()
+    #
+    # That ordering is deliberate and must stay, which is exactly why the size
+    # limit has to be enforced HERE. This route is public, so before the fix an
+    # unauthenticated caller could post half a gigabyte and have it buffered in
+    # full before anything checked the bearer token — a handful in parallel
+    # OOM-kills the container mid-assembly. The size check in receive_chunk is
+    # too late to prevent that; it stays as the belt to this pair of braces.
+    body = await _read_capped_body(request)
 
     # Everything below blocks: SQLite waits up to busy_timeout for the writer
     # slot, the chunk is written to disk, and the config read makes an OCS call
