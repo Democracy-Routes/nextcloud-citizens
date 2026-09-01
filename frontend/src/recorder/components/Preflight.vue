@@ -14,6 +14,7 @@ import {
 	mdiWaveform,
 } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { useWakeLock } from '../useWakeLock'
@@ -22,6 +23,8 @@ import { idb } from '../idb'
 
 const props = defineProps<{ session: JoinResult }>()
 const emit = defineEmits<{ ready: []; start: [round: RoundInfo]; report: [] }>()
+
+const { t } = useI18n()
 
 // independent tables pick a round and start right here — one screen, one tap;
 // orchestrated tables arm with READY and the facilitator starts the round
@@ -77,7 +80,16 @@ function set(check: string, state: CheckState, note = ''): void {
 
 useWakeLock()
 
-onMounted(async () => {
+/** Run every readiness check.
+ *
+ * Extracted from onMounted so the microphone failure is not a dead end: on
+ * Android a hard denial is never re-prompted, so "allow it and reload" is
+ * advice that does not work. Changing the site setting and re-running the
+ * check does.
+ */
+async function runChecks(): Promise<void> {
+	window.clearInterval(levelTimer)
+	stream?.getTracks().forEach((track) => track.stop())
 	try {
 		stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 		set('microphone', 'ok')
@@ -135,7 +147,9 @@ onMounted(async () => {
 		void pollReport()
 		reportTimer = window.setInterval(() => void pollReport(), 20_000)
 	}
-})
+}
+
+onMounted(runChecks)
 
 onBeforeUnmount(() => {
 	window.clearInterval(reportTimer)
@@ -224,7 +238,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 			</div>
 
 			<p class="rc-eyebrow" style="margin-top: 16px">
-				<SvgIcon :path="mdiWaveform" :size="14" /> Audio level — speak at the table
+				<SvgIcon :path="mdiWaveform" :size="14" /> {{ t('recorder.preflight.level') }}
 			</p>
 			<div class="rc-level"><div class="rc-level-fill" :style="{ width: level + '%' }"></div></div>
 
@@ -241,16 +255,19 @@ const STATE_CLASS: Record<CheckState, string> = {
 				:disabled="testState === 'playing'"
 				@click="playTest">
 				<SvgIcon :path="mdiPlay" :size="20" />
-				Listen to the test
+				{{ t('recorder.preflight.listen') }}
 			</button>
 		</div>
 
 		<div v-if="checks.microphone.state === 'fail'" class="rc-alert">
-			Microphone access is required. Allow microphone access in the browser and reload this page.
+			<strong>{{ t('recorder.preflight.micRequired') }}</strong>
+			<p style="margin: 8px 0 0">{{ t('recorder.preflight.micGuidance') }}</p>
+			<button class="rc-btn rc-primary" style="margin-top: 12px" @click="runChecks">
+				{{ t('recorder.preflight.micRetry') }}
+			</button>
 		</div>
 		<div v-else-if="checks.storage.state === 'fail'" class="rc-alert">
-			This browser cannot store audio locally. Recording would not be safe — please use a different
-			browser or disable private mode.
+			{{ t('recorder.preflight.noStorage') }}
 		</div>
 
 		<template v-if="!orchestrated">
@@ -262,7 +279,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 				<p class="rc-question" style="margin: 0">{{ selectedRound.question || selectedRound.title }}</p>
 				<div v-if="openRounds.length > 1" style="margin-top: 14px">
 					<select
-						style="width: 100%; padding: 11px; border-radius: 10px; background: var(--rc-surface-2); color: var(--rc-text); border: 1px solid var(--rc-border); font-size: 15px"
+						style="width: 100%; padding: 11px; border-radius: 10px; background: var(--rc-surface-2); color: var(--rc-text); border: 1px solid var(--rc-border); font-size: 16px"
 						:value="selectedRound.id"
 						@change="selectedRound = session.rounds.find((r) => r.id === ($event.target as HTMLSelectElement).value) ?? selectedRound">
 						<option
@@ -277,20 +294,20 @@ const STATE_CLASS: Record<CheckState, string> = {
 				</div>
 			</div>
 			<div v-else-if="session.rounds.length === 0" class="rc-alert">
-				This assembly has no rounds yet.
+				{{ t('recorder.preflight.noRounds') }}
 			</div>
 			<div v-else class="rc-card">
-				<p class="rc-eyebrow rc-center" style="display: block">All rounds recorded</p>
-				<p class="rc-muted rc-center" style="margin: 0">This table has completed every round. Thank you!</p>
+				<p class="rc-eyebrow rc-center" style="display: block">{{ t('recorder.armed.allRecordedTitle') }}</p>
+				<p class="rc-muted rc-center" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
 				<template v-for="entry in tableSummaries" :key="entry.position">
 					<p class="rc-eyebrow" style="margin: 10px 0 2px; color: var(--rc-blue)">
-						Round {{ entry.position }} — your table's AI summary
+						{{ t('recorder.preflight.roundSummary', { position: entry.position }) }}
 					</p>
 					<p v-if="entry.summary" style="font-size: 14px; margin: 0">{{ entry.summary }}</p>
-					<p v-else class="rc-muted" style="font-size: 13.5px; margin: 0">Analyzing your discussion…</p>
+					<p v-else class="rc-muted" style="font-size: 13.5px; margin: 0">{{ t('recorder.preflight.analyzing') }}</p>
 				</template>
 				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
-					View assembly report
+					{{ t('recorder.armed.viewReport') }}
 				</button>
 			</div>
 		</template>

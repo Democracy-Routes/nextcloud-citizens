@@ -9,9 +9,10 @@
  * the table straight back in. The table could not escape, and nothing on
  * screen explained why it kept flickering.
  */
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArmedScreen from '../../frontend/src/recorder/components/ArmedScreen.vue'
+import { mountWithI18n } from './support/mount'
 
 const status = vi.fn()
 const heartbeat = vi.fn().mockResolvedValue(undefined)
@@ -48,13 +49,13 @@ beforeEach(() => {
 
 describe('ArmedScreen auto-start', () => {
 	it('starts the active round when nothing is wrong', async () => {
-		const wrapper = mount(ArmedScreen, { props: { session: SESSION } })
+		const wrapper = mountWithI18n(ArmedScreen, { props: { session: SESSION } })
 		await flushPromises()
 		expect(wrapper.emitted('start')).toBeTruthy()
 	})
 
 	it('does NOT auto-start a round whose microphone just failed', async () => {
-		const wrapper = mount(ArmedScreen, {
+		const wrapper = mountWithI18n(ArmedScreen, {
 			props: { session: SESSION, blockedRoundId: 'round-1' },
 		})
 		await flushPromises()
@@ -64,7 +65,7 @@ describe('ArmedScreen auto-start', () => {
 	})
 
 	it('starts again only when the table explicitly asks', async () => {
-		const wrapper = mount(ArmedScreen, {
+		const wrapper = mountWithI18n(ArmedScreen, {
 			props: { session: SESSION, blockedRoundId: 'round-1' },
 		})
 		await flushPromises()
@@ -78,7 +79,7 @@ describe('ArmedScreen auto-start', () => {
 	it('still auto-starts a DIFFERENT round while one is blocked', async () => {
 		const other = { ...ACTIVE_ROUND, id: 'round-2', position: 2 }
 		status.mockResolvedValue({ rounds: [other], report_available: false })
-		const wrapper = mount(ArmedScreen, {
+		const wrapper = mountWithI18n(ArmedScreen, {
 			props: { session: SESSION, blockedRoundId: 'round-1' },
 		})
 		await flushPromises()

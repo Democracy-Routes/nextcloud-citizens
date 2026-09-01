@@ -5,6 +5,8 @@ import { mdiAlertCircleOutline, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
 import SvgIcon from '../components/ui/SvgIcon.vue'
 import { recorderApi, RecorderApiError, type JoinResult, type RoundInfo } from './api'
+import { useI18n } from 'vue-i18n'
+import { setLocale } from '../i18n'
 import { decideOnStatusFailure } from './errors'
 import ArmedScreen from './components/ArmedScreen.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
@@ -28,6 +30,8 @@ type Screen =
 	| 'recording'
 	| 'report'
 	| 'error'
+
+const { t } = useI18n()
 
 const screen = ref<Screen>('joining')
 const error = ref('')
@@ -98,6 +102,9 @@ async function scanForRecovery(): Promise<boolean> {
 
 async function enterWithSession(joined: JoinResult): Promise<void> {
 	session.value = joined
+	// The ROOM's language, not the phone's: this is a shared table device, and
+	// everyone around it is discussing the assembly's question in one language.
+	setLocale(joined.assembly.language)
 	initLogger(joined.session_token)
 	// reload/crash recovery: unsynchronized local recordings take priority
 	if (await scanForRecovery()) return
@@ -244,10 +251,10 @@ function sessionStorageClear(): void {
 		<div v-else-if="screen === 'no-invite'" class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 18vh">
 				<div class="rc-hero__icon"><SvgIcon :path="mdiQrcodeScan" :size="44" style="color: var(--rc-blue)" /></div>
-				<h1>Table Recorder</h1>
+				<h1>{{ t('recorder.noInvite.title') }}</h1>
 				<p class="rc-muted" style="margin-top: 14px">
-					Open this page by scanning your table's QR code.<br />
-					Ask the facilitator for the QR sheet.
+					{{ t('recorder.noInvite.body') }}<br />
+					{{ t('recorder.noInvite.askFacilitator') }}
 				</p>
 			</div>
 		</div>
@@ -257,13 +264,10 @@ function sessionStorageClear(): void {
 				<div class="rc-hero__icon">
 					<SvgIcon :path="mdiWifiOff" :size="44" style="color: var(--rc-amber)" />
 				</div>
-				<h1>Cannot reach the assembly</h1>
-				<p class="rc-muted" style="margin-top: 14px">
-					This table is still joined. Nothing has been lost — any recording on
-					this phone is safe and will upload when the connection returns.
-				</p>
+				<h1>{{ t('recorder.offline.title') }}</h1>
+				<p class="rc-muted" style="margin-top: 14px">{{ t('recorder.offline.body') }}</p>
 				<button class="rc-btn" :disabled="retryBusy" style="margin-top: 22px" @click="retryStoredSession">
-					{{ retryBusy ? 'Trying…' : 'Try again' }}
+					{{ retryBusy ? t('recorder.offline.retrying') : t('recorder.offline.retry') }}
 				</button>
 			</div>
 		</div>
@@ -271,9 +275,9 @@ function sessionStorageClear(): void {
 		<div v-else-if="screen === 'error'" class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 14vh">
 				<div class="rc-hero__icon"><SvgIcon :path="mdiAlertCircleOutline" :size="44" style="color: var(--rc-red)" /></div>
-				<h1>Cannot join</h1>
+				<h1>{{ t('recorder.joinError.title') }}</h1>
 				<div class="rc-alert" style="text-align: left">{{ error }}</div>
-				<p class="rc-muted">The QR code may have been revoked. Ask the facilitator for a new one.</p>
+				<p class="rc-muted">{{ t('recorder.joinError.hint') }}</p>
 			</div>
 		</div>
 

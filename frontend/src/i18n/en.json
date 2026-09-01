@@ -1,0 +1,125 @@
+{
+	"recorder": {
+		"consent": {
+			"title": "Table {number}",
+			"lead": "Before you start, here is what happens to this recording.",
+			"records": "This phone records the conversation at your table.",
+			"notConfigured": "This assembly is not yet set up to transcribe recordings.",
+			"noEngine": "No transcription engine is configured, so the audio stays on this server.",
+			"audioHosted": "The recording is sent to {engine}, an outside service, to be turned into text.",
+			"audioSelfHosted": "The recording is transcribed by {engine} on this organisation's own server. The audio is not sent to any outside company.",
+			"transcriptHosted": "The written transcript — never the audio — is also sent to an outside AI service to draft a summary.",
+			"transcriptSelfHosted": "The written transcript is summarised by AI on this organisation's own server.",
+			"retentionDays": "The audio recording is deleted {days} days after the assembly ends. | The audio recording is deleted one day after the assembly ends. | The audio recording is deleted {days} days after the assembly ends.",
+			"retentionForever": "The audio recording is kept until an organiser deletes it.",
+			"speakers": "Speakers are labelled only as “Speaker 1”, “Speaker 2” and so on. Nobody's name is attached to what they said unless an organiser adds it.",
+			"reviewed": "Nothing is published until a person has reviewed it.",
+			"ask": "Please make sure everyone at the table has heard this before you begin.",
+			"agree": "Everyone at this table agrees — continue",
+			"decline": "Someone does not agree",
+			"declinedTitle": "This table will not record",
+			"declinedBody": "Please tell the facilitator. Nothing has been recorded, and the discussion can still go ahead without this phone.",
+			"declinedBack": "Go back",
+			"engineFallback": "a transcription engine"
+		},
+		"offline": {
+			"title": "Cannot reach the assembly",
+			"body": "This table is still joined. Nothing has been lost — any recording on this phone is safe and will upload when the connection returns.",
+			"retry": "Try again",
+			"retrying": "Trying…"
+		},
+		"noInvite": {
+			"title": "Table Recorder",
+			"body": "Open this page by scanning your table's QR code.",
+			"askFacilitator": "Ask the facilitator for the QR sheet."
+		},
+		"joinError": {
+			"title": "Cannot join",
+			"hint": "The QR code may have been revoked. Ask the facilitator for a new one."
+		},
+		"mic": {
+			"failedTitle": "The microphone could not be started.",
+			"guidance": "If the browser asked for microphone permission and it was refused, allow it in the site settings — tap the icon to the left of the web address, then Permissions, then Microphone — and try again. You do not need to reload this page.",
+			"retry": "Try the microphone again",
+			"retrying": "Trying…",
+			"back": "Back",
+			"blockedTitle": "Microphone unavailable",
+			"blockedBody": "Round {position} is open, but this phone could not start its microphone. Check that no other app is using it, and that the browser is allowed to record."
+		},
+		"uploaded": {
+			"title": "Recording uploaded",
+			"body": "Round {position} is complete for this table. Every part of the recording was uploaded and accepted, but the server has not finished processing it yet. Keep this phone's copy until it has.",
+			"check": "Check again",
+			"checking": "Checking…"
+		},
+		"done": {
+			"title": "Recording synchronized",
+			"body": "Round {position} is complete for this table. The recording was uploaded and validated by the server."
+		},
+		"armed": {
+			"allRecordedTitle": "All rounds recorded",
+			"allRecordedBody": "This table has completed every round. Thank you!",
+			"viewReport": "View assembly report",
+			"waiting": "Waiting for the facilitator to start",
+			"waitingHint": "Recording begins automatically. Keep this page open and the phone on the table.",
+			"offline": "Network unavailable — reconnecting… the phone stays armed.",
+			"backToTest": "Back to microphone test"
+		},
+		"preflight": {
+			"level": "Audio level — speak at the table",
+			"listen": "Listen to the test",
+			"micRequired": "Microphone access is required.",
+			"micGuidance": "Allow microphone access in the site settings — tap the icon to the left of the web address, then Permissions, then Microphone. You do not need to reload this page.",
+			"micRetry": "Try the microphone again",
+			"noStorage": "This browser cannot store audio locally. Recording would not be safe — please use a different browser or disable private mode.",
+			"noRounds": "This assembly has no rounds yet.",
+			"roundSummary": "Round {position} — your table's AI summary",
+			"analyzing": "Analyzing your discussion…"
+		},
+		"recording": {
+			"storageErrorTitle": "LOCAL STORAGE ERROR",
+			"storageErrorBody": "Recording can no longer be safely stored. Please notify the facilitator immediately.",
+			"serverBusy": "The server is busy — the recording continues safely on this phone and will upload by itself. Nothing is lost. Keep this page open.",
+			"offline": "Network unavailable — the recording continues safely on this phone and will upload when the connection returns. Keep this page open.",
+			"retryUpload": "Retry upload now",
+			"keepOpen": "Keep this page open while the table is recording.",
+			"lowStorage": "Phone storage is getting low. Notify the facilitator after this round.",
+			"finish": "Finish and synchronize",
+			"liveTranscript": "Live transcript — provisional",
+			"confirmFinish": "Finish and synchronize this table's recording?",
+			"confirmFinishYes": "Yes, finish and synchronize",
+			"retrying": "Connection problem or busy server — retrying automatically.",
+			"audioSafe": "The audio is safe on this phone. Keep this page open.",
+			"nextStarted": "Round {position} has started.",
+			"nextCountdown": "Recording begins in {seconds} s…",
+			"nextRound": "Next: Round {position} · {minutes} minutes",
+			"takeABreak": "Take a break if you need one — recording starts when you tap the button.",
+			"reportReady": "The assembly report is ready.",
+			"allRounds": "This table has completed all rounds",
+			"reportPending": "Keep this page open — the assembly report appears here when every table has finished or the organizer publishes it.",
+			"startNext": "We're ready — Start Round {position}",
+			"clearAudio": "Clear synchronized audio from this phone",
+			"syncFailed": "Synchronization did not finish:",
+			"syncFailedSafe": "The audio is safely stored on this phone — nothing is lost.",
+			"tryAgainLater": "Try again in a moment."
+		},
+		"recovery": {
+			"intro": "This phone has a recording that was not fully synchronized — for example after the page was reloaded or the browser closed. All locally saved audio is intact.",
+			"chunks": "Chunks stored locally",
+			"waiting": "Waiting for network… the audio is safe on this phone. Keep this page open.",
+			"done": "Recovered recording fully synchronized and validated.",
+			"gone": "The server no longer has this recording — the assembly may have been deleted or reset. The audio is still safely stored on this phone.",
+			"download": "Download audio file",
+			"confirmDelete": "Permanently delete this audio from the phone? This cannot be undone.",
+			"confirmDeleteYes": "Yes, delete permanently",
+			"keep": "Keep the audio",
+			"delete": "Delete local audio",
+			"skip": "Skip for now",
+			"failed": "Recovery synchronization failed:",
+			"failedHint": "Local audio remains stored on this phone. Notify the facilitator."
+		},
+		"report": {
+			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables"
+		}
+	}
+}

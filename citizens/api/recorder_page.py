@@ -22,11 +22,14 @@ from citizens.config import get_settings
 router = APIRouter()
 
 RECORDER_HTML = """<!DOCTYPE html>
-<html lang="en">
+<html lang="">
 <head>
 <meta charset="utf-8">
+<!-- Zoom deliberately NOT blocked: maximum-scale/user-scalable=no is a
+     WCAG 1.4.4 failure, and the people most likely to need to enlarge the
+     round's question are the ones least likely to work around it. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, \
-maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+viewport-fit=cover">
 <meta name="theme-color" content="#f5f6f8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -37,10 +40,17 @@ maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     position: fixed; inset: 0; width: 100%; background: #f5f6f8; color: #222;
     font-family: system-ui, -apple-system, sans-serif; }
   #boot { padding: 40px 20px; text-align: center; color: #666; }
+  .boot-spinner {
+    width: 28px; height: 28px; margin: 0 auto; border-radius: 50%;
+    border: 3px solid #d9dce3; border-top-color: #7a8194;
+    animation: boot-spin 0.9s linear infinite;
+  }
+  @keyframes boot-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .boot-spinner { animation: none; } }
 </style>
 </head>
 <body>
-<div id="recorder-app"><div id="boot">Loading recorder…</div></div>
+<div id="recorder-app"><div id="boot"><div class="boot-spinner"></div></div></div>
 <script>
 (function () {
   var current = document.currentScript;
@@ -52,6 +62,8 @@ maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   if (current && current.nonce) { s.nonce = current.nonce; }
   s.src = base + '/recorder/static/citizens-recorder.js?v=__APP_VERSION__';
   s.onerror = function () {
+    // The one string that cannot be translated: if the bundle did not load,
+    // neither did the catalogues.
     document.getElementById('boot').textContent =
       'Failed to load the recorder application. Check the connection and reload.';
   };

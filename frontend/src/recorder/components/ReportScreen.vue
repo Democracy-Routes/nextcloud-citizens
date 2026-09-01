@@ -1,6 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { mdiDownloadOutline, mdiFileDocumentOutline } from '@mdi/js'
 import { onMounted, ref } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
@@ -16,6 +17,8 @@ import { downloadBlob } from '../../download'
 
 const props = defineProps<{ session: JoinResult }>()
 const emit = defineEmits<{ back: [] }>()
+
+const { t } = useI18n()
 
 const report = ref<PublishedReport | null>(null)
 const error = ref('')
@@ -90,7 +93,7 @@ async function downloadPdf(): Promise<void> {
 						<div v-for="finding in group.findings" :key="finding.id" style="margin: 0 0 12px">
 							<p style="font-weight: 700; font-size: 14.5px; margin: 0">{{ finding.title }}</p>
 							<p v-if="finding.mentioned_table_count" class="rc-muted" style="font-size: 12.5px; margin: 1px 0">
-								Mentioned at {{ finding.mentioned_table_count }} table(s)
+								{{ t('recorder.report.mentionedAt', { count: finding.mentioned_table_count }, finding.mentioned_table_count) }}
 							</p>
 							<p style="font-size: 14px; margin: 3px 0 0">{{ finding.summary }}</p>
 						</div>

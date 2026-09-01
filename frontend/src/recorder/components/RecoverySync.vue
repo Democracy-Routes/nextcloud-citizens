@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { JoinResult } from '../api'
 import { RecorderEngine } from '../engine'
 import { downloadBlob } from '../../download'
@@ -9,6 +10,8 @@ import { idb, type StoredRecording } from '../idb'
 
 const props = defineProps<{ session: JoinResult; recording: StoredRecording }>()
 const emit = defineEmits<{ done: [] }>()
+
+const { t } = useI18n()
 
 const engine = new RecorderEngine()
 const state = engine.state
@@ -51,11 +54,10 @@ async function deleteLocal(): Promise<void> {
 		<div class="rc-card">
 			<h2>Recovered recording</h2>
 			<p class="rc-muted">
-				This phone has a recording that was not fully synchronized — for example after the page
-				was reloaded or the browser closed. All locally saved audio is intact.
+				{{ t('recorder.recovery.intro') }}
 			</p>
 			<div class="rc-status-row">
-				<span>Chunks stored locally</span><span>{{ state.localChunks }}</span>
+				<span>{{ t('recorder.recovery.chunks') }}</span><span>{{ state.localChunks }}</span>
 			</div>
 			<div class="rc-status-row">
 				<span>Awaiting upload</span>
@@ -68,42 +70,41 @@ async function deleteLocal(): Promise<void> {
 
 		<template v-if="state.phase === 'syncing'">
 			<div v-if="!state.uploadOnline" class="rc-note">
-				Waiting for network… the audio is safe on this phone. Keep this page open.
+				{{ t('recorder.recovery.waiting') }}
 				<button class="rc-btn" style="margin-top: 10px" @click="engine.retryNow()">Retry now</button>
 			</div>
 			<p v-else class="rc-muted rc-center">Synchronizing…</p>
 		</template>
 
 		<template v-else-if="state.phase === 'done'">
-			<div class="rc-note">✅ Recovered recording fully synchronized and validated.</div>
+			<div class="rc-note">✅ {{ t('recorder.recovery.done') }}</div>
 			<button class="rc-btn rc-primary" @click="emit('done')">Continue</button>
 		</template>
 
 		<template v-else-if="state.phase === 'failed'">
 			<template v-if="state.errorKind === 'gone'">
 				<div class="rc-alert">
-					The server no longer has this recording — the assembly may have been
-					deleted or reset. The audio is still safely stored on this phone.
+					{{ t('recorder.recovery.gone') }}
 				</div>
 				<p v-if="downloadNote" class="rc-note">{{ downloadNote }}</p>
-				<button class="rc-btn rc-primary" @click="downloadAudio">Download audio file</button>
+				<button class="rc-btn rc-primary" @click="downloadAudio">{{ t('recorder.recovery.download') }}</button>
 				<template v-if="confirmDelete">
 					<div class="rc-note" style="margin-bottom: 8px">
-						Permanently delete this audio from the phone? This cannot be undone.
+						{{ t('recorder.recovery.confirmDelete') }}
 					</div>
-					<button class="rc-btn rc-record" @click="deleteLocal">Yes, delete permanently</button>
-					<button class="rc-btn rc-subtle" @click="confirmDelete = false">Keep the audio</button>
+					<button class="rc-btn rc-record" @click="deleteLocal">{{ t('recorder.recovery.confirmDeleteYes') }}</button>
+					<button class="rc-btn rc-subtle" @click="confirmDelete = false">{{ t('recorder.recovery.keep') }}</button>
 				</template>
-				<button v-else class="rc-btn" @click="confirmDelete = true">Delete local audio</button>
-				<button class="rc-btn rc-subtle" @click="emit('done')">Skip for now</button>
+				<button v-else class="rc-btn" @click="confirmDelete = true">{{ t('recorder.recovery.delete') }}</button>
+				<button class="rc-btn rc-subtle" @click="emit('done')">{{ t('recorder.recovery.skip') }}</button>
 			</template>
 			<template v-else>
 				<div class="rc-alert">
-					Recovery synchronization failed: {{ state.error }}<br />
-					Local audio remains stored on this phone. Notify the facilitator.
+					{{ t('recorder.recovery.failed') }} {{ state.error }}<br />
+					{{ t('recorder.recovery.failedHint') }}
 				</div>
 				<button class="rc-btn" @click="engine.retryNow()">Try again</button>
-				<button class="rc-btn rc-subtle" @click="emit('done')">Skip for now</button>
+				<button class="rc-btn rc-subtle" @click="emit('done')">{{ t('recorder.recovery.skip') }}</button>
 			</template>
 		</template>
 		</div>

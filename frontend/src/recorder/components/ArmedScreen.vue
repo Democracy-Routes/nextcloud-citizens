@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { useWakeLock } from '../useWakeLock'
 
@@ -22,6 +23,8 @@ const emit = defineEmits<{ start: [round: RoundInfo]; back: []; report: [] }>()
 const rounds = ref<RoundInfo[]>(props.session.rounds)
 const offline = ref(false)
 const reportAvailable = ref(false)
+
+const { t } = useI18n()
 
 const blockedRound = ref<RoundInfo | null>(null)
 
@@ -97,24 +100,24 @@ onBeforeUnmount(() => {
 			     and wait to be asked, rather than silently retrying forever -->
 			<template v-if="blockedRound">
 				<div class="rc-card rc-center">
-					<p class="rc-eyebrow" style="color: var(--rc-red)">Microphone unavailable</p>
+					<p class="rc-eyebrow" style="color: var(--rc-red)">
+						{{ t('recorder.mic.blockedTitle') }}
+					</p>
 					<p class="rc-muted" style="margin: 0">
-						Round {{ blockedRound.position }} is open, but this phone could not
-						start its microphone. Check that no other app is using it, and that
-						the browser is allowed to record.
+						{{ t('recorder.mic.blockedBody', { position: blockedRound.position }) }}
 					</p>
 					<button class="rc-btn rc-primary" @click="retryBlockedRound">
-						Try the microphone again
+						{{ t('recorder.mic.retry') }}
 					</button>
 				</div>
 			</template>
 
 			<template v-else-if="allRecorded">
 				<div class="rc-card rc-center">
-					<p class="rc-eyebrow">All rounds recorded</p>
-					<p class="rc-muted" style="margin: 0">This table has completed every round. Thank you!</p>
+					<p class="rc-eyebrow">{{ t('recorder.armed.allRecordedTitle') }}</p>
+					<p class="rc-muted" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
 					<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
-						View assembly report
+						{{ t('recorder.armed.viewReport') }}
 					</button>
 				</div>
 			</template>
@@ -125,11 +128,11 @@ onBeforeUnmount(() => {
 						<span class="rc-live" style="color: var(--rc-green); display: inline-flex">ARMED</span>
 					</p>
 					<p style="font-size: 17px; font-weight: 600; margin: 8px 0 4px">
-						Waiting for the facilitator to start
+						{{ t('recorder.armed.waiting') }}
 						{{ nextRound ? `Round ${nextRound.position}` : 'the round' }}
 					</p>
 					<p class="rc-muted" style="margin: 0; font-size: 14px">
-						Recording begins automatically. Keep this page open and the phone on the table.
+						{{ t('recorder.armed.waitingHint') }}
 					</p>
 				</div>
 				<div v-if="nextRound && (nextRound.question || nextRound.title)" class="rc-card">
@@ -139,13 +142,13 @@ onBeforeUnmount(() => {
 					<p class="rc-question" style="margin: 0">{{ nextRound.question || nextRound.title }}</p>
 				</div>
 				<div v-if="offline" class="rc-note">
-					Network unavailable — reconnecting… the phone stays armed.
+					{{ t('recorder.armed.offline') }}
 				</div>
 			</template>
 		</div>
 
 		<div class="rc-actions">
-			<button class="rc-btn rc-subtle" @click="emit('back')">Back to microphone test</button>
+			<button class="rc-btn rc-subtle" @click="emit('back')">{{ t('recorder.armed.backToTest') }}</button>
 		</div>
 	</div>
 </template>
