@@ -4,6 +4,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { JoinResult } from '../api'
 import { RecorderEngine } from '../engine'
+import { downloadBlob } from '../../download'
 import { idb, type StoredRecording } from '../idb'
 
 const props = defineProps<{ session: JoinResult; recording: StoredRecording }>()
@@ -28,14 +29,7 @@ async function downloadAudio(): Promise<void> {
 	const mime = props.recording.mimeType || 'audio/webm'
 	const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
 	const blob = new Blob(chunks.map((c) => c.blob), { type: mime.split(';')[0] })
-	const url = URL.createObjectURL(blob)
-	const anchor = document.createElement('a')
-	anchor.href = url
-	anchor.download = `citizens-table-${props.session.table_number}-recovered.${ext}`
-	document.body.appendChild(anchor)
-	anchor.click()
-	anchor.remove()
-	window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+	downloadBlob(blob, `citizens-table-${props.session.table_number}-recovered.${ext}`)
 	downloadNote.value = 'Audio file saved to this phone’s downloads.'
 }
 

@@ -11,10 +11,18 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { useWakeLock } from '../useWakeLock'
 import { clearSynchronizedRecordings, RecorderEngine } from '../engine'
 
 const props = defineProps<{ session: JoinResult; round: RoundInfo }>()
-const emit = defineEmits<{ exit: []; nextRound: [round: RoundInfo]; viewReport: [] }>()
+const emit = defineEmits<{
+	exit: []
+	nextRound: [round: RoundInfo]
+	viewReport: []
+	/** the microphone could not be opened for THIS round — armed must not
+	 * immediately send the table straight back in */
+	micFailed: [roundId: string]
+}>()
 
 const engine = new RecorderEngine()
 const state = engine.state
@@ -140,11 +148,14 @@ function watchForNextRound(): void {
 				nextStartCountdown.value = 3
 				nextStartTimer = window.setInterval(() => {
 					nextStartCountdown.value -= 1
-					if (nextStartCountdown.value <= 0 && nextRound.value) {
-						window.clearInterval(nextStartTimer)
-						nextStartTimer = 0
-						emit('nextRound', nextRound.value)
-					}
+					// Clear on reaching zero WHATEVER nextRound now holds. Gating
+					// the clear on nextRound being set leaked the interval when
+					// the round disappeared mid-countdown, and the stale timer
+					// then started a recording with no warning the moment some
+					// later poll set nextRound again.
+					if (nextStartCountdown.value > 0) return
+					stopNextStartTimer()
+					if (nextRound.value) emit('nextRound', nextRound.value)
 				}, 1000)
 			}
 		} catch {
@@ -155,12 +166,21 @@ function watchForNextRound(): void {
 	nextRoundTimer = window.setInterval(() => void poll(), 10_000)
 }
 
+function stopNextStartTimer(): void {
+	window.clearInterval(nextStartTimer)
+	nextStartTimer = 0
+}
+
+// the countdown is announcing a round that no longer exists: stop announcing it
+watch(nextRound, (round) => {
+	if (!round) stopNextStartTimer()
+})
+
 let clockTimer = 0
 let levelTimer = 0
 let roundPollTimer = 0
 let livePollTimer = 0
 let audioContext: AudioContext | null = null
-let wakeLock: WakeLockSentinel | null = null
 
 const elapsed = computed(() => {
 	if (!state.startedAt) return '00:00'
@@ -180,8 +200,14 @@ watch(liveLines, () => {
 watch(
 	() => state.phase,
 	(phase) => {
-		if (phase === 'done') watchForNextRound()
+		if (phase === 'done' || phase === 'uploaded') watchForNextRound()
 	},
+)
+
+// Not just while recording: the finished screen polls for the next round and
+// auto-starts it, so letting the phone sleep here means missing that too.
+useWakeLock(() =>
+	['recording', 'finishing', 'syncing', 'done', 'uploaded'].includes(state.phase),
 )
 
 onMounted(async () => {
@@ -200,12 +226,7 @@ onMounted(async () => {
 			beginFinishCountdown()
 		}
 	}, 500)
-	try {
-		await engine.start(props.session.session_token, props.round.id)
-	} catch (error) {
-		startError.value = error instanceof Error ? error.message : String(error)
-		return
-	}
+	await beginRecording()
 	const stream = engine.mediaStream
 	if (stream) {
 		audioContext = new AudioContext()
@@ -219,12 +240,6 @@ onMounted(async () => {
 			for (const value of samples) peak = Math.max(peak, Math.abs(value - 128))
 			level.value = Math.min(100, Math.round((peak / 128) * 160))
 		}, 120)
-	}
-	try {
-		wakeLock = (await navigator.wakeLock?.request('screen')) ?? null
-		document.addEventListener('visibilitychange', reacquireWakeLock)
-	} catch {
-		/* not supported — the UI warns to keep the page open */
 	}
 	roundPollTimer = window.setInterval(async () => {
 		if (state.phase !== 'recording') return
@@ -242,16 +257,6 @@ onMounted(async () => {
 	startLivePoll()
 })
 
-async function reacquireWakeLock(): Promise<void> {
-	if (document.visibilityState === 'visible' && state.phase === 'recording') {
-		try {
-			wakeLock = (await navigator.wakeLock?.request('screen')) ?? null
-		} catch {
-			/* ignore */
-		}
-	}
-}
-
 onBeforeUnmount(() => {
 	window.clearInterval(clockTimer)
 	window.clearInterval(levelTimer)
@@ -262,8 +267,6 @@ onBeforeUnmount(() => {
 	window.clearInterval(nextStartTimer)
 	window.clearInterval(reportOpenTimer)
 	audioContext?.close()
-	wakeLock?.release().catch(() => undefined)
-	document.removeEventListener('visibilitychange', reacquireWakeLock)
 })
 
 function startLivePoll(): void {
@@ -288,6 +291,42 @@ async function finishRecording(): Promise<void> {
 	await engine.finish()
 }
 
+const startBusy = ref(false)
+
+/** Open the microphone. On failure, tell the parent which round failed.
+ *
+ * Without that the loop was: start fails -> "Back" -> ArmedScreen -> its poll
+ * sees the round still ACTIVE -> emits start -> fails again, every five
+ * seconds, with no way out for the table.
+ */
+async function beginRecording(): Promise<void> {
+	startBusy.value = true
+	startError.value = ''
+	try {
+		await engine.start(props.session.session_token, props.round.id)
+	} catch (error) {
+		startError.value = error instanceof Error ? error.message : String(error)
+		emit('micFailed', props.round.id)
+	} finally {
+		startBusy.value = false
+	}
+}
+
+async function retryMicrophone(): Promise<void> {
+	await beginRecording()
+}
+
+const recheckBusy = ref(false)
+
+async function recheck(): Promise<void> {
+	recheckBusy.value = true
+	try {
+		await engine.recheckServerState()
+	} finally {
+		recheckBusy.value = false
+	}
+}
+
 async function clearSynced(): Promise<void> {
 	const cleared = await clearSynchronizedRecordings()
 	clearedNote.value = `${cleared} synchronized recording(s) removed from this phone.`
@@ -303,8 +342,24 @@ async function clearSynced(): Promise<void> {
 
 		<div v-if="startError" class="rc-scroll">
 			<div class="rc-alert">
-				Could not start recording: {{ startError }}
-				<button class="rc-btn" style="margin-top: 12px" @click="emit('exit')">Back</button>
+				<strong>The microphone could not be started.</strong>
+				<p style="margin: 8px 0 0">{{ startError }}</p>
+				<p class="rc-muted" style="margin: 10px 0 0; font-size: 0.875rem">
+					If the browser asked for microphone permission and it was refused,
+					allow it in the site settings — tap the icon to the left of the web
+					address, then Permissions, then Microphone — and try again. You do
+					not need to reload this page.
+				</p>
+				<button
+					class="rc-btn rc-primary"
+					style="margin-top: 14px"
+					:disabled="startBusy"
+					@click="retryMicrophone">
+					{{ startBusy ? 'Trying…' : 'Try the microphone again' }}
+				</button>
+				<button class="rc-btn rc-subtle" style="margin-top: 8px" @click="emit('exit')">
+					Back
+				</button>
 			</div>
 		</div>
 
@@ -461,15 +516,31 @@ async function clearSynced(): Promise<void> {
 			</div>
 		</template>
 
-		<template v-else-if="state.phase === 'done'">
+		<template v-else-if="state.phase === 'done' || state.phase === 'uploaded'">
 			<div class="rc-scroll">
 				<div class="rc-hero">
-					<div class="rc-hero__icon rc-hero__icon--ok"><SvgIcon :path="mdiCheckCircle" :size="52" /></div>
-					<h1>Recording synchronized</h1>
-					<p class="rc-muted" style="margin-top: 10px">
+					<div
+						class="rc-hero__icon"
+						:class="state.phase === 'done' ? 'rc-hero__icon--ok' : ''">
+						<SvgIcon
+							:path="state.phase === 'done' ? mdiCheckCircle : mdiCloudUploadOutline"
+							:size="52" />
+					</div>
+					<h1>{{ state.phase === 'done' ? 'Recording synchronized' : 'Recording uploaded' }}</h1>
+					<p v-if="state.phase === 'done'" class="rc-muted" style="margin-top: 10px">
 						Round {{ round.position }} is complete for this table.
 						The recording was uploaded and validated by the server.
 					</p>
+					<p v-else class="rc-muted" style="margin-top: 10px">
+						Round {{ round.position }} is complete for this table. Every part of
+						the recording was uploaded and accepted, but the server has not
+						finished processing it yet. Keep this phone's copy until it has.
+					</p>
+					<div v-if="state.phase === 'uploaded'" class="rc-note" style="margin-top: 14px">
+						<button class="rc-btn rc-subtle" :disabled="recheckBusy" @click="recheck">
+							{{ recheckBusy ? 'Checking…' : 'Check again' }}
+						</button>
+					</div>
 					<p v-if="clearedNote" class="rc-muted">{{ clearedNote }}</p>
 
 					<div v-if="nextRound && orchestrated" class="rc-note" style="text-align: left; margin-top: 20px">
@@ -527,7 +598,12 @@ async function clearSynced(): Promise<void> {
 				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('viewReport')">
 					View assembly report
 				</button>
-				<button v-if="!clearedNote" class="rc-linkbtn" @click="clearSynced">
+				<!-- only when the SERVER confirmed it: this deletes the copy that
+				     would otherwise be the last one -->
+				<button
+					v-if="!clearedNote && state.phase === 'done'"
+					class="rc-linkbtn"
+					@click="clearSynced">
 					Clear synchronized audio from this phone
 				</button>
 			</div>

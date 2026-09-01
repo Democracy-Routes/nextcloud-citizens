@@ -16,6 +16,7 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { useWakeLock } from '../useWakeLock'
 import { pickMimeType } from '../engine'
 import { idb } from '../idb'
 
@@ -73,6 +74,8 @@ let testSource: AudioBufferSourceNode | null = null
 function set(check: string, state: CheckState, note = ''): void {
 	checks.value[check] = { state, note }
 }
+
+useWakeLock()
 
 onMounted(async () => {
 	try {

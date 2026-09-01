@@ -3,6 +3,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { useWakeLock } from '../useWakeLock'
 
 /*
  * Orchestrated mode: the table is ARMED. The phone waits for the facilitator
@@ -10,12 +11,27 @@ import { recorderApi, type JoinResult, type RoundInfo } from '../api'
  * on READY was the human consent at the table.
  */
 
-const props = defineProps<{ session: JoinResult }>()
+const props = defineProps<{
+	session: JoinResult
+	/** a round whose microphone just failed: auto-start must not re-enter it,
+	 * or the table is stuck in a five-second failure loop with no way out */
+	blockedRoundId?: string | null
+}>()
 const emit = defineEmits<{ start: [round: RoundInfo]; back: []; report: [] }>()
 
 const rounds = ref<RoundInfo[]>(props.session.rounds)
 const offline = ref(false)
 const reportAvailable = ref(false)
+
+const blockedRound = ref<RoundInfo | null>(null)
+
+/** The table asked to try the microphone again: drop the latch and go. */
+function retryBlockedRound(): void {
+	const round = blockedRound.value
+	if (!round) return
+	blockedRound.value = null
+	emit('start', round)
+}
 
 let pollTimer = 0
 let heartbeatTimer = 0
@@ -30,7 +46,8 @@ async function poll(): Promise<void> {
 		reportAvailable.value = status.report_available ?? false
 		offline.value = false
 		const active = status.rounds.find((r) => r.status === 'ACTIVE' && !r.recorded_state)
-		if (active) emit('start', active)
+		blockedRound.value = active && active.id === props.blockedRoundId ? active : null
+		if (active && active.id !== props.blockedRoundId) emit('start', active)
 	} catch {
 		offline.value = true
 	}
@@ -49,6 +66,11 @@ async function heartbeat(): Promise<void> {
 		/* offline — retried */
 	}
 }
+
+// the whole point of this screen is waiting, so the screen must stay on:
+// asleep it stops polling and heartbeating, shows as STALE to the
+// organizer, and misses the round starting
+useWakeLock()
 
 onMounted(() => {
 	void poll()
@@ -71,7 +93,23 @@ onBeforeUnmount(() => {
 				<div class="rc-hero__table">TABLE {{ session.table_number }}</div>
 			</div>
 
-			<template v-if="allRecorded">
+			<!-- the microphone failed for the round that is currently open: say so
+			     and wait to be asked, rather than silently retrying forever -->
+			<template v-if="blockedRound">
+				<div class="rc-card rc-center">
+					<p class="rc-eyebrow" style="color: var(--rc-red)">Microphone unavailable</p>
+					<p class="rc-muted" style="margin: 0">
+						Round {{ blockedRound.position }} is open, but this phone could not
+						start its microphone. Check that no other app is using it, and that
+						the browser is allowed to record.
+					</p>
+					<button class="rc-btn rc-primary" @click="retryBlockedRound">
+						Try the microphone again
+					</button>
+				</div>
+			</template>
+
+			<template v-else-if="allRecorded">
 				<div class="rc-card rc-center">
 					<p class="rc-eyebrow">All rounds recorded</p>
 					<p class="rc-muted" style="margin: 0">This table has completed every round. Thank you!</p>

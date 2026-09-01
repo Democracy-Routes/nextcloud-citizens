@@ -6,6 +6,7 @@ import { onMounted, ref } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { groupByType, TYPE_LABELS } from '../../labels'
 import { recorderApi, type JoinResult, type PublishedReport } from '../api'
+import { downloadBlob } from '../../download'
 
 /*
  * The assembly report as published by the organizer (approved findings and
@@ -33,14 +34,10 @@ async function downloadPdf(): Promise<void> {
 	downloading.value = true
 	try {
 		const blob = await recorderApi.reportPdf(props.session.session_token)
-		const url = URL.createObjectURL(blob)
-		const anchor = document.createElement('a')
-		anchor.href = url
-		anchor.download = `${props.session.assembly.name.slice(0, 40).replace(/ /g, '-')}-report.pdf`
-		document.body.appendChild(anchor)
-		anchor.click()
-		anchor.remove()
-		window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+		downloadBlob(
+			blob,
+			`${props.session.assembly.name.slice(0, 40).replace(/ /g, '-')}-report.pdf`,
+		)
 		downloadNote.value = 'PDF saved to this phone’s downloads.'
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)

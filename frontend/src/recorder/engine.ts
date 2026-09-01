@@ -9,6 +9,7 @@
 
 import { reactive } from 'vue'
 import { RecorderApiError, recorderApi } from './api'
+import { isGoneError, isTransientError } from './errors'
 import { idb, type StoredRecording } from './idb'
 import { clientLog } from './logger'
 import { sha256Hex } from './sha'
@@ -40,7 +41,11 @@ export function pickMimeType(): string | null {
 }
 
 export interface EngineState {
-	phase: 'idle' | 'recording' | 'finishing' | 'syncing' | 'done' | 'failed'
+	/** 'done' means the SERVER confirmed the audio; 'uploaded' means every
+	 * chunk was accepted but the server never got round to confirming within
+	 * the poll window. The difference decides whether this phone may offer to
+	 * delete its own copy, so the two must never be conflated. */
+	phase: 'idle' | 'recording' | 'finishing' | 'syncing' | 'done' | 'uploaded' | 'failed'
 	recordingId: string
 	startedAt: number
 	localChunks: number
@@ -58,16 +63,6 @@ export interface EngineState {
 	errorKind: '' | 'gone' | 'transient'
 }
 
-function isGoneError(error: unknown): boolean {
-	return error instanceof RecorderApiError && [401, 403, 404, 410].includes(error.status)
-}
-
-/** Network failures and server-side hiccups (busy DB, restarts, rate limits)
- * are worth retrying; only definitive rejections are not. */
-function isTransientError(error: unknown): boolean {
-	if (!(error instanceof RecorderApiError)) return true // fetch/network failure
-	return error.status >= 500 || error.status === 429
-}
 
 export class RecorderEngine {
 	state: EngineState = reactive({
@@ -463,9 +458,47 @@ export class RecorderEngine {
 			}
 			await new Promise((resolve) => setTimeout(resolve, 2000))
 		}
-		// server still busy — audio is fully uploaded and safe server-side
-		this.state.phase = 'done'
-		await this.markServerComplete()
+		// Five minutes of polling and the server never reported a state at or
+		// past AUDIO_READY. Every chunk was acknowledged, so the upload itself
+		// is finished — but nothing has confirmed the assembled audio, and
+		// saying so is not the same as the server saying so. Calling this
+		// 'done' told the table "uploaded and validated by the server" and
+		// then offered to delete the only other copy, on no evidence at all.
+		this.state.phase = 'uploaded'
+		clientLog('warn', 'server_confirmation_timed_out', {
+			recordingId: this.state.recordingId,
+			lastServerState: this.state.serverState,
+		})
+	}
+
+	/** Ask the server once whether it has finished with this recording.
+	 *
+	 * The 'uploaded' screen offers this: every chunk was acknowledged but the
+	 * server had not confirmed the assembled audio before the poll window
+	 * closed. A later check often succeeds — assembly may simply have been
+	 * queued behind other tables.
+	 */
+	async recheckServerState(): Promise<void> {
+		const SETTLED = new Set([
+			'AUDIO_READY', 'TRANSCRIBING', 'TRANSCRIBED', 'TRANSCRIPTION_FAILED',
+			'ANALYZING', 'READY_FOR_REVIEW', 'REVIEWED', 'ANALYSIS_FAILED',
+		])
+		try {
+			const status = await recorderApi.recordingStatus(this.token, this.state.recordingId)
+			this.state.uploadOnline = true
+			this.state.serverState = status.state
+			if (SETTLED.has(status.state)) {
+				this.state.phase = 'done'
+				clientLog('info', 'recording_synchronized', { recordingId: this.state.recordingId })
+				await this.markServerComplete()
+			} else if (status.state === 'AUDIO_INVALID') {
+				this.state.phase = 'failed'
+				this.state.error = `Server could not validate the audio (${status.error_code})`
+			}
+		} catch (error) {
+			this.state.uploadOnline = false
+			clientLog('warn', 'recheck_failed', { error: String(error).slice(0, 120) })
+		}
 	}
 
 	private async markServerComplete(): Promise<void> {

@@ -1,10 +1,11 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiAlertCircleOutline, mdiQrcodeScan } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
 import SvgIcon from '../components/ui/SvgIcon.vue'
 import { recorderApi, RecorderApiError, type JoinResult, type RoundInfo } from './api'
+import { decideOnStatusFailure } from './errors'
 import ArmedScreen from './components/ArmedScreen.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
 import Preflight from './components/Preflight.vue'
@@ -19,6 +20,7 @@ const SESSION_KEY = 'citizens-recorder-session'
 type Screen =
 	| 'joining'
 	| 'no-invite'
+	| 'offline'
 	| 'recovery'
 	| 'consent'
 	| 'preflight'
@@ -54,30 +56,51 @@ async function joinWithRetry(token: string): Promise<JoinResult> {
 	}
 }
 
+/** The round whose microphone just failed, if any.
+ *
+ * ArmedScreen auto-starts whatever round is ACTIVE. Without this latch a
+ * microphone failure bounced the table straight back into the same round every
+ * five seconds, forever.
+ */
+const micFailedRoundId = ref<string | null>(null)
+
 function startRound(round: RoundInfo): void {
+	// an explicit start (including "try again") clears the latch
+	if (micFailedRoundId.value === round.id) micFailedRoundId.value = null
 	selectedRound.value = round
 	screen.value = 'recording'
+}
+
+/** Unsynchronized audio still on this phone, if any (brief §20).
+ *
+ * Deliberately independent of whether the server can be reached: audio waiting
+ * on the device is exactly what matters when it cannot. This used to run only
+ * on the way into a live session, so a failed status check left it unreachable
+ * through the UI.
+ */
+async function scanForRecovery(): Promise<boolean> {
+	try {
+		const unfinished = await idb.unfinishedRecordings()
+		const candidate = unfinished.find((r) => r.totalChunks !== null || r.startedAt > 0)
+		if (!candidate) return false
+		const chunks = await idb.chunksFor(candidate.recordingId)
+		if (chunks.length > 0) {
+			recoveryRecording.value = candidate
+			screen.value = 'recovery'
+			return true
+		}
+		await idb.deleteRecording(candidate.recordingId)
+	} catch {
+		/* recovery scan failure must not block a fresh session */
+	}
+	return false
 }
 
 async function enterWithSession(joined: JoinResult): Promise<void> {
 	session.value = joined
 	initLogger(joined.session_token)
-	// reload/crash recovery: unsynchronized local recordings take priority (brief §20)
-	try {
-		const unfinished = await idb.unfinishedRecordings()
-		const candidate = unfinished.find((r) => r.totalChunks !== null || r.startedAt > 0)
-		if (candidate) {
-			const chunks = await idb.chunksFor(candidate.recordingId)
-			if (chunks.length > 0) {
-				recoveryRecording.value = candidate
-				screen.value = 'recovery'
-				return
-			}
-			await idb.deleteRecording(candidate.recordingId)
-		}
-	} catch {
-		/* recovery scan failure must not block a fresh session */
-	}
+	// reload/crash recovery: unsynchronized local recordings take priority
+	if (await scanForRecovery()) return
 	// people are about to be recorded: tell them what happens to the audio
 	// before it starts. Once per device — an interrupted round must not make
 	// the table read it again mid-assembly.
@@ -127,16 +150,59 @@ onMounted(async () => {
 	// 2) returning device with a stored session
 	const stored = sessionLoad()
 	if (stored) {
-		try {
-			const status = await recorderApi.status(stored.session_token)
-			await enterWithSession({ ...stored, ...status })
-			return
-		} catch {
-			sessionStorageClear()
-		}
+		if (await resumeStoredSession(stored)) return
 	}
+	// 3) no session at all — but audio from a previous one may still be here
+	if (await scanForRecovery()) return
 	screen.value = 'no-invite'
 })
+
+/** Returns true when the boot is finished (resumed, or parked on 'offline'). */
+async function resumeStoredSession(stored: JoinResult): Promise<boolean> {
+	try {
+		const status = await recorderApi.status(stored.session_token)
+		await enterWithSession({ ...stored, ...status })
+		return true
+	} catch (err) {
+		if (decideOnStatusFailure(err) === 'clear') {
+			// the server has actually rejected this session: revoked invite,
+			// deleted assembly. A new QR code is the only way forward.
+			sessionStorageClear()
+			return false
+		}
+		// Anything else — venue WiFi, a restarting container, a 500 — must NOT
+		// cost the table its session. Keep it, show the audio that is still on
+		// the phone if there is any, and offer a retry.
+		session.value = stored
+		initLogger(stored.session_token)
+		if (await scanForRecovery()) return true
+		screen.value = 'offline'
+		return true
+	}
+}
+
+const retryBusy = ref(false)
+
+async function retryStoredSession(): Promise<void> {
+	const stored = sessionLoad()
+	if (!stored) {
+		screen.value = 'no-invite'
+		return
+	}
+	retryBusy.value = true
+	try {
+		const status = await recorderApi.status(stored.session_token)
+		await enterWithSession({ ...stored, ...status })
+	} catch (err) {
+		if (decideOnStatusFailure(err) === 'clear') {
+			sessionStorageClear()
+			screen.value = 'no-invite'
+		}
+		/* still unreachable: stay on the offline screen */
+	} finally {
+		retryBusy.value = false
+	}
+}
 
 function sessionStore(joined: JoinResult): void {
 	try {
@@ -186,6 +252,22 @@ function sessionStorageClear(): void {
 			</div>
 		</div>
 
+		<div v-else-if="screen === 'offline'" class="rc-scroll">
+			<div class="rc-hero" style="padding-top: 16vh">
+				<div class="rc-hero__icon">
+					<SvgIcon :path="mdiWifiOff" :size="44" style="color: var(--rc-amber)" />
+				</div>
+				<h1>Cannot reach the assembly</h1>
+				<p class="rc-muted" style="margin-top: 14px">
+					This table is still joined. Nothing has been lost — any recording on
+					this phone is safe and will upload when the connection returns.
+				</p>
+				<button class="rc-btn" :disabled="retryBusy" style="margin-top: 22px" @click="retryStoredSession">
+					{{ retryBusy ? 'Trying…' : 'Try again' }}
+				</button>
+			</div>
+		</div>
+
 		<div v-else-if="screen === 'error'" class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 14vh">
 				<div class="rc-hero__icon"><SvgIcon :path="mdiAlertCircleOutline" :size="44" style="color: var(--rc-red)" /></div>
@@ -217,6 +299,7 @@ function sessionStorageClear(): void {
 		<ArmedScreen
 			v-else-if="screen === 'armed' && session"
 			:session="session"
+			:blocked-round-id="micFailedRoundId"
 			@start="startRound"
 			@back="screen = 'preflight'"
 			@report="screen = 'report'" />
@@ -233,6 +316,7 @@ function sessionStorageClear(): void {
 			:round="selectedRound"
 			@exit="screen = orchestrated ? 'armed' : 'preflight'"
 			@next-round="startRound"
+			@mic-failed="micFailedRoundId = $event"
 			@view-report="screen = 'report'" />
 	</div>
 </template>
