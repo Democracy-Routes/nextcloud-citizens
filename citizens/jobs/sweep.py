@@ -22,6 +22,7 @@ from citizens.db.session import session_scope
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.logging_setup import get_logger
 from citizens.services.audit import record_audit_event
+from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording_states import transition
 
 log = get_logger(__name__)
@@ -72,7 +73,14 @@ def sweep_stalled_uploads() -> int:
             # the round was waiting on these; it can proceed now
             for recording in stalled:
                 maybe_enqueue_round_analysis(session, recording)
-        return len(stalled)
+        stalled_ids = [recording.id for recording in stalled]
+
+    # Outside the transaction: these phones are gone, so nothing else will end
+    # their caption sessions — /complete never arrives. An unended session
+    # never persists what it heard and holds its provider connection open.
+    for recording_id in stalled_ids:
+        LIVE_CAPTIONS.finish(recording_id)
+    return len(stalled_ids)
 
 
 def _retention_days(assembly, default_days: int) -> int:

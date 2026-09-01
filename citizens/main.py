@@ -92,11 +92,17 @@ async def lifespan(app: FastAPI):
     stop_event = asyncio.Event()
     jobs_task = asyncio.create_task(jobs_run_forever(stop_event))
     LIVE_CAPTIONS.set_loop(asyncio.get_running_loop())
+    # Caption sessions used to be reaped only as a side effect of some other
+    # table's chunk upload, so a phone that died in the last round of the day
+    # was never cleaned up at all: its captions were never written to disk and
+    # its provider websocket stayed open until the container restarted.
+    reaper_task = asyncio.create_task(LIVE_CAPTIONS.reap_forever(stop_event))
     log.info("app_started", version=settings.app_version, storage=str(settings.app_persistent_storage))
     yield
     stop_event.set()
     await LIVE_CAPTIONS.shutdown()
     await jobs_task
+    await reaper_task
     log.info("app_stopping")
 
 

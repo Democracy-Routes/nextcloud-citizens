@@ -19,6 +19,7 @@ from citizens.security.identity import CurrentUser
 from citizens.services import invites as invite_svc
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
+from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording_states import transition
 from citizens.storage.paths import device_log_path
 
@@ -57,6 +58,10 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     recording.error_code = "UPLOAD_ABANDONED"
     transition(recording, "UPLOAD_INCOMPLETE")
     session.flush()
+    # The phone is not coming back, so nothing else will ever end its caption
+    # session: /complete is the only other path. Left running it holds a
+    # provider websocket open and never writes down what it heard.
+    LIVE_CAPTIONS.finish(recording.id)
     maybe_enqueue_round_analysis(session, recording)
     record_audit_event(
         session, "upload_abandoned", "recording", recording.id, actor=user,

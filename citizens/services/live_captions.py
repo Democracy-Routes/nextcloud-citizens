@@ -23,6 +23,7 @@ jobs.handlers.handle_transcribe_from_live to turn into a real transcript.
 
 import asyncio
 import base64
+import contextlib
 import json
 import time
 import urllib.parse
@@ -36,7 +37,16 @@ log = get_logger(__name__)
 
 DEEPGRAM_URL = "wss://api.deepgram.com/v1/listen"
 MISTRAL_URL = "wss://api.mistral.ai/v1/audio/transcriptions/realtime"
-SESSION_IDLE_TIMEOUT = 180.0
+# Chunks arrive about every ten seconds while a table is recording, and
+# last_fed is bumped by their arrival rather than by engine output, so a slow
+# engine is never reaped. Ninety seconds of total silence therefore means the
+# phone is gone. It also has to leave room inside the 300 s grace that
+# handle_transcribe_from_live allows for captions to land.
+SESSION_IDLE_TIMEOUT = 90.0
+#: how often the reaper looks for sessions nobody is feeding any more
+REAP_INTERVAL_SECONDS = 15.0
+#: how long a session gets to finish writing its transcript before it is cancelled
+DISPOSE_TIMEOUT_SECONDS = 20.0
 FAILURE_COOLDOWN = 60.0
 KEEPALIVE_SECONDS = 5.0
 # how many lines the phone and the monitor are shown — a display window, not
@@ -88,8 +98,12 @@ class _BaseSession:
         self.failed_at: float | None = None
         self.last_fed = time.monotonic()
         self.task: asyncio.Task | None = None
-        # engines fed with PCM own a decoder for this recording
+        # engines fed with PCM own a decoder for this recording, and the task
+        # forwarding its output. Both are held so teardown can reach them: an
+        # untracked pump task parks forever on a queue nobody drains and its
+        # cleanup — which is what kills ffmpeg — never runs.
         self.pcm_stream = None
+        self.pump_task: asyncio.Task | None = None
 
     def add_line(
         self,
@@ -631,12 +645,17 @@ class LiveCaptionManager:
     async def _feed_async(
         self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
     ) -> None:
-        self._garbage_collect()
         session = self._sessions.get(recording_id)
         if session is not None and session.failed_at is not None:
             if time.monotonic() - session.failed_at < FAILURE_COOLDOWN:
                 return  # cooling down; don't reconnect-loop (brief §51)
+            # Tear the dead one down before building its replacement. Merely
+            # dropping it from the dict orphaned the ffmpeg process: _pump_pcm
+            # is a separate task, and it parks forever on a queue that nobody
+            # drains any more, so its finally — which closes the stream — never
+            # runs, and the reaper can no longer see the session either.
             self._sessions.pop(recording_id, None)
+            await self._dispose(session)
             session = None
         if session is None:
             provider = config["provider"]
@@ -655,19 +674,29 @@ class LiveCaptionManager:
                 endpoint=config.get("endpoint", ""),
                 assembly_id=assembly_id,
             )
-            session.task = asyncio.get_running_loop().create_task(
-                self._run_and_persist(session)
-            )
+            # Registered BEFORE anything can fail or await. Starting the task
+            # first and storing the session last meant that a PcmStream which
+            # refused to start returned with the task already running (holding
+            # an open websocket) and failed_at set on an object nobody held —
+            # so the cooldown below could never see it, and every subsequent
+            # ten-second chunk leaked another session, task and connection.
+            self._sessions[recording_id] = session
             if session.wants_pcm:
                 # the phone sends fragments of one WebM stream; these engines
                 # want PCM, so one ffmpeg decodes the stream for the session
                 stream = live_audio.PcmStream(recording_id)
                 if not await stream.start():
                     session.failed_at = time.monotonic()
+                    session.active = False
+                    log.warning("live_stt_pcm_stream_failed", recording_id=recording_id)
                     return
                 session.pcm_stream = stream
-                asyncio.get_running_loop().create_task(self._pump_pcm(session, stream))
-            self._sessions[recording_id] = session
+            loop = asyncio.get_running_loop()
+            session.task = loop.create_task(self._run_and_persist(session))
+            if session.pcm_stream is not None:
+                session.pump_task = loop.create_task(
+                    self._pump_pcm(session, session.pcm_stream)
+                )
         session.last_fed = time.monotonic()
         if session.wants_pcm:
             if session.pcm_stream is not None:
@@ -758,35 +787,105 @@ class LiveCaptionManager:
         )
 
     async def _finish_async(self, recording_id: str) -> None:
-        session = self._sessions.get(recording_id)
+        session = self._sessions.pop(recording_id, None)
         if session is None:
             return
-        if session.pcm_stream is not None:
-            # closing ffmpeg's stdin flushes the tail, then _pump_pcm ends the queue
-            await session.pcm_stream.close()
-            return
-        try:
-            session.queue.put_nowait(None)
-        except asyncio.QueueFull:
-            if session.task:
-                session.task.cancel()
+        await self._dispose(session)
 
-    def _garbage_collect(self) -> None:
+    async def _dispose(self, session: "_BaseSession | None") -> None:
+        """End one caption session and wait for it to finish writing.
+
+        Ending the queue (or closing the decoder, which ends it in turn) lets
+        run() return normally, so _run_and_persist reaches its finally and the
+        transcript is written. Cancelling outright can abort that mid-await and
+        lose the lines — which, with final transcription off, is the table's
+        only record. Cancellation is therefore the last resort, not the method.
+        """
+        if session is None:
+            return
+        session.active = False
+        try:
+            if session.pcm_stream is not None:
+                # closing ffmpeg's stdin flushes the tail; _pump_pcm then ends
+                # the queue on its way out
+                await session.pcm_stream.close()
+            else:
+                try:
+                    session.queue.put_nowait(None)
+                except asyncio.QueueFull:
+                    # nothing is draining it, so the sentinel cannot get in —
+                    # cancelling the pump frees the slot
+                    if session.pump_task and not session.pump_task.done():
+                        session.pump_task.cancel()
+        except Exception:
+            log.warning(
+                "live_stt_dispose_failed", recording_id=session.recording_id, exc_info=True
+            )
+        for task in (session.task, session.pump_task):
+            if task is None or task.done():
+                continue
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=DISPOSE_TIMEOUT_SECONDS)
+            except (TimeoutError, asyncio.CancelledError):
+                # it will not end on its own; cancel and WAIT for that to land,
+                # so callers can rely on the session really being finished
+                task.cancel()
+                with contextlib.suppress(Exception, asyncio.CancelledError):
+                    await task
+            except Exception:
+                log.warning(
+                    "live_stt_session_end_failed",
+                    recording_id=session.recording_id,
+                    exc_info=True,
+                )
+
+    async def reap_idle(self) -> None:
+        """End sessions nobody is feeding any more.
+
+        Reaping used to happen only as a side effect of some OTHER recording's
+        chunk upload. So when a phone died in the last round of the day and the
+        remaining tables finished within the idle timeout, nothing ever ran
+        again: the session stayed active forever, its captions were never
+        written to disk (with final transcription off, that was the table's
+        only transcript), and a Deepgram websocket stayed open with keepalives
+        being sent to it until the container restarted — a billable connection
+        held for nothing.
+        """
         now = time.monotonic()
-        for recording_id, session in list(self._sessions.items()):
-            if now - session.last_fed > SESSION_IDLE_TIMEOUT:
-                if session.task and not session.task.done():
-                    session.task.cancel()
-                if session.pcm_stream is not None:
-                    asyncio.get_running_loop().create_task(session.pcm_stream.close())
-                self._sessions.pop(recording_id, None)
+        stale = [
+            (recording_id, session)
+            for recording_id, session in list(self._sessions.items())
+            if now - session.last_fed > SESSION_IDLE_TIMEOUT
+        ]
+        for recording_id, session in stale:
+            log.info(
+                "live_stt_session_reaped",
+                recording_id=recording_id,
+                idle_seconds=round(now - session.last_fed, 1),
+                lines=len(session.lines),
+            )
+            self._sessions.pop(recording_id, None)
+            await self._dispose(session)
+
+    async def reap_forever(self, stop_event: asyncio.Event) -> None:
+        """Drive reap_idle on its own clock, not on other tables' traffic."""
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(
+                    stop_event.wait(), timeout=REAP_INTERVAL_SECONDS
+                )
+                return  # asked to stop
+            except TimeoutError:
+                pass
+            try:
+                await self.reap_idle()
+            except Exception:
+                log.error("live_stt_reap_failed", exc_info=True)
 
     async def shutdown(self) -> None:
-        for session in self._sessions.values():
-            if session.task and not session.task.done():
-                session.task.cancel()
-            if session.pcm_stream is not None:
-                await session.pcm_stream.close()
+        for recording_id, session in list(self._sessions.items()):
+            self._sessions.pop(recording_id, None)
+            await self._dispose(session)
         self._sessions.clear()
 
 
