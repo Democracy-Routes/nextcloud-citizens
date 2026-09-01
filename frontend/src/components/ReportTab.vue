@@ -30,6 +30,10 @@ const report = ref<ReportData | null>(null)
 const error = ref('')
 const includeDrafts = ref(false)
 const confirmPublish = ref(false)
+// unpublishing removes the report from every table phone that is reading it
+const confirmUnpublish = ref(false)
+// reopening undoes "final", which participants have already been shown
+const confirmReopen = ref(false)
 const confirmClose = ref(false)
 const publishing = ref(false)
 const closing = ref(false)
@@ -186,7 +190,7 @@ const hasContent = () =>
 				variant="tertiary"
 				:icon="mdiLockOpenVariantOutline"
 				:disabled="closing"
-				@click="reopenSession">
+				@click="confirmReopen = true">
 				Reopen session
 			</CzButton>
 		</div>
@@ -231,7 +235,7 @@ const hasContent = () =>
 					:variant="report.published_at ? 'tertiary' : 'primary'"
 					:icon="mdiCellphoneLink"
 					:disabled="publishing"
-					@click="report.published_at ? togglePublish() : (confirmPublish = true)">
+					@click="report.published_at ? (confirmUnpublish = true) : (confirmPublish = true)">
 					{{ report.published_at ? 'Unpublish' : 'Publish report to tables' }}
 				</CzButton>
 			</div>
@@ -357,6 +361,23 @@ const hasContent = () =>
 			:danger="false"
 			@confirm="closeSession"
 			@cancel="confirmClose = false" />
+
+		<CzConfirm
+			v-if="confirmUnpublish"
+			title="Stop sharing the report with the tables?"
+			message="Every table phone currently reading the report loses access to it immediately. You can publish it again at any time."
+			confirm-label="Unpublish"
+			tone="danger"
+			@confirm="confirmUnpublish = false; togglePublish()"
+			@cancel="confirmUnpublish = false" />
+
+		<CzConfirm
+			v-if="confirmReopen"
+			title="Reopen this session?"
+			message="Tables can record again and the report stops being final. Participants keep reading the version that was frozen when the session closed, until you close it again."
+			confirm-label="Reopen session"
+			@confirm="confirmReopen = false; reopenSession()"
+			@cancel="confirmReopen = false" />
 
 		<CzConfirm
 			v-if="confirmPublish"

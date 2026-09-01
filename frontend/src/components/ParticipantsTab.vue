@@ -160,6 +160,7 @@ function initials(participant: Participant): string {
 			title="Remove participant?"
 			:message="`${removeTarget.label}${removeTarget.name ? ' (' + removeTarget.name + ')' : ''} will be removed from this assembly.`"
 			confirm-label="Remove"
+			tone="danger"
 			@confirm="remove"
 			@cancel="removeTarget = null" />
 	</div>

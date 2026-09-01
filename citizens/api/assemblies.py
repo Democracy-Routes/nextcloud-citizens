@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import Assembly, Participant, RecorderSession
+from citizens.db.models import Assembly, Participant, RecorderSession, Recording
 from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.security.identity import CurrentUser
@@ -192,4 +192,13 @@ def _detail(session: Session, assembly: Assembly) -> schemas.AssemblyDetail:
     ).scalar_one()
     detail = schemas.AssemblyDetail.model_validate(assembly, from_attributes=True)
     detail.participant_count = count
+    recordings = dict(
+        session.execute(
+            select(Recording.round_id, func.count())
+            .where(Recording.assembly_id == assembly.id)
+            .group_by(Recording.round_id)
+        ).all()
+    )
+    for round_out in detail.rounds:
+        round_out.recording_count = recordings.get(round_out.id, 0)
     return detail

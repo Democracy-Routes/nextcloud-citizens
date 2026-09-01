@@ -137,5 +137,9 @@
 		"updated": "Aggiornato alle {time}",
 		"reconnecting": "Riconnessione — ultimo aggiornamento alle {time}",
 		"refresh": "Aggiorna"
+	},
+	"confirm": {
+		"cancel": "Annulla",
+		"typeToConfirm": "Digitate «{word}» per confermare"
 	}
 }

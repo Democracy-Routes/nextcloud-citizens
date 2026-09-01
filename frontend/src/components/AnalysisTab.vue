@@ -2,11 +2,13 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiBrain, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiRefresh } from '@mdi/js'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
+import { describeError } from '../errors'
 import type { AssemblyDetail, RoundFindings } from '../types'
 import FindingCard from './FindingCard.vue'
 import CzButton from './ui/CzButton.vue'
+import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
@@ -44,14 +46,36 @@ watch(roundId, () => {
 	void reload()
 })
 
+const confirmRerun = ref(false)
+
+/** Findings a person has already dealt with, which a re-run would replace. */
+const reviewedCount = computed(() => {
+	const perTable = (data.value?.tables ?? []).flatMap((table) => table.findings)
+	const crossTable = data.value?.cross_table ?? []
+	return [...perTable, ...crossTable].filter((finding) => finding.status !== 'DRAFT').length
+})
+
+function requestAnalyze(): void {
+	// Re-running passes force=true, which regenerates findings the facilitator
+	// has approved or hand-edited. It used to do that behind a plain button
+	// with no dialog at all.
+	if (hasAnyFindings()) confirmRerun.value = true
+	else void analyze(false)
+}
+
 async function analyze(force: boolean): Promise<void> {
+	confirmRerun.value = false
 	busy.value = true
 	try {
 		const result = await api.requestAnalysis(roundId.value, force)
-		toast(`Analysis queued for ${result.queued} table(s)`)
+		if (result.queued === 0) {
+			toast('Nothing to analyze — no table has a transcript ready yet', 'error')
+		} else {
+			toast(`Analysis queued for ${result.queued} table(s)`)
+		}
 		await reload()
 	} catch (err) {
-		toast(err instanceof Error ? err.message : String(err), 'error')
+		toast(describeError(err).message, 'error')
 	} finally {
 		busy.value = false
 	}
@@ -83,7 +107,7 @@ const anyAnalyzing = () =>
 				<CzButton
 					v-if="data.analysis_configured"
 					small :icon="mdiRefresh" :disabled="busy"
-					@click="analyze(hasAnyFindings())">
+					@click="requestAnalyze">
 					{{ hasAnyFindings() ? 'Re-run analysis' : 'Run analysis' }}
 				</CzButton>
 			</template>
@@ -162,5 +186,18 @@ const anyAnalyzing = () =>
 				</p>
 			</template>
 		</template>
+		<CzConfirm
+			v-if="confirmRerun"
+			title="Run the analysis again?"
+			:message="
+				reviewedCount > 0
+					? `Every finding for this round is replaced with freshly generated ones — including the ${reviewedCount} you have already approved or edited. Their wording and your review are lost.`
+					: 'Every draft finding for this round is replaced with freshly generated ones.'
+			"
+			confirm-label="Run analysis again"
+			:tone="reviewedCount > 0 ? 'destructive' : 'danger'"
+			:confirm-word="reviewedCount > 0 ? 'replace' : undefined"
+			@confirm="analyze(true)"
+			@cancel="confirmRerun = false" />
 	</div>
 </template>

@@ -9,7 +9,7 @@ import {
 	mdiPlus,
 	mdiTimelineClockOutline,
 } from '@mdi/js'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from '../api'
 import { useAsyncAction } from '../composables/useAsyncAction'
 import type { AssemblyDetail } from '../types'
@@ -28,6 +28,19 @@ const editTitle = ref('')
 const editQuestion = ref('')
 const editDuration = ref(30)
 const deleteId = ref('')
+
+/** Name what the delete actually destroys.
+ *
+ * "any recordings made in it" gave the facilitator no way to tell an empty
+ * round from one holding an hour of audio from eight tables.
+ */
+const deleteMessage = computed(() => {
+	const round = props.assembly.rounds.find((r) => r.id === deleteId.value)
+	const count = round?.recording_count ?? 0
+	if (count === 0) return 'The round and its tables will be deleted. It has no recordings.'
+	const plural = count === 1 ? 'recording' : 'recordings'
+	return `The round, its tables and its ${count} ${plural} will be permanently deleted, including the audio.`
+})
 
 function startEdit(roundId: string): void {
 	const round = props.assembly.rounds.find((r) => r.id === roundId)
@@ -121,7 +134,13 @@ const add = () =>
 							<CzButton small variant="tertiary" :icon="mdiChevronUp" :disabled="busy || round.position === 1" title="Move up" @click="move(round.id, round.position - 1)" />
 							<CzButton small variant="tertiary" :icon="mdiChevronDown" :disabled="busy || round.position === assembly.rounds.length" title="Move down" @click="move(round.id, round.position + 1)" />
 							<CzButton small variant="tertiary" :icon="mdiPencilOutline" title="Edit" @click="startEdit(round.id)" />
-							<CzButton small variant="tertiary" :icon="mdiDeleteOutline" title="Delete" :disabled="busy" @click="deleteId = round.id" />
+							<CzButton
+								small
+								variant="tertiary"
+								:icon="mdiDeleteOutline"
+								:title="round.status === 'ACTIVE' ? 'End the round before deleting it' : 'Delete'"
+								:disabled="busy || round.status === 'ACTIVE'"
+								@click="deleteId = round.id" />
 						</div>
 					</div>
 				</template>
@@ -132,8 +151,9 @@ const add = () =>
 		<CzConfirm
 			v-if="deleteId"
 			title="Delete round?"
-			message="The round, its tables and any recordings made in it will be deleted."
+			:message="deleteMessage"
 			confirm-label="Delete round"
+			tone="danger"
 			@confirm="remove"
 			@cancel="deleteId = ''" />
 	</div>

@@ -4,6 +4,7 @@
 import {
 	mdiAccountGroup,
 	mdiArrowRight,
+	mdiDeleteOutline,
 	mdiMonitorEye,
 	mdiQrcode,
 	mdiTableFurniture,
@@ -20,6 +21,8 @@ const props = defineProps<{ assembly: AssemblyDetail }>()
 const emit = defineEmits<{
 	navigate: [tab: 'rounds' | 'participants' | 'tables' | 'qr' | 'monitor']
 	changed: []
+	/** The parent owns the confirmation; this is only the trigger. */
+	requestDelete: []
 }>()
 
 const invites = ref<Invite[]>([])
@@ -182,5 +185,25 @@ const nextStep = computed<NextStep | null>(() => {
 				</div>
 			</div>
 		</div>
+
+		<!-- Last, labelled, and away from everything else: this used to be a
+		     small grey icon in the header, visually identical to Edit and Move
+		     buttons elsewhere in the app. -->
+		<div class="cz-card cz-dangerzone">
+			<h3>Danger zone</h3>
+			<p class="cz-muted" style="margin: 6px 0 12px; font-size: 0.875rem">
+				Deleting this assembly permanently removes every round, recording,
+				transcript, finding and report. There is no undo and no backup.
+			</p>
+			<CzButton variant="danger" :icon="mdiDeleteOutline" @click="emit('requestDelete')">
+				Delete this assembly
+			</CzButton>
+		</div>
 	</div>
 </template>
+
+<style scoped>
+.cz-dangerzone {
+	border: 1px solid var(--color-error, #c62828);
+}
+</style>

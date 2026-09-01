@@ -4,11 +4,13 @@
 import { mdiContentCopy, mdiPrinter, mdiQrcode, mdiRefresh, mdiCancel } from '@mdi/js'
 import { onMounted, ref } from 'vue'
 import { api, BASE } from '../api'
+import { downloadFromApi } from '../download'
 import { describeError, type UiError } from '../errors'
 import type { AssemblyDetail, Invite, InviteGenerated } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzQrImage from './ui/CzQrImage.vue'
 import CzError from './ui/CzError.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import { toast } from './ui/toast'
@@ -22,6 +24,11 @@ const generated = ref<InviteGenerated[]>(props.initialGenerated ?? [])
 const error = ref('')
 const busy = ref(false)
 const confirmRevoke = ref(false)
+// Regenerating invalidates every QR code already printed and taped to a table
+// — strictly more disruptive than Revoke all, which always did ask.
+const confirmRegenerate = ref(false)
+
+const activeCount = () => invites.value.filter((i) => i.active).length
 const loaded = ref(false)
 const loadError = ref<UiError | null>(null)
 
@@ -83,10 +90,27 @@ async function revoke(): Promise<void> {
 	}
 }
 
-function printSheet(): void {
+const printing = ref(false)
+
+async function printSheet(): Promise<void> {
 	// A real PDF, not window.print(): the browser print dropped every page
 	// after the first, and the layout had to survive Nextcloud's global CSS.
-	window.open(`${BASE}/api/v1/assemblies/${props.assembly.id}/invites/sheet.pdf`, '_blank')
+	//
+	// Fetched rather than window.open'd, because a popup blocker swallows the
+	// new tab silently — and this is the single most time-critical action of
+	// the event, taken at the door with people waiting.
+	const url = `${BASE}/api/v1/assemblies/${props.assembly.id}/invites/sheet.pdf`
+	printing.value = true
+	try {
+		await downloadFromApi(url, `${props.assembly.name.slice(0, 40).replace(/ /g, '-')}-qr-sheet.pdf`)
+	} catch {
+		// last resort: let the browser try, and say so if that is blocked too
+		if (!window.open(url, '_blank')) {
+			toast('The sheet could not be downloaded — check the pop-up blocker', 'error')
+		}
+	} finally {
+		printing.value = false
+	}
 }
 
 async function copyUrl(url: string): Promise<void> {
@@ -116,10 +140,16 @@ const hasActive = () => invites.value.some((i) => i.active)
 					</p>
 				</div>
 				<div class="cz-row" style="flex-wrap: nowrap">
-					<CzButton variant="primary" :icon="mdiRefresh" :disabled="busy" @click="generate">
+					<CzButton
+						variant="primary"
+						:icon="mdiRefresh"
+						:disabled="busy"
+						@click="hasActive() ? (confirmRegenerate = true) : generate()">
 						{{ hasActive() ? 'Regenerate all' : 'Generate codes' }}
 					</CzButton>
-					<CzButton v-if="generated.length" :icon="mdiPrinter" @click="printSheet">Print</CzButton>
+					<CzButton v-if="generated.length" :icon="mdiPrinter" :disabled="printing" @click="printSheet">
+						{{ printing ? 'Preparing…' : 'Print' }}
+					</CzButton>
 					<CzButton v-if="hasActive()" variant="tertiary" :icon="mdiCancel" :disabled="busy" @click="confirmRevoke = true">
 						Revoke all
 					</CzButton>
@@ -156,7 +186,7 @@ const hasActive = () => invites.value.some((i) => i.active)
 			<div v-for="invite in generated" :key="invite.table_number" class="cz-qr-item">
 				<div class="cz-qr-item__assembly">{{ assembly.name }}</div>
 				<h3>TABLE {{ invite.table_number }}</h3>
-				<div class="cz-qr-image" v-html="invite.qr_svg"></div>
+				<CzQrImage :svg="invite.qr_svg" :label="`QR code for table ${invite.table_number}`" />
 				<p style="font-size: 13px; margin: 0; color: #333">Scan with the table recording phone</p>
 				<div class="cz-qr-url" :title="invite.url">{{ invite.url }}</div>
 				<CzButton small :icon="mdiContentCopy" @click="copyUrl(invite.url)">
@@ -166,10 +196,20 @@ const hasActive = () => invites.value.some((i) => i.active)
 		</div>
 
 		<CzConfirm
+			v-if="confirmRegenerate"
+			title="Replace every table code?"
+			:message="`All ${activeCount()} codes already printed and placed on the tables stop working immediately, and a new sheet has to be printed and distributed. Tables already recording keep their session.`"
+			confirm-label="Regenerate all codes"
+			tone="danger"
+			@confirm="confirmRegenerate = false; generate()"
+			@cancel="confirmRegenerate = false" />
+
+		<CzConfirm
 			v-if="confirmRevoke"
 			title="Revoke all table codes?"
 			message="Every printed or shared QR code stops working immediately. Phones already recording keep their session."
 			confirm-label="Revoke all"
+			tone="danger"
 			@confirm="revoke"
 			@cancel="confirmRevoke = false" />
 	</div>

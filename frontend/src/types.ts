@@ -7,6 +7,8 @@ export interface RoundIn {
 }
 
 export interface Round extends RoundIn {
+	/** How many recordings this round would take with it if deleted. */
+	recording_count?: number
 	id: string
 	position: number
 	status: string

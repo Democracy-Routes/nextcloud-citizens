@@ -32,6 +32,9 @@ class RoundOut(BaseModel):
     status: str
     started_at: datetime | None
     ended_at: datetime | None
+    # so the delete dialog can say how many recordings it is about to destroy
+    # rather than "any recordings made in it"
+    recording_count: int = 0
 
 
 class AssemblyCreate(BaseModel):

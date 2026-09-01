@@ -126,6 +126,14 @@ async function deleteAllTranscripts(): Promise<void> {
 	}
 }
 
+/** formatBytes returns an em dash for zero, which produced the sentence
+ * "All — of recorded audio will be permanently deleted". */
+const deleteAllMessage = computed(() => {
+	const bytes = listing.value?.totals.audio_bytes ?? 0
+	const scale = bytes > 0 ? `All ${formatBytes(bytes)} of recorded audio` : 'All recorded audio'
+	return `${scale} will be permanently deleted and cannot be recovered. Transcripts, findings and the report are kept. Download or export first if you need a copy.`
+})
+
 function formatBytes(bytes: number): string {
 	if (!bytes) return '—'
 	if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -327,6 +335,7 @@ async function deleteAll(): Promise<void> {
 			title="Transcribe this table again?"
 			:message="`Table ${confirmRetranscribe.table_number} will be transcribed again from its stored audio${confirmRetranscribe.transcript_source === 'live' ? ', replacing the transcript taken from the live captions' : ', replacing the current transcript'}. Quotes inside existing findings refer to the old text, so they are marked as removed, and the analysis runs again. The audio is not touched.`"
 			confirm-label="Transcribe again"
+			tone="default"
 			@confirm="retranscribe"
 			@cancel="confirmRetranscribe = null" />
 
@@ -335,6 +344,7 @@ async function deleteAll(): Promise<void> {
 			title="Delete this table's audio?"
 			:message="`The audio of table ${confirmOne.table_number} will be permanently deleted and cannot be recovered. Its transcript, findings and the report are kept — but the recording can never be transcribed again.`"
 			confirm-label="Delete audio"
+			tone="danger"
 			@confirm="deleteOne"
 			@cancel="confirmOne = null" />
 
@@ -343,6 +353,7 @@ async function deleteAll(): Promise<void> {
 			title="Delete this table's transcript?"
 			:message="`The verbatim text of table ${confirmTranscript.table_number} will be permanently erased — including the quotes shown inside findings and in the published report. The findings and AI summaries stay. ${confirmTranscript.can_retranscribe ? 'The audio is still here, so this recording can be transcribed again.' : 'Its audio is already deleted, so the transcript cannot be recreated.'}`"
 			confirm-label="Delete transcript"
+			tone="danger"
 			@confirm="deleteTranscript"
 			@cancel="confirmTranscript = null" />
 
@@ -351,14 +362,16 @@ async function deleteAll(): Promise<void> {
 			title="Delete all transcripts of this session?"
 			message="Every table's verbatim text will be permanently erased, including the quotes inside findings and in the published report. Findings and AI summaries stay. Tables whose audio is still here can be transcribed again."
 			confirm-label="Delete all transcripts"
+			tone="danger"
 			@confirm="deleteAllTranscripts"
 			@cancel="confirmAllTranscripts = false" />
 
 		<CzConfirm
 			v-if="confirmAll && listing"
 			title="Delete all audio of this session?"
-			:message="`All ${formatBytes(listing.totals.audio_bytes)} of recorded audio will be permanently deleted and cannot be recovered. Transcripts, findings and the report are kept. Download or export first if you need a copy.`"
+			:message="deleteAllMessage"
 			confirm-label="Delete all audio"
+			tone="danger"
 			@confirm="deleteAll"
 			@cancel="confirmAll = false" />
 	</div>

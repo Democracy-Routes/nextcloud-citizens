@@ -4,7 +4,6 @@
 import {
 	mdiAccountGroup,
 	mdiBrain,
-	mdiDeleteOutline,
 	mdiFileDocumentOutline,
 	mdiFolderMusicOutline,
 	mdiMonitorEye,
@@ -25,7 +24,6 @@ import QrTab from './QrTab.vue'
 import RoundsTab from './RoundsTab.vue'
 import TablesTab from './TablesTab.vue'
 import MonitorTab from './MonitorTab.vue'
-import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
@@ -97,12 +95,12 @@ async function deleteAssembly(): Promise<void> {
 				</div>
 				<div class="cz-row" style="flex-wrap: nowrap">
 					<CzStatusPill :status="assembly.status" />
-					<CzButton
-						variant="tertiary"
-						small
-						:icon="mdiDeleteOutline"
-						title="Delete assembly"
-						@click="confirmDelete = true" />
+					<!-- Deleting the assembly is the most destructive action in the
+					     app, and as a small grey icon here it was indistinguishable
+					     from the Edit and Move icons elsewhere: one mis-click plus
+					     Enter destroyed everything. It now lives in a labelled
+					     danger zone on the Overview tab, behind a typed
+					     confirmation. -->
 				</div>
 			</div>
 
@@ -120,7 +118,12 @@ async function deleteAssembly(): Promise<void> {
 				</button>
 			</div>
 
-			<OverviewTab v-if="tab === 'overview'" :assembly="assembly" @navigate="(t: Tab) => (tab = t)" @changed="reload" />
+			<OverviewTab
+				v-if="tab === 'overview'"
+				:assembly="assembly"
+				@navigate="(t: Tab) => (tab = t)"
+				@changed="reload"
+				@request-delete="confirmDelete = true" />
 			<RoundsTab v-else-if="tab === 'rounds'" :assembly="assembly" @changed="reload" />
 			<ParticipantsTab v-else-if="tab === 'participants'" :assembly-id="assembly.id" @changed="reload" />
 			<TablesTab v-else-if="tab === 'tables'" :assembly="assembly" />
@@ -140,6 +143,8 @@ async function deleteAssembly(): Promise<void> {
 			title="Delete assembly?"
 			:message="`“${assembly.name}” and all of its rounds, transcripts and reports will be permanently deleted — including every audio file stored on the server.`"
 			confirm-label="Delete assembly"
+			tone="destructive"
+			:confirm-word="assembly.name"
 			@confirm="deleteAssembly"
 			@cancel="confirmDelete = false" />
 	</div>

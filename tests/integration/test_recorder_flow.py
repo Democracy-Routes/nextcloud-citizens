@@ -235,13 +235,24 @@ def test_chunks_are_reclaimed_once_the_audio_is_verified(recorder, tmp_path):
     assert _wait_for_state(recorder, recording_id, "AUDIO_READY")["state"] == "AUDIO_READY"
 
     root = get_settings().app_persistent_storage
-    with session_scope() as session:
-        assert (
-            session.execute(
+
+    # Reclamation now happens AFTER the commit that records AUDIO_READY, on
+    # purpose: unlinking the files first meant that a failed commit rolled the
+    # chunk rows back while their bytes were already gone, and every retry then
+    # failed permanently. So the state is visible a moment before the chunks
+    # are collected, and this waits for the collection rather than assuming the
+    # two are atomic.
+    for _ in range(100):
+        with session_scope() as session:
+            remaining = session.execute(
                 select(AudioChunk).where(AudioChunk.recording_id == recording_id)
             ).scalars().all()
-            == []
-        )
+        if not remaining:
+            break
+        time.sleep(0.1)
+    assert remaining == [], "the per-chunk copies were never reclaimed"
+
+    with session_scope() as session:
         recording = session.get(Recording, recording_id)
         # the canonical audio and its checksum survive...
         assert recording.sha256

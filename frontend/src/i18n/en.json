@@ -137,5 +137,9 @@
 		"updated": "Updated {time}",
 		"reconnecting": "Reconnecting — last updated {time}",
 		"refresh": "Refresh"
+	},
+	"confirm": {
+		"cancel": "Cancel",
+		"typeToConfirm": "Type “{word}” to confirm"
 	}
 }

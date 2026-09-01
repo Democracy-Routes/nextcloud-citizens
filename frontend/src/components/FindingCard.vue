@@ -94,9 +94,12 @@ function formatTime(seconds: number): string {
 					@click="apply({ status: 'APPROVED' }, 'Finding approved')">
 					Approve
 				</CzButton>
+				<!-- rejecting keeps a finding out of the published report, which is
+				     less recoverable than approving it — it should not be the
+				     quietest button on the card -->
 				<CzButton
 					v-if="finding.status !== 'REJECTED'"
-					variant="tertiary" small :icon="mdiClose" :disabled="busy"
+					variant="secondary" small :icon="mdiClose" :disabled="busy"
 					@click="apply({ status: 'REJECTED' }, 'Finding rejected')">
 					Reject
 				</CzButton>

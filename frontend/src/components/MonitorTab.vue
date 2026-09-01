@@ -302,7 +302,6 @@ function pendingChunks(table: MonitorTable): number {
 			title="Start with tables missing?"
 			:message="`Only ${monitor.tables_ready} of ${monitor.tables_total} tables are armed and ready. Tables that arm later can still join the round. Start anyway?`"
 			confirm-label="Start round"
-			:danger="false"
 			@confirm="startRound"
 			@cancel="confirmStartUnready = false" />
 
