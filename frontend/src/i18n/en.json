@@ -144,5 +144,38 @@
 	},
 	"toast": {
 		"dismiss": "Dismiss"
+	},
+	"state": {
+		"DRAFT": "draft",
+		"NOT_STARTED": "not started",
+		"IDLE": "idle",
+		"CREATED": "created",
+		"READY": "ready",
+		"AUDIO_READY": "audio ready",
+		"ACTIVE": "running",
+		"RECORDING": "recording",
+		"PROCESSING": "processing",
+		"FINALIZING": "finishing",
+		"WAITING_FOR_CHUNKS": "waiting for audio",
+		"ASSEMBLING": "assembling audio",
+		"TRANSCRIBING": "transcribing",
+		"ANALYZING": "analyzing",
+		"ENDED": "ended",
+		"REVIEW": "in review",
+		"READY_FOR_REVIEW": "ready for review",
+		"COMPLETE": "complete",
+		"TRANSCRIBED": "transcribed",
+		"REVIEWED": "reviewed",
+		"SAFE": "safe",
+		"CONNECTED": "connected",
+		"UPLOAD_INCOMPLETE": "upload incomplete",
+		"AUDIO_INVALID": "audio unusable",
+		"TRANSCRIPTION_FAILED": "transcription failed",
+		"ANALYSIS_FAILED": "analysis failed",
+		"STALE": "not responding",
+		"OFFLINE": "offline",
+		"APPROVED": "approved",
+		"REJECTED": "rejected",
+		"EDITED_AND_APPROVED": "edited and approved"
 	}
 }

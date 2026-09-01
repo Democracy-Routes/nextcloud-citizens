@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(defineProps<{ status: string; pulse?: boolean; label?: string }>(), {
 	pulse: false,
@@ -21,8 +22,23 @@ const TONE: Record<string, string> = {
 	TRANSCRIPTION_FAILED: 'orange', ANALYSIS_FAILED: 'orange', STALE: 'orange', OFFLINE: 'orange',
 }
 
+const { t, te } = useI18n()
+
 const tone = computed(() => TONE[props.status] ?? 'gray')
-const text = computed(() => props.label || props.status.replaceAll('_', ' ').toLowerCase())
+
+/** The state, in words.
+ *
+ * This used to render the database enum with its underscores swapped for
+ * spaces, so a facilitator read "waiting for chunks" and "audio invalid" —
+ * internal vocabulary, in English, describing something they might need to act
+ * on. A state with no entry still falls back to the humanized enum rather than
+ * showing nothing, and the catalogue is kept complete by
+ * tests/unit/test_status_labels_are_translated.py. */
+const text = computed(() => {
+	if (props.label) return props.label
+	const key = `state.${props.status}`
+	return te(key) ? t(key) : props.status.replaceAll('_', ' ').toLowerCase()
+})
 const shouldPulse = computed(() => props.pulse || props.status === 'ACTIVE' || props.status === 'RECORDING')
 </script>
 
