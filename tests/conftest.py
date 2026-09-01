@@ -5,6 +5,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 
 from citizens.config import get_settings
+from citizens.db.session import get_engine
 from citizens.main import create_app
 from citizens.security.identity import get_current_user_id
 
@@ -35,3 +36,38 @@ def client(settings_env):
     app.dependency_overrides[get_current_user_id] = fake_user
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def writer_slot_probe():
+    """Assert SQLite's single writer slot is free RIGHT NOW.
+
+    `_begin_immediate` claims that slot at transaction start, so any endpoint
+    that keeps a write session open while it copies a gigabyte of audio, renders
+    a PDF or waits on an HTTPS round-trip starves every phone uploading chunks.
+    Reproducing that as a timeout takes 10 seconds (`busy_timeout`) and is
+    flaky; this makes it an immediate, deterministic assertion instead.
+
+    Use it by monkeypatching the slow work to call the probe first:
+
+        monkeypatch.setattr(files_svc, "build_audio_zip", probing(real))
+    """
+
+    def probe() -> None:
+        raw = get_engine().raw_connection()
+        try:
+            cursor = raw.cursor()
+            cursor.execute("PRAGMA busy_timeout=200")
+            try:
+                cursor.execute("BEGIN IMMEDIATE")
+            except Exception as exc:  # sqlite3.OperationalError: database is locked
+                raise AssertionError(
+                    "the write lock is held here — a phone uploading a chunk "
+                    "would queue on busy_timeout and fail"
+                ) from exc
+            cursor.execute("ROLLBACK")
+            cursor.close()
+        finally:
+            raw.close()
+
+    return probe

@@ -8,7 +8,9 @@ help:
 	@echo "  make register    register the manual-install daemon + Citizens ExApp in AppAPI"
 	@echo "  make unregister  remove the Citizens ExApp registration"
 	@echo "  make logs        tail the dev container logs (pretty structlog output)"
-	@echo "  make test        run the Python test suite"
+	@echo "  make test        run the Python and frontend test suites"
+	@echo "  make test-py     run only the Python test suite"
+	@echo "  make test-frontend  run only the frontend (vitest) suite"
 	@echo "  make lint        run ruff"
 	@echo "  make dev-reset   wipe ONLY Citizens app data (asks for confirmation)"
 	@echo ""
@@ -37,10 +39,21 @@ logs:
 # adds espeak-ng (synthetic speech for transcription tests); the published
 # image never carries it.
 .PHONY: test
-test:
+test: test-py test-frontend
+
+.PHONY: test-py
+test-py:
 	docker build -q --build-arg WITH_TEST_TOOLS=1 -t citizens-test . >/dev/null
 	docker run --rm --user root -v "$(CURDIR)":/app -w /app --entrypoint sh citizens-test \
 		-c "pip install -q pytest ruff && python -m pytest -q"
+
+# Component and unit tests for both Vue bundles (organizer SPA + phone
+# recorder). Runs in node:22 so the host's node version is irrelevant; specs
+# live in tests/frontend/ with the rest of the suite.
+.PHONY: test-frontend
+test-frontend:
+	docker run --rm --user root -v "$(CURDIR)":/app -w /app/frontend node:22-alpine \
+		sh -c "npm ci --no-audit --no-fund && npm test"
 
 .PHONY: lint
 lint:
