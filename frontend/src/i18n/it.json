@@ -132,5 +132,10 @@
 		"unknown": "Qualcosa è andato storto. Riprovate o ricaricate la pagina.",
 		"details": "Dettagli tecnici",
 		"retry": "Riprova"
+	},
+	"freshness": {
+		"updated": "Aggiornato alle {time}",
+		"reconnecting": "Riconnessione — ultimo aggiornamento alle {time}",
+		"refresh": "Aggiorna"
 	}
 }

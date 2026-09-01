@@ -112,4 +112,18 @@ def round_monitor(session: Session, round_: Round) -> dict:
         "tables_ready": sum(1 for t in tables if t["armed"]),
         "tables_total": len(tables),
         "tables": tables,
+        # Every round's status, not just this one's. The Live tab polls this
+        # every few seconds but computed "which round is next" from the
+        # assembly it was handed on mount, which nothing refreshed — so it
+        # could offer to start a round the server had already started, or hide
+        # one that was available. One poll now answers both questions.
+        "rounds": [
+            {
+                "id": other.id,
+                "position": other.position,
+                "title": other.title,
+                "status": other.status,
+            }
+            for other in sorted(round_.assembly.rounds, key=lambda r: r.position)
+        ],
     }

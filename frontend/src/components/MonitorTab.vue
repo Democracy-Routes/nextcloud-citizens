@@ -12,10 +12,13 @@ import {
 } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
+import { LIVE_MS } from '../composables/intervals'
+import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, MonitorTable, RoundMonitor, TranscriptData } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzFreshness from './ui/CzFreshness.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import SvgIcon from './ui/SvgIcon.vue'
@@ -38,33 +41,34 @@ const transcript = ref<TranscriptData | null>(null)
 const transcriptError = ref('')
 const transcriptFor = ref('')
 
-let pollTimer = 0
 let clockTimer = 0
 
 async function poll(): Promise<void> {
 	if (!roundId.value) return
-	try {
-		monitor.value = await api.roundMonitor(roundId.value)
-		error.value = ''
-	} catch (err) {
-		error.value = err instanceof Error ? err.message : String(err)
-	}
+	const previous = monitor.value?.status
+	monitor.value = await api.roundMonitor(roundId.value)
+	error.value = ''
+	// the poll is the only thing watching the round change state, so it has to
+	// be what tells the rest of the app — otherwise the header pill, the
+	// sidebar and the Rounds tab stay on whatever they last heard
+	if (previous && previous !== monitor.value.status) emit('changed')
 }
 
+// keeps polling while hidden: this is the live view, and a facilitator
+// switching to another tab for ten seconds should not come back to stale data
+const polling = usePolling(poll, { intervalMs: LIVE_MS, pauseWhenHidden: false })
+
 onMounted(() => {
-	void poll()
-	pollTimer = window.setInterval(() => void poll(), 4000)
 	clockTimer = window.setInterval(() => (now.value = Date.now()), 1000)
 })
 
 onBeforeUnmount(() => {
-	window.clearInterval(pollTimer)
 	window.clearInterval(clockTimer)
 })
 
 watch(roundId, () => {
 	monitor.value = null
-	void poll()
+	void polling.refresh()
 })
 
 const remaining = computed(() => {
@@ -99,10 +103,20 @@ async function run(action: () => Promise<unknown>, note = ''): Promise<void> {
 
 // after ending a round, the obvious next step is offered directly instead of
 // hiding behind the round dropdown
+/** Round statuses as the SERVER currently has them.
+ *
+ * props.assembly is refreshed only when something emits 'changed', so these
+ * used to be computed from a snapshot taken on mount: the card could offer to
+ * start a round that was already running, or hide one that was available. The
+ * monitor poll now carries every round's status, so the same request that says
+ * "8/8 connected" also says which rounds exist and where they are.
+ */
+const liveRounds = computed(() => monitor.value?.rounds ?? props.assembly.rounds)
+
 const nextUp = computed(() => {
 	if (!monitor.value) return null
 	if (!['ENDED', 'PROCESSING', 'READY_FOR_REVIEW'].includes(monitor.value.status)) return null
-	const rounds = props.assembly.rounds
+	const rounds = liveRounds.value
 	const index = rounds.findIndex((r) => r.id === roundId.value)
 	if (index < 0) return null
 	return rounds.slice(index + 1).find((r) => r.status === 'NOT_STARTED') ?? null
@@ -112,8 +126,8 @@ const allRoundsDone = computed(
 	() =>
 		!!monitor.value &&
 		['ENDED', 'PROCESSING', 'READY_FOR_REVIEW'].includes(monitor.value.status) &&
-		props.assembly.rounds.length > 0 &&
-		props.assembly.rounds.every((r) => r.status !== 'NOT_STARTED' && r.status !== 'ACTIVE'),
+		liveRounds.value.length > 0 &&
+		liveRounds.value.every((r) => r.status !== 'NOT_STARTED' && r.status !== 'ACTIVE'),
 )
 
 async function startNextRound(): Promise<void> {
@@ -204,7 +218,14 @@ function pendingChunks(table: MonitorTable): number {
 </script>
 
 <template>
-	<div>
+	<div :class="{ 'cz-stale': polling.consecutiveFailures.value > 0 }">
+		<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
+			<CzFreshness
+				:last-success-at="polling.lastSuccessAt.value"
+				:consecutive-failures="polling.consecutiveFailures.value"
+				@refresh="polling.refresh()" />
+		</div>
+
 		<div v-if="error" class="cz-error">{{ error }}</div>
 
 		<div

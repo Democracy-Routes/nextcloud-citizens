@@ -10,12 +10,15 @@ import {
 	mdiTextBoxRemoveOutline,
 	mdiTextSearch,
 } from '@mdi/js'
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api, BASE } from '../api'
+import { BACKGROUND_MS } from '../composables/intervals'
+import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, FileEntry, FilesListing } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzFreshness from './ui/CzFreshness.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import { toast } from './ui/toast'
@@ -40,7 +43,30 @@ async function reload(): Promise<void> {
 	}
 }
 
-onMounted(reload)
+/** Refresh while any recording is still being worked on.
+ *
+ * This tab never refreshed at all, so a re-transcription started here showed
+ * TRANSCRIBING until the facilitator left the tab and came back — the work
+ * finishing was invisible.
+ */
+const TERMINAL = new Set([
+	'REVIEWED',
+	'READY_FOR_REVIEW',
+	'AUDIO_INVALID',
+	'TRANSCRIPTION_FAILED',
+	'ANALYSIS_FAILED',
+	'UPLOAD_INCOMPLETE',
+])
+
+const working = computed(() =>
+	(listing.value?.rounds ?? []).some((round) =>
+		round.tables.some((table) => !TERMINAL.has(table.state)),
+	),
+)
+
+const polling = usePolling(async () => {
+	if (working.value) await reload()
+}, { intervalMs: BACKGROUND_MS })
 
 const hasAudio = computed(() =>
 	(listing.value?.rounds ?? []).some((round) => round.tables.some((t) => t.audio_available)),
@@ -150,6 +176,13 @@ async function deleteAll(): Promise<void> {
 
 <template>
 	<div>
+		<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
+			<CzFreshness
+				:last-success-at="polling.lastSuccessAt.value"
+				:consecutive-failures="polling.consecutiveFailures.value"
+				@refresh="reload" />
+		</div>
+
 		<div v-if="error" class="cz-error">{{ error }}</div>
 
 		<CzSkeleton v-if="!listing && !error" :rows="4" />

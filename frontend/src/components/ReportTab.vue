@@ -10,10 +10,13 @@ import {
 	mdiFilePdfBox,
 	mdiLockOpenVariantOutline,
 } from '@mdi/js'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { api, BASE } from '../api'
+import { SLOW_MS } from '../composables/intervals'
+import { usePolling } from '../composables/usePolling'
 import { groupByType, TYPE_LABELS } from '../labels'
 import type { AssemblyDetail, ReportData } from '../types'
+import CzFreshness from './ui/CzFreshness.vue'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
@@ -98,7 +101,9 @@ async function reload(): Promise<void> {
 	}
 }
 
-onMounted(reload)
+// slower than the live view: a report changes when a person approves a
+// finding, not on its own — but it must not stay stale for the whole event
+const polling = usePolling(reload, { intervalMs: SLOW_MS })
 watch(includeDrafts, reload)
 
 function downloadMarkdown(): void {
@@ -135,6 +140,13 @@ const hasContent = () =>
 
 <template>
 	<div>
+		<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
+			<CzFreshness
+				:last-success-at="polling.lastSuccessAt.value"
+				:consecutive-failures="polling.consecutiveFailures.value"
+				@refresh="reload" />
+		</div>
+
 		<div v-if="error" class="cz-error">{{ error }}</div>
 
 		<div v-if="report" class="cz-card cz-nextstep" style="margin-bottom: 16px">

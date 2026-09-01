@@ -132,5 +132,10 @@
 		"unknown": "Something went wrong. Try again, or reload the page.",
 		"details": "Technical details",
 		"retry": "Try again"
+	},
+	"freshness": {
+		"updated": "Updated {time}",
+		"reconnecting": "Reconnecting — last updated {time}",
+		"refresh": "Refresh"
 	}
 }

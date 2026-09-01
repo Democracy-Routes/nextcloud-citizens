@@ -272,4 +272,7 @@ export interface RoundMonitor {
 	tables_ready: number
 	tables_total: number
 	tables: MonitorTable[]
+	/** Every round of the assembly, as the server has them right now. The Live
+	 * tab used to read these from the assembly prop, which nothing refreshed. */
+	rounds: { id: string; position: number; title: string; status: string }[]
 }

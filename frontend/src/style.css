@@ -863,3 +863,11 @@
 	#citizens-app .cz-qr-item .cz-btn { display: none; }
 }
 }
+
+/* A view whose last refresh failed. Dimming it is the difference between
+   "these numbers are current" and "these numbers are the last ones we got",
+   which for a facilitator watching tables connect is the whole question. */
+.cz-stale {
+	opacity: 0.62;
+	transition: opacity 0.2s ease;
+}

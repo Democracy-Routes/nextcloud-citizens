@@ -109,3 +109,35 @@ def test_device_log_shipping(client, settings_env):
         headers={"X-Test-User": "intruder"},
     )
     assert other.status_code == 404
+
+
+def test_the_monitor_reports_every_round_status(client):
+    """The Live tab polls this every few seconds but used to compute "which
+    round is next" from the assembly object it was handed on mount, which
+    nothing refreshed — so it could offer to start a round the server had
+    already started. One request now answers both questions."""
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST Monitor Rounds",
+            "default_table_count": 1,
+            "rounds": [
+                {"title": "R1", "question": "Q1?", "duration_minutes": 30},
+                {"title": "R2", "question": "Q2?", "duration_minutes": 30},
+            ],
+        },
+    ).json()
+    first, second = assembly["rounds"]
+    client.post(f"/api/v1/rounds/{first['id']}/start")
+    client.post(f"/api/v1/rounds/{first['id']}/end")
+    client.post(f"/api/v1/rounds/{second['id']}/start")
+
+    monitor = client.get(f"/api/v1/rounds/{first['id']}/monitor").json()
+
+    assert "rounds" in monitor, "the monitor does not report the other rounds"
+    by_id = {r["id"]: r for r in monitor["rounds"]}
+    assert by_id[second["id"]]["status"] == "ACTIVE", (
+        "the monitor still reports round 2 as available to start, which is how "
+        "the Live tab offered a round that was already running"
+    )
+    assert [r["position"] for r in monitor["rounds"]] == [1, 2]
