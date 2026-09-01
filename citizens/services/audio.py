@@ -46,13 +46,18 @@ def _extension_for(mime_type: str) -> str:
     return EXTENSION_BY_MIME.get(base, ".webm")
 
 
-def assemble_recording(session: Session, recording: Recording) -> None:
-    """Concatenate chunks, validate with ffprobe, remux, checksum, mark AUDIO_READY."""
+def assemble_recording(session: Session, recording: Recording) -> list | None:
+    """Concatenate chunks, validate with ffprobe, remux, checksum, mark AUDIO_READY.
+
+    Returns the chunk rows that are now redundant, for the caller to reclaim
+    with reclaim_chunks() once AUDIO_READY has been committed — or None when
+    there was nothing to assemble. See the comment at the end of the body.
+    """
     missing = missing_sequences(session, recording)
     if missing:
         transition(recording, "WAITING_FOR_CHUNKS")
         log.warning("audio_assemble_missing_chunks", recording_id=recording.id, missing=len(missing))
-        return
+        return None
 
     root = get_settings().app_persistent_storage
     directory = recording_dir(
@@ -79,10 +84,28 @@ def assemble_recording(session: Session, recording: Recording) -> None:
     # 500-ing every API request after busy_timeout (expire_on_commit=False
     # keeps the loaded chunk rows usable)
     session.commit()
+    # The commit above deliberately releases the write lock before the ffmpeg
+    # work, which leaves a window in which the organizer can delete this
+    # recording's audio. Deleting mid-assembly is refused now, but the check
+    # costs nothing and closes the race rather than narrowing it.
+    if recording.audio_deleted_at is not None:
+        raise AudioAssemblyError(
+            "AUDIO_DELETED", "The audio of this recording was deleted while it was assembling"
+        )
     digest = hashlib.sha256()
     with open(raw_path, "wb") as raw:
         for chunk in chunks:
-            data = (root / chunk.path).read_bytes()
+            try:
+                data = (root / chunk.path).read_bytes()
+            except FileNotFoundError as exc:
+                # Not a transient fault: the bytes are gone, so retrying can
+                # only fail the same way five times and then strand the
+                # recording in ASSEMBLING with nothing able to free it.
+                raw_path.unlink(missing_ok=True)
+                raise AudioAssemblyError(
+                    "CHUNKS_GONE",
+                    f"Chunk {chunk.sequence_number} is missing from storage",
+                ) from exc
             if hashlib.sha256(data).hexdigest() != chunk.sha256:
                 raw_path.unlink(missing_ok=True)
                 raise AudioAssemblyError(
@@ -112,6 +135,27 @@ def assemble_recording(session: Session, recording: Recording) -> None:
         size_bytes=canonical.stat().st_size,
     )
     _write_manifest(directory, recording, chunks)
+    # NOT discarded here. _discard_chunks unlinks files and deletes rows; if
+    # the commit that records AUDIO_READY then fails (a full disk is a modeled
+    # condition on this path), the rollback restores AudioChunk rows pointing
+    # at files that no longer exist, and every retry fails permanently. The
+    # caller reclaims them once the new state is durable.
+    return chunks
+
+
+def reclaim_chunks(session: Session, recording: Recording, chunks) -> None:
+    """Reclaim the per-chunk copies of an assembled recording.
+
+    Separate from assemble_recording, and called only after AUDIO_READY is
+    committed, so a failed commit can never leave rows rolled back while their
+    files are already unlinked.
+    """
+    if not chunks:
+        return
+    root = get_settings().app_persistent_storage
+    directory = recording_dir(
+        root, recording.assembly_id, recording.round_id, recording.table_id, recording.id
+    )
     _discard_chunks(session, root, directory, recording, chunks)
 
 
@@ -138,7 +182,12 @@ def _discard_chunks(session: Session, root, directory, recording: Recording, chu
         removed.append(chunk)
         freed += chunk.size_bytes
     for chunk in removed:
-        session.delete(chunk)
+        # re-fetch: a concurrent delete of this recording's audio may already
+        # have removed the row, and deleting a stale one raises StaleDataError
+        # on flush and fails the whole job
+        live = session.get(type(chunk), chunk.id)
+        if live is not None:
+            session.delete(live)
     chunks_dir = directory / "chunks"
     if chunks_dir.is_dir():
         try:

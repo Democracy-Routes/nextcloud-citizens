@@ -19,6 +19,7 @@ from citizens.security.identity import CurrentUser
 from citizens.services import invites as invite_svc
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
+from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording_states import transition
 from citizens.storage.paths import device_log_path
@@ -50,10 +51,19 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     if recording is None:
         raise HTTPException(status_code=404, detail="Recording not found")
     get_owned_assembly(session, recording.assembly_id, user)
-    if recording.state not in ("WAITING_FOR_CHUNKS", "RECORDING", "FINALIZING"):
+    # ASSEMBLING included: a recording whose assembly failed for good (a full
+    # disk, exhausted retries) is stuck there with nothing else able to free it
+    if recording.state not in ("WAITING_FOR_CHUNKS", "RECORDING", "FINALIZING", "ASSEMBLING"):
         raise HTTPException(
             status_code=409,
             detail=f"Recording is {recording.state}; only a stalled upload can be abandoned",
+        )
+    if recording.state == "ASSEMBLING" and has_live_job(
+        session, "ASSEMBLE_AUDIO", "recording_id", recording.id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="This recording is still being assembled; wait for it to finish or fail",
         )
     recording.error_code = "UPLOAD_ABANDONED"
     transition(recording, "UPLOAD_INCOMPLETE")
@@ -69,6 +79,40 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     )
     return {"state": recording.state}
 
+
+@router.post("/recordings/{recording_id}/assemble", status_code=202)
+def retry_assembly(recording_id: str, user: CurrentUser, session: DB):
+    """Try assembling this recording's audio again.
+
+    The only other place that ever enqueues ASSEMBLE_AUDIO is
+    complete_recording, which refuses a recording that is already ASSEMBLING —
+    so when assembly failed for good (a full disk exhausting the retries) there
+    was nothing an organizer could do about it. The chunks are still on disk;
+    once space is free this is the way back.
+    """
+    recording = session.get(Recording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    get_owned_assembly(session, recording.assembly_id, user)
+    if recording.state not in ("ASSEMBLING", "AUDIO_INVALID", "UPLOAD_INCOMPLETE"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Recording is {recording.state}; there is nothing to assemble",
+        )
+    if has_live_job(session, "ASSEMBLE_AUDIO", "recording_id", recording.id):
+        raise HTTPException(
+            status_code=409, detail="Assembly is already queued for this recording"
+        )
+    if recording.state != "ASSEMBLING":
+        transition(recording, "ASSEMBLING")
+    recording.error_code = ""
+    session.flush()
+    enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": recording.id})
+    record_audit_event(
+        session, "assembly_retried", "recording", recording.id, actor=user,
+        data={"table_number": recording.table_number},
+    )
+    return {"state": recording.state}
 
 @router.get(
     "/assemblies/{assembly_id}/invites/links",

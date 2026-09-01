@@ -22,6 +22,7 @@ from citizens.db.session import session_scope
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.logging_setup import get_logger
 from citizens.services.audit import record_audit_event
+from citizens.services.jobs import has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording_states import transition
 
@@ -32,6 +33,12 @@ SWEEP_INTERVAL_SECONDS = 60.0
 # before we stop waiting for it. Generous: a phone that regains signal an hour
 # later still re-uploads, because UPLOAD_INCOMPLETE transitions back.
 STALLED_UPLOAD_MINUTES = 20
+# A recording stuck in ASSEMBLING gets its own, longer, cutoff: assembly is
+# real work (concatenate, ffprobe, remux) and a long round on a busy instance
+# can legitimately take a while. This only fires when no ASSEMBLE_AUDIO job is
+# still queued, running or backing off for it — i.e. when nothing is going to
+# move it, ever.
+STALLED_ASSEMBLY_MINUTES = 30
 
 
 def sweep_stalled_uploads() -> int:
@@ -49,6 +56,7 @@ def sweep_stalled_uploads() -> int:
     recording back to WAITING_FOR_CHUNKS.
     """
     cutoff = utcnow() - timedelta(minutes=STALLED_UPLOAD_MINUTES)
+    assembly_cutoff = utcnow() - timedelta(minutes=STALLED_ASSEMBLY_MINUTES)
     with session_scope() as session:
         stalled = list(
             session.execute(
@@ -58,8 +66,32 @@ def sweep_stalled_uploads() -> int:
                 )
             ).scalars()
         )
+        # ASSEMBLING is a trap without this: StorageFullError is retryable, so
+        # it leaves the state alone, and when the attempts run out the job is
+        # FAILED while the recording stays ASSEMBLING — where nothing can
+        # re-record it, abandon it or retry it, and where it blocks the round's
+        # cross-table analysis for good.
+        wedged = [
+            recording
+            for recording in session.execute(
+                select(Recording).where(
+                    Recording.state == "ASSEMBLING",
+                    Recording.updated_at < assembly_cutoff,
+                )
+            ).scalars()
+            if not has_live_job(session, "ASSEMBLE_AUDIO", "recording_id", recording.id)
+        ]
+        for recording in wedged:
+            log.warning(
+                "assembly_abandoned",
+                recording_id=recording.id,
+                table_number=recording.table_number,
+                error_code=recording.error_code,
+            )
+        stalled.extend(wedged)
         for recording in stalled:
-            recording.error_code = "UPLOAD_TIMED_OUT"
+            if not recording.error_code:
+                recording.error_code = "UPLOAD_TIMED_OUT"
             transition(recording, "UPLOAD_INCOMPLETE")
             log.warning(
                 "upload_abandoned",

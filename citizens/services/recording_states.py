@@ -10,7 +10,15 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     "RECORDING": {"FINALIZING", "UPLOAD_INCOMPLETE"},
     "FINALIZING": {"WAITING_FOR_CHUNKS", "ASSEMBLING", "UPLOAD_INCOMPLETE"},
     "WAITING_FOR_CHUNKS": {"ASSEMBLING", "UPLOAD_INCOMPLETE"},
-    "ASSEMBLING": {"AUDIO_READY", "AUDIO_INVALID", "WAITING_FOR_CHUNKS"},
+    # → UPLOAD_INCOMPLETE: a full disk raises StorageFullError, which is
+    # retryable and so leaves the state untouched. Once the attempts ran out
+    # the job was FAILED and the recording sat in ASSEMBLING with no way out at
+    # all: not re-recordable, not abandonable, not re-transcribable, not swept
+    # — and, because ASSEMBLING counts as healthy-pending, it also stopped the
+    # round's cross-table analysis forever. UPLOAD_INCOMPLETE is the right
+    # landing state (not AUDIO_INVALID: the audio is fine, the disk was full)
+    # because it already unblocks the round and lets the table start over.
+    "ASSEMBLING": {"AUDIO_READY", "AUDIO_INVALID", "WAITING_FOR_CHUNKS", "UPLOAD_INCOMPLETE"},
     "AUDIO_READY": {"TRANSCRIBING"},
     "TRANSCRIBING": {"TRANSCRIBED", "TRANSCRIPTION_FAILED"},
     # TRANSCRIBED → TRANSCRIBING supports organizer-requested re-transcription;

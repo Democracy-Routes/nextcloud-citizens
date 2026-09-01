@@ -18,7 +18,7 @@ import json
 import time
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from citizens.db.models import AppJob
 from citizens.db.models.base import utcnow
@@ -32,6 +32,11 @@ log = get_logger(__name__)
 POLL_INTERVAL_SECONDS = 3.0
 BACKOFF_BASE_SECONDS = 30
 BACKOFF_MAX_SECONDS = 3600
+# How long a RUNNING job may hold its lease before another pass reclaims it.
+# Generous, because a long transcription legitimately takes many minutes.
+# Safe because exactly one worker runs (a single container, one run_forever
+# task); reclaiming would double-run jobs if that ever stopped being true.
+RUNNING_LEASE_SECONDS = 1800
 
 
 def recover_stale_jobs() -> int:
@@ -50,14 +55,36 @@ def recover_stale_jobs() -> int:
 
 def _claim_next_job() -> str | None:
     with session_scope() as session:
+        now = utcnow()
+        lease_expiry = now - timedelta(seconds=RUNNING_LEASE_SECONDS)
         job = session.execute(
             select(AppJob)
-            .where(AppJob.state.in_(("QUEUED", "RETRY")), AppJob.next_attempt_at <= utcnow())
+            .where(
+                or_(
+                    and_(
+                        AppJob.state.in_(("QUEUED", "RETRY")),
+                        AppJob.next_attempt_at <= now,
+                    ),
+                    # A job left RUNNING past its lease. recover_stale_jobs
+                    # only runs at startup, so without this a job whose final
+                    # commit failed stayed RUNNING — invisible to the claim
+                    # query — until somebody restarted the container.
+                    and_(
+                        AppJob.state == "RUNNING",
+                        AppJob.locked_at.is_not(None),
+                        AppJob.locked_at < lease_expiry,
+                    ),
+                )
+            )
             .order_by(AppJob.next_attempt_at)
             .limit(1)
         ).scalar_one_or_none()
         if job is None:
             return None
+        if job.state == "RUNNING":
+            log.warning(
+                "job_lease_expired", job_id=job.id, job_type=job.type, attempts=job.attempts
+            )
         job.state = "RUNNING"
         job.locked_at = utcnow()
         job.attempts = job.attempts + 1
@@ -65,6 +92,39 @@ def _claim_next_job() -> str | None:
 
 
 def _run_job(job_id: str) -> None:
+    try:
+        _run_job_inner(job_id)
+    except Exception:
+        # The bookkeeping commit itself failed (a full disk is a modeled
+        # condition on these paths). run_forever swallows this, so without a
+        # second attempt in a fresh session the row stays RUNNING with
+        # locked_at set — and the claim query never looks at RUNNING rows, so
+        # the job would never run again until a restart.
+        log.error("job_bookkeeping_failed", job_id=job_id, exc_info=True)
+        _release_job_after_failure(job_id)
+
+
+def _release_job_after_failure(job_id: str) -> None:
+    try:
+        with session_scope() as session:
+            job = session.get(AppJob, job_id)
+            if job is None or job.state != "RUNNING":
+                return
+            job.locked_at = None
+            job.last_error = "The job could not record its own result"[:2000]
+            if job.attempts >= job.max_attempts:
+                job.state = "FAILED"
+            else:
+                job.state = "RETRY"
+                delay = min(BACKOFF_BASE_SECONDS * (2 ** (job.attempts - 1)), BACKOFF_MAX_SECONDS)
+                job.next_attempt_at = utcnow() + timedelta(seconds=delay)
+    except Exception:
+        # nothing more we can do here; the lease reclaim in _claim_next_job is
+        # the backstop
+        log.error("job_release_failed", job_id=job_id, exc_info=True)
+
+
+def _run_job_inner(job_id: str) -> None:
     with session_scope() as session:
         job = session.get(AppJob, job_id)
         if job is None:

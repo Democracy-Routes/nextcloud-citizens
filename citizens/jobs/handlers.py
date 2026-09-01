@@ -16,7 +16,12 @@ from citizens.providers.transcription.base import TranscriptionError
 from citizens.services import analysis as analysis_svc
 from citizens.services import provider_config
 from citizens.services import transcription as transcription_svc
-from citizens.services.audio import AudioAssemblyError, StorageFullError, assemble_recording
+from citizens.services.audio import (
+    AudioAssemblyError,
+    StorageFullError,
+    assemble_recording,
+    reclaim_chunks,
+)
 from citizens.services.jobs import enqueue_job
 from citizens.services.recording_states import transition
 from citizens.storage.paths import live_caption_path
@@ -54,7 +59,7 @@ def handle_assemble_audio(session: Session, payload: dict) -> None:
     if recording.state != "ASSEMBLING":
         transition(recording, "ASSEMBLING")
     try:
-        assemble_recording(session, recording)
+        redundant_chunks = assemble_recording(session, recording)
     except StorageFullError:
         recording.error_code = "STORAGE_FULL"
         _commit_failure_state(session)
@@ -65,6 +70,14 @@ def handle_assemble_audio(session: Session, payload: dict) -> None:
         transition(recording, "AUDIO_INVALID")
         log.error("audio_assembly_failed", recording_id=recording.id, error_code=exc.code)
         raise PermanentJobError(str(exc)) from exc
+
+    # Commit AUDIO_READY BEFORE reclaiming the chunk files. Reclaiming unlinks
+    # the bytes and deletes the rows; if this commit failed afterwards, the
+    # rollback would restore rows pointing at files that no longer exist and
+    # every retry would then fail permanently. A full disk — exactly what
+    # brings us here — makes that a real sequence, not a theoretical one.
+    session.commit()
+    reclaim_chunks(session, recording, redundant_chunks)
 
     _maybe_enqueue_transcription(session, recording)
 

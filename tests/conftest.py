@@ -5,7 +5,8 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 
 from citizens.config import get_settings
-from citizens.db.session import get_engine
+from citizens.db.migrate import run_migrations
+from citizens.db.session import configure_database, get_engine, sqlite_url
 from citizens.main import create_app
 from citizens.security.identity import get_current_user_id
 
@@ -71,3 +72,20 @@ def writer_slot_probe():
             raw.close()
 
     return probe
+
+
+@pytest.fixture
+def database(settings_env):
+    """A migrated database with NO application running.
+
+    The `client` fixture starts the real job runner, which competes for queued
+    jobs — so a test that asserts something about claiming or scheduling races
+    it and fails intermittently. This gives the schema without the worker.
+    """
+    from citizens.storage.paths import db_path, ensure_storage_layout
+
+    ensure_storage_layout(settings_env.app_persistent_storage)
+    url = sqlite_url(db_path(settings_env.app_persistent_storage))
+    configure_database(url)
+    run_migrations(url)
+    return settings_env

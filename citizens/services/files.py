@@ -123,7 +123,14 @@ def list_files(session: Session, assembly: Assembly) -> dict:
 
 
 def delete_recording_audio(session: Session, recording: Recording) -> int:
-    """Remove the audio bytes of one recording; keep everything derived."""
+    """Remove the audio bytes of one recording; keep everything derived.
+
+    Callers must not invoke this while an ASSEMBLE_AUDIO job is live for the
+    recording — see _refuse_if_being_assembled in citizens/api/files.py. A
+    transcription already in flight is a different matter and deliberately
+    allowed: the organizer asked for the audio to go, and the transcript that
+    lands afterwards is an honest record of what was said.
+    """
     root = _storage_root()
     freed = 0
     path = canonical_path(recording)

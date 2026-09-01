@@ -16,6 +16,7 @@ from citizens.security.identity import CurrentUser
 from citizens.services import files as files_svc
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
+from citizens.services.jobs import has_live_job
 
 router = APIRouter()
 
@@ -26,6 +27,27 @@ DB = Annotated[Session, Depends(get_db)]
 # phone still uploading chunks, which surfaced as "database is locked" 500s
 # mid-event.
 ReadDB = Annotated[Session, Depends(get_read_db)]
+
+
+def _refuse_if_being_assembled(session: Session, recording: Recording) -> None:
+    """Deleting audio out from under a running assembly corrupts the job.
+
+    assemble_recording commits and releases the write lock before its ffmpeg
+    work, deliberately, so requests can proceed while it runs. That leaves a
+    window in which this delete unlinks the very chunk files the job is about
+    to read: it then fails with a missing file, retries five times, and lands
+    the recording in ASSEMBLING with nothing able to free it.
+    """
+    if recording.state == "ASSEMBLING" or has_live_job(
+        session, "ASSEMBLE_AUDIO", "recording_id", recording.id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This recording is being assembled right now. Wait for it to "
+                "finish, then delete its audio."
+            ),
+        )
 
 
 def _owned_recording(session: Session, recording_id: str, user: str) -> Recording:
@@ -97,6 +119,7 @@ def download_session_export(assembly_id: str, user: CurrentUser, session: ReadDB
 @router.delete("/recordings/{recording_id}/audio", status_code=200)
 def delete_audio(recording_id: str, user: CurrentUser, session: DB):
     recording = _owned_recording(session, recording_id, user)
+    _refuse_if_being_assembled(session, recording)
     freed = files_svc.delete_recording_audio(session, recording)
     record_audit_event(
         session, "recording_audio_deleted", "recording", recording.id, actor=user,
