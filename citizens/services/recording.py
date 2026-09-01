@@ -151,6 +151,43 @@ def assembly_progress(session: Session, assembly) -> dict:
     }
 
 
+#: How long a recording may go without a chunk before a replacement phone may
+#: take the table over. Chunks arrive every ~10 s (CHUNK_INTERVAL_MS), so two
+#: minutes is roughly twelve missed ones — well past any plausible hiccup, and
+#: far enough from the monitor's 45 s "stale" warning that the irreversible
+#: action needs more evidence than the advisory one.
+STALLED_DEVICE_SECONDS = 120
+
+
+def _device_has_gone_silent(recording: Recording) -> bool:
+    """Has this recording's phone stopped sending anything at all?
+
+    `updated_at` bumps on every received chunk, so it measures the arrival of
+    audio rather than the liveness of a heartbeat — which is what actually
+    matters for deciding whether a recording is still being made.
+    """
+    if recording.state != "RECORDING" or recording.updated_at is None:
+        return False
+    return (utcnow() - recording.updated_at).total_seconds() > STALLED_DEVICE_SECONDS
+
+
+def _release_silent_recording(session: Session, recording: Recording) -> None:
+    from citizens.services.live_captions import LIVE_CAPTIONS
+
+    recording.error_code = "DEVICE_SILENT"
+    recording.superseded_at = utcnow()
+    transition(recording, "UPLOAD_INCOMPLETE")
+    session.flush()
+    # nothing else will ever end its caption session; see release_stalled_recording
+    LIVE_CAPTIONS.finish(recording.id)
+    log.warning(
+        "device_silent_recording_released",
+        recording_id=recording.id,
+        table_number=recording.table_number,
+        received_chunks=recording.received_chunks,
+    )
+
+
 def start_recording(
     session: Session, recorder_session: RecorderSession, round_id: str, mime_type: str
 ) -> Recording:
@@ -184,8 +221,25 @@ def start_recording(
             Recording.round_id == round_id,
             Recording.table_id == table.id,
             Recording.state.notin_(RERECORDABLE_STATES),
+            # a superseded recording is still progressing towards a transcript
+            # — it holds most of the round — but its phone is gone, so it must
+            # not keep the table from recording the rest
+            Recording.superseded_at.is_(None),
         )
     ).scalars().first()
+    if existing is not None and _device_has_gone_silent(existing):
+        # A phone that has sent nothing for minutes is not "already recording",
+        # it is gone — a dead battery, most often. Blocking here left the table
+        # waiting twenty minutes for the sweep, which on a thirty-minute round
+        # means losing the rest of the discussion.
+        #
+        # Deliberately NOT assembled, unlike the organizer pressing "replace
+        # device": that is a person who looked at the phone, this is a timer
+        # guessing. We cannot tell a dead battery from dead WiFi, and a merely
+        # disconnected phone is still recording locally — leaving this in
+        # UPLOAD_INCOMPLETE lets it upload that backlog when it returns.
+        _release_silent_recording(session, existing)
+        existing = None
     if existing is not None:
         raise HTTPException(
             status_code=409,

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from citizens.api.downloads import download_headers
 from citizens.config import get_settings
 from citizens.db.models import RecorderSession, Recording
+from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
@@ -38,6 +39,53 @@ def list_invites(assembly_id: str, user: CurrentUser, session: ReadDB):
     return invite_svc.list_invites(session, assembly_id)
 
 
+#: states a recording can be in when its phone has stopped talking to us
+STALLED_STATES = ("WAITING_FOR_CHUNKS", "RECORDING", "FINALIZING", "ASSEMBLING")
+
+
+def _owned_stalled_recording(session: Session, recording_id: str, user: str) -> Recording:
+    """The caller's recording, if it is one that can be given up on."""
+    recording = session.get(Recording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    get_owned_assembly(session, recording.assembly_id, user)
+    # ASSEMBLING included: a recording whose assembly failed for good (a full
+    # disk, exhausted retries) is stuck there with nothing else able to free it
+    if recording.state not in STALLED_STATES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Recording is {recording.state}; only a stalled upload can be given up on",
+        )
+    if recording.state == "ASSEMBLING" and has_live_job(
+        session, "ASSEMBLE_AUDIO", "recording_id", recording.id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="This recording is still being assembled; wait for it to finish or fail",
+        )
+    return recording
+
+
+def release_stalled_recording(session: Session, recording: Recording, error_code: str) -> None:
+    """Stop waiting for this recording's phone, and close its caption session.
+
+    Shared by every path that gives up on a device — the organizer abandoning
+    an upload, the organizer replacing a dead phone, and a replacement device
+    taking over automatically. They differ only in what they do afterwards and
+    in the error code they leave behind, which is what tells the organizer
+    which of them happened.
+
+    Ending the caption session matters on all three: /complete is the only
+    other thing that ever ends one, and a phone that is not coming back will
+    never send it. Left running it holds a provider websocket open and never
+    writes down what it heard.
+    """
+    recording.error_code = error_code
+    transition(recording, "UPLOAD_INCOMPLETE")
+    session.flush()
+    LIVE_CAPTIONS.finish(recording.id)
+
+
 @router.post("/recordings/{recording_id}/abandon-upload")
 def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     """Stop waiting for a table whose phone never finished uploading.
@@ -47,37 +95,68 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     audio already received is kept, and the table can still re-record or the
     phone can still finish uploading later — UPLOAD_INCOMPLETE transitions back.
     """
-    recording = session.get(Recording, recording_id)
-    if recording is None:
-        raise HTTPException(status_code=404, detail="Recording not found")
-    get_owned_assembly(session, recording.assembly_id, user)
-    # ASSEMBLING included: a recording whose assembly failed for good (a full
-    # disk, exhausted retries) is stuck there with nothing else able to free it
-    if recording.state not in ("WAITING_FOR_CHUNKS", "RECORDING", "FINALIZING", "ASSEMBLING"):
-        raise HTTPException(
-            status_code=409,
-            detail=f"Recording is {recording.state}; only a stalled upload can be abandoned",
-        )
-    if recording.state == "ASSEMBLING" and has_live_job(
-        session, "ASSEMBLE_AUDIO", "recording_id", recording.id
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="This recording is still being assembled; wait for it to finish or fail",
-        )
-    recording.error_code = "UPLOAD_ABANDONED"
-    transition(recording, "UPLOAD_INCOMPLETE")
-    session.flush()
-    # The phone is not coming back, so nothing else will ever end its caption
-    # session: /complete is the only other path. Left running it holds a
-    # provider websocket open and never writes down what it heard.
-    LIVE_CAPTIONS.finish(recording.id)
+    recording = _owned_stalled_recording(session, recording_id, user)
+    release_stalled_recording(session, recording, "UPLOAD_ABANDONED")
     maybe_enqueue_round_analysis(session, recording)
     record_audit_event(
         session, "upload_abandoned", "recording", recording.id, actor=user,
         data={"received_chunks": recording.received_chunks, "total_chunks": recording.total_chunks},
     )
     return {"state": recording.state}
+
+
+@router.post("/recordings/{recording_id}/replace-device")
+def replace_device(recording_id: str, user: CurrentUser, session: DB):
+    """This table's phone is gone; let another one take over.
+
+    Distinct from abandon-upload, which means "stop waiting, it may yet come
+    back". This means a person walked to the table and saw a dead phone, and
+    that confidence buys two things abandon does not do:
+
+      * the partial recording is assembled and transcribed immediately, so most
+        of the round becomes a real transcript instead of waiting for somebody
+        to remember a manual Retry afterwards;
+      * the table is released at once, rather than in twenty minutes, which on
+        a thirty-minute round is the difference between recording the rest of
+        the discussion and losing it.
+
+    The replacement phone simply rescans the SAME QR code — invites are not
+    single-use — and starts a second recording for this table and round.
+
+    The old phone's session is deliberately NOT revoked. If it is charged
+    later, its unsent chunks are all from before it died, so they belong to
+    this recording and overlap nothing; revoking would strand them, because
+    uploading them needs its bearer token.
+    """
+    recording = _owned_stalled_recording(session, recording_id, user)
+    release_stalled_recording(session, recording, "DEVICE_REPLACED")
+    # Marked BEFORE assembly is queued: the recording is about to move through
+    # ASSEMBLING and on to a transcript, none of which are re-recordable
+    # states, so without this the replacement phone would still be refused —
+    # the feature would defeat itself.
+    recording.superseded_at = utcnow()
+
+    # Assemble what did arrive. missing_sequences() returns [] when
+    # total_chunks is NULL — the phone never sent /complete — so this proceeds
+    # with whatever chunks exist rather than waiting for a completion that is
+    # never coming.
+    assembling = recording.received_chunks > 0
+    if assembling:
+        transition(recording, "ASSEMBLING")
+        enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": recording.id})
+    else:
+        # nothing to assemble, so the round should stop waiting on this table
+        maybe_enqueue_round_analysis(session, recording)
+
+    record_audit_event(
+        session, "device_replaced", "recording", recording.id, actor=user,
+        data={
+            "table_number": recording.table_number,
+            "received_chunks": recording.received_chunks,
+            "assembling": assembling,
+        },
+    )
+    return {"state": recording.state, "assembling": assembling}
 
 
 @router.post("/recordings/{recording_id}/assemble", status_code=202)
