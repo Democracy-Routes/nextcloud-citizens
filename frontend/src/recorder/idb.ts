@@ -10,6 +10,16 @@ const DB_VERSION = 2
 
 export interface StoredRecording {
 	recordingId: string
+	/** Which assembly this audio belongs to.
+	 *
+	 * Optional because recordings stored before this existed have none. A phone
+	 * is often a citizen's own, used at more than one assembly over time, and
+	 * without this there is no way to tell whose audio is whose — so an old
+	 * recording could hijack a later event's recovery screen, and clearing one
+	 * assembly could delete another's. Absent means "unknown", and unknown is
+	 * always treated as belonging to whoever is asking.
+	 */
+	assemblyId?: string
 	roundId: string
 	tableNumber: number
 	mimeType: string
@@ -122,9 +132,24 @@ export const idb = {
 	},
 
 	/** Recordings that were interrupted or not confirmed by the server. */
-	async unfinishedRecordings(): Promise<StoredRecording[]> {
+	/** Unsynced recordings this assembly may still need to recover.
+	 *
+	 * Scoped, because the recovery screen is shown before a phone can join:
+	 * an unscoped scan meant a phone carrying audio from a previous assembly
+	 * was diverted into recovering THAT before it could record this one.
+	 *
+	 * Recordings with no assembly (stored before this field existed) are
+	 * included: we cannot attribute them, and failing to offer real unsynced
+	 * audio loses it, while offering it needlessly only costs a tap.
+	 */
+	async unfinishedRecordings(assemblyId?: string): Promise<StoredRecording[]> {
 		const all = await this.getRecordings()
-		return all.filter((r) => r.recordingId !== '__selftest__' && !r.serverComplete)
+		return all.filter(
+			(r) =>
+				r.recordingId !== '__selftest__' &&
+				!r.serverComplete &&
+				(!assemblyId || !r.assemblyId || r.assemblyId === assemblyId),
+		)
 	},
 }
 

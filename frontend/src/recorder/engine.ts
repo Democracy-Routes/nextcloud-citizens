@@ -100,7 +100,7 @@ export class RecorderEngine {
 		this.kickUploader()
 	}
 
-	async start(token: string, roundId: string): Promise<void> {
+	async start(token: string, roundId: string, assemblyId: string): Promise<void> {
 		this.token = token
 		const mimeType = pickMimeType()
 		if (!mimeType) throw new Error('This browser cannot record audio (no supported format)')
@@ -116,6 +116,7 @@ export class RecorderEngine {
 
 		await idb.putRecording({
 			recordingId: started.recording_id,
+			assemblyId,
 			roundId,
 			tableNumber: 0,
 			mimeType,
@@ -533,15 +534,20 @@ export async function readBatteryLevel(): Promise<number | undefined> {
 }
 
 /** Explicit local cleanup of fully synchronized recordings (done screen). */
-export async function clearSynchronizedRecordings(): Promise<number> {
+export async function clearSynchronizedRecordings(assemblyId?: string): Promise<number> {
 	const recordings = await idb.getRecordings()
 	let cleared = 0
 	for (const recording of recordings) {
-		if (recording.serverComplete) {
-			await idb.deleteChunksFor(recording.recordingId)
-			await idb.deleteRecording(recording.recordingId)
-			cleared += 1
-		}
+		// serverComplete is the whole safety of this: only audio the server has
+		// confirmed it holds is ever removed, so this can never destroy the
+		// last copy of anything.
+		if (!recording.serverComplete) continue
+		// and only this assembly's, or audio predating the field — clearing one
+		// event must not quietly delete another's from a citizen's own phone
+		if (assemblyId && recording.assemblyId && recording.assemblyId !== assemblyId) continue
+		await idb.deleteChunksFor(recording.recordingId)
+		await idb.deleteRecording(recording.recordingId)
+		cleared += 1
 	}
 	return cleared
 }

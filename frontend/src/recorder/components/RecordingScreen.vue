@@ -306,7 +306,7 @@ async function beginRecording(): Promise<void> {
 	startBusy.value = true
 	startError.value = ''
 	try {
-		await engine.start(props.session.session_token, props.round.id)
+		await engine.start(props.session.session_token, props.round.id, props.session.assembly.id)
 	} catch (error) {
 		startError.value = error instanceof Error ? error.message : String(error)
 		emit('micFailed', props.round.id)
@@ -331,7 +331,7 @@ async function recheck(): Promise<void> {
 }
 
 async function clearSynced(): Promise<void> {
-	const cleared = await clearSynchronizedRecordings()
+	const cleared = await clearSynchronizedRecordings(props.session.assembly.id)
 	clearedNote.value = `${cleared} synchronized recording(s) removed from this phone.`
 }
 </script>

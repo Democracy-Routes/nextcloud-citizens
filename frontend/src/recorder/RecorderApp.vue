@@ -82,9 +82,9 @@ function startRound(round: RoundInfo): void {
  * on the way into a live session, so a failed status check left it unreachable
  * through the UI.
  */
-async function scanForRecovery(): Promise<boolean> {
+async function scanForRecovery(assemblyId?: string): Promise<boolean> {
 	try {
-		const unfinished = await idb.unfinishedRecordings()
+		const unfinished = await idb.unfinishedRecordings(assemblyId)
 		const candidate = unfinished.find((r) => r.totalChunks !== null || r.startedAt > 0)
 		if (!candidate) return false
 		const chunks = await idb.chunksFor(candidate.recordingId)
@@ -106,8 +106,11 @@ async function enterWithSession(joined: JoinResult): Promise<void> {
 	// everyone around it is discussing the assembly's question in one language.
 	setLocale(joined.assembly.language)
 	initLogger(joined.session_token)
-	// reload/crash recovery: unsynchronized local recordings take priority
-	if (await scanForRecovery()) return
+	// reload/crash recovery: unsynchronized local recordings take priority.
+	// Scoped to THIS assembly — a citizen's own phone may still be carrying
+	// audio from a previous event, and that must not stand between them and
+	// recording this one.
+	if (await scanForRecovery(joined.assembly.id)) return
 	// people are about to be recorded: tell them what happens to the audio
 	// before it starts. Once per device — an interrupted round must not make
 	// the table read it again mid-assembly.
@@ -159,7 +162,8 @@ onMounted(async () => {
 	if (stored) {
 		if (await resumeStoredSession(stored)) return
 	}
-	// 3) no session at all — but audio from a previous one may still be here
+	// 3) no session at all, so nothing to scope by — offer whatever unsynced
+	// audio is on this phone rather than leaving it unreachable
 	if (await scanForRecovery()) return
 	screen.value = 'no-invite'
 })
@@ -182,7 +186,7 @@ async function resumeStoredSession(stored: JoinResult): Promise<boolean> {
 		// the phone if there is any, and offer a retry.
 		session.value = stored
 		initLogger(stored.session_token)
-		if (await scanForRecovery()) return true
+		if (await scanForRecovery(stored.assembly.id)) return true
 		screen.value = 'offline'
 		return true
 	}
