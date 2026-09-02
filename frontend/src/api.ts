@@ -169,6 +169,15 @@ export const api = {
 
 	getTranscript: (recordingId: string) =>
 		request<TranscriptData>('GET', `/api/v1/recordings/${recordingId}/transcript`),
+	/** This table's phone is gone; release the table so another can take over.
+	 *
+	 * Finishes the recording with whatever audio arrived — usually most of the
+	 * round — rather than leaving it for someone to salvage by hand later. */
+	replaceDevice: (recordingId: string) =>
+		request<{ state: string; assembling: boolean }>(
+			'POST',
+			`/api/v1/recordings/${recordingId}/replace-device`,
+		),
 	/** Try assembling a recording's audio again — the way out of a failure
 	 * that left it stuck, once the disk has room. */
 	retryAssembly: (recordingId: string) =>
