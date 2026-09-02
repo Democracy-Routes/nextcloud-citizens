@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiCellphoneRemove,
 	mdiClipboardTextOutline,
 	mdiConsoleLine,
 	mdiMonitorEye,
@@ -12,6 +13,7 @@ import {
 } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
+import { describeError } from '../errors'
 import { relativeAge, timestamp } from '../format'
 import { LIVE_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
@@ -19,6 +21,7 @@ import type { AssemblyDetail, MonitorTable, RoundMonitor, TranscriptData } from 
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzFailureNote from './ui/CzFailureNote.vue'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
@@ -204,6 +207,54 @@ function deviceState(table: MonitorTable): { status: string; label: string } {
  * warning to finish the round and swap the phone between rounds. */
 const LOW_STORAGE_MB = 200
 
+/** Enough charge to finish a round, not enough to start another. The point of
+ * showing it at all is to swap a phone BEFORE it dies, rather than recovering
+ * afterwards. Only Chromium reports battery, so a table showing nothing here
+ * is unknown, not healthy — never present its absence as reassurance. */
+const LOW_BATTERY = 0.15
+
+/** States in which a table is still expected to be sending audio. */
+const LIVE_RECORDING_STATES = ['RECORDING', 'FINALIZING', 'WAITING_FOR_CHUNKS']
+
+const confirmReplace = ref<MonitorTable | null>(null)
+
+/** Offer to hand this table to another phone.
+ *
+ * Only when the device has stopped answering (the server's 45 s threshold) AND
+ * a recording is still open — otherwise this is a healthy table and replacing
+ * its device is not a thing anyone should be invited to do.
+ */
+function canReplaceDevice(table: MonitorTable): boolean {
+	if (table.device.connected || !table.recording) return false
+	return LIVE_RECORDING_STATES.includes(table.recording.state)
+}
+
+async function replaceDevice(): Promise<void> {
+	const table = confirmReplace.value
+	confirmReplace.value = null
+	if (!table?.recording) return
+	busy.value = true
+	try {
+		const result = await api.replaceDevice(table.recording.id)
+		toast(
+			result.assembling
+				? `Table ${table.number} released — its recording so far is being transcribed`
+				: `Table ${table.number} released — it had not uploaded any audio yet`,
+		)
+		await polling.refresh()
+		emit('changed')
+	} catch (err) {
+		error.value = describeError(err).message
+	} finally {
+		busy.value = false
+	}
+}
+
+function lowBattery(table: MonitorTable): boolean {
+	const level = table.device.status.battery_level
+	return typeof level === 'number' && level < LOW_BATTERY
+}
+
 function lowStorage(table: MonitorTable): boolean {
 	const free = table.device.status.storage_free_mb
 	return typeof free === 'number' && free < LOW_STORAGE_MB
@@ -295,6 +346,15 @@ function pendingChunks(table: MonitorTable): number {
 		</div>
 
 		<CzConfirm
+			v-if="confirmReplace"
+			title="Hand this table to another phone?"
+			:message="`Table ${confirmReplace.number}'s phone has stopped responding. Its recording is finished with the audio already received — usually most of the round — and transcribed. The table can then record the rest on any phone by scanning the same QR code.`"
+			confirm-label="Replace device"
+			tone="danger"
+			@confirm="replaceDevice"
+			@cancel="confirmReplace = null" />
+
+		<CzConfirm
 			v-if="confirmStartUnready && monitor"
 			title="Start with tables missing?"
 			:message="`Only ${monitor.tables_ready} of ${monitor.tables_total} tables are armed and ready. Tables that arm later can still join the round. Start anyway?`"
@@ -323,6 +383,12 @@ function pendingChunks(table: MonitorTable): number {
 						<td><CzStatusPill :status="deviceState(table).status" :label="deviceState(table).label" /></td>
 						<td>
 							<CzStatusPill v-if="table.recording" :status="table.recording.state" />
+							<!-- the server already returns error_code; the Live tab was the
+							     one place a failure showed as a bare pill with no reason -->
+							<CzFailureNote
+								v-if="table.recording"
+								:state="table.recording.state"
+								:error-code="table.recording.error_code" />
 							<span v-else class="cz-muted">—</span>
 						</td>
 						<td>
@@ -349,6 +415,10 @@ function pendingChunks(table: MonitorTable): number {
 								status="OFFLINE"
 								label="storage error" />
 							<CzStatusPill
+								v-else-if="lowBattery(table)"
+								status="PROCESSING"
+								:label="`battery ${Math.round((table.device.status.battery_level ?? 0) * 100)}%`" />
+							<CzStatusPill
 								v-else-if="lowStorage(table)"
 								status="PROCESSING"
 								:label="`low storage — ${Math.round(table.device.status.storage_free_mb ?? 0)} MB`" />
@@ -372,6 +442,16 @@ function pendingChunks(table: MonitorTable): number {
 									:icon="mdiTextBoxOutline"
 									title="Transcript"
 									@click="showTranscript(table.recording.id)" />
+								<CzButton
+									v-if="canReplaceDevice(table)"
+									small
+									variant="danger"
+									:icon="mdiCellphoneRemove"
+									title="This table's phone has stopped responding — hand the table to another device"
+									:disabled="busy"
+									@click="confirmReplace = table">
+									Replace device
+								</CzButton>
 								<CzButton
 									small
 									variant="tertiary"

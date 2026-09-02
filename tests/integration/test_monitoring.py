@@ -141,3 +141,65 @@ def test_the_monitor_reports_every_round_status(client):
         "the Live tab offered a round that was already running"
     )
     assert [r["position"] for r in monitor["rounds"]] == [1, 2]
+
+
+def test_the_heartbeat_carries_the_phones_battery(client):
+    """Everything else about a dying phone is recovery; this is the only signal
+    that arrives while there is still time to swap it."""
+    import re
+
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST Battery",
+            "default_table_count": 1,
+            "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}],
+        },
+    ).json()
+    round_id = assembly["rounds"][0]["id"]
+    client.post(f"/api/v1/rounds/{round_id}/start")
+    invites = client.post(f"/api/v1/assemblies/{assembly['id']}/invites/generate").json()
+    token = re.search(r"#/join/(.+)$", invites[0]["url"]).group(1)
+    joined = client.post(
+        "/api/v1/public/join", json={"token": token}, headers={"X-Origin-IP": "203.0.113.7"}
+    ).json()
+    headers = {"Authorization": f"Bearer {joined['session_token']}"}
+
+    beat = client.post(
+        "/api/v1/public/recorder/heartbeat",
+        json={"recording_active": True, "storage_ok": True, "battery_level": 0.07},
+        headers=headers,
+    )
+    assert beat.status_code == 200, beat.text
+
+    monitor = client.get(f"/api/v1/rounds/{round_id}/monitor").json()
+    assert monitor["tables"][0]["device"]["status"]["battery_level"] == 0.07
+
+
+def test_an_impossible_battery_level_is_refused(client):
+    """The value is displayed as a percentage; a client must not be able to put
+    nonsense on the organizer's screen."""
+    import re
+
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST Battery Range",
+            "default_table_count": 1,
+            "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}],
+        },
+    ).json()
+    client.post(f"/api/v1/rounds/{assembly['rounds'][0]['id']}/start")
+    invites = client.post(f"/api/v1/assemblies/{assembly['id']}/invites/generate").json()
+    token = re.search(r"#/join/(.+)$", invites[0]["url"]).group(1)
+    joined = client.post(
+        "/api/v1/public/join", json={"token": token}, headers={"X-Origin-IP": "203.0.113.7"}
+    ).json()
+    headers = {"Authorization": f"Bearer {joined['session_token']}"}
+
+    refused = client.post(
+        "/api/v1/public/recorder/heartbeat",
+        json={"recording_active": True, "storage_ok": True, "battery_level": 7},
+        headers=headers,
+    )
+    assert refused.status_code == 422

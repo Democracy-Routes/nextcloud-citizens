@@ -219,6 +219,7 @@ export class RecorderEngine {
 				acked_chunks: this.state.ackedChunks,
 				storage_ok: !this.state.storageError,
 				storage_free_mb: freeMb,
+				battery_level: await readBatteryLevel(),
 			})
 		} catch {
 			/* offline — heartbeats resume when the network does */
@@ -508,6 +509,26 @@ export class RecorderEngine {
 			meta.serverComplete = true
 			await idb.putRecording(meta)
 		}
+	}
+}
+
+/** The phone's battery, 0–1, or undefined where the browser will not say.
+ *
+ * The whole reason this feature exists is a phone dying mid-round: knowing it
+ * is at 8% while there is still time to swap it beats every recovery path
+ * downstream. Chromium on Android exposes this; Safari and Firefox removed it
+ * on fingerprinting grounds, so absence is common and means only "unknown".
+ */
+export async function readBatteryLevel(): Promise<number | undefined> {
+	try {
+		const getBattery = (
+			navigator as Navigator & { getBattery?: () => Promise<{ level: number }> }
+		).getBattery
+		if (!getBattery) return undefined
+		const battery = await getBattery.call(navigator)
+		return typeof battery?.level === 'number' ? battery.level : undefined
+	} catch {
+		return undefined // permissions policy, or an unsupported context
 	}
 }
 

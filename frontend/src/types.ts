@@ -112,6 +112,9 @@ export interface DeviceStatus {
 	acked_chunks?: number
 	storage_ok?: boolean
 	storage_free_mb?: number
+	/** 0–1. Absent means the browser would not say, NOT that the phone is fine:
+	 * only Chromium exposes this. */
+	battery_level?: number
 }
 
 export interface MonitorTable {

@@ -261,6 +261,10 @@ class HeartbeatIn(BaseModel):
     acked_chunks: int = Field(default=0, ge=0)
     storage_ok: bool = True
     storage_free_mb: float | None = None
+    # 0.0–1.0, or absent. Only Chromium exposes the Battery API, so a table
+    # reporting nothing means "unknown", never "fine" — the monitor must not
+    # imply otherwise.
+    battery_level: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 @router.post("/recorder/heartbeat")

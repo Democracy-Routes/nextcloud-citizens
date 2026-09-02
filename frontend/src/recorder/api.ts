@@ -186,6 +186,8 @@ export const recorderApi = {
 			acked_chunks: number
 			storage_ok: boolean
 			storage_free_mb?: number
+			/** 0–1, absent where the browser will not expose it */
+			battery_level?: number
 		},
 	) => request<{ ok: boolean }>('POST', '/api/v1/public/recorder/heartbeat', { token, json: payload }),
 
