@@ -47,9 +47,18 @@ def canonical_path(recording: Recording) -> Path | None:
 
 
 def audio_filename(assembly: Assembly, recording: Recording, position: int) -> str:
+    """A name that is unique within an export.
+
+    A table whose phone was replaced mid-round has two recordings for one
+    round and table, which produced two identical names: the zip got duplicate
+    entries and the manifest pointed two records at one path. The earlier
+    recording is marked, so the file names say which half is which rather than
+    one silently standing in for both.
+    """
     stem = "".join(c if c.isalnum() or c in "-_" else "-" for c in assembly.name)[:40].strip("-")
     suffix = Path(recording.canonical_audio_path or "audio.webm").suffix or ".webm"
-    return f"{stem or 'assembly'}-round{position}-table{recording.table_number}{suffix}"
+    part = "-part1" if recording.superseded_at is not None else ""
+    return f"{stem or 'assembly'}-round{position}-table{recording.table_number}{part}{suffix}"
 
 
 def list_files(session: Session, assembly: Assembly) -> dict:

@@ -93,6 +93,44 @@ LIVE_TRANSCRIPT_NOTE = (
 )
 
 
+DEVICE_REPLACED_NOTE = (
+    " At least one table's phone stopped working during a round and the "
+    "discussion continued on another device. Both parts were transcribed and "
+    "analysed together as one conversation; a short stretch between them was "
+    "not recorded."
+)
+
+
+def _methodology_note(session: Session, assembly: Assembly) -> str:
+    """The standing note, plus whatever was unusual about THIS assembly."""
+    note = METHODOLOGY_NOTE
+    if _has_live_transcript(session, assembly):
+        note += LIVE_TRANSCRIPT_NOTE
+    if _has_replaced_device(session, assembly):
+        note += DEVICE_REPLACED_NOTE
+    return note
+
+
+def _has_replaced_device(session: Session, assembly: Assembly) -> bool:
+    """Did any table change phone mid-round?
+
+    The methodology says one phone per table recorded each conversation. When
+    a device was replaced that is no longer true, and a reader deserves to know
+    why a table's recording has a gap in it.
+    """
+    return (
+        session.execute(
+            select(Recording.id)
+            .where(
+                Recording.assembly_id == assembly.id,
+                Recording.superseded_at.is_not(None),
+            )
+            .limit(1)
+        ).first()
+        is not None
+    )
+
+
 def _has_live_transcript(session: Session, assembly: Assembly) -> bool:
     """True when any of this assembly's transcripts came from live captions.
 
@@ -220,15 +258,13 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
         # Whisper and Vosk return text without speaker separation
         "method": (
             "In-person citizens' assembly: participants discussed in small tables; "
-            "one phone per table recorded the conversation, which was transcribed "
+            "a phone at each table recorded the conversation, which was transcribed "
             + ("with speaker diarization " if _has_speaker_labels(session, assembly) else "")
             + "and analyzed per table, then aggregated across tables."
         ),
-        "methodology_note": (
-            METHODOLOGY_NOTE + LIVE_TRANSCRIPT_NOTE
-            if _has_live_transcript(session, assembly)
-            else METHODOLOGY_NOTE
-        ),
+        # built by accumulation rather than a ternary: there are three notes
+        # now, and "(A + B) if cond else A" does not extend to a third
+        "methodology_note": _methodology_note(session, assembly),
         "include_drafts": include_drafts,
         # when set, table phones can view/download this report
         "published_at": (

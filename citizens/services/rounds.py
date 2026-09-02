@@ -53,12 +53,19 @@ def round_monitor(session: Session, round_: Round) -> dict:
     now = utcnow()
     tables = []
     for table in round_.tables:
-        recording = session.execute(
-            select(Recording)
-            .where(Recording.round_id == round_.id, Recording.table_id == table.id)
-            .order_by(Recording.created_at.desc())
-            .limit(1)
-        ).scalar_one_or_none()
+        recordings = list(
+            session.execute(
+                select(Recording)
+                .where(Recording.round_id == round_.id, Recording.table_id == table.id)
+                .order_by(Recording.created_at.desc())
+            ).scalars()
+        )
+        recording = recordings[0] if recordings else None
+        # A table whose phone was replaced has an earlier recording still on
+        # its way to a transcript. Showing only the newest made the half we had
+        # just salvaged vanish from the Live tab the moment the replacement
+        # started, so a facilitator could not watch it finish.
+        superseded = [other for other in recordings[1:] if other.superseded_at is not None]
 
         recorder_session = session.execute(
             select(RecorderSession)
@@ -101,6 +108,15 @@ def round_monitor(session: Session, round_: Round) -> dict:
                     "total_chunks": recording.total_chunks,
                     "error_code": recording.error_code,
                 },
+                "superseded_recordings": [
+                    {
+                        "id": other.id,
+                        "state": other.state,
+                        "error_code": other.error_code,
+                        "received_chunks": other.received_chunks,
+                    }
+                    for other in superseded
+                ],
             }
         )
     return {

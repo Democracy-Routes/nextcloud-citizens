@@ -154,31 +154,79 @@ def build_system_prompt(
     return system
 
 
-def analyze_table(session: Session, store: provider_config.ConfigStore, recording: Recording) -> int:
-    """Extract findings for one table recording; returns stored finding count."""
-    transcript = session.execute(
-        select(Transcript).where(Transcript.recording_id == recording.id)
-    ).scalar_one_or_none()
-    if transcript is None:
-        raise AnalysisError("No transcript for this recording", permanent=True)
+#: Marks where a table's phone was replaced, so the model reads the join as an
+#: interruption rather than an unexplained jump in the conversation.
+DEVICE_CHANGE_MARKER = (
+    "[--- the table's phone was replaced here; the discussion continued on "
+    "another device, and a short part of it was not recorded ---]"
+)
 
-    if not transcript.segments:
+
+def table_recordings(session: Session, recording: Recording) -> list[Recording]:
+    """Every recording of this table's discussion in this round, oldest first.
+
+    Normally one. Two when the phone was replaced mid-round — one group of
+    people having one conversation with a technical interruption in the middle,
+    which is how the analysis and the report should treat it.
+    """
+    return list(
+        session.execute(
+            select(Recording)
+            .where(
+                Recording.round_id == recording.round_id,
+                Recording.table_id == recording.table_id,
+            )
+            .order_by(Recording.created_at)
+        ).scalars()
+    )
+
+
+def analyze_table(session: Session, store: provider_config.ConfigStore, recording: Recording) -> int:
+    """Extract findings for one table's discussion; returns stored finding count.
+
+    Analyses the TABLE, not the recording. A table whose phone was replaced has
+    two recordings, and analysing each separately would produce two competing
+    summaries above a single merged set of findings — telling a reader the same
+    discussion is both one thing and two. It is also more expensive: one model
+    call per recording rather than one per table.
+    """
+    siblings = table_recordings(session, recording)
+    # the newest recording owns the table's summary and findings, so exactly
+    # one row per (round, table) carries them and nothing can overwrite anything
+    primary = siblings[-1]
+
+    transcripts = []
+    for sibling in siblings:
+        transcript = session.execute(
+            select(Transcript).where(Transcript.recording_id == sibling.id)
+        ).scalar_one_or_none()
+        if transcript is not None:
+            transcripts.append(transcript)
+    if not transcripts:
+        raise AnalysisError("No transcript for this table", permanent=True)
+
+    segments = [segment for transcript in transcripts for segment in transcript.segments]
+    if not segments:
         # nothing can fail after this point, so replacing here is safe
-        _delete_existing(session, recording_id=recording.id, scope="table", only_drafts=True)
-        recording.analysis_summary = "No speech was detected in this recording."
-        log.info("analysis_empty_transcript", recording_id=recording.id)
+        _delete_table_findings(session, siblings)
+        _set_table_summary(siblings, primary, "No speech was detected in this recording.")
+        log.info("analysis_empty_transcript", recording_id=primary.id)
         return 0
 
     assembly = session.get(Assembly, recording.assembly_id)
     round_ = session.get(Round, recording.round_id)
     language = LANGUAGE_NAMES.get(assembly.language if assembly else "en", "English")
-    valid_ids = {segment.id for segment in transcript.segments}
+    valid_ids = {segment.id for segment in segments}
 
-    lines = [
-        f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
-        f"({_timestamp(block['start'])}-{_timestamp(block['end'])}): {block['text']}"
-        for block in coalesce_segments(list(transcript.segments))
-    ]
+    lines: list[str] = []
+    for index, transcript in enumerate(transcripts):
+        if index:
+            lines.append(DEVICE_CHANGE_MARKER)
+        lines.extend(
+            f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
+            f"({_timestamp(block['start'])}-{_timestamp(block['end'])}): {block['text']}"
+            for block in coalesce_segments(list(transcript.segments))
+        )
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title if round_ else ''}\n"
@@ -192,7 +240,10 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     # transaction 500s every API request after busy_timeout
     session.commit()
     base_url, key, model = _analysis_config(store)
-    log.info("analysis_started", recording_id=recording.id, scope="table", segments=len(lines))
+    log.info(
+        "analysis_started", recording_id=primary.id, scope="table",
+        segments=len(lines), recordings=len(siblings),
+    )
     system_prompt = build_system_prompt(
         TABLE_SYSTEM, language, store, assembly.analysis_instructions if assembly else ""
     )
@@ -204,8 +255,8 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     # nothing: PermanentJobError does not roll back (see jobs/runner.py). The
     # delete and the inserts below are one transaction, so re-analysis either
     # replaces the findings or leaves them untouched.
-    _delete_existing(session, recording_id=recording.id, scope="table", only_drafts=True)
-    recording.analysis_summary = result.summary
+    _delete_table_findings(session, siblings)
+    _set_table_summary(siblings, primary, result.summary)
 
     stored = 0
     dropped = 0
@@ -220,7 +271,9 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
             assembly_id=recording.assembly_id,
             round_id=recording.round_id,
             table_id=recording.table_id,
-            recording_id=recording.id,
+            # attributed to the table's current recording, so re-analysis
+            # replaces them wherever the job happened to be enqueued from
+            recording_id=primary.id,
             scope="table",
             type=item.type,
             title=item.title,
@@ -235,8 +288,8 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
         stored += 1
     session.flush()
     log.info(
-        "analysis_completed", recording_id=recording.id, scope="table",
-        findings=stored, dropped_without_evidence=dropped,
+        "analysis_completed", recording_id=primary.id, scope="table",
+        recordings=len(siblings), findings=stored, dropped_without_evidence=dropped,
     )
     return stored
 
@@ -332,6 +385,29 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
 
 def _table_numbers(session: Session, round_: Round) -> dict[str, int]:
     return {table.id: table.number for table in round_.tables}
+
+
+def _delete_table_findings(session: Session, siblings: list[Recording]) -> None:
+    """Clear this table's draft findings across every recording it has.
+
+    A replaced phone leaves findings attributed to the earlier recording; a
+    re-analysis that only cleared the current one would leave those behind as
+    duplicates nobody could account for.
+    """
+    for sibling in siblings:
+        _delete_existing(session, recording_id=sibling.id, scope="table", only_drafts=True)
+
+
+def _set_table_summary(siblings: list[Recording], primary: Recording, summary: str) -> None:
+    """One summary per table, on one row.
+
+    The report keys each table's summary by (round, table number), so two
+    recordings both carrying one meant the second silently overwrote the first
+    and database row order decided which a reader saw. Clearing the others
+    makes that impossible rather than merely unlikely.
+    """
+    for sibling in siblings:
+        sibling.analysis_summary = summary if sibling.id == primary.id else ""
 
 
 def _delete_existing(

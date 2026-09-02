@@ -192,8 +192,37 @@ def _fail_transcription(session: Session, recording: Recording, code: str) -> No
     log.error("live_transcription_failed", recording_id=recording.id, error_code=code)
 
 
+#: A table with a recording in one of these still has audio on its way to a
+#: transcript, so analysing the table now would analyse half of it.
+TABLE_PENDING_STATES = {
+    "CREATED", "RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS", "ASSEMBLING",
+    "AUDIO_READY", "TRANSCRIBING",
+}
+
+
+def _table_still_transcribing(session: Session, recording: Recording) -> bool:
+    """Is another recording of this same table still on its way to a transcript?
+
+    A table whose phone was replaced has two recordings of one discussion.
+    Analysis covers the table as a whole, so it must wait for both halves —
+    otherwise the first to finish transcribing is analysed on its own and the
+    rest of the round is missing from the summary and the findings.
+    """
+    states = session.execute(
+        select(Recording.state).where(
+            Recording.round_id == recording.round_id,
+            Recording.table_id == recording.table_id,
+            Recording.id != recording.id,
+        )
+    ).scalars()
+    return any(state in TABLE_PENDING_STATES for state in states)
+
+
 def _maybe_enqueue_analysis(session: Session, recording: Recording) -> None:
     try:
+        if _table_still_transcribing(session, recording):
+            log.info("analysis_waiting_for_sibling", recording_id=recording.id)
+            return
         store = provider_config.default_store()
         if analysis_svc.analysis_ready(store):
             enqueue_job(session, "ANALYZE_TABLE", {"recording_id": recording.id})

@@ -163,6 +163,12 @@ def test_a_permanent_round_failure_keeps_the_existing_clusters(seeded, monkeypat
     assert len(clusters) == 1, "the round's existing clusters were destroyed by a failure"
 
 
+#: Every way these functions clear existing findings. Named rather than
+#: matched loosely so that renaming one — as the per-table analysis did with
+#: _delete_table_findings — fails this test rather than silently passing it.
+DELETE_CALLS = ("_delete_existing(", "_delete_table_findings(")
+
+
 def test_findings_are_deleted_only_after_the_model_answers():
     """The ordering itself, so a refactor cannot quietly reintroduce this."""
     import inspect
@@ -172,7 +178,13 @@ def test_findings_are_deleted_only_after_the_model_answers():
         model_call = source.index("chat_json(")
         # the replacing delete is the last one in the body; an earlier delete
         # inside the "nothing to analyse" branch is deliberate and safe
-        assert source.rindex("_delete_existing(") > model_call, (
+        deletes = [source.rindex(call) for call in DELETE_CALLS if call in source]
+        assert deletes, (
+            f"{function.__name__} no longer calls any known delete helper — if it "
+            f"was renamed again, add it to DELETE_CALLS rather than dropping this "
+            f"guard"
+        )
+        assert max(deletes) > model_call, (
             f"{function.__name__} deletes findings before calling the model — a "
             "permanent provider failure would destroy them with no replacement"
         )
