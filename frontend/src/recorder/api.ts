@@ -45,6 +45,8 @@ export interface JoinResult {
 	data_handling?: DataHandling
 	table_number: number
 	rounds: RoundInfo[]
+	/** The organizer has asked the phones to delete their local copies. */
+	purge_local_audio?: boolean
 }
 
 export interface RecorderStatus {
@@ -53,6 +55,7 @@ export interface RecorderStatus {
 	data_handling?: DataHandling
 	table_number: number
 	rounds: RoundInfo[]
+	purge_local_audio?: boolean
 }
 
 export interface PublishedReport {
@@ -188,6 +191,8 @@ export const recorderApi = {
 			storage_free_mb?: number
 			/** 0–1, absent where the browser will not expose it */
 			battery_level?: number
+			/** how many recordings this phone still holds locally */
+			local_recordings?: number
 		},
 	) => request<{ ok: boolean }>('POST', '/api/v1/public/recorder/heartbeat', { token, json: payload }),
 

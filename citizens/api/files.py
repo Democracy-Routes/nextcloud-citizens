@@ -11,6 +11,7 @@ from starlette.background import BackgroundTask
 
 from citizens.api.downloads import NO_STORE
 from citizens.db.models import Recording
+from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db, session_scope
 from citizens.security.identity import CurrentUser
 from citizens.services import files as files_svc
@@ -156,6 +157,53 @@ def delete_all_transcripts(assembly_id: str, user: CurrentUser, session: DB):
             data={"transcripts": count},
         )
     return {"transcripts": count}
+
+
+@router.post("/assemblies/{assembly_id}/purge-device-audio", status_code=200)
+def purge_device_audio(assembly_id: str, user: CurrentUser, session: DB):
+    """Ask the table phones to delete their local copies of this assembly.
+
+    Every recording is written to the phone's own storage before it is
+    uploaded, so at the end of an event each phone still holds its table's
+    audio. With organisation-owned phones that is merely untidy; when citizens
+    use their own, it means people walk home carrying a recording of the
+    discussion without knowing it.
+
+    The server cannot push to a phone, so this sets a flag that travels on the
+    status poll each recorder already makes every few seconds. Consequences
+    worth being clear about:
+
+      * It reaches phones whose recorder is still open. One closed and carried
+        out of the building never receives it — though it will act on it if
+        reopened while its session is still valid. The response reports how
+        many phones are known to still hold audio so the UI can say what was
+        covered rather than claim completion.
+      * Each phone removes only recordings the SERVER has confirmed it holds,
+        so this can never destroy the last copy of anything.
+
+    Only once the session is closed: before that the phones are still
+    recording, and their local copy is the safety net the whole design rests
+    on.
+    """
+    assembly = get_owned_assembly(session, assembly_id, user)
+    if assembly.closed_at is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Close the session first. Until then each phone's local copy is "
+                "the backup that protects against a failed upload."
+            ),
+        )
+    if assembly.device_audio_purge_requested_at is None:
+        assembly.device_audio_purge_requested_at = utcnow()
+        session.flush()
+        record_audit_event(
+            session, "device_audio_purge_requested", "assembly", assembly.id, actor=user,
+        )
+    return {
+        "requested_at": assembly.device_audio_purge_requested_at.isoformat(),
+        **files_svc.device_audio_coverage(session, assembly),
+    }
 
 
 @router.delete("/assemblies/{assembly_id}/audio", status_code=200)

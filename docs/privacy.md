@@ -67,6 +67,29 @@ starts** — see "Consent" below.
   deletion used to reclaim one — so the sweep could report the audio purged
   while an entire copy of it remained on disk. Archives nobody collected are
   also swept after an hour.
+* **The table phones hold a copy too.** Every recording is written to the
+  phone's own storage before it is uploaded — that is what makes recording
+  survive a bad network — so at the end of an assembly each phone still has its
+  table's audio. When the phones belong to the organisation this is a matter of
+  housekeeping. When participants use their own devices, **those devices are a
+  processing location outside your control**, and you should say so in your
+  own privacy information.
+
+  The Files tab of a closed assembly has **Clear audio from the table phones**,
+  which asks each phone to delete its local copy. Two limits matter:
+
+  * It reaches phones whose recorder page is still open, because the server
+    cannot push to a phone — the request travels on a poll the recorder already
+    makes. A phone that was closed and carried out of the building will act on
+    it the next time the recorder is opened, while its session is still valid,
+    and otherwise not at all. The screen reports how many phones have confirmed
+    rather than claiming the job is done.
+  * A phone only deletes recordings **the server has already confirmed it
+    holds**. Audio still waiting to upload is kept, because that copy may be
+    the only one. The phone says so, and that table should be shown to an
+    organizer.
+
+  Each phone also offers the same thing to its own user at the end of a round.
 * **Not implemented:** there is no automatic deletion of transcripts or
   findings, and no data-subject-request tooling. Both are manual today.
 

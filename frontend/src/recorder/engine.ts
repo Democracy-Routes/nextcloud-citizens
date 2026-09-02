@@ -82,6 +82,8 @@ export class RecorderEngine {
 	})
 
 	private token = ''
+	/** so the heartbeat can report how much of THIS assembly is still here */
+	private assemblyId = ''
 	private stream: MediaStream | null = null
 	private mediaRecorder: MediaRecorder | null = null
 	private seq = 0
@@ -101,6 +103,7 @@ export class RecorderEngine {
 	}
 
 	async start(token: string, roundId: string, assemblyId: string): Promise<void> {
+		this.assemblyId = assemblyId
 		this.token = token
 		const mimeType = pickMimeType()
 		if (!mimeType) throw new Error('This browser cannot record audio (no supported format)')
@@ -221,6 +224,7 @@ export class RecorderEngine {
 				storage_ok: !this.state.storageError,
 				storage_free_mb: freeMb,
 				battery_level: await readBatteryLevel(),
+				local_recordings: await idb.countFor(this.assemblyId),
 			})
 		} catch {
 			/* offline — heartbeats resume when the network does */

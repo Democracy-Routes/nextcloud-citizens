@@ -261,6 +261,9 @@ class HeartbeatIn(BaseModel):
     acked_chunks: int = Field(default=0, ge=0)
     storage_ok: bool = True
     storage_free_mb: float | None = None
+    # how many recordings this phone still holds locally, so the organizer can
+    # see how far a purge actually reached rather than assume it reached all
+    local_recordings: int | None = Field(default=None, ge=0)
     # 0.0–1.0, or absent. Only Chromium exposes the Battery API, so a table
     # reporting nothing means "unknown", never "fine" — the monitor must not
     # imply otherwise.
@@ -355,6 +358,10 @@ def _assembly_state(
             ),
         },
         "table_number": recorder_session.table_number,
+        # The organizer has asked the phones to delete their local copies. The
+        # server cannot push, so it rides on this poll — which every recorder
+        # already makes every few seconds.
+        "purge_local_audio": assembly.device_audio_purge_requested_at is not None,
         "rounds": [
             {
                 "id": round_.id,

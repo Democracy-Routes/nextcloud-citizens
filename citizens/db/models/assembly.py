@@ -43,6 +43,11 @@ class Assembly(Base):
     # NULL = follow the default, 0 = keep indefinitely
     audio_retention_days: Mapped[int | None] = mapped_column(Integer())
     audio_purged_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # The organizer asked the table phones to delete their local copies. The
+    # server cannot push to a phone, so this travels on the status poll each
+    # recorder already makes every few seconds. Set once and left set: a phone
+    # that reopens days later should still honour it.
+    device_audio_purge_requested_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 

@@ -120,6 +120,12 @@
 		},
 		"report": {
 			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables"
+		},
+		"purged": {
+			"title": "The recording was removed from this phone",
+			"body": "The organizer has finished with this assembly, so its audio has been deleted from this device. The server keeps the recording; nothing has been lost.",
+			"kept": "One recording was NOT deleted, because the server has not confirmed it yet. Please show this phone to the facilitator. | One recording was NOT deleted, because the server has not confirmed it yet. Please show this phone to the facilitator. | {count} recordings were NOT deleted, because the server has not confirmed them yet. Please show this phone to the facilitator.",
+			"dismiss": "OK"
 		}
 	},
 	"error": {

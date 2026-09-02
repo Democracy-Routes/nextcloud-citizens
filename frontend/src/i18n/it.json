@@ -120,6 +120,12 @@
 		},
 		"report": {
 			"mentionedAt": "Citato a {count} tavolo | Citato a {count} tavolo | Citato a {count} tavoli"
+		},
+		"purged": {
+			"title": "La registrazione è stata rimossa da questo telefono",
+			"body": "L'organizzatore ha concluso questa assemblea, quindi l'audio è stato eliminato da questo dispositivo. Il server conserva la registrazione: non è andato perso nulla.",
+			"kept": "Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono al facilitatore. | Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono al facilitatore. | {count} registrazioni NON sono state eliminate perché il server non le ha ancora confermate. Mostrate questo telefono al facilitatore.",
+			"dismiss": "OK"
 		}
 	},
 	"error": {

@@ -1,13 +1,14 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiAlertCircleOutline, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiCheckCircle, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
 import SvgIcon from '../components/ui/SvgIcon.vue'
 import { recorderApi, RecorderApiError, type JoinResult, type RoundInfo } from './api'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../i18n'
 import { decideOnStatusFailure } from './errors'
+import { purgeLocalAudio, type PurgeOutcome } from './purge'
 import ArmedScreen from './components/ArmedScreen.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
 import Preflight from './components/Preflight.vue'
@@ -23,6 +24,7 @@ type Screen =
 	| 'joining'
 	| 'no-invite'
 	| 'offline'
+	| 'purged'
 	| 'recovery'
 	| 'consent'
 	| 'preflight'
@@ -68,6 +70,28 @@ async function joinWithRetry(token: string): Promise<JoinResult> {
  */
 const micFailedRoundId = ref<string | null>(null)
 
+/** What clearing this phone's copy actually did, once it has been asked for. */
+const purgeOutcome = ref<PurgeOutcome | null>(null)
+
+/** Act on the organizer's request to clear this phone.
+ *
+ * Only ever removes recordings the server has confirmed, and only this
+ * assembly's — see purge.ts. Returns true when the citizen should be told,
+ * which is whenever anything was actually deleted from their device.
+ */
+async function honourPurgeRequest(joined: JoinResult): Promise<boolean> {
+	if (!joined.purge_local_audio) return false
+	try {
+		const outcome = await purgeLocalAudio(joined.assembly.id)
+		if (outcome.cleared === 0) return false
+		purgeOutcome.value = outcome
+		screen.value = 'purged'
+		return true
+	} catch {
+		return false // never let this stand between the table and recording
+	}
+}
+
 function startRound(round: RoundInfo): void {
 	// an explicit start (including "try again") clears the latch
 	if (micFailedRoundId.value === round.id) micFailedRoundId.value = null
@@ -106,6 +130,9 @@ async function enterWithSession(joined: JoinResult): Promise<void> {
 	// everyone around it is discussing the assembly's question in one language.
 	setLocale(joined.assembly.language)
 	initLogger(joined.session_token)
+	// the organizer has finished with this assembly and asked the phones to
+	// drop their copies; it is this person's device, so say so
+	if (await honourPurgeRequest(joined)) return
 	// reload/crash recovery: unsynchronized local recordings take priority.
 	// Scoped to THIS assembly — a citizen's own phone may still be carrying
 	// audio from a previous event, and that must not stand between them and
@@ -260,6 +287,20 @@ function sessionStorageClear(): void {
 					{{ t('recorder.noInvite.body') }}<br />
 					{{ t('recorder.noInvite.askFacilitator') }}
 				</p>
+			</div>
+		</div>
+
+		<div v-else-if="screen === 'purged'" class="rc-scroll">
+			<div class="rc-hero" style="padding-top: 16vh">
+				<div class="rc-hero__icon"><SvgIcon :path="mdiCheckCircle" :size="44" style="color: var(--rc-green)" /></div>
+				<h1>{{ t('recorder.purged.title') }}</h1>
+				<p class="rc-muted" style="margin-top: 14px">{{ t('recorder.purged.body') }}</p>
+				<p v-if="purgeOutcome && purgeOutcome.keptUnsynced > 0" class="rc-alert" style="margin-top: 16px">
+					{{ t('recorder.purged.kept', { count: purgeOutcome.keptUnsynced }, purgeOutcome.keptUnsynced) }}
+				</p>
+				<button class="rc-btn" style="margin-top: 22px" @click="screen = 'no-invite'">
+					{{ t('recorder.purged.dismiss') }}
+				</button>
 			</div>
 		</div>
 

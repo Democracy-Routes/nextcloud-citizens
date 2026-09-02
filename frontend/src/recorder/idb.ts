@@ -132,6 +132,27 @@ export const idb = {
 	},
 
 	/** Recordings that were interrupted or not confirmed by the server. */
+	/** How many recordings of this assembly are still on this phone.
+	 *
+	 * Reported on the heartbeat so an organizer clearing the table phones can
+	 * see how far that actually reached, rather than assume it reached all of
+	 * them. Lives here rather than beside the purge logic because it only
+	 * reads storage — putting it there would make engine and purge import each
+	 * other.
+	 */
+	async countFor(assemblyId?: string): Promise<number> {
+		try {
+			const all = await this.getRecordings()
+			return all.filter(
+				(r) =>
+					r.recordingId !== '__selftest__' &&
+					(!assemblyId || !r.assemblyId || r.assemblyId === assemblyId),
+			).length
+		} catch {
+			return 0
+		}
+	},
+
 	/** Unsynced recordings this assembly may still need to recover.
 	 *
 	 * Scoped, because the recovery screen is shown before a phone can join:

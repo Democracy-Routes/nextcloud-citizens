@@ -213,6 +213,24 @@ safe and the job backs off rather than discarding them. The Files tab says so
 and offers **Retry** on that recording — free some space, then use it. If the
 recording is abandoned instead, the round's analysis proceeds without it.
 
+**A table's phone died and they want to use another one.** Open the Live tab
+and press **Replace device** on that table. The recording so far is finished
+and transcribed — usually most of the round — and the table carries on by
+scanning the same QR code on any phone. If nobody presses it, a replacement
+phone is let in automatically after two minutes of silence; in that case the
+first recording is left open, so a phone that was merely offline rather than
+dead can still upload what it recorded while disconnected.
+
+**Participants used their own phones.** Close the session, then use **Clear
+audio from the table phones** on the Files tab. It reaches phones whose
+recorder page is still open and reports how many confirmed — it is coverage,
+not a guarantee. A phone only deletes audio the server has already confirmed,
+so nothing can be lost.
+
+**A table shows "low battery".** Only Chromium reports this, so a table showing
+nothing is unknown rather than fine. Swap the phone between rounds; a phone
+that dies mid-round costs you the rest of it.
+
 **A table shows "low storage".** The phone is running out of room. It reports
 free space on every heartbeat, and this appears while there is still time to
 act — finish the round, then swap the phone or clear its synchronized audio.

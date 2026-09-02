@@ -15,7 +15,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import Assembly, Participant, Recording, Transcript
+from citizens.db.models import (
+    Assembly,
+    Participant,
+    RecorderSession,
+    Recording,
+    Transcript,
+)
 from citizens.db.models.base import utcnow
 from citizens.db.models.findings import Finding, FindingEvidence
 from citizens.db.models.recording import AudioChunk
@@ -264,6 +270,56 @@ def refresh_frozen_report(session: Session, assembly: Assembly) -> None:
 
     snapshot_final_report(session, assembly)
     log.info("final_report_resnapshotted", assembly_id=assembly.id)
+
+
+def device_audio_coverage(session: Session, assembly: Assembly) -> dict:
+    """How many of this assembly's phones still hold audio locally.
+
+    Reported so the organizer sees coverage rather than a claim of success:
+    a purge reaches phones whose recorder is still open, and one that was
+    closed and carried out of the building simply never hears about it.
+
+    Read from the heartbeats each phone already sends. A session that has never
+    reported is counted as unknown rather than clear — silence is not evidence
+    of an empty phone.
+    """
+    sessions = list(
+        session.execute(
+            select(RecorderSession).where(
+                RecorderSession.assembly_id == assembly.id,
+                RecorderSession.revoked_at.is_(None),
+            )
+        ).scalars()
+    )
+    # one phone per table: the newest session for each table number is the
+    # device actually in use, and older ones are replaced phones
+    newest: dict[int, RecorderSession] = {}
+    for recorder_session in sessions:
+        current = newest.get(recorder_session.table_number)
+        if current is None or recorder_session.created_at > current.created_at:
+            newest[recorder_session.table_number] = recorder_session
+
+    cleared = 0
+    holding = 0
+    unknown = 0
+    for recorder_session in newest.values():
+        try:
+            status = json.loads(recorder_session.last_status_json or "{}")
+        except ValueError:
+            status = {}
+        remaining = status.get("local_recordings")
+        if not isinstance(remaining, int):
+            unknown += 1
+        elif remaining > 0:
+            holding += 1
+        else:
+            cleared += 1
+    return {
+        "devices": len(newest),
+        "cleared": cleared,
+        "still_holding": holding,
+        "unknown": unknown,
+    }
 
 
 def delete_assembly_audio(session: Session, assembly: Assembly) -> tuple[int, int]:

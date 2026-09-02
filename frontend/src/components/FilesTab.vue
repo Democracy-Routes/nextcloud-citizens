@@ -2,12 +2,13 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiCellphoneRemove,
 	mdiDeleteOutline,
 	mdiDownloadOutline,
 	mdiFolderZipOutline,
 	mdiMusicNoteOutline,
-	mdiRefresh,
 	mdiPackageVariantClosed,
+	mdiRefresh,
 	mdiTextBoxRemoveOutline,
 	mdiTextSearch,
 } from '@mdi/js'
@@ -37,6 +38,32 @@ const confirmAll = ref(false)
 const confirmTranscript = ref<FileEntry | null>(null)
 const confirmRetranscribe = ref<FileEntry | null>(null)
 const confirmAllTranscripts = ref(false)
+const confirmPurge = ref(false)
+const purgeCoverage = ref<{ devices: number; cleared: number; still_holding: number; unknown: number } | null>(null)
+
+/** Ask the table phones to delete their local copies.
+ *
+ * Deliberately reports coverage rather than success: this reaches phones whose
+ * recorder is still open, and one that was closed and carried out of the
+ * building never hears about it.
+ */
+async function purgeDeviceAudio(): Promise<void> {
+	confirmPurge.value = false
+	busy.value = true
+	try {
+		const result = await api.purgeDeviceAudio(props.assembly.id)
+		purgeCoverage.value = result
+		toast(
+			result.devices === 0
+				? 'No table phones have connected to this assembly'
+				: `Asked ${result.devices} table phone(s) to clear their copy`,
+		)
+	} catch (err) {
+		error.value = describeError(err).message
+	} finally {
+		busy.value = false
+	}
+}
 
 async function reload(): Promise<void> {
 	try {
@@ -249,8 +276,33 @@ async function deleteAll(): Promise<void> {
 							@click="confirmAllTranscripts = true">
 							Delete all transcripts
 						</CzButton>
+						<!-- the audio on the PHONES, which no server-side deletion
+						     reaches — only offered once the session is closed, since
+						     until then each phone's copy is the upload safety net -->
+						<CzButton
+							v-if="assembly.closed_at"
+							variant="danger"
+							:icon="mdiCellphoneRemove"
+							:disabled="busy"
+							@click="confirmPurge = true">
+							Clear audio from the table phones
+						</CzButton>
 					</div>
 				</div>
+				<!-- coverage, never "done": a phone that was closed and carried out
+				     of the building simply never receives the request -->
+				<p v-if="purgeCoverage" class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
+					<strong>{{ purgeCoverage.cleared }} of {{ purgeCoverage.devices }}</strong>
+					table phones have reported clearing their copy.
+					<template v-if="purgeCoverage.still_holding">
+						{{ purgeCoverage.still_holding }} still hold audio.
+					</template>
+					<template v-if="purgeCoverage.unknown">
+						{{ purgeCoverage.unknown }} have not reported since — they will clear
+						themselves if the recorder is opened again.
+					</template>
+				</p>
+
 				<p class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
 					The full session export bundles metadata, audio, transcripts and the report —
 					enough to move this assembly to another server. Deleting audio keeps transcripts,
@@ -383,6 +435,15 @@ async function deleteAll(): Promise<void> {
 			tone="danger"
 			@confirm="deleteTranscript"
 			@cancel="confirmTranscript = null" />
+
+		<CzConfirm
+			v-if="confirmPurge"
+			title="Clear this assembly's audio from the table phones?"
+			message="Each phone still holds the audio it recorded. This asks them to delete it — but only the parts the server has already confirmed, so nothing can be lost. It reaches phones whose recorder is still open; one that was closed and taken away will clear itself if it is opened again."
+			confirm-label="Clear the phones"
+			tone="danger"
+			@confirm="purgeDeviceAudio"
+			@cancel="confirmPurge = false" />
 
 		<CzConfirm
 			v-if="confirmAllTranscripts"

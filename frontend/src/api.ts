@@ -169,6 +169,19 @@ export const api = {
 
 	getTranscript: (recordingId: string) =>
 		request<TranscriptData>('GET', `/api/v1/recordings/${recordingId}/transcript`),
+	/** Ask the table phones to delete their local copies of this assembly.
+	 *
+	 * Reaches phones whose recorder is still open; the response reports how
+	 * many are known to still hold audio, so the UI can say what was covered
+	 * rather than claim it is done. */
+	purgeDeviceAudio: (assemblyId: string) =>
+		request<{
+			requested_at: string
+			devices: number
+			cleared: number
+			still_holding: number
+			unknown: number
+		}>('POST', `/api/v1/assemblies/${assemblyId}/purge-device-audio`),
 	/** This table's phone is gone; release the table so another can take over.
 	 *
 	 * Finishes the recording with whatever audio arrived — usually most of the
