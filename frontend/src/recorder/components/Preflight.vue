@@ -31,6 +31,13 @@ const { t } = useI18n()
 const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
 
 const openRounds = computed(() => props.session.rounds.filter((r) => !r.recorded_state))
+
+/** A round this table is mid-way through on a device that is not this one. */
+const recordingElsewhere = computed(() =>
+	props.session.rounds.some((round) =>
+		['RECORDING', 'FINALIZING', 'WAITING_FOR_CHUNKS'].includes(round.recorded_state ?? ''),
+	),
+)
 const selectedRound = ref<RoundInfo | null>(
 	props.session.rounds.filter((r) => !r.recorded_state).find((r) => r.status === 'ACTIVE') ??
 		props.session.rounds.filter((r) => !r.recorded_state)[0] ??
@@ -222,7 +229,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 
 		<div class="rc-scroll">
 		<div class="rc-card">
-			<h2>Microphone test</h2>
+			<h2>{{ t('recorder.preflight.title') }}</h2>
 			<div v-for="row in ROWS" :key="row.key" class="rc-status-row">
 				<span class="rc-status-row__label">
 					<SvgIcon :path="row.icon" :size="19" style="color: var(--rc-muted)" />
@@ -247,7 +254,11 @@ const STATE_CLASS: Record<CheckState, string> = {
 				:disabled="testState === 'recording' || checks.microphone.state !== 'ok'"
 				@click="recordTest">
 				<SvgIcon :path="mdiRecordCircleOutline" :size="20" />
-				{{ testState === 'recording' ? 'Recording 5 seconds…' : 'Record 5-second test' }}
+				{{
+					testState === 'recording'
+						? t('recorder.preflight.recordingTest')
+						: t('recorder.preflight.recordTest')
+				}}
 			</button>
 			<button
 				v-if="testState === 'ready' || testState === 'playing'"
@@ -273,7 +284,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 		<template v-if="!orchestrated">
 			<div v-if="selectedRound" class="rc-card">
 				<p class="rc-eyebrow" style="margin-bottom: 4px">
-					Round {{ selectedRound.position }} of {{ session.rounds.length }} ·
+					{{ t('recorder.common.roundOf', { position: selectedRound.position, total: session.rounds.length }) }} ·
 					{{ selectedRound.duration_minutes }} minutes
 				</p>
 				<p class="rc-question" style="margin: 0">{{ selectedRound.question || selectedRound.title }}</p>
@@ -287,7 +298,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 							:key="round.id"
 							:value="round.id"
 							:disabled="!!round.recorded_state">
-							Round {{ round.position }} — {{ round.title || round.question || 'Untitled' }}
+							{{ t('recorder.common.roundNumber', { position: round.position }) }} — {{ round.title || round.question || t('recorder.preflight.untitled') }}
 							{{ round.recorded_state ? ' ✓ recorded' : '' }}
 						</option>
 					</select>
@@ -296,6 +307,18 @@ const STATE_CLASS: Record<CheckState, string> = {
 			<div v-else-if="session.rounds.length === 0" class="rc-alert">
 				{{ t('recorder.preflight.noRounds') }}
 			</div>
+			<!-- A round still open on a phone that has gone is not a round this
+			     table has completed, and telling them so at the moment their
+			     device died is the worst possible time to be wrong. -->
+			<div v-else-if="recordingElsewhere" class="rc-card">
+				<p class="rc-eyebrow rc-center" style="display: block; color: var(--rc-amber)">
+					{{ t('recorder.armed.waiting') }}
+				</p>
+				<p class="rc-muted rc-center" style="margin: 0">
+					{{ t('recorder.preflight.recordingElsewhere') }}
+				</p>
+			</div>
+
 			<div v-else class="rc-card">
 				<p class="rc-eyebrow rc-center" style="display: block">{{ t('recorder.armed.allRecordedTitle') }}</p>
 				<p class="rc-muted rc-center" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
@@ -323,7 +346,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 				:disabled="!canProceed()"
 				@click="emit('start', selectedRound)">
 				<SvgIcon :path="mdiRecordCircleOutline" :size="22" />
-				Start recording
+				{{ t('recorder.preflight.startRecording') }}
 			</button>
 		</div>
 	</div>

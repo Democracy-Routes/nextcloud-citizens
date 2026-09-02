@@ -32,21 +32,48 @@ function template(source: string): string {
 }
 
 /**
- * Text nodes of three or more words that are not inside a moustache.
- * Three, not one, so that "OK", "ARMED" and unit suffixes do not swamp the
- * signal — a full sentence is what actually reads as untranslated.
+ * English left in the markup: bare text nodes, and string literals inside
+ * moustache expressions.
+ *
+ * The literals matter as much as the text nodes. A ternary like
+ * `{{ orchestrated ? 'The round has ended' : 'Time is up' }}` is invisible to a
+ * scan that strips moustaches wholesale — which is exactly how six untranslated
+ * strings survived on the citizens' recorder until a browser test walked into
+ * one of them.
+ *
+ * Two words, not three. Three was chosen to keep "OK" and "ARMED" out of the
+ * results, but it also let "Finish recording" and "Keep talking" through — and
+ * those are buttons a citizen has to understand.
  */
 function untranslatedPhrases(markup: string): string[] {
-	const withoutTags = markup
-		.replace(/<!--[\s\S]*?-->/g, ' ')
+	const withoutComments = markup.replace(/<!--[\s\S]*?-->/g, ' ')
+
+	const found: string[] = []
+	for (const moustache of withoutComments.match(/\{\{[\s\S]*?\}\}/g) ?? []) {
+		// a literal inside an expression is still text a person reads
+		for (const literal of moustache.match(/'[^']{2,}'|"[^"]{2,}"/g) ?? []) {
+			const text = literal.slice(1, -1)
+			if (/^[a-z0-9_.]+$/i.test(text)) continue // an i18n key, not prose
+			if (countWords(text) >= 2) found.push(text)
+		}
+	}
+
+	const withoutTags = withoutComments
 		.replace(/\{\{[\s\S]*?\}\}/g, ' ')
 		// quoted attributes may themselves contain '>' (a Vue expression with a
 		// cast or a comparison), so tags cannot be matched with [^>]+
 		.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, '\n')
-	return withoutTags
-		.split('\n')
-		.map((line) => line.trim())
-		.filter((line) => line.split(/\s+/).filter((word) => /[a-zA-Z]{2,}/.test(word)).length >= 3)
+	found.push(
+		...withoutTags
+			.split('\n')
+			.map((line) => line.trim())
+			.filter((line) => countWords(line) >= 2),
+	)
+	return found
+}
+
+function countWords(text: string): number {
+	return text.split(/\s+/).filter((word) => /[a-zA-Z]{2,}/.test(word)).length
 }
 
 describe('the recorder bundle', () => {

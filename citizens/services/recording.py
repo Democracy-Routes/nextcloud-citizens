@@ -159,7 +159,7 @@ def assembly_progress(session: Session, assembly) -> dict:
 STALLED_DEVICE_SECONDS = 120
 
 
-def _device_has_gone_silent(recording: Recording) -> bool:
+def device_has_gone_silent(recording: Recording) -> bool:
     """Has this recording's phone stopped sending anything at all?
 
     `updated_at` bumps on every received chunk, so it measures the arrival of
@@ -227,7 +227,7 @@ def start_recording(
             Recording.superseded_at.is_(None),
         )
     ).scalars().first()
-    if existing is not None and _device_has_gone_silent(existing):
+    if existing is not None and device_has_gone_silent(existing):
         # A phone that has sent nothing for minutes is not "already recording",
         # it is gone — a dead battery, most often. Blocking here left the table
         # waiting twenty minutes for the sweep, which on a thirty-minute round

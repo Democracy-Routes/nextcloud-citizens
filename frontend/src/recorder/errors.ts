@@ -9,6 +9,22 @@
  */
 import { RecorderApiError } from './api'
 
+/** The microphone itself could not be opened.
+ *
+ * Distinguished from every other way starting can fail, because the advice is
+ * completely different. getUserMedia failing means permissions or hardware and
+ * the fix is on the phone; the server refusing means something about the
+ * assembly, and it already says what in words written for a person to read.
+ * Showing the Android permission steps for a 409 sends someone to fix a
+ * microphone that is working perfectly.
+ */
+export class MicrophoneError extends Error {
+	constructor(message: string) {
+		super(message)
+		this.name = 'MicrophoneError'
+	}
+}
+
 /** The server definitively no longer accepts this session or recording —
  * revoked invite, deleted assembly, reset instance. Retrying cannot succeed. */
 export function isGoneError(error: unknown): boolean {

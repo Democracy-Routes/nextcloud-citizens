@@ -2,13 +2,13 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiAlertCircleOutline, mdiCheckCircle, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SvgIcon from '../components/ui/SvgIcon.vue'
 import { recorderApi, RecorderApiError, type JoinResult, type RoundInfo } from './api'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../i18n'
 import { decideOnStatusFailure } from './errors'
-import { purgeLocalAudio, type PurgeOutcome } from './purge'
+import { hasUnfinishedAudio, purgeLocalAudio, type PurgeOutcome } from './purge'
 import ArmedScreen from './components/ArmedScreen.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
 import Preflight from './components/Preflight.vue'
@@ -62,13 +62,14 @@ async function joinWithRetry(token: string): Promise<JoinResult> {
 	}
 }
 
-/** The round whose microphone just failed, if any.
+/** The round that just failed to start, if any.
  *
  * ArmedScreen auto-starts whatever round is ACTIVE. Without this latch a
- * microphone failure bounced the table straight back into the same round every
- * five seconds, forever.
+ * failure bounced the table straight back into the same round every five
+ * seconds, forever — whether the microphone would not open or the server
+ * refused.
  */
-const micFailedRoundId = ref<string | null>(null)
+const startFailedRoundId = ref<string | null>(null)
 
 /** What clearing this phone's copy actually did, once it has been asked for. */
 const purgeOutcome = ref<PurgeOutcome | null>(null)
@@ -79,8 +80,16 @@ const purgeOutcome = ref<PurgeOutcome | null>(null)
  * assembly's — see purge.ts. Returns true when the citizen should be told,
  * which is whenever anything was actually deleted from their device.
  */
-async function honourPurgeRequest(joined: JoinResult): Promise<boolean> {
+async function honourPurgeRequest(joined: {
+	purge_local_audio?: boolean
+	assembly: { id: string }
+}): Promise<boolean> {
 	if (!joined.purge_local_audio) return false
+	// Defer while anything is still on its way to the server. Clearing only
+	// touches audio the server has confirmed, so this is belt and braces — but
+	// the belt is what stops a table mid-round being told its recording was
+	// removed, and the phone will be asked again on the next poll.
+	if (await hasUnfinishedAudio(joined.assembly.id)) return false
 	try {
 		const outcome = await purgeLocalAudio(joined.assembly.id)
 		if (outcome.cleared === 0) return false
@@ -92,9 +101,13 @@ async function honourPurgeRequest(joined: JoinResult): Promise<boolean> {
 	}
 }
 
+/** True only while audio is actually being captured. */
+const capturing = ref(false)
+
 function startRound(round: RoundInfo): void {
+	capturing.value = true
 	// an explicit start (including "try again") clears the latch
-	if (micFailedRoundId.value === round.id) micFailedRoundId.value = null
+	if (startFailedRoundId.value === round.id) startFailedRoundId.value = null
 	selectedRound.value = round
 	screen.value = 'recording'
 }
@@ -166,6 +179,40 @@ function acceptConsent(): void {
 	}
 	screen.value = 'preflight'
 }
+
+/** How often a joined phone asks whether the organizer has cleared it.
+ *
+ * The request arrives on a status poll, and the phone that most needs to hear
+ * it is one sitting on the finished screen at the end of an assembly — which
+ * never reloads. Checking only at join meant exactly that phone never acted.
+ * Slow on purpose: it is a housekeeping instruction, not something anyone is
+ * waiting on.
+ */
+const PURGE_POLL_MS = 30_000
+let purgePollTimer = 0
+
+async function checkForPurgeRequest(): Promise<void> {
+	const current = session.value
+	// Never while the microphone is live: the purge itself is harmless — it
+	// only removes audio the server has confirmed, which a recording in
+	// progress is not — but navigating away from the recording screen to
+	// announce it would not be. `screen` alone is not enough: it stays
+	// 'recording' through the finished view, which is exactly where a phone
+	// sits at the end of an assembly and exactly where this has to work.
+	if (!current || capturing.value) return
+	try {
+		const status = await recorderApi.status(current.session_token)
+		await honourPurgeRequest({ ...status, assembly: current.assembly })
+	} catch {
+		/* offline, or the session ended — nothing to do either way */
+	}
+}
+
+onMounted(() => {
+	purgePollTimer = window.setInterval(() => void checkForPurgeRequest(), PURGE_POLL_MS)
+})
+
+onBeforeUnmount(() => window.clearInterval(purgePollTimer))
 
 onMounted(async () => {
 	// 1) fresh QR join: #/join/<token>
@@ -274,7 +321,7 @@ function sessionStorageClear(): void {
 			<div class="rc-hero" style="padding-top: 26vh">
 				<div class="rc-hero__icon"><span class="rc-spin" style="width: 30px; height: 30px"></span></div>
 				<p class="rc-muted">
-					{{ joinBusy ? 'Lots of tables joining at once — waiting for a turn…' : 'Connecting to the assembly…' }}
+					{{ joinBusy ? t('recorder.joining.queued') : t('recorder.joining.connecting') }}
 				</p>
 			</div>
 		</div>
@@ -348,7 +395,7 @@ function sessionStorageClear(): void {
 		<ArmedScreen
 			v-else-if="screen === 'armed' && session"
 			:session="session"
-			:blocked-round-id="micFailedRoundId"
+			:blocked-round-id="startFailedRoundId"
 			@start="startRound"
 			@back="screen = 'preflight'"
 			@report="screen = 'report'" />
@@ -365,7 +412,8 @@ function sessionStorageClear(): void {
 			:round="selectedRound"
 			@exit="screen = orchestrated ? 'armed' : 'preflight'"
 			@next-round="startRound"
-			@mic-failed="micFailedRoundId = $event"
+			@start-failed="startFailedRoundId = $event; capturing = false"
+			@settled="capturing = false"
 			@view-report="screen = 'report'" />
 	</div>
 </template>

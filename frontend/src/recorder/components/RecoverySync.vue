@@ -52,7 +52,7 @@ async function deleteLocal(): Promise<void> {
 
 		<div class="rc-scroll">
 		<div class="rc-card">
-			<h2>Recovered recording</h2>
+			<h2>{{ t('recorder.recovery.title') }}</h2>
 			<p class="rc-muted">
 				{{ t('recorder.recovery.intro') }}
 			</p>
@@ -60,7 +60,7 @@ async function deleteLocal(): Promise<void> {
 				<span>{{ t('recorder.recovery.chunks') }}</span><span>{{ state.localChunks }}</span>
 			</div>
 			<div class="rc-status-row">
-				<span>Awaiting upload</span>
+				<span>{{ t('recorder.recovery.awaitingUpload') }}</span>
 				<span :class="pending > 0 ? 'rc-warn' : 'rc-ok'">{{ pending }}</span>
 			</div>
 			<div class="rc-status-row">
@@ -71,7 +71,7 @@ async function deleteLocal(): Promise<void> {
 		<template v-if="state.phase === 'syncing'">
 			<div v-if="!state.uploadOnline" class="rc-note">
 				{{ t('recorder.recovery.waiting') }}
-				<button class="rc-btn" style="margin-top: 10px" @click="engine.retryNow()">Retry now</button>
+				<button class="rc-btn" style="margin-top: 10px" @click="engine.retryNow()">{{ t('recorder.common.retryNow') }}</button>
 			</div>
 			<p v-else class="rc-muted rc-center">Synchronizing…</p>
 		</template>
@@ -103,7 +103,7 @@ async function deleteLocal(): Promise<void> {
 					{{ t('recorder.recovery.failed') }} {{ state.error }}<br />
 					{{ t('recorder.recovery.failedHint') }}
 				</div>
-				<button class="rc-btn" @click="engine.retryNow()">Try again</button>
+				<button class="rc-btn" @click="engine.retryNow()">{{ t('recorder.common.tryAgain') }}</button>
 				<button class="rc-btn rc-subtle" @click="emit('done')">{{ t('recorder.recovery.skip') }}</button>
 			</template>
 		</template>

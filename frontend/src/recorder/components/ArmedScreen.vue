@@ -42,6 +42,14 @@ let heartbeatTimer = 0
 const nextRound = computed(() => rounds.value.find((r) => !r.recorded_state) ?? null)
 const allRecorded = computed(() => rounds.value.length > 0 && !nextRound.value)
 
+/** A round this table is mid-way through on a device that is not this one —
+ * the shape a replaced phone leaves behind until the table is released. */
+const recordingElsewhere = computed(() =>
+	rounds.value.some((round) =>
+		['RECORDING', 'FINALIZING', 'WAITING_FOR_CHUNKS'].includes(round.recorded_state ?? ''),
+	),
+)
+
 async function poll(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
@@ -112,6 +120,20 @@ onBeforeUnmount(() => {
 				</div>
 			</template>
 
+			<!-- A round still open on a phone that has gone is not a round this
+			     table has completed. Saying it was, at the moment their device
+			     died, is the worst possible time to be wrong. -->
+			<template v-else-if="recordingElsewhere">
+				<div class="rc-card rc-center">
+					<p class="rc-eyebrow" style="color: var(--rc-amber)">
+						{{ t('recorder.armed.waiting') }}
+					</p>
+					<p class="rc-muted" style="margin: 0">
+						{{ t('recorder.preflight.recordingElsewhere') }}
+					</p>
+				</div>
+			</template>
+
 			<template v-else-if="allRecorded">
 				<div class="rc-card rc-center">
 					<p class="rc-eyebrow">{{ t('recorder.armed.allRecordedTitle') }}</p>
@@ -129,7 +151,11 @@ onBeforeUnmount(() => {
 					</p>
 					<p style="font-size: 1.06rem; font-weight: 600; margin: 8px 0 4px">
 						{{ t('recorder.armed.waiting') }}
-						{{ nextRound ? `Round ${nextRound.position}` : 'the round' }}
+						{{
+							nextRound
+								? t('recorder.common.roundNumber', { position: nextRound.position })
+								: t('recorder.common.thisRound')
+						}}
 					</p>
 					<p class="rc-muted" style="margin: 0; font-size: 0.875rem">
 						{{ t('recorder.armed.waitingHint') }}
@@ -137,7 +163,12 @@ onBeforeUnmount(() => {
 				</div>
 				<div v-if="nextRound && (nextRound.question || nextRound.title)" class="rc-card">
 					<p class="rc-eyebrow" style="margin-bottom: 4px">
-						Round {{ nextRound.position }} · {{ nextRound.duration_minutes }} minutes
+						{{
+							t('recorder.common.roundAndDuration', {
+								position: nextRound.position,
+								minutes: nextRound.duration_minutes,
+							})
+						}}
 					</p>
 					<p class="rc-question" style="margin: 0">{{ nextRound.question || nextRound.title }}</p>
 				</div>

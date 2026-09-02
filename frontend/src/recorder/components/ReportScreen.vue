@@ -62,7 +62,7 @@ async function downloadPdf(): Promise<void> {
 			<template v-else-if="report">
 				<div class="rc-card">
 					<p class="rc-eyebrow" style="margin-bottom: 4px">
-						<SvgIcon :path="mdiFileDocumentOutline" :size="13" /> Assembly report
+						<SvgIcon :path="mdiFileDocumentOutline" :size="13" /> {{ t('recorder.report.title') }}
 					</p>
 					<h1 style="font-size: 1.25rem">{{ report.assembly.name }}</h1>
 					<p class="rc-muted" style="margin: 6px 0 0; font-size: 0.8125rem">
@@ -79,7 +79,7 @@ async function downloadPdf(): Promise<void> {
 						{{ round.question }}
 					</p>
 					<template v-if="round.summary">
-						<p class="rc-eyebrow" style="margin-bottom: 2px">AI summary</p>
+						<p class="rc-eyebrow" style="margin-bottom: 2px">{{ t('recorder.report.aiSummary') }}</p>
 						<p style="font-size: 0.905rem; margin: 0 0 10px">{{ round.summary }}</p>
 					</template>
 
@@ -127,7 +127,7 @@ async function downloadPdf(): Promise<void> {
 		<div class="rc-actions">
 			<button v-if="report" class="rc-btn rc-primary" :disabled="downloading" @click="downloadPdf">
 				<SvgIcon :path="mdiDownloadOutline" :size="20" />
-				{{ downloading ? 'Preparing PDF…' : 'Download PDF' }}
+				{{ downloading ? t('recorder.report.preparingPdf') : t('recorder.report.downloadPdf') }}
 			</button>
 			<button class="rc-btn rc-subtle" @click="emit('back')">Back</button>
 		</div>

@@ -45,12 +45,18 @@ case "${1:-}" in
         docker exec -e APP_PERSISTENT_STORAGE=/tmp/citizens-test-data "$TEST_CONTAINER" \
             sh -c "cd /app && python3 -m citizens.devtools seed-load-test ${2:-10}"
         ;;
+    api)
+        # organizer API call from inside the container — see citizens.devtools
+        shift
+        docker exec -e APP_PERSISTENT_STORAGE=/tmp/citizens-test-data "$TEST_CONTAINER" \
+            python3 -m citizens.devtools api "$@"
+        ;;
     stop)
         docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
         echo "stopped"
         ;;
     *)
-        echo "Usage: $0 start|seed|seed-load [N]|stop" >&2
+        echo "Usage: $0 start|seed|seed-load [N]|api METHOD PATH [JSON]|stop" >&2
         exit 2
         ;;
 esac

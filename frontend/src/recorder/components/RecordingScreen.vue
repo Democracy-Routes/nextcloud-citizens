@@ -12,6 +12,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { MicrophoneError } from '../errors'
 import { useWakeLock } from '../useWakeLock'
 import { clearSynchronizedRecordings, RecorderEngine } from '../engine'
 
@@ -20,9 +21,13 @@ const emit = defineEmits<{
 	exit: []
 	nextRound: [round: RoundInfo]
 	viewReport: []
-	/** the microphone could not be opened for THIS round — armed must not
-	 * immediately send the table straight back in */
-	micFailed: [roundId: string]
+	/** recording could not be started for THIS round — armed must not
+	 * immediately send the table straight back in, whatever the cause */
+	startFailed: [roundId: string]
+	/** nothing is being captured any more: uploaded, done, or failed. The
+	 * parent needs this because the screen stays mounted long after the
+	 * microphone stops. */
+	settled: []
 }>()
 
 const { t } = useI18n()
@@ -204,6 +209,7 @@ watch(
 	() => state.phase,
 	(phase) => {
 		if (phase === 'done' || phase === 'uploaded') watchForNextRound()
+		if (['done', 'uploaded', 'failed'].includes(phase)) emit('settled')
 	},
 )
 
@@ -295,6 +301,7 @@ async function finishRecording(): Promise<void> {
 }
 
 const startBusy = ref(false)
+const startErrorIsMicrophone = ref(true)
 
 /** Open the microphone. On failure, tell the parent which round failed.
  *
@@ -309,7 +316,12 @@ async function beginRecording(): Promise<void> {
 		await engine.start(props.session.session_token, props.round.id, props.session.assembly.id)
 	} catch (error) {
 		startError.value = error instanceof Error ? error.message : String(error)
-		emit('micFailed', props.round.id)
+		// A microphone problem is the phone's owner to fix; anything else — the
+		// server refusing because this table is already recording, say — is not,
+		// and telling them to check their permissions sends them after a
+		// microphone that is working.
+		startErrorIsMicrophone.value = error instanceof MicrophoneError
+		emit('startFailed', props.round.id)
 	} finally {
 		startBusy.value = false
 	}
@@ -345,17 +357,25 @@ async function clearSynced(): Promise<void> {
 
 		<div v-if="startError" class="rc-scroll">
 			<div class="rc-alert">
-				<strong>{{ t('recorder.mic.failedTitle') }}</strong>
+				<strong>
+					{{ startErrorIsMicrophone ? t('recorder.mic.failedTitle') : t('recorder.mic.serverTitle') }}
+				</strong>
 				<p style="margin: 8px 0 0">{{ startError }}</p>
 				<p class="rc-muted" style="margin: 10px 0 0; font-size: 0.875rem">
-					{{ t('recorder.mic.guidance') }}
+					{{ startErrorIsMicrophone ? t('recorder.mic.guidance') : t('recorder.mic.serverHelp') }}
 				</p>
 				<button
 					class="rc-btn rc-primary"
 					style="margin-top: 14px"
 					:disabled="startBusy"
 					@click="retryMicrophone">
-					{{ startBusy ? t('recorder.mic.retrying') : t('recorder.mic.retry') }}
+					{{
+						startBusy
+							? t('recorder.mic.retrying')
+							: startErrorIsMicrophone
+								? t('recorder.mic.retry')
+								: t('recorder.mic.serverRetry')
+					}}
 				</button>
 				<button class="rc-btn rc-subtle" style="margin-top: 8px" @click="emit('exit')">
 					{{ t('recorder.mic.back') }}
@@ -365,7 +385,9 @@ async function clearSynced(): Promise<void> {
 
 		<template v-else-if="state.phase === 'recording' || state.phase === 'finishing'">
 			<button class="rc-qbar" :class="{ 'rc-qbar--open': qbarOpen }" @click="qbarOpen = !qbarOpen">
-				<span class="rc-eyebrow" style="margin: 0">Round {{ round.position }} of {{ session.rounds.length }}</span>
+				<span class="rc-eyebrow" style="margin: 0">
+					{{ t('recorder.common.roundOf', { position: round.position, total: session.rounds.length }) }}
+				</span>
 				<p class="rc-qbar__q">{{ round.question || round.title }}</p>
 			</button>
 
@@ -382,7 +404,11 @@ async function clearSynced(): Promise<void> {
 			<button class="rc-techbar" @click="techOpen = !techOpen">
 				<span class="rc-techbar__item">
 					<span class="rc-dot" :class="{ 'rc-dot--bad': state.storageError }"></span>
-					{{ state.storageError ? 'Storage error' : 'Audio safe' }}
+					{{
+						state.storageError
+							? t('recorder.recording.storageErrorShort')
+							: t('recorder.recording.audioSafe')
+					}}
 				</span>
 				<span class="rc-techbar__item">
 					<span class="rc-dot" :class="{ 'rc-dot--warn': !state.uploadOnline }"></span>
@@ -398,16 +424,16 @@ async function clearSynced(): Promise<void> {
 				<div class="rc-status-row">
 					<span class="rc-status-row__label">
 						<SvgIcon :path="mdiDatabaseOutline" :size="19" style="color: var(--rc-muted)" />
-						Local audio
+						{{ t('recorder.recording.localAudio') }}
 					</span>
 					<span :class="state.storageError ? 'rc-bad' : 'rc-ok'">
-						{{ state.storageError ? '✕ STORAGE ERROR' : '✓ SAFE' }}
+						{{ state.storageError ? t('recorder.recording.storageErrorBanner') : '✓ SAFE' }}
 					</span>
 				</div>
 				<div class="rc-status-row">
 					<span class="rc-status-row__label">
 						<SvgIcon :path="mdiCloudUploadOutline" :size="19" style="color: var(--rc-muted)" />
-						Server upload
+						{{ t('recorder.recording.serverUpload') }}
 					</span>
 					<span :class="state.uploadOnline ? 'rc-ok' : 'rc-warn'">
 						{{ state.uploadOnline ? '✓' : 'OFFLINE' }}
@@ -416,7 +442,7 @@ async function clearSynced(): Promise<void> {
 				<div class="rc-status-row">
 					<span class="rc-status-row__label">
 						<SvgIcon :path="mdiTrayFull" :size="19" style="color: var(--rc-muted)" />
-						Pending upload
+						{{ t('recorder.recording.pendingUpload') }}
 					</span>
 					<span :class="pendingChunks > 3 ? 'rc-warn' : ''">{{ pendingChunks }} chunks</span>
 				</div>
@@ -446,16 +472,24 @@ async function clearSynced(): Promise<void> {
 			<div v-if="roundEnded && state.phase === 'recording'" class="rc-note">
 				<template v-if="finishCountdown > 0">
 					<strong>
-						{{ orchestrated ? 'The round has ended' : 'Time is up for this round' }}
-						— finishing in {{ finishCountdown }} s.
+						{{
+							t('recorder.recording.finishingIn', {
+								ended: orchestrated
+									? t('recorder.recording.roundEnded')
+									: t('recorder.recording.timeUp'),
+								seconds: finishCountdown,
+							})
+						}}
 					</strong>
 					<button class="rc-btn" style="margin-top: 10px" @click="cancelFinishCountdown">
-						Keep talking
+						{{ t('recorder.recording.keepTalking') }}
 					</button>
 				</template>
 				<template v-else>
-					<strong>{{ orchestrated ? 'The round has ended.' : 'Time is up for this round.' }}</strong>
-					Finish recording?
+					<strong>
+						{{ orchestrated ? t('recorder.recording.roundEnded') : t('recorder.recording.timeUp') }}
+					</strong>
+					{{ t('recorder.recording.finishQuestion') }}
 					<button class="rc-btn rc-primary" style="margin-top: 10px" @click="finishRecording">
 						{{ t('recorder.recording.finish') }}
 					</button>
@@ -466,7 +500,11 @@ async function clearSynced(): Promise<void> {
 				<div v-if="showLive" class="rc-card">
 					<p class="rc-eyebrow">{{ t('recorder.recording.liveTranscript') }}</p>
 					<p v-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 0.875rem; margin: 0">
-						{{ liveChecked ? 'Live captions temporarily unavailable. Recording continues safely.' : 'Waiting for captions…' }}
+						{{
+							liveChecked
+								? t('recorder.recording.captionsUnavailable')
+								: t('recorder.recording.waitingCaptions')
+						}}
 					</p>
 					<div v-else ref="captionsBox" class="rc-captions">
 						<div v-for="(block, index) in captionBlocks" :key="index" class="rc-caption">
@@ -479,19 +517,25 @@ async function clearSynced(): Promise<void> {
 				</div>
 				<button class="rc-btn rc-subtle" @click="showLive = !showLive">
 					<SvgIcon :path="mdiBroadcast" :size="18" />
-					{{ showLive ? 'Hide live transcript' : 'Show live transcript' }}
+					{{
+						showLive
+							? t('recorder.recording.hideTranscript')
+							: t('recorder.recording.showTranscript')
+					}}
 				</button>
 			</template>
 			</div>
 
 			<div v-if="state.phase === 'recording'" class="rc-actions">
 				<button v-if="!confirmFinish" class="rc-btn" @click="confirmFinish = true">
-					Finish recording
+					{{ t('recorder.recording.finishButton') }}
 				</button>
 				<template v-else>
 					<div class="rc-note" style="margin: 0 0 8px">{{ t('recorder.recording.confirmFinish') }}</div>
 					<button class="rc-btn rc-primary" style="margin-top: 0" @click="finishRecording">{{ t('recorder.recording.confirmFinishYes') }}</button>
-					<button class="rc-btn rc-subtle" @click="confirmFinish = false">Keep recording</button>
+					<button class="rc-btn rc-subtle" @click="confirmFinish = false">
+						{{ t('recorder.recording.keepRecording') }}
+					</button>
 				</template>
 			</div>
 		</template>
@@ -503,7 +547,7 @@ async function clearSynced(): Promise<void> {
 					<h1>Synchronizing</h1>
 					<p class="rc-muted" style="margin-top: 10px; font-size: 1rem">
 						<span style="font-variant-numeric: tabular-nums">{{ state.ackedChunks }} / {{ state.localChunks }}</span>
-						chunks uploaded
+						{{ t('recorder.recording.chunksUploaded') }}
 						<template v-if="state.serverState"><br />Server: {{ state.serverState }}</template>
 					</p>
 					<div v-if="!state.uploadOnline" class="rc-note" style="text-align: left">
@@ -561,7 +605,7 @@ async function clearSynced(): Promise<void> {
 					</div>
 					<div v-else-if="reportOpenCountdown > 0" class="rc-note" style="text-align: left; margin-top: 20px">
 						<strong>{{ t('recorder.recording.reportReady') }}</strong>
-						Opening in {{ reportOpenCountdown }} s…
+						{{ t('recorder.recording.openingIn', { seconds: reportOpenCountdown }) }}
 					</div>
 					<template v-else>
 						<div v-if="tableSummaries.length" class="rc-card" style="text-align: left; margin-top: 20px">
@@ -616,7 +660,7 @@ async function clearSynced(): Promise<void> {
 			</div>
 			<div class="rc-actions">
 				<button class="rc-btn rc-primary" style="margin-top: 0" @click="engine.retrySync()">
-					Try again
+					{{ t('recorder.common.tryAgain') }}
 				</button>
 				<button class="rc-btn rc-subtle" @click="emit('exit')">Back</button>
 			</div>

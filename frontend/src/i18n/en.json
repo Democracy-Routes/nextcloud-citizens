@@ -44,7 +44,10 @@
 			"retrying": "Trying…",
 			"back": "Back",
 			"blockedTitle": "Microphone unavailable",
-			"blockedBody": "Round {position} is open, but this phone could not start its microphone. Check that no other app is using it, and that the browser is allowed to record."
+			"blockedBody": "Round {position} is open, but this phone could not start its microphone. Check that no other app is using it, and that the browser is allowed to record.",
+			"serverTitle": "This table cannot start recording",
+			"serverRetry": "Try again",
+			"serverHelp": "Ask the facilitator — they can hand this table to another phone from the Live tab."
 		},
 		"uploaded": {
 			"title": "Recording uploaded",
@@ -74,7 +77,13 @@
 			"noStorage": "This browser cannot store audio locally. Recording would not be safe — please use a different browser or disable private mode.",
 			"noRounds": "This assembly has no rounds yet.",
 			"roundSummary": "Round {position} — your table's AI summary",
-			"analyzing": "Analyzing your discussion…"
+			"analyzing": "Analyzing your discussion…",
+			"recordingElsewhere": "This table is already recording on another phone. If that phone has stopped working, ask the facilitator to hand the table to this one.",
+			"title": "Microphone test",
+			"recordTest": "Record 5-second test",
+			"recordingTest": "Recording 5 seconds…",
+			"startRecording": "Start recording",
+			"untitled": "Untitled"
 		},
 		"recording": {
 			"storageErrorTitle": "LOCAL STORAGE ERROR",
@@ -89,7 +98,7 @@
 			"confirmFinish": "Finish and synchronize this table's recording?",
 			"confirmFinishYes": "Yes, finish and synchronize",
 			"retrying": "Connection problem or busy server — retrying automatically.",
-			"audioSafe": "The audio is safe on this phone. Keep this page open.",
+			"audioSafe": "Audio safe",
 			"nextStarted": "Round {position} has started.",
 			"nextCountdown": "Recording begins in {seconds} s…",
 			"nextRound": "Next: Round {position} · {minutes} minutes",
@@ -101,7 +110,25 @@
 			"clearAudio": "Clear synchronized audio from this phone",
 			"syncFailed": "Synchronization did not finish:",
 			"syncFailedSafe": "The audio is safely stored on this phone — nothing is lost.",
-			"tryAgainLater": "Try again in a moment."
+			"tryAgainLater": "Try again in a moment.",
+			"roundEnded": "The round has ended.",
+			"timeUp": "Time is up for this round.",
+			"finishQuestion": "Finish recording?",
+			"finishButton": "Finish recording",
+			"keepRecording": "Keep recording",
+			"keepTalking": "Keep talking",
+			"finishingIn": "{ended} — finishing in {seconds} s.",
+			"storageErrorShort": "Storage error",
+			"storageErrorBanner": "✕ STORAGE ERROR",
+			"captionsUnavailable": "Live captions temporarily unavailable. Recording continues safely.",
+			"waitingCaptions": "Waiting for captions…",
+			"hideTranscript": "Hide live transcript",
+			"showTranscript": "Show live transcript",
+			"localAudio": "Local audio",
+			"serverUpload": "Server upload",
+			"pendingUpload": "Pending upload",
+			"chunksUploaded": "chunks uploaded",
+			"openingIn": "Opening in {seconds} s…"
 		},
 		"recovery": {
 			"intro": "This phone has a recording that was not fully synchronized — for example after the page was reloaded or the browser closed. All locally saved audio is intact.",
@@ -116,16 +143,34 @@
 			"delete": "Delete local audio",
 			"skip": "Skip for now",
 			"failed": "Recovery synchronization failed:",
-			"failedHint": "Local audio remains stored on this phone. Notify the facilitator."
+			"failedHint": "Local audio remains stored on this phone. Notify the facilitator.",
+			"title": "Recovered recording",
+			"awaitingUpload": "Awaiting upload"
 		},
 		"report": {
-			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables"
+			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables",
+			"title": "Assembly report",
+			"downloadPdf": "Download PDF",
+			"preparingPdf": "Preparing PDF…",
+			"aiSummary": "AI summary"
 		},
 		"purged": {
 			"title": "The recording was removed from this phone",
 			"body": "The organizer has finished with this assembly, so its audio has been deleted from this device. The server keeps the recording; nothing has been lost.",
 			"kept": "One recording was NOT deleted, because the server has not confirmed it yet. Please show this phone to the facilitator. | One recording was NOT deleted, because the server has not confirmed it yet. Please show this phone to the facilitator. | {count} recordings were NOT deleted, because the server has not confirmed them yet. Please show this phone to the facilitator.",
 			"dismiss": "OK"
+		},
+		"joining": {
+			"queued": "Lots of tables joining at once — waiting for a turn…",
+			"connecting": "Connecting to the assembly…"
+		},
+		"common": {
+			"roundNumber": "Round {position}",
+			"thisRound": "the round",
+			"roundOf": "Round {position} of {total}",
+			"roundAndDuration": "Round {position} · {minutes} minutes",
+			"tryAgain": "Try again",
+			"retryNow": "Retry now"
 		}
 	},
 	"error": {

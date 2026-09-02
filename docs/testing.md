@@ -14,8 +14,10 @@ Testing is part of implementation, not a final phase (brief §55).
    primitive, error mapping, confirm semantics, the i18n catalogues. Fast
    enough to assert on a single component's behaviour, which Playwright is
    not.
-4. **Browser** (`tests/browser/`, Playwright, from Milestone 2): organizer and
-   recorder UIs, including offline simulation via network emulation.
+4. **Browser** (`tests/browser/`, Playwright): the recorder driven for real in
+   Firefox with a fake microphone, against a throwaway instance — network loss,
+   reload recovery, a table's phone dying mid-round and another taking over,
+   and clearing the phones at the end of an assembly.
 5. **Manual gates**: real-phone recording tests over HTTPS (Milestones 2–3,
    brief §66) and the physical multi-phone room test before release (§57).
 
@@ -55,10 +57,36 @@ exists because the mistake had already been made:
 Browser tests (release-blocker offline scenarios, brief §56 A and C):
 
 ```bash
-sh scripts/browser-test-env.sh start   # throwaway instance on 127.0.0.1:23100, no AppAPI auth
-cd frontend && npx playwright test     # Firefox with fake microphone streams
+make test-browser   # starts the instance, runs Playwright, stops it either way
+```
+
+or by hand, which is useful when iterating on one spec:
+
+```bash
+sh scripts/browser-test-env.sh start   # throwaway instance on 127.0.0.1:23100
+cd frontend && npx playwright test device-replacement
 sh ../scripts/browser-test-env.sh stop
 ```
+
+These are the **only** tests that run the phone's own code — MediaRecorder,
+IndexedDB, the join flow, the upload engine. The Python suite posts chunks the
+way a phone would; the vitest specs mount components with the network mocked.
+Neither would notice the recorder failing to start at all.
+
+Two things to know when writing one:
+
+* **A phone is a browser CONTEXT, not a second page.** `localStorage` and
+  IndexedDB are per-context, so two pages would share the recorder session and
+  the same audio store and fight over each other's state. `newPhone()` in
+  `tests/browser/support/phone.ts` does this correctly.
+* **Organizer calls do not go over HTTP.** Disabling the AppAPI middleware does
+  not open those routes — nc_py_api then checks the request signature inline
+  instead — so `organizerApi()` asks the container to make the call through the
+  real router with the identity stubbed. See `citizens/devtools.py`.
+
+Rebuild the frontend and restart the instance after changing recorder code:
+the container serves the built bundle and runs without auto-reload, so source
+edits are invisible until you do.
 
 Notes: Chromium 151's `--use-fake-device-for-media-capture` no longer provides
 a fake microphone on this host — the Playwright config uses **Firefox** with

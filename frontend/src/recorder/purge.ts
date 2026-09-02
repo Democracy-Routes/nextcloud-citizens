@@ -32,3 +32,18 @@ export async function purgeLocalAudio(assemblyId: string): Promise<PurgeOutcome>
 	const cleared = await clearSynchronizedRecordings(assemblyId)
 	return { cleared, keptUnsynced: before.length }
 }
+
+/** Is this phone still working on something the server has not got?
+ *
+ * A structural gate rather than a flag the parent maintains: whether audio is
+ * still in flight is a fact about storage, and reading it directly cannot get
+ * out of step with the component tree the way an event-driven flag can. While
+ * this is true the purge is deferred, not refused — the next poll asks again.
+ */
+export async function hasUnfinishedAudio(assemblyId: string): Promise<boolean> {
+	try {
+		return (await idb.unfinishedRecordings(assemblyId)).length > 0
+	} catch {
+		return true // cannot tell: assume there is, and leave the audio alone
+	}
+}

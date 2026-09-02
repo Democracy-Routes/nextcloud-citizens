@@ -333,8 +333,19 @@ def _assembly_state(
             Recording.assembly_id == assembly.id,
             Recording.table_number == recorder_session.table_number,
             Recording.state.notin_(RERECORDABLE_STATES),
+            # A superseded recording belonged to a phone that has gone. Counting
+            # it as "this round is recorded" told the REPLACEMENT phone the
+            # table had finished — so releasing the table on the server made no
+            # difference on the phone, and the feature did not work end to end.
+            Recording.superseded_at.is_(None),
         )
     ).scalars():
+        # ...and neither does one whose phone stopped sending minutes ago. The
+        # automatic takeover lives in start_recording, but a phone only calls
+        # start for a round it believes is open — so without this the takeover
+        # was reachable by the API and unreachable by an actual phone.
+        if rec_svc.device_has_gone_silent(recording):
+            continue
         recorded_rounds[recording.round_id] = recording.state
         if recording.analysis_summary:
             table_summaries[recording.round_id] = recording.analysis_summary

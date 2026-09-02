@@ -8,50 +8,14 @@
  * (fake microphone; 2-second chunks via ?chunkms=2000).
  */
 
-import { execSync } from 'node:child_process'
 import { expect, test, type Page } from '@playwright/test'
+import { CHUNK_MS, newPhone, seed } from './support/phone'
 
-const CHUNK_MS = 2000
-
-interface Seed {
-	assembly_id: string
-	round_id: string
-	token: string
-}
-
-function seed(): Seed {
-	const output = execSync('sh ../scripts/browser-test-env.sh seed', { encoding: 'utf-8' })
-	return JSON.parse(output.trim()) as Seed
-}
-
-async function startRecording(page: Page, token: string): Promise<void> {
-	await page.goto(`/recorder.html?chunkms=${CHUNK_MS}#/join/${encodeURIComponent(token)}`)
-	await expect(page.getByText('Microphone test')).toBeVisible({ timeout: 15_000 })
-	await expect(page.getByRole('button', { name: 'READY' })).toBeEnabled({ timeout: 15_000 })
-	await page.getByRole('button', { name: 'READY' }).click()
-	// orchestrated mode: the armed phone auto-starts (seeded round is ACTIVE)
-	await expect(page.getByText('RECORDING', { exact: true })).toBeVisible({ timeout: 20_000 })
-}
-
-async function localChunkCount(page: Page): Promise<number> {
-	return page.evaluate(
-		() =>
-			new Promise<number>((resolve, reject) => {
-				const open = indexedDB.open('citizens-recorder')
-				open.onsuccess = () => {
-					const db = open.result
-					const request = db.transaction('chunks', 'readonly').objectStore('chunks').count()
-					request.onsuccess = () => resolve(request.result)
-					request.onerror = () => reject(request.error)
-				}
-				open.onerror = () => reject(open.error)
-			}),
-	)
-}
-
-test('Test A: network loss during recording, recovery after reconnect', async ({ page, context }) => {
+test('Test A: network loss during recording, recovery after reconnect', async ({ browser }) => {
 	const fixture = seed()
-	await startRecording(page, fixture.token)
+	const phone = await newPhone(browser, fixture.token)
+	const { page, context } = phone
+	await phone.record()
 
 	// record online long enough for a few chunks to upload
 	await page.waitForTimeout(CHUNK_MS * 3)
@@ -63,16 +27,16 @@ test('Test A: network loss during recording, recovery after reconnect', async ({
 	})
 
 	// recording continues locally while offline
-	const before = await localChunkCount(page)
+	const before = await phone.localChunks()
 	await page.waitForTimeout(CHUNK_MS * 4)
-	const after = await localChunkCount(page)
+	const after = await phone.localChunks()
 	expect(after).toBeGreaterThan(before)
 
 	// network returns; pending chunks drain
 	await context.setOffline(false)
 
 	// finish and synchronize
-	await page.getByRole('button', { name: 'Finish recording' }).click()
+	await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
 	await page.getByRole('button', { name: 'Yes, finish and synchronize' }).click()
 	await expect(page.getByText('Recording synchronized')).toBeVisible({ timeout: 90_000 })
 
@@ -80,11 +44,14 @@ test('Test A: network loss during recording, recovery after reconnect', async ({
 	const recording = await latestRecordingState(page)
 	expect(recording.state).toBe('AUDIO_READY')
 	expect(recording.received_chunks).toBe(recording.total_chunks)
+	await context.close()
 })
 
-test('Test C: browser reload mid-recording; chunks recovered and synchronized', async ({ page }) => {
+test('Test C: browser reload mid-recording; chunks recovered and synchronized', async ({ browser }) => {
 	const fixture = seed()
-	await startRecording(page, fixture.token)
+	const phone = await newPhone(browser, fixture.token)
+	const { page } = phone
+	await phone.record()
 
 	// persist several chunks, then simulate a crash/reload
 	await page.waitForTimeout(CHUNK_MS * 4)
@@ -101,6 +68,7 @@ test('Test C: browser reload mid-recording; chunks recovered and synchronized', 
 	const recording = await latestRecordingState(page)
 	expect(recording.state).toBe('AUDIO_READY')
 	expect(recording.received_chunks).toBe(recording.total_chunks)
+	await phone.context.close()
 })
 
 async function latestRecordingState(

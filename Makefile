@@ -11,6 +11,7 @@ help:
 	@echo "  make test        run the Python and frontend test suites"
 	@echo "  make test-py     run only the Python test suite"
 	@echo "  make test-frontend  run only the frontend (vitest) suite"
+	@echo "  make test-browser   drive the real recorder in a browser (slow; before a release)"
 	@echo "  make lint        run ruff"
 	@echo "  make dev-reset   wipe ONLY Citizens app data (asks for confirmation)"
 	@echo ""
@@ -54,6 +55,18 @@ test-py:
 test-frontend:
 	docker run --rm --user root -v "$(CURDIR)":/app -w /app/frontend node:22-alpine \
 		sh -c "npm ci --no-audit --no-fund && npm test"
+
+# The only tests that run the PHONE's code — MediaRecorder, IndexedDB, the
+# join flow, the upload engine. Slow (minutes) and needs Docker, so it is kept
+# out of `make test`: run it before a release, or after touching the recorder.
+# The instance is stopped even when the tests fail, or the next run inherits a
+# half-used one.
+.PHONY: test-browser
+test-browser:
+	sh scripts/browser-test-env.sh start
+	cd frontend && npx playwright test; status=$$?; \
+		sh ../scripts/browser-test-env.sh stop; \
+		exit $$status
 
 .PHONY: lint
 lint:

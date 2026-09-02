@@ -9,7 +9,7 @@
 
 import { reactive } from 'vue'
 import { RecorderApiError, recorderApi } from './api'
-import { isGoneError, isTransientError } from './errors'
+import { isGoneError, isTransientError, MicrophoneError } from './errors'
 import { idb, type StoredRecording } from './idb'
 import { clientLog } from './logger'
 import { sha256Hex } from './sha'
@@ -108,9 +108,15 @@ export class RecorderEngine {
 		const mimeType = pickMimeType()
 		if (!mimeType) throw new Error('This browser cannot record audio (no supported format)')
 
-		this.stream = await navigator.mediaDevices.getUserMedia({
-			audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
-		})
+		try {
+			this.stream = await navigator.mediaDevices.getUserMedia({
+				audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+			})
+		} catch (error) {
+			// only THIS is a microphone problem; the call below can fail for
+			// reasons the phone's owner can do nothing about
+			throw new MicrophoneError(error instanceof Error ? error.message : String(error))
+		}
 		const started = await recorderApi.start(token, roundId, mimeType)
 		this.state.recordingId = started.recording_id
 		this.state.startedAt = Date.now()
