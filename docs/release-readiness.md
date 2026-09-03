@@ -80,17 +80,17 @@ in order.
 | 1 | Project identity and authorship | **Done** — `61f5e8a`: moved to `Democracy-Routes`, Alessandro Oppo as maintainer, Philip as contributor. Existing SPDX headers deliberately unchanged. |
 | 2 | Documentation consistency | **Done** — `61f5e8a`. No "still to come" claim survives in `README.md`, `info.xml` or `docs/`. |
 | 3 | Freeze V1 scope | **Done** — no product feature has been added since; every commit below is a fix, a test or metadata. |
-| 4 | Run the full test suite | **Done** — 158 tests pass, lint clean, store schema validation passes. |
+| 4 | Run the full test suite | **Done** — 319 Python and 174 frontend tests pass, plus 5 browser tests in the separate pre-release suite; lint clean, store schema validation passes. |
 
 ### Testing (§5–§11)
 
 | # | Item | Status |
 |---|---|---|
-| 5 | Browser E2E A–E | **Real gap** — only `tests/browser/offline.spec.ts` exists, covering part of scenario C. A, B, D and E are unwritten. |
+| 5 | Browser E2E A–E | **Mostly done** — `d6cff15`. Five specs drive the real recorder in Firefox: A and C (network loss, reload recovery), plus a phone dying mid-round, a disconnected phone's backlog, and clearing the phones. `offline.spec.ts` had also been silently broken since the consent screen landed — it never reached the recorder. B, D and E remain unwritten. |
 | 6 | Replace the 10-device test | **Done** — `b974eb5`, `tests/load/load_g_single_assembly.py`. Found the event-loop freeze. |
 | 7 | Long-duration stress test | **Not now** — 1800 chunks over 30 minutes needs care on a host with ~1.9 GB available; it would measure the host, not the app. |
 | 8 | Fault-injection test | **Real gap** — worth doing, nobody has. |
-| 9 | Real-phone checklist | **Not now** — a document to execute, worth writing once a beta is installable. |
+| 9 | Real-phone checklist | **Smaller than it was** — the browser suite now covers what a browser can. What is left genuinely needs hardware: wake locks (headless browsers do not sleep), battery reporting (Firefox implements none), hard microphone denial, and iOS Safari. |
 | 10 | Physical room test | **Not now** — same. |
 | 11 | Recorder security audit | **Done** — `4a9a23d`, `tests/integration/test_recorder_isolation.py`: nine negative-authorization tests. Found the revoke gap. |
 
@@ -170,6 +170,18 @@ in order.
 
 ## Standing items
 
-Not audit items, but outstanding: rotate the Mistral and Deepgram keys and the
-`citizens-test` password that were pasted into a conversation, and reshoot the
-six screenshots.
+Not audit items, but outstanding:
+
+- **Rotate the Mistral and Deepgram keys and the `citizens-test` password**
+  that were pasted into a conversation. Oldest item here, still undone.
+- **Decide what retention does when there is no transcript.**
+  `sweep_expired_audio` deletes a recording on the retention timer without
+  checking whether anything was ever written down from it — so a failed
+  transcription plus an expiry means the assembly is gone, silently, on a
+  timer. The choice is whether retention refuses to delete or deletes loudly;
+  it is the only remaining defect that can lose an assembly outright.
+- **Translate the organizer interface.** The citizens' half is done and
+  guarded; the organizer's is still English. The mechanism, catalogues and
+  parity test all exist, so this is extraction rather than design — point the
+  untranslated-strings guard at `frontend/src/components/` when it happens.
+- Reshoot the six screenshots.

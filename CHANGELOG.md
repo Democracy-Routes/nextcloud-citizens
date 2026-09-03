@@ -4,6 +4,101 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Finishing four sweeps that had each missed one file — 2026-09-03
+
+Six defects found while writing the browser tests. Most are not new mistakes
+but old ones that survived a cleanup: the helper that saves a file correctly
+was written because three places had got it wrong, and one of those three was
+never converted.
+
+- **A phone could be told its own recording belonged to another device.** The
+  status a phone polls describes the *table*, never which phone made the
+  recording — so a phone's own work and the recording left behind by a device
+  it replaced looked identical. Two details made it stick rather than flicker:
+  the "has this phone gone silent" check only ever applied to a recording still
+  in progress, so one parked mid-upload was never cleared, and the check looked
+  at every round rather than the open one. The routes there are ordinary — a
+  failed sync offers "Back" — and the table was then told, indefinitely, to ask
+  the facilitator to hand it a table it already had.
+- **The report's JSON download did nothing at all on Firefox and Safari.** It
+  cancelled its own download one line after starting it. The Markdown, PDF and
+  Files tab downloads opened a tab instead, which a pop-up blocker eats just as
+  quietly; all four now fetch the file and say so if that fails.
+- **The Analysis tab emptied an edit box you were typing in.** A background
+  analysis job replaces the drafts it regenerates, so the refresh that followed
+  destroyed the card mid-sentence. The refresh now waits while an editor is
+  open, and the tab says why it has stopped updating.
+- **The final report could not be updated after closing.** Closing freezes what
+  participants read, and reopening deliberately leaves that frozen copy alone —
+  so approving a finding afterwards had no way to reach the phones. The button
+  now exists.
+- **An assembly could be created that no phone could ever join.** Zero tables
+  produces no QR codes, and nothing repairs it afterwards: raising the count
+  only affects future rounds, so the assembly has to be deleted and made again.
+  Refused now, at both ends.
+- **Name, description and language can be edited.** The API had always accepted
+  them; nothing in the interface ever sent them. Language locks once recording
+  has begun, because it decides how audio is transcribed.
+
+### A table whose phone dies can carry on — 2026-09-02
+
+Phones run out of battery, get dropped, and get locked by their owner. Before
+this, a table that lost its phone lost the rest of the round: the replacement
+scanned the same QR code, was refused because the dead phone still held the
+table, and the only ways out were a twenty-minute sweep and an endpoint nothing
+called.
+
+- **Replace device**, on the Live tab where the facilitator is already looking.
+  The audio recorded so far is finished and transcribed rather than discarded —
+  usually most of the round — and the table carries on by scanning the same code
+  on any other phone.
+- **A replacement is also let in automatically** after two minutes of silence,
+  for when nobody is watching the screen. The two paths deliberately differ,
+  because the server cannot tell a dead battery from dead WiFi: pressing the
+  button means a person looked at the phone and it is finished, while the timer
+  only guesses — so the automatic path leaves the first recording open, and a
+  phone that was merely offline can still upload everything it recorded while
+  disconnected.
+- **The round reads as one discussion.** Both halves are analysed together and
+  summarised once, with a note in the report's methodology that the table
+  changed device — visible, but not a seam running through the findings.
+- **Phones report their battery** while recording, so a table can be swapped
+  before it goes dark rather than after.
+- **Audio can be cleared off the phones** once the assembly is closed. Every
+  phone keeps a copy of its table's audio — that is what makes recording
+  survive a bad network — which matters when participants used their own
+  devices. One button asks every phone still open to delete it and reports how
+  many confirmed. A phone only deletes audio the server has already accepted,
+  so the request can never destroy the last copy, and a phone that still holds
+  something unconfirmed says so instead of obeying.
+
+### The phone's own code is now tested in a browser — 2026-09-02
+
+There were 315 backend tests and none of them ran the recorder: the backend
+suite posts chunks the way a phone would, and the component tests mount screens
+with the network mocked away. Neither would notice the recorder failing to
+start. Three specs now drive the real thing in Firefox with a fake microphone —
+a dead battery and a closed tab are the same event to the server, so closing a
+browser reproduces one exactly.
+
+They found five defects, which was the point. Two of them meant the device
+replacement above did not actually work from a phone, only from the API: the
+automatic takeover was unreachable because a phone only asks to start a round
+it believes is open, and releasing a table on the server changed nothing a
+phone could see. A replacement phone was also told "This table has completed
+every round. Thank you!" while its predecessor lay dead mid-round; a refusal
+from the server was reported as a microphone fault, sending someone to fix a
+microphone that was working; and the request to clear a phone was only read
+when joining, so a phone left on the finished screen — the one the feature is
+for — never acted on it.
+
+Also: the recorder turned out not to be fully translated after all. The guard
+meant to prevent that required three words and ignored anything inside an
+expression, so 34 English strings had walked past it.
+
+`make test-browser` runs them, and stays out of `make test` — that one gates
+every commit and these take minutes.
+
 ### Live-event hardening — 2026-09-01
 
 A sweep through the whole app for things that could stop an assembly or lose

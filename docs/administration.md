@@ -227,6 +227,19 @@ recorder page is still open and reports how many confirmed — it is coverage,
 not a guarantee. A phone only deletes audio the server has already confirmed,
 so nothing can be lost.
 
+**I approved more findings after closing, and the phones still show the old
+report.** Closing freezes the version participants read, and reopening leaves
+that frozen copy alone on purpose — so a phone's copy does not change under
+someone mid-read. Press **Update the published version** on the Report tab to
+push the current content. The same applies after renaming an assembly: the name
+inside the frozen report changes only when you update it.
+
+**The assembly name or language is wrong.** Both are on the Overview tab under
+*Assembly details*. The language locks once any table has recorded, because it
+decides how audio is transcribed and which model is used — changing it then
+would leave one assembly with transcripts in two languages. Fix it before the
+first round, or create the assembly again.
+
 **A table shows "low battery".** Only Chromium reports this, so a table showing
 nothing is unknown rather than fine. Swap the phone between rounds; a phone
 that dies mid-round costs you the rest of it.

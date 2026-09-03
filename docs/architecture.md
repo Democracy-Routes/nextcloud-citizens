@@ -137,6 +137,62 @@ client log ring (IndexedDB)           ──►  logs/devices/<session>.jsonl
 - Both modes: one healthy recording per table+round; the recorder locks after
   finish so no stray recordings appear.
 
+## Losing a phone mid-round
+
+The server cannot distinguish a dead battery from dead WiFi: both simply stop
+sending chunks. That single fact shapes the whole design, because the right
+response differs — a dead phone has stopped recording, while a disconnected one
+is still recording locally and will upload the backlog when it returns.
+
+So there are two release paths, and they deliberately behave differently:
+
+- **`POST /recordings/{id}/replace-device`** (the facilitator's *Replace
+  device*): a person looked at the phone and it is finished. The recording is
+  moved to `UPLOAD_INCOMPLETE` with `error_code=DEVICE_REPLACED`, stamped
+  `superseded_at`, and — if any chunk arrived — assembled and transcribed, so
+  the half already recorded is not thrown away.
+- **The automatic takeover** in `start_recording`: no chunk for
+  `STALLED_DEVICE_SECONDS` (120) while still `RECORDING`. A timer only guesses,
+  so the original recording is left **open**, and a phone that was merely
+  offline can still upload everything it captured while disconnected.
+
+`superseded_at` exists because the salvage path defeated itself otherwise:
+assembling the partial audio moves the recording into `ASSEMBLING`, which is
+not a re-recordable state, so the replacement phone was still refused. The
+column marks "this belonged to a device that has gone" independently of state,
+and every guard that asks "has this table recorded this round?" ignores rows
+carrying it.
+
+Two things the phone is told, both scoped to the *session* rather than the
+table, because the table-level view cannot tell one phone from another:
+
+- a recording whose device has gone silent is omitted from the phone's view of
+  what has been recorded — without this the takeover was reachable by the API
+  and unreachable by an actual phone, which only asks to start a round it
+  believes is open;
+- each round reports whether *this* session made the recording holding it, so a
+  phone is never told its own work belongs to somebody else.
+
+Both halves of the round are analysed as one table (`table_recordings()`), with
+a methodology note that the device changed, so the report reads as one
+discussion rather than two fragments.
+
+## Clearing audio off the phones
+
+Recording offline-first means every phone keeps its table's audio after the
+event — which matters when participants used their own devices. Closing the
+assembly enables **Clear audio from the table phones**, which sets
+`device_audio_purge_requested_at`; the server cannot push, so the flag rides
+the status poll every recorder already makes.
+
+The guarantee is one-directional and deliberate: a phone deletes only audio the
+server has already confirmed. Anything unconfirmed is kept and the phone says
+so, because the alternative — a request that could destroy the last copy of a
+discussion — is not worth the tidiness. The Files tab reports coverage
+("6 of 8 table phones have reported clearing their copy"), never completion: a
+phone closed and carried out of the building never receives the request at all,
+and one that has not reported since will clear itself if it is opened again.
+
 ## Analysis output
 
 - Every analyzed table stores a mandatory neutral AI `analysis_summary`

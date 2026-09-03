@@ -42,6 +42,12 @@ that a human organizer reviews before anything is published.
   are separate switches: run both, or run captions alone and let them be the
   record — which skips a second pass over every recording, at some cost in
   accuracy that the report states plainly.
+* **A dead phone does not end a table.** Batteries die mid-round. The
+  facilitator hands the table to any other phone from the Live tab — or a
+  replacement is let in automatically after two minutes of silence — and the
+  half already recorded is transcribed and analysed with the rest, so the round
+  reads as one discussion. Phones report their battery level while recording,
+  so a table can be swapped before it goes dark rather than after.
 * **Evidence-linked analysis.** Every finding cites the transcript passages that
   support it — speaker, timestamp, exact words. A finding with no evidence is
   discarded automatically.
@@ -58,6 +64,12 @@ that a human organizer reviews before anything is published.
 * **Data you control.** Per-assembly Files tab to download, export or delete
   audio and transcripts at any time — and with a self-hosted Whisper server or
   Vosk, recordings never leave your infrastructure at all.
+* **Audio can be cleared off the phones.** Recording offline-first means every
+  phone keeps a copy of its table's audio, which matters when participants used
+  their own devices. Once the assembly is closed, one button asks every phone
+  still open to delete it, and reports how many confirmed. A phone only ever
+  deletes audio the server has already accepted, so the request can never
+  destroy the last copy.
 
 ## Install
 
