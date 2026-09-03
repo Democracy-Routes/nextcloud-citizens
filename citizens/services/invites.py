@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Recorder invites: per assembly+table QR tokens (brief §13–§14)."""
 
+import io
 from datetime import timedelta
 
 import segno
@@ -34,15 +35,37 @@ def recorder_join_url(token: str) -> str:
     return f"{base}/index.php/apps/app_api/proxy/citizens/recorder.html#/join/{token}"
 
 
+def _qr_svg(url: str) -> str:
+    """A QR code as a STANDALONE SVG document.
+
+    Not svg_inline(): that serialises with svgns=False, which is correct only
+    when the markup is pasted into an HTML page, where the parser supplies the
+    SVG namespace. The organizer renders this in an <img> instead — safer,
+    since an image cannot execute script whatever it contains — and an <img>
+    parses its source as an independent XML document. Without the xmlns the
+    root element is in no namespace, nothing recognises it as SVG, and the
+    browser reports a decode failure: naturalWidth 0, a broken-image icon, and
+    a QR sheet with no codes on it minutes before the doors open.
+
+    The same trap is documented in qr_sheet.py, which hit it from the other
+    side: fpdf2 also rejects a root element with no namespace.
+
+    omitsize keeps the viewBox and drops width/height, so CSS scales the code
+    without clipping it — the <img> must therefore be given a size.
+    """
+    buffer = io.BytesIO()
+    segno.make(url, error="m").save(
+        buffer, kind="svg", scale=4, dark="#000000", omitsize=True, xmldecl=False
+    )
+    return buffer.getvalue().decode()
+
+
 def _invite_card(table_number: int, token: str) -> schemas.InviteGenerated:
     url = recorder_join_url(token)
-    qr = segno.make(url, error="m")
     return schemas.InviteGenerated(
         table_number=table_number,
         url=url,
-        # omitsize → viewBox instead of fixed px size, so CSS can
-        # scale the QR without clipping it
-        qr_svg=qr.svg_inline(scale=4, dark="#000000", omitsize=True),
+        qr_svg=_qr_svg(url),
     )
 
 

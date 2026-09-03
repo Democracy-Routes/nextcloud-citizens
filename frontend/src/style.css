@@ -644,9 +644,14 @@
 
 #citizens-app .cz-qr-item h3 { color: #000; font-size: 22px; font-weight: 800; }
 
-/* scoped to the QR image: a bare `.cz-qr-item svg` also caught button icons
- * and stretched them to the button's width */
-#citizens-app .cz-qr-item .cz-qr-image svg {
+/* The QR itself is an <img>, so this sizes the element, not a child svg —
+ * it used to wrap an inline <svg> and the selector was left behind when it
+ * became an image. Scoped rather than a bare `.cz-qr-item svg`, which also
+ * caught button icons and stretched them to the button's width.
+ *
+ * The size has to come from here: the SVG carries a viewBox and no
+ * width/height, so an unsized <img> falls back to a 300px default. */
+#citizens-app .cz-qr-item .cz-qr-image {
 	width: 100%;
 	max-width: 210px;
 	height: auto;
