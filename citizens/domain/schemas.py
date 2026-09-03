@@ -37,14 +37,24 @@ class RoundOut(BaseModel):
     recording_count: int = 0
 
 
+#: The languages the organizer can choose. Anything else reaches the analysis
+#: prompt as "English" and picks no transcription model for the room's actual
+#: language, so it is refused rather than accepted and quietly ignored.
+Language = Literal["en", "it", "de", "fr", "es"]
+
+
 class AssemblyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str = ""
-    language: str = "en"
+    language: Language = "en"
     scheduled_at: datetime | None = None
     recording_mode: Literal["orchestrated", "independent"] = "orchestrated"
     expected_participants: int = Field(default=0, ge=0, le=10000)
-    default_table_count: int = Field(default=0, ge=0, le=200)
+    # At least one: with zero tables no Table rows are built, so no QR codes are
+    # generated and no phone can ever join. Nothing in the UI can repair that
+    # afterwards - raising the count creates tables only for FUTURE rounds - so
+    # the assembly has to be deleted and made again.
+    default_table_count: int = Field(default=1, ge=1, le=200)
     analysis_instructions: str = Field(default="", max_length=4000)
     rounds: list[RoundIn] = []
 
@@ -52,11 +62,11 @@ class AssemblyCreate(BaseModel):
 class AssemblyUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
-    language: str | None = None
+    language: Language | None = None
     scheduled_at: datetime | None = None
     recording_mode: Literal["orchestrated", "independent"] | None = None
     expected_participants: int | None = Field(default=None, ge=0, le=10000)
-    default_table_count: int | None = Field(default=None, ge=0, le=200)
+    default_table_count: int | None = Field(default=None, ge=1, le=200)
     analysis_instructions: str | None = Field(default=None, max_length=4000)
     # null follows the instance default; 0 keeps audio indefinitely
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)

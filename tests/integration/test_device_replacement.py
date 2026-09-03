@@ -263,3 +263,57 @@ def test_both_recordings_belong_to_the_same_table(client, table_recording):
         replacement = session.get(Recording, new_id)
         assert replacement.table_id == first.table_id
         assert replacement.table_number == first.table_number
+
+
+# ------------------------------- whose recording is it, from the phone's view
+
+
+def _status_round(client, headers, round_id):
+    """What one phone's status poll says about a round."""
+    response = client.get("/api/v1/public/recorder/status", headers=headers)
+    assert response.status_code == 200, response.text
+    return next(r for r in response.json()["rounds"] if r["id"] == round_id)
+
+
+def test_a_phone_is_told_the_open_recording_is_its_own(client, table_recording):
+    """The recording states in the payload are scoped to the TABLE, not the
+    session. Without an ownership flag a phone could not tell its own recording
+    from the one a device it replaced left behind — so the armed screen told
+    phones, about themselves, that another phone had the table."""
+    own = _status_round(
+        client, table_recording["headers"], table_recording["round_id"]
+    )
+
+    assert own["recorded_state"] == "RECORDING"
+    assert own["recorded_by_this_device"] is True
+
+
+def test_a_second_phone_is_told_the_recording_is_not_its_own(client, table_recording):
+    second = _rejoin(client, table_recording["assembly"])
+
+    theirs = _status_round(client, second, table_recording["round_id"])
+
+    assert theirs["recorded_state"] == "RECORDING"
+    assert theirs["recorded_by_this_device"] is False
+
+
+def test_a_replacement_phone_owns_the_round_once_it_records(client, table_recording):
+    """After the handover the flag has to follow the table, or the replacement
+    phone spends the rest of the round being told it is an impostor."""
+    client.post(f"/api/v1/recordings/{table_recording['recording_id']}/replace-device")
+    second = _rejoin(client, table_recording["assembly"])
+    assert _start(client, second, table_recording["round_id"]).status_code == 201
+
+    theirs = _status_round(client, second, table_recording["round_id"])
+
+    assert theirs["recorded_by_this_device"] is True
+
+
+def test_an_unrecorded_round_is_owned_by_nobody(client, table_recording):
+    assembly = _assembly(client, name="TEST Ownership idle")
+    headers = _join(client, assembly)
+
+    idle = _status_round(client, headers, assembly["rounds"][0]["id"])
+
+    assert idle["recorded_state"] is None
+    assert idle["recorded_by_this_device"] is False

@@ -32,7 +32,12 @@ async function downloadAudio(): Promise<void> {
 	const mime = props.recording.mimeType || 'audio/webm'
 	const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
 	const blob = new Blob(chunks.map((c) => c.blob), { type: mime.split(';')[0] })
-	downloadBlob(blob, `citizens-table-${props.session.table_number}-recovered.${ext}`)
+	// the recording's own table, falling back to the current session for audio
+	// stored before that was written. A phone handed to another table would
+	// otherwise name this after the table it is sitting at now, not the one it
+	// recorded — which is exactly the situation device replacement creates.
+	const table = props.recording.tableNumber || props.session.table_number
+	downloadBlob(blob, `citizens-table-${table}-recovered.${ext}`)
 	downloadNote.value = 'Audio file saved to this phone’s downloads.'
 }
 

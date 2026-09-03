@@ -103,7 +103,9 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 			v-else-if="tables.length === 0"
 			:icon="mdiTableFurniture"
 			title="No tables in this round"
-			hint="Tables are created with the assembly. Add a round first if the list is empty." />
+			hint="Tables are created with the round, from the assembly's table count. If that
+			      count was zero this round has no tables and no QR codes, and adding another
+			      round will not help — the assembly needs to be created again." />
 
 		<CzEmptyState
 			v-else-if="!hasAssignments()"

@@ -51,7 +51,7 @@ function recording(over: Partial<StoredRecording>): StoredRecording {
 	return {
 		recordingId: 'rec',
 		roundId: 'round',
-		tableNumber: 0,
+		tableNumber: 1,
 		mimeType: 'audio/webm',
 		startedAt: 1,
 		finishedAt: null,

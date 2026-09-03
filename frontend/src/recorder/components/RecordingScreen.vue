@@ -313,7 +313,12 @@ async function beginRecording(): Promise<void> {
 	startBusy.value = true
 	startError.value = ''
 	try {
-		await engine.start(props.session.session_token, props.round.id, props.session.assembly.id)
+		await engine.start(
+			props.session.session_token,
+			props.round.id,
+			props.session.assembly.id,
+			props.session.table_number,
+		)
 	} catch (error) {
 		startError.value = error instanceof Error ? error.message : String(error)
 		// A microphone problem is the phone's owner to fix; anything else — the

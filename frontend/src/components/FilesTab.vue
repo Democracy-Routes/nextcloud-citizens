@@ -14,6 +14,7 @@ import {
 } from '@mdi/js'
 import { computed, ref } from 'vue'
 import { api, BASE } from '../api'
+import { downloadFromApi } from '../download'
 import { describeError } from '../errors'
 import { bytes, duration } from '../format'
 import { BACKGROUND_MS } from '../composables/intervals'
@@ -33,6 +34,7 @@ const props = defineProps<{ assembly: AssemblyDetail }>()
 const listing = ref<FilesListing | null>(null)
 const error = ref('')
 const busy = ref(false)
+const downloading = ref('')
 const confirmOne = ref<FileEntry | null>(null)
 const confirmAll = ref(false)
 const confirmTranscript = ref<FileEntry | null>(null)
@@ -188,8 +190,21 @@ const deleteAllMessage = computed(() => {
 	return `${scale} will be permanently deleted and cannot be recovered. Transcripts, findings and the report are kept. Download or export first if you need a copy.`
 })
 
-function download(path: string): void {
-	window.open(`${BASE}${path}`, '_blank')
+/** Fetched rather than window.open'd: a popup blocker swallows the new tab
+ * silently. The filename comes from the server, which already names these
+ * after the assembly, round and table. */
+async function download(path: string): Promise<void> {
+	const url = `${BASE}${path}`
+	downloading.value = path
+	try {
+		await downloadFromApi(url)
+	} catch (err) {
+		if (!window.open(url, '_blank')) {
+			toast(describeError(err).message, 'error')
+		}
+	} finally {
+		downloading.value = ''
+	}
 }
 
 async function deleteOne(): Promise<void> {

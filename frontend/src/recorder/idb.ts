@@ -21,6 +21,9 @@ export interface StoredRecording {
 	 */
 	assemblyId?: string
 	roundId: string
+	/** The table this audio was recorded at. Was written as 0 by every caller
+	 * and read by nobody; it names the recovery download, which the current
+	 * session cannot do correctly once a phone has moved between tables. */
 	tableNumber: number
 	mimeType: string
 	startedAt: number

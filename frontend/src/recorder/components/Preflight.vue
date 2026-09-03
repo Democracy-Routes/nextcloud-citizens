@@ -17,6 +17,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { heldByAnotherDevice } from '../holding'
 import { useWakeLock } from '../useWakeLock'
 import { pickMimeType } from '../engine'
 import { idb } from '../idb'
@@ -33,11 +34,7 @@ const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
 const openRounds = computed(() => props.session.rounds.filter((r) => !r.recorded_state))
 
 /** A round this table is mid-way through on a device that is not this one. */
-const recordingElsewhere = computed(() =>
-	props.session.rounds.some((round) =>
-		['RECORDING', 'FINALIZING', 'WAITING_FOR_CHUNKS'].includes(round.recorded_state ?? ''),
-	),
-)
+const recordingElsewhere = computed(() => heldByAnotherDevice(props.session.rounds))
 const selectedRound = ref<RoundInfo | null>(
 	props.session.rounds.filter((r) => !r.recorded_state).find((r) => r.status === 'ACTIVE') ??
 		props.session.rounds.filter((r) => !r.recorded_state)[0] ??

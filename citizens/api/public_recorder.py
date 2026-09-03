@@ -328,6 +328,11 @@ def _assembly_state(
         handling = data_handling_summary()
     recorded_rounds: dict[str, str] = {}
     table_summaries: dict[str, str] = {}
+    # Which of those recordings are THIS phone's own. Without it the payload
+    # cannot tell a phone apart from the dead one it replaced: the query below
+    # is scoped to the table, not the session, so "this round is being recorded"
+    # was read as "...by somebody else" even when the somebody was itself.
+    own_rounds: set[str] = set()
     for recording in session.execute(
         select(Recording).where(
             Recording.assembly_id == assembly.id,
@@ -347,6 +352,8 @@ def _assembly_state(
         if rec_svc.device_has_gone_silent(recording):
             continue
         recorded_rounds[recording.round_id] = recording.state
+        if recording.recorder_session_id == recorder_session.id:
+            own_rounds.add(recording.round_id)
         if recording.analysis_summary:
             table_summaries[recording.round_id] = recording.analysis_summary
     return {
@@ -382,6 +389,9 @@ def _assembly_state(
                 "duration_minutes": round_.duration_minutes,
                 "status": round_.status,
                 "recorded_state": recorded_rounds.get(round_.id),
+                # A boolean rather than the holder's recording id: the phone
+                # needs an answer about itself, not another device's identifier.
+                "recorded_by_this_device": round_.id in own_rounds,
                 "table_summary": table_summaries.get(round_.id, ""),
             }
             for round_ in assembly.rounds

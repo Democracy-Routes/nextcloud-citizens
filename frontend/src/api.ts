@@ -5,6 +5,7 @@ import type {
 	AssemblyCreated,
 	AssemblyDetail,
 	AssemblyProgress,
+	AssemblyUpdate,
 	FilesListing,
 	Invite,
 	InviteGenerated,
@@ -82,7 +83,7 @@ export const api = {
 		rounds: RoundIn[]
 	}) => request<AssemblyCreated>('POST', '/api/v1/assemblies', data),
 	getAssembly: (id: string) => request<AssemblyDetail>('GET', `/api/v1/assemblies/${id}`),
-	updateAssembly: (id: string, data: Record<string, unknown>) =>
+	updateAssembly: (id: string, data: AssemblyUpdate) =>
 		request<AssemblyDetail>('PUT', `/api/v1/assemblies/${id}`, data),
 	deleteAssembly: (id: string) => request<void>('DELETE', `/api/v1/assemblies/${id}`),
 

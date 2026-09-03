@@ -26,6 +26,52 @@ const emit = defineEmits<{
 }>()
 
 const invites = ref<Invite[]>([])
+
+const editingDetails = ref(false)
+const savingDetails = ref(false)
+const detailsError = ref('')
+const draft = ref({ name: '', description: '', language: 'en' })
+
+/** Has any table started recording?
+ *
+ * The language decides how audio is transcribed and which model is chosen for
+ * it, so changing it once recording has begun would leave one assembly with
+ * transcripts in two languages and no way to tell which is which. The per-round
+ * recording count is already in this payload. */
+const recordingHasBegun = computed(() =>
+	props.assembly.rounds.some((round) => (round.recording_count ?? 0) > 0),
+)
+
+function startEditDetails(): void {
+	draft.value = {
+		name: props.assembly.name,
+		description: props.assembly.description,
+		language: props.assembly.language,
+	}
+	detailsError.value = ''
+	editingDetails.value = true
+}
+
+async function saveDetails(): Promise<void> {
+	savingDetails.value = true
+	detailsError.value = ''
+	try {
+		await api.updateAssembly(props.assembly.id, {
+			name: draft.value.name.trim(),
+			description: draft.value.description.trim(),
+			// never sent once recording has begun, so a stale form cannot
+			// change it behind the guard
+			...(recordingHasBegun.value ? {} : { language: draft.value.language }),
+		})
+		editingDetails.value = false
+		emit('changed')
+	} catch (err) {
+		detailsError.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		savingDetails.value = false
+	}
+}
+
 const editingInstructions = ref(false)
 const instructionsDraft = ref('')
 const savingInstructions = ref(false)
@@ -126,6 +172,62 @@ const nextStep = computed<NextStep | null>(() => {
 					<div class="cz-stat__label">Active QR codes</div>
 				</div>
 			</button>
+		</div>
+
+		<div class="cz-card">
+			<div class="cz-row cz-row--spread" style="margin-bottom: 8px">
+				<h3>Assembly details</h3>
+				<CzButton v-if="!editingDetails" variant="tertiary" small @click="startEditDetails">
+					Edit
+				</CzButton>
+			</div>
+			<template v-if="editingDetails">
+				<div v-if="detailsError" class="cz-error">{{ detailsError }}</div>
+				<div class="cz-field">
+					<label for="cz-assembly-name">Name</label>
+					<input id="cz-assembly-name" v-model="draft.name" type="text" maxlength="200" />
+				</div>
+				<div class="cz-field">
+					<label for="cz-assembly-description">Description</label>
+					<textarea id="cz-assembly-description" v-model="draft.description" rows="2"></textarea>
+				</div>
+				<div class="cz-field">
+					<label for="cz-assembly-language">Language</label>
+					<select
+						id="cz-assembly-language"
+						v-model="draft.language"
+						:disabled="recordingHasBegun">
+						<option value="en">English</option>
+						<option value="it">Italiano</option>
+						<option value="de">Deutsch</option>
+						<option value="fr">Français</option>
+						<option value="es">Español</option>
+					</select>
+					<span v-if="recordingHasBegun" class="cz-muted" style="font-size: 0.78rem">
+						Locked: this assembly has started recording. The language decides how
+						audio is transcribed, so changing it now would leave one assembly with
+						transcripts in two languages.
+					</span>
+				</div>
+				<div class="cz-row" style="justify-content: flex-end; margin-top: 8px">
+					<CzButton variant="tertiary" small @click="editingDetails = false">Cancel</CzButton>
+					<CzButton
+						variant="primary"
+						small
+						:disabled="savingDetails || !draft.name.trim()"
+						@click="saveDetails">
+						Save
+					</CzButton>
+				</div>
+			</template>
+			<template v-else>
+				<p v-if="assembly.description" style="margin: 0; font-size: 0.875rem; white-space: pre-wrap">
+					{{ assembly.description }}
+				</p>
+				<p v-else class="cz-muted" style="margin: 0; font-size: 0.845rem">
+					No description. The name and language shown in the header are edited here.
+				</p>
+			</template>
 		</div>
 
 		<div class="cz-card">

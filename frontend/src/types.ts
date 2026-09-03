@@ -67,6 +67,20 @@ export interface FilesListing {
 	rounds: Array<{ id: string; position: number; title: string; tables: FileEntry[] }>
 }
 
+/** Everything PUT /assemblies/{id} accepts. Every field is optional; only
+ * what is sent is written. Was Record<string, unknown>, which typed nothing. */
+export interface AssemblyUpdate {
+	name?: string
+	description?: string
+	language?: string
+	scheduled_at?: string | null
+	recording_mode?: 'orchestrated' | 'independent'
+	expected_participants?: number
+	default_table_count?: number
+	analysis_instructions?: string
+	audio_retention_days?: number | null
+}
+
 export interface AssemblyDetail extends Assembly {
 	rounds: Round[]
 	participant_count: number

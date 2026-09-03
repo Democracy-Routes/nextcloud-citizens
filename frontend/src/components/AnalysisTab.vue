@@ -2,14 +2,17 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiBrain, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiRefresh } from '@mdi/js'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { api } from '../api'
+import { BACKGROUND_MS } from '../composables/intervals'
+import { usePolling } from '../composables/usePolling'
 import { describeError } from '../errors'
 import type { AssemblyDetail, RoundFindings } from '../types'
 import FindingCard from './FindingCard.vue'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzFreshness from './ui/CzFreshness.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import { toast } from './ui/toast'
@@ -21,8 +24,6 @@ const data = ref<RoundFindings | null>(null)
 const error = ref('')
 const busy = ref(false)
 
-let pollTimer = 0
-
 async function reload(): Promise<void> {
 	if (!roundId.value) return
 	try {
@@ -33,16 +34,37 @@ async function reload(): Promise<void> {
 	}
 }
 
-onMounted(() => {
-	void reload()
-	// analysis jobs complete in the background; refresh periodically
-	pollTimer = window.setInterval(() => void reload(), 8000)
-})
+// analysis jobs complete in the background; BACKGROUND_MS is the shared
+// constant for exactly that. This tab was the one the polling sweep missed and
+// still had a hand-picked 8000 with no visibility gating and no freshness.
+const polling = usePolling(reload, { intervalMs: BACKGROUND_MS })
 
-onBeforeUnmount(() => window.clearInterval(pollTimer))
+/** Findings with an editor open on them.
+ *
+ * A background analysis job DELETES the draft findings it replaces, so every
+ * id changes; the poll then swaps the list and Vue unmounts the card the
+ * organizer was typing in, taking the text with it. Silent, and it lands on
+ * the person doing the most careful work in the room.
+ *
+ * Keyed by id rather than counted, because a count desyncs the moment a card
+ * disappears without saying so. */
+const editingIds = ref(new Set<string>())
+
+function setEditing(findingId: string, editing: boolean): void {
+	const next = new Set(editingIds.value)
+	if (editing) next.add(findingId)
+	else next.delete(findingId)
+	editingIds.value = next
+	if (next.size) polling.pause()
+	else polling.resume()
+}
 
 watch(roundId, () => {
 	data.value = null
+	// the cards these referred to are gone; holding their ids would pause the
+	// poll forever
+	editingIds.value = new Set()
+	polling.resume()
 	void reload()
 })
 
@@ -93,6 +115,19 @@ const anyAnalyzing = () =>
 
 <template>
 	<div>
+		<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
+			<!-- pausing while an editor is open makes the view stale on
+			     purpose, so it has to say when it was last current -->
+			<span v-if="polling.paused.value" class="cz-muted" style="font-size: 0.8125rem">
+				Paused while you edit
+			</span>
+			<span v-else></span>
+			<CzFreshness
+				:last-success-at="polling.lastSuccessAt.value"
+				:consecutive-failures="polling.consecutiveFailures.value"
+				@refresh="polling.refresh" />
+		</div>
+
 		<div v-if="error" class="cz-error">{{ error }}</div>
 
 		<div class="cz-row" style="margin-bottom: 16px">
@@ -158,7 +193,8 @@ const anyAnalyzing = () =>
 						v-for="finding in data.cross_table"
 						:key="finding.id"
 						:finding="finding"
-						@changed="reload" />
+						@changed="reload"
+						@editing="(open: boolean) => setEditing(finding.id, open)" />
 				</div>
 
 				<template v-for="table in data.tables" :key="table.table_number">
@@ -175,7 +211,8 @@ const anyAnalyzing = () =>
 							v-for="finding in table.findings"
 							:key="finding.id"
 							:finding="finding"
-							@changed="reload" />
+							@changed="reload"
+							@editing="(open: boolean) => setEditing(finding.id, open)" />
 					</div>
 				</template>
 

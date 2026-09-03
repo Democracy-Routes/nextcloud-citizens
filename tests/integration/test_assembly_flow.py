@@ -132,3 +132,67 @@ def test_round_management(client):
     assert client.delete(f"/api/v1/rounds/{round1['id']}").status_code == 204
     detail = client.get(f"/api/v1/assemblies/{assembly['id']}").json()
     assert [(r["title"], r["position"]) for r in detail["rounds"]] == [("Round 3", 1), ("Round 2", 2)]
+
+
+def test_an_assembly_needs_at_least_one_table(client):
+    """Zero tables builds no Table rows, so generate_invites has nothing to make
+    codes for and no phone can ever join. Nothing in the UI repairs it either -
+    raising the count creates tables only for FUTURE rounds - so the assembly
+    would have to be deleted and made again. Refused at the door instead."""
+    response = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST No tables",
+            "default_table_count": 0,
+            "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_assembly_created_without_a_table_count_still_gets_one(client):
+    response = client.post("/api/v1/assemblies", json={"name": "TEST Default tables"})
+
+    assert response.status_code == 201
+    assert response.json()["default_table_count"] == 1
+
+
+def test_the_table_count_cannot_be_dropped_to_zero_later(client):
+    assembly = client.post(
+        "/api/v1/assemblies", json={"name": "TEST Shrink", "default_table_count": 4}
+    ).json()
+
+    response = client.put(
+        f"/api/v1/assemblies/{assembly['id']}", json={"default_table_count": 0}
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_unsupported_language_is_refused(client):
+    """Anything outside the offered list reaches the analysis prompt as English
+    and selects no transcription model for the room's real language. Better to
+    refuse it than to accept it and quietly ignore it."""
+    response = client.post(
+        "/api/v1/assemblies", json={"name": "TEST Klingon", "language": "tlh"}
+    )
+
+    assert response.status_code == 422
+
+
+def test_the_name_description_and_language_can_be_edited(client):
+    """The endpoint always accepted these; nothing in the UI ever sent them."""
+    assembly = client.post(
+        "/api/v1/assemblies", json={"name": "TEST Typo", "language": "en"}
+    ).json()
+
+    updated = client.put(
+        f"/api/v1/assemblies/{assembly['id']}",
+        json={"name": "TEST Corrected", "description": "Mobility", "language": "it"},
+    )
+
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "TEST Corrected"
+    assert updated.json()["description"] == "Mobility"
+    assert updated.json()["language"] == "it"

@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiPlus } from '@mdi/js'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { api } from '../api'
 import type { InviteGenerated, RoundIn } from '../types'
 import CzButton from './ui/CzButton.vue'
@@ -21,6 +21,12 @@ const expectedParticipants = ref(50)
 const tableCount = ref(10)
 const analysisInstructions = ref('')
 const rounds = ref<RoundIn[]>([{ title: 'Round 1', question: '', duration_minutes: 30 }])
+
+/* The component has no <form>, so the inputs' min/max never run — they only
+ * drive the spinner arrows. An assembly created with zero tables gets no Table
+ * rows, therefore no QR codes, therefore no phone can ever join it, and
+ * nothing in the UI can repair it afterwards. */
+const basicsValid = computed(() => !!name.value.trim() && tableCount.value >= 1)
 
 function addRound(): void {
 	rounds.value.push({
@@ -145,12 +151,15 @@ async function submit(): Promise<void> {
 				</div>
 				<div class="cz-field">
 					<label>Number of tables</label>
-					<input v-model.number="tableCount" type="number" min="0" max="200" />
+					<input v-model.number="tableCount" type="number" min="1" max="200" />
+					<span v-if="tableCount < 1" style="font-size: 0.78rem; color: var(--cz-orange)">
+						At least one table — each one gets a QR code, and phones join by scanning it.
+					</span>
 				</div>
 			</div>
 			<div class="cz-row" style="justify-content: flex-end; margin-top: 8px">
 				<CzButton variant="tertiary" @click="emit('cancel')">Cancel</CzButton>
-				<CzButton variant="primary" :disabled="!name.trim()" @click="step = 2">Continue</CzButton>
+				<CzButton variant="primary" :disabled="!basicsValid" @click="step = 2">Continue</CzButton>
 			</div>
 		</div>
 
@@ -188,7 +197,7 @@ async function submit(): Promise<void> {
 			<CzButton :icon="mdiPlus" @click="addRound">Add round</CzButton>
 			<div class="cz-row" style="justify-content: flex-end; margin-top: 20px">
 				<CzButton variant="tertiary" @click="step = 1">Back</CzButton>
-				<CzButton variant="primary" :disabled="saving" @click="submit">
+				<CzButton variant="primary" :disabled="saving || !basicsValid" @click="submit">
 					{{ saving ? 'Creating…' : 'Create assembly' }}
 				</CzButton>
 			</div>

@@ -4,6 +4,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { heldByAnotherDevice } from '../holding'
 import { useWakeLock } from '../useWakeLock'
 
 /*
@@ -44,11 +45,7 @@ const allRecorded = computed(() => rounds.value.length > 0 && !nextRound.value)
 
 /** A round this table is mid-way through on a device that is not this one —
  * the shape a replaced phone leaves behind until the table is released. */
-const recordingElsewhere = computed(() =>
-	rounds.value.some((round) =>
-		['RECORDING', 'FINALIZING', 'WAITING_FOR_CHUNKS'].includes(round.recorded_state ?? ''),
-	),
-)
+const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
 
 async function poll(): Promise<void> {
 	try {

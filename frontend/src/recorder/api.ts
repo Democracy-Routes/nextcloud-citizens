@@ -17,6 +17,10 @@ export interface RoundInfo {
 	status: string
 	/** state of this table's healthy recording for the round, null if none */
 	recorded_state?: string | null
+	/** whether that recording is this phone's own. The state above is scoped
+	 * to the TABLE, so without this a phone cannot tell its own recording from
+	 * the one left behind by a device it replaced. */
+	recorded_by_this_device?: boolean
 	/** this table's AI summary for the round ('' until analysis lands) */
 	table_summary?: string
 }

@@ -9,9 +9,11 @@ import {
 	mdiFileDocumentOutline,
 	mdiFilePdfBox,
 	mdiLockOpenVariantOutline,
+	mdiRefresh,
 } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
 import { api, BASE } from '../api'
+import { downloadBlob, downloadFromApi } from '../download'
 import { SLOW_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import { groupByType, TYPE_LABELS } from '../labels'
@@ -36,6 +38,8 @@ const confirmUnpublish = ref(false)
 const confirmReopen = ref(false)
 const confirmClose = ref(false)
 const publishing = ref(false)
+const refreshing = ref(false)
+const downloading = ref<'' | 'md' | 'pdf'>('')
 const closing = ref(false)
 
 const isFinal = computed(() => !!report.value?.is_final)
@@ -94,6 +98,26 @@ async function togglePublish(): Promise<void> {
 	}
 }
 
+/** Re-freeze the published version from the current content.
+ *
+ * Closing snapshots the report once, and reopening deliberately leaves that
+ * snapshot alone so phones keep showing exactly what they showed at closing.
+ * The consequence was a dead end: approve a finding after reopening, close
+ * again, and the phones still read the old version with nothing in the UI able
+ * to update it. The endpoint existed and had never been given a button. */
+async function refreshFinal(): Promise<void> {
+	refreshing.value = true
+	try {
+		await api.refreshFinalReport(props.assembly.id)
+		toast('The published version now matches the current report')
+		await reload()
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		refreshing.value = false
+	}
+}
+
 // shared deliberation-report vocabulary + grouped rendering order
 
 async function reload(): Promise<void> {
@@ -110,30 +134,34 @@ async function reload(): Promise<void> {
 const polling = usePolling(reload, { intervalMs: SLOW_MS })
 watch(includeDrafts, reload)
 
-function downloadMarkdown(): void {
-	window.open(
-		`${BASE}/api/v1/assemblies/${props.assembly.id}/report.md?include_drafts=${includeDrafts.value}`,
-		'_blank',
-	)
-}
-
-function downloadPdf(): void {
-	window.open(
-		`${BASE}/api/v1/assemblies/${props.assembly.id}/report.pdf?include_drafts=${includeDrafts.value}`,
-		'_blank',
-	)
+/** Fetched rather than window.open'd: a popup blocker swallows the new tab
+ * silently, and the organizer is left thinking the button is broken. */
+async function downloadReport(extension: 'md' | 'pdf'): Promise<void> {
+	const url = `${BASE}/api/v1/assemblies/${props.assembly.id}/report.${extension}?include_drafts=${includeDrafts.value}`
+	downloading.value = extension
+	try {
+		await downloadFromApi(url)
+	} catch {
+		if (!window.open(url, '_blank')) {
+			toast('The report could not be downloaded — check the pop-up blocker', 'error')
+		}
+	} finally {
+		downloading.value = ''
+	}
 }
 
 function downloadJson(): void {
 	if (!report.value) return
-	const blob = new Blob([JSON.stringify(report.value, null, 2)], { type: 'application/json' })
-	const url = URL.createObjectURL(blob)
-	const anchor = document.createElement('a')
-	anchor.href = url
-	anchor.download = `${props.assembly.name.slice(0, 40)}-report.json`
-	anchor.click()
-	URL.revokeObjectURL(url)
+	// downloadBlob, not a hand-rolled anchor: this one revoked the object URL
+	// on the next line and never put the anchor in the document, so Firefox
+	// and Safari cancelled the download before it started and said nothing.
+	downloadBlob(
+		new Blob([JSON.stringify(report.value, null, 2)], { type: 'application/json' }),
+		`${slug()}-report.json`,
+	)
 }
+
+const slug = () => props.assembly.name.slice(0, 40).replace(/ /g, '-')
 
 const hasContent = () =>
 	!!report.value &&
@@ -159,7 +187,8 @@ const hasContent = () =>
 					<strong>Final report · closed {{ closedDate() }}</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 						The session is closed: tables can no longer record, and this is the
-						definitive report. Participants keep reading this version even if you reopen.
+						definitive report. Participants keep reading this version even if you
+						reopen — approve more findings and press Update to push them.
 					</span>
 				</template>
 				<template v-else-if="progress?.complete">
@@ -185,14 +214,22 @@ const hasContent = () =>
 				@click="confirmClose = true">
 				Close session &amp; create final report
 			</CzButton>
-			<CzButton
-				v-else
-				variant="tertiary"
-				:icon="mdiLockOpenVariantOutline"
-				:disabled="closing"
-				@click="confirmReopen = true">
-				Reopen session
-			</CzButton>
+			<div v-else class="cz-row" style="flex-wrap: nowrap">
+				<CzButton
+					variant="tertiary"
+					:icon="mdiRefresh"
+					:disabled="refreshing || closing"
+					@click="refreshFinal">
+					{{ refreshing ? 'Updating…' : 'Update the published version' }}
+				</CzButton>
+				<CzButton
+					variant="tertiary"
+					:icon="mdiLockOpenVariantOutline"
+					:disabled="closing"
+					@click="confirmReopen = true">
+					Reopen session
+				</CzButton>
+			</div>
 		</div>
 
 		<div class="cz-row cz-row--spread" style="margin-bottom: 16px">
@@ -201,9 +238,19 @@ const hasContent = () =>
 				Include unreviewed drafts (clearly marked)
 			</label>
 			<div class="cz-row">
-				<CzButton small :icon="mdiFilePdfBox" :disabled="!isFinal" @click="downloadPdf">PDF</CzButton>
-				<CzButton small :icon="mdiDownloadOutline" :disabled="!isFinal" @click="downloadMarkdown">
-					Markdown
+				<CzButton
+					small
+					:icon="mdiFilePdfBox"
+					:disabled="!isFinal || !!downloading"
+					@click="downloadReport('pdf')">
+					{{ downloading === 'pdf' ? 'Preparing…' : 'PDF' }}
+				</CzButton>
+				<CzButton
+					small
+					:icon="mdiDownloadOutline"
+					:disabled="!isFinal || !!downloading"
+					@click="downloadReport('md')">
+					{{ downloading === 'md' ? 'Preparing…' : 'Markdown' }}
 				</CzButton>
 				<CzButton small :icon="mdiCodeJson" :disabled="!isFinal" @click="downloadJson">JSON</CzButton>
 			</div>

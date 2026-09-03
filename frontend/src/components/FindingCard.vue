@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiCheck, mdiChevronDown, mdiChevronUp, mdiClose, mdiPencilOutline } from '@mdi/js'
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { api } from '../api'
 import { timestamp } from '../format'
 import { TYPE_LABELS } from '../labels'
@@ -12,7 +12,7 @@ import CzStatusPill from './ui/CzStatusPill.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ finding: FindingData }>()
-const emit = defineEmits<{ changed: [] }>()
+const emit = defineEmits<{ changed: []; editing: [open: boolean] }>()
 
 const showEvidence = ref(false)
 const editing = ref(false)
@@ -29,18 +29,32 @@ const STATUS_MAP: Record<string, string> = {
 	DRAFT: 'PROCESSING', APPROVED: 'COMPLETE', EDITED_AND_APPROVED: 'COMPLETE', REJECTED: 'UPLOAD_INCOMPLETE',
 }
 
+/** The parent pauses its poll while this is open. A re-analysis deletes the
+ * draft findings it replaces, so a refresh mid-edit unmounts this card and the
+ * typed text goes with it. */
+function setEditing(open: boolean): void {
+	editing.value = open
+	emit('editing', open)
+}
+
 function startEdit(): void {
-	editing.value = true
 	editTitle.value = props.finding.title
 	editSummary.value = props.finding.summary
+	setEditing(true)
 }
+
+// a card can vanish for reasons of its own — a round change, the tab closing.
+// Without this the parent would hold its id and never poll again.
+onBeforeUnmount(() => {
+	if (editing.value) emit('editing', false)
+})
 
 async function apply(payload: { status?: string; title?: string; summary?: string }, note: string): Promise<void> {
 	busy.value = true
 	try {
 		await api.updateFinding(props.finding.id, payload)
 		toast(note)
-		editing.value = false
+		setEditing(false)
 		emit('changed')
 	} catch (err) {
 		toast(err instanceof Error ? err.message : String(err), 'error')
@@ -57,7 +71,7 @@ async function apply(payload: { status?: string; title?: string; summary?: strin
 			<div class="cz-field"><label>Title</label><input v-model="editTitle" type="text" /></div>
 			<div class="cz-field"><label>Summary</label><textarea v-model="editSummary" rows="3"></textarea></div>
 			<div class="cz-row" style="justify-content: flex-end">
-				<CzButton variant="tertiary" small @click="editing = false">Cancel</CzButton>
+				<CzButton variant="tertiary" small @click="setEditing(false)">Cancel</CzButton>
 				<CzButton
 					variant="primary"
 					small

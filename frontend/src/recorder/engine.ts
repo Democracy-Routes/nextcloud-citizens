@@ -102,7 +102,12 @@ export class RecorderEngine {
 		this.kickUploader()
 	}
 
-	async start(token: string, roundId: string, assemblyId: string): Promise<void> {
+	async start(
+		token: string,
+		roundId: string,
+		assemblyId: string,
+		tableNumber: number,
+	): Promise<void> {
 		this.assemblyId = assemblyId
 		this.token = token
 		const mimeType = pickMimeType()
@@ -127,7 +132,10 @@ export class RecorderEngine {
 			recordingId: started.recording_id,
 			assemblyId,
 			roundId,
-			tableNumber: 0,
+			// this recording's table, not the phone's current one: a phone can
+			// record table 3, be handed to table 7 later, and still hold the
+			// first recording's audio locally
+			tableNumber,
 			mimeType,
 			startedAt: this.state.startedAt,
 			finishedAt: null,
