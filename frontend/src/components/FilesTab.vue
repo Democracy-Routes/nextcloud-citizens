@@ -1,6 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
+import { roundHeading } from '../labels'
 import {
 	mdiCellphoneRemove,
 	mdiDeleteOutline,
@@ -334,7 +335,7 @@ async function deleteAll(): Promise<void> {
 			<div v-for="round in listing.rounds" :key="round.id">
 				<div v-if="round.tables.length" class="cz-card">
 					<h3 style="margin-bottom: 10px">
-						Round {{ round.position }} — {{ round.title || 'Untitled' }}
+						{{ roundHeading(round.position, round.title) }}
 					</h3>
 					<table class="cz-table">
 						<thead>

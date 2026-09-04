@@ -16,7 +16,7 @@ import { api, BASE } from '../api'
 import { downloadBlob, downloadFromApi } from '../download'
 import { SLOW_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
-import { groupByType, TYPE_LABELS } from '../labels'
+import { TYPE_LABELS, groupByType, roundHeading } from '../labels'
 import type { AssemblyDetail, ReportData } from '../types'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzButton from './ui/CzButton.vue'
@@ -316,7 +316,7 @@ const hasContent = () =>
 				<div
 					v-if="round.cross_table.length || round.summary || round.tables.some((t) => t.findings.length || t.summary)"
 					class="cz-card">
-					<h3>Round {{ round.position }} — {{ round.title || 'Untitled' }}</h3>
+					<h3>{{ roundHeading(round.position, round.title) }}</h3>
 					<p v-if="round.question" class="cz-muted" style="font-style: italic; margin: 4px 0 14px">
 						“{{ round.question }}”
 					</p>

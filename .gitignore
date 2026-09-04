@@ -17,6 +17,11 @@ frontend/dist/
 
 # App runtime data (never commit recordings, DBs, logs, secrets)
 persistent_storage/
+# Generated reports and anything dropped here for review: a report carries
+# transcript quotes verbatim, including names people said out loud. This repo
+# is public.
+.orca/
+*-report-*.pdf
 *.db
 *.db-wal
 *.db-shm

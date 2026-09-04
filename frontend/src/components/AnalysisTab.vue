@@ -1,6 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
+import { roundHeading } from '../labels'
 import { mdiBrain, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiRefresh } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
@@ -133,7 +134,7 @@ const anyAnalyzing = () =>
 		<div class="cz-row" style="margin-bottom: 16px">
 			<select v-model="roundId" style="min-width: 220px">
 				<option v-for="round in assembly.rounds" :key="round.id" :value="round.id">
-					Round {{ round.position }} — {{ round.title || 'Untitled' }}
+					{{ roundHeading(round.position, round.title) }}
 				</option>
 			</select>
 			<template v-if="data">

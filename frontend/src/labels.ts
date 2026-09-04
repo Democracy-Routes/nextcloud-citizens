@@ -46,3 +46,20 @@ export function groupByType<T extends { type: string }>(
 	if (leftover.length) groups.push({ type: 'other', label: 'Other findings', findings: leftover })
 	return groups
 }
+
+/** How a round is named wherever it is shown.
+ *
+ * Mirrors round_heading() in citizens/services/report.py — the two must agree,
+ * or the same round is called different things on screen and in the export.
+ *
+ * The app manufactures its own redundancy here: both round-creation paths
+ * pre-fill the title with "Round N", so an organizer who edits it to
+ * "Round 1 - design" got "Round 1 — Round 1 - design" everywhere.
+ */
+export function roundHeading(position: number, title: string): string {
+	const name = (title ?? '').trim()
+	if (!name) return `Round ${position}`
+	const first = name.split(/\s+/)[0].replace(/[.:\-–—]+$/, '')
+	if (name.toLowerCase().startsWith(`round ${position}`) || first === String(position)) return name
+	return `Round ${position} — ${name}`
+}

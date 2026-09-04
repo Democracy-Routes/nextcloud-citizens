@@ -1,6 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
+import { roundHeading } from '../labels'
 import { mdiContentCopy, mdiShuffleVariant, mdiTableFurniture } from '@mdi/js'
 import { onMounted, ref, watch } from 'vue'
 import { api } from '../api'
@@ -86,7 +87,7 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 		<div class="cz-row" style="margin-bottom: 16px">
 			<select v-model="roundId" style="min-width: 220px">
 				<option v-for="round in assembly.rounds" :key="round.id" :value="round.id">
-					Round {{ round.position }} — {{ round.title || 'Untitled' }}
+					{{ roundHeading(round.position, round.title) }}
 				</option>
 			</select>
 			<CzButton variant="primary" small :icon="mdiShuffleVariant" :disabled="busy || !roundId" @click="randomize">

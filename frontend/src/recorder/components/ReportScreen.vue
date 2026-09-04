@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { mdiDownloadOutline, mdiFileDocumentOutline } from '@mdi/js'
 import { onMounted, ref } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
-import { groupByType, TYPE_LABELS } from '../../labels'
+import { TYPE_LABELS, groupByType, roundHeading } from '../../labels'
 import { recorderApi, type JoinResult, type PublishedReport } from '../api'
 import { downloadBlob } from '../../download'
 
@@ -73,7 +73,7 @@ async function downloadPdf(): Promise<void> {
 
 				<div v-for="round in report.rounds" :key="round.position" class="rc-card">
 					<p class="rc-eyebrow" style="margin-bottom: 4px">
-						Round {{ round.position }} — {{ round.title || 'Untitled' }}
+						{{ roundHeading(round.position, round.title) }}
 					</p>
 					<p v-if="round.question" class="rc-question" style="margin: 0 0 10px">
 						{{ round.question }}

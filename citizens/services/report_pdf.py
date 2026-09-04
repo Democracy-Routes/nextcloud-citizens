@@ -20,7 +20,7 @@ from pathlib import Path
 
 from fpdf import FPDF
 
-from citizens.services.report import TYPE_LABELS_SINGULAR, group_findings_by_type
+from citizens.services.report import TYPE_LABELS_SINGULAR, group_findings_by_type, round_heading
 
 _FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 
@@ -80,13 +80,44 @@ class _ReportPDF(FPDF):
             new_x="LMARGIN", new_y="NEXT",
         )
 
+    def block_height(self, text: str, size: float = 10.5, style: str = "",
+                     height: float = 5.2, indent: float = 0) -> float:
+        """How tall text_block() would be, without drawing anything.
+
+        fpdf2's dry run reports the height and leaves the cursor alone. Used
+        instead of unbreakable()/offset_rendering(), which work by duplicating
+        the output buffer — needless here, and this runs on a small host.
+        """
+        self.set_font(self.family, style, size)
+        return float(
+            self.multi_cell(
+                self.w - self.l_margin - self.r_margin - indent, height, text,
+                dry_run=True, output="HEIGHT", new_x="LMARGIN", new_y="NEXT",
+            )
+        )
+
+    def keep_together(self, needed: float) -> bool:
+        """Start a new page if `needed` mm will not fit on this one.
+
+        Returns whether it did, so a caller that draws its own decoration knows
+        the block is now on a single page. A block taller than a whole page
+        cannot be kept together at all — say so rather than looping.
+        """
+        if needed > self.eph:
+            return False
+        if self.will_page_break(needed):
+            self.add_page()
+        return True
+
     def eyebrow(self, text: str, color: tuple = MUTED) -> None:
         self.set_font(self.family, "B", 8)
         self.set_text_color(*color)
         self.cell(0, 5, text.upper(), new_x="LMARGIN", new_y="NEXT")
 
     def section_banner(self, title: str) -> None:
-        if self.get_y() > self.h - 55:
+        # a banner alone at the foot of a page is just a heading with nothing
+        # under it: reserve the banner plus a couple of lines of what follows
+        if self.will_page_break(10 + 3 + 16):
             self.add_page()
         self.ln(5)
         self.set_fill_color(*ACCENT)
@@ -115,7 +146,9 @@ class _ReportPDF(FPDF):
 
 
 def _finding(pdf: _ReportPDF, finding: dict, cross: bool) -> None:
-    if pdf.get_y() > pdf.h - 40:
+    # enough for the badge, the title and the first line of the summary; the
+    # evidence block below measures itself
+    if pdf.will_page_break(6 + 5.4 + 5):
         pdf.add_page()
     label = TYPE_LABELS_SINGULAR.get(finding["type"], finding["type"])
     color = BADGE_COLORS.get(finding["type"], MUTED)
@@ -130,21 +163,40 @@ def _finding(pdf: _ReportPDF, finding: dict, cross: bool) -> None:
             size=8.5, style="B", color=color, height=4.4,
         )
     pdf.text_block(finding["summary"], height=5)
-    quotes = finding["evidence"][:5]
+    # already chosen and capped by report._quotes(); do not re-truncate here
+    quotes = finding["evidence"]
     if not quotes and finding.get("evidence_removed"):
         pdf.text_block("Evidence removed with the transcript.", size=9, color=MUTED, height=4.6,
                        indent=5)
     if quotes:
-        y_start = pdf.get_y() + 1
+        lines = [
+            f"[{evidence['timestamp']}] {evidence['speaker'] or 'Speaker'}: “{evidence['text']}”"
+            for evidence in quotes
+        ]
+        # The accent bar is one line() from where the quotes began to where they
+        # ended, and both are page-agnostic. When the block straddled a page
+        # break, get_y() had reset to the top of the NEW page, so the bar was
+        # drawn there running almost its full height — and the page that
+        # actually held the first quotes got no bar at all. Measured in a real
+        # report: 627, 649 and 663pt bars on an 842pt page.
+        #
+        # Keeping the block on one page fixes the bar and reads better; a
+        # citation split across a page break is hard to follow either way.
+        heights = [pdf.block_height(line, size=9, height=4.6, indent=5) for line in lines]
+        whole = pdf.keep_together(sum(heights) + 1)
         pdf.ln(1)
-        for evidence in quotes:
-            speaker = evidence["speaker"] or "Speaker"
-            pdf.text_block(
-                f"[{evidence['timestamp']}] {speaker}: “{evidence['text']}”",
-                size=9, color=MUTED, height=4.6, indent=5,
-            )
         pdf.set_draw_color(*color)
         pdf.set_line_width(0.7)
+        y_start = pdf.get_y()
+        for line, line_height in zip(lines, heights, strict=True):
+            if not whole and pdf.will_page_break(line_height):
+                # Taller than a page even after truncation to five quotes: close
+                # the bar off here and start it again after the break, so every
+                # page carries the segment that belongs to it.
+                pdf.line(pdf.l_margin + 1.5, y_start, pdf.l_margin + 1.5, pdf.get_y() - 0.5)
+                pdf.add_page()
+                y_start = pdf.get_y()
+            pdf.text_block(line, size=9, color=MUTED, height=4.6, indent=5)
         pdf.line(pdf.l_margin + 1.5, y_start, pdf.l_margin + 1.5, pdf.get_y() - 0.5)
     pdf.ln(3)
 
@@ -194,12 +246,18 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             size=9, style="B", color=AMBER, height=4.6,
         )
     generated = datetime.now(UTC).strftime("%-d %B %Y")
-    pdf.text_block(
-        f"{generated} · {assembly['participants']} participants (expected "
-        f"{assembly['expected_participants']}) · {assembly['tables']} tables · "
-        f"{assembly['language'].upper()}",
-        size=9.5, color=MUTED,
-    )
+    # The participant count is a live count of the organizer's roster, and
+    # recording a table creates no roster entry — so an assembly that ran
+    # perfectly well without one announced "0 participants (expected 50)" on
+    # the cover of its final report. Say nothing rather than say zero.
+    meta = [generated]
+    if assembly["participants"]:
+        meta.append(
+            f"{assembly['participants']} participants "
+            f"(expected {assembly['expected_participants']})"
+        )
+    meta += [f"{assembly['tables']} tables", assembly["language"].upper()]
+    pdf.text_block(" · ".join(meta), size=9.5, color=MUTED)
     if progress.get("tables_expected"):
         pdf.text_block(
             f"{progress.get('tables_contributed', 0)} of "
@@ -225,7 +283,7 @@ def render_pdf(report: dict, logo_path: Path | None = None,
         pdf.ln(1.5)
         for round_ in summaries:
             pdf.text_block(
-                f"Round {round_['position']} — {round_['title'] or 'Untitled'}",
+                round_heading(round_["position"], round_["title"]),
                 size=10.5, style="B", height=5,
             )
             pdf.text_block(round_["summary"], height=5)
@@ -233,7 +291,7 @@ def render_pdf(report: dict, logo_path: Path | None = None,
 
     # ---- rounds ----
     for round_ in report["rounds"]:
-        pdf.section_banner(f"Round {round_['position']} — {round_['title'] or 'Untitled'}")
+        pdf.section_banner(round_heading(round_["position"], round_["title"]))
         if round_["question"]:
             pdf.text_block(f"“{round_['question']}”", size=11.5, style="B", color=ACCENT)
             pdf.ln(1.5)
@@ -268,11 +326,18 @@ def render_pdf(report: dict, logo_path: Path | None = None,
         ):
             pdf.text_block("No findings for this round yet.", color=MUTED)
 
+    # The rule and the note are one thing. Drawn without measuring, the rule
+    # landed near the foot of the page and the note overflowed, leaving two
+    # orphaned lines on a page of their own. Its length varies run to run —
+    # _methodology_note() appends a paragraph for live captions and another for
+    # a replaced device — so a fixed margin would not have held either.
+    note = report["methodology_note"]
     pdf.ln(5)
+    pdf.keep_together(pdf.block_height(note, size=8.5, height=4.4) + 3)
     pdf.set_draw_color(*MUTED)
     pdf.set_line_width(0.2)
     pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
     pdf.ln(3)
-    pdf.text_block(report["methodology_note"], size=8.5, color=MUTED, height=4.4)
+    pdf.text_block(note, size=8.5, color=MUTED, height=4.4)
 
     return bytes(pdf.output())

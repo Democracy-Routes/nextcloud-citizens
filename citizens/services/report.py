@@ -101,6 +101,73 @@ DEVICE_REPLACED_NOTE = (
 )
 
 
+#: Quotes printed under a finding. Five is what fits without the citation
+#: swamping the finding it supports.
+def round_heading(position: int, title: str) -> str:
+    """How a round is named wherever it is shown.
+
+    The app manufactures its own redundancy here: both round-creation paths
+    pre-fill the title with "Round N", so an organizer who edits it to
+    "Round 1 - design" gets "Round 1 — Round 1 - design" on every screen and in
+    every export. When the title already opens with this round's number, it is
+    the whole heading.
+    """
+    name = (title or "").strip()
+    if not name:
+        return f"Round {position}"
+    first = name.split()[0].rstrip(".:-–—") if name.split() else ""
+    if name.lower().startswith(f"round {position}") or first == str(position):
+        return name
+    return f"Round {position} — {name}"
+
+
+#: Quotes printed under a finding. Five is what fits without the citation
+#: swamping the finding it supports.
+MAX_QUOTES = 5
+
+#: An utterance shorter than this says nothing on its own. "Yes.", "Also…" and
+#: "And so this is cool." were all printed as evidence for real findings in a
+#: real report — a citation a reader can check and find empty damages the claim
+#: more than no citation would.
+MIN_QUOTE_CHARS = 25
+
+
+def _quotes(cited: list[TranscriptSegment]) -> list[dict]:
+    """The excerpts printed under a finding, best first-to-last.
+
+    Two bugs met here. FindingEvidence has no ordering column and the
+    relationship declares no order_by, so rows came back in insertion order —
+    and they are inserted over `sorted(evidence_ids)`, which sorts random
+    UUIDs. Truncating that with [:5] printed five ARBITRARY quotes in an
+    arbitrary order, which is why the timestamps ran 04:35, 09:59, 04:25.
+
+    So: prefer excerpts that carry something, then read them back in the order
+    they were said. Substance is chosen first and chronology restored after,
+    because choosing chronologically would just print the first five.
+
+    Sorted within a transcript, not across: start_seconds is relative to its own
+    recording, and a table that changed device mid-round has two timelines that
+    would interleave wrongly.
+    """
+    def spoken_order(segment: TranscriptSegment) -> tuple:
+        return (segment.transcript_id, segment.start_seconds)
+
+    substantial = [s for s in cited if len(s.text.strip()) >= MIN_QUOTE_CHARS]
+    # never leave a finding uncited: if every excerpt is short, the longest
+    # available still says more about it than nothing does
+    pool = substantial or cited
+    chosen = sorted(pool, key=lambda s: len(s.text.strip()), reverse=True)[:MAX_QUOTES]
+    return [
+        {
+            "speaker": segment.speaker_label,
+            "start": segment.start_seconds,
+            "timestamp": _timestamp(segment.start_seconds),
+            "text": segment.text,
+        }
+        for segment in sorted(chosen, key=spoken_order)
+    ]
+
+
 def _methodology_note(session: Session, assembly: Assembly) -> str:
     """The standing note, plus whatever was unusual about THIS assembly."""
     note = METHODOLOGY_NOTE
@@ -195,16 +262,13 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             # the quotes went away with a deleted/replaced transcript — say so
             # rather than rendering a finding that looks unsupported
             "evidence_removed": finding.evidence_removed_at is not None,
-            "evidence": [
-                {
-                    "speaker": segments[e.transcript_segment_id].speaker_label,
-                    "start": segments[e.transcript_segment_id].start_seconds,
-                    "timestamp": _timestamp(segments[e.transcript_segment_id].start_seconds),
-                    "text": segments[e.transcript_segment_id].text,
-                }
-                for e in finding.evidence
-                if e.transcript_segment_id in segments
-            ],
+            "evidence": _quotes(
+                [
+                    segments[e.transcript_segment_id]
+                    for e in finding.evidence
+                    if e.transcript_segment_id in segments
+                ]
+            ),
         }
 
     rounds_payload = []
@@ -299,7 +363,15 @@ def render_markdown(report: dict) -> str:
         "",
         f"- Tables contributing: {coverage.get('tables_contributed', 0)} of "
         f"{coverage.get('tables_expected', 0)}",
-        f"- Participants: {assembly['participants']} (expected {assembly['expected_participants']})",
+        # only when a roster was imported: "0 participants (expected 50)" on a
+        # report of a real discussion reads as a failure, and it is not one —
+        # recording a table creates no Participant row
+        *(
+            [f"- Participants: {assembly['participants']} "
+             f"(expected {assembly['expected_participants']})"]
+            if assembly["participants"]
+            else []
+        ),
         f"- Tables: {assembly['tables']}",
         f"- Language: {assembly['language'].upper()}",
         "",
@@ -309,7 +381,7 @@ def render_markdown(report: dict) -> str:
         "",
     ]
     for round_ in report["rounds"]:
-        lines += [f"## Round {round_['position']} — {round_['title'] or 'Untitled'}", ""]
+        lines += [f"## {round_heading(round_['position'], round_['title'])}", ""]
         if round_["question"]:
             lines += [f"> {round_['question']}", ""]
         if round_["summary"]:
@@ -346,7 +418,7 @@ def _markdown_finding(finding: dict, cross: bool) -> list[str]:
     if cross and finding["mentioned_table_count"]:
         lines.insert(2, f"Mentioned at {finding['mentioned_table_count']} table(s).")
         lines.insert(3, "")
-    for evidence in finding["evidence"][:5]:
+    for evidence in finding["evidence"]:
         speaker = evidence["speaker"] or "Speaker"
         lines += [f"> [{evidence['timestamp']}] {speaker}: “{evidence['text']}”", ""]
     if not finding["evidence"] and finding.get("evidence_removed"):
