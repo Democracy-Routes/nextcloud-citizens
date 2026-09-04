@@ -317,3 +317,64 @@ def test_an_unrecorded_round_is_owned_by_nobody(client, table_recording):
 
     assert idle["recorded_state"] is None
     assert idle["recorded_by_this_device"] is False
+
+
+# ------------------------------- a phone reclaiming its own interrupted round
+
+
+def test_a_phone_can_restart_its_own_round_without_waiting(client, table_recording):
+    """A table that reloaded mid-round was told, by itself, that it had already
+    recorded — and nothing released it for two minutes. In orchestrated mode the
+    round could be over by then, so a dropped connection cost the table the rest
+    of the discussion. The wait exists to stop a DIFFERENT phone taking a live
+    table; it has nothing to say about one reclaiming its own work."""
+    same_phone = table_recording["headers"]
+
+    response = _start(client, same_phone, table_recording["round_id"])
+
+    assert response.status_code == 201, response.text
+    assert response.json()["recording_id"] != table_recording["recording_id"]
+
+
+def test_reclaiming_keeps_the_audio_already_uploaded(client, table_recording):
+    state, error = _state(table_recording["recording_id"])
+    assert state == "RECORDING"
+
+    _start(client, table_recording["headers"], table_recording["round_id"])
+
+    # salvaged the same way a replaced device is: parked for its chunks, not
+    # discarded, so the first half of the round still becomes a transcript
+    state, error = _state(table_recording["recording_id"])
+    assert state == "UPLOAD_INCOMPLETE"
+    assert error == "DEVICE_REJOINED"
+
+
+def test_another_phone_still_waits_its_two_minutes(client, table_recording):
+    """The guard this relaxes must still hold for a different device."""
+    second = _rejoin(client, table_recording["assembly"])
+
+    response = _start(client, second, table_recording["round_id"])
+
+    assert response.status_code == 409
+    assert "already recorded" in response.json()["detail"]
+
+
+def test_a_phone_cannot_re_record_a_round_it_finished(client, table_recording):
+    """The reclaim is scoped to a recording still in progress. Once the audio is
+    assembled the table HAS recorded the round, and starting again would throw
+    finished work away to record over it."""
+    headers = table_recording["headers"]
+    recording_id = table_recording["recording_id"]
+    client.post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/complete",
+        json={"total_chunks": 1},
+        headers=headers,
+    )
+    with session_scope() as session:
+        recording = session.get(Recording, recording_id)
+        recording.state = "AUDIO_READY"
+
+    response = _start(client, headers, table_recording["round_id"])
+
+    assert response.status_code == 409
+    assert "already recorded" in response.json()["detail"]

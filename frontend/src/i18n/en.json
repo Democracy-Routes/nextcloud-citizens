@@ -12,7 +12,7 @@
 			"transcriptSelfHosted": "The written transcript is summarised by AI on this organisation's own server.",
 			"retentionDays": "The audio recording is deleted {days} days after the assembly ends. | The audio recording is deleted one day after the assembly ends. | The audio recording is deleted {days} days after the assembly ends.",
 			"retentionForever": "The audio recording is kept until an organiser deletes it.",
-			"speakers": "Speakers are labelled only as “Speaker 1”, “Speaker 2” and so on. Nobody's name is attached to what they said unless an organiser adds it.",
+			"speakers": "Speakers are labelled only as “Speaker 1”, “Speaker 2” and so on — the recording is not linked to your identity. Names people say out loud are written down as spoken, so if somebody says your name it will appear in the transcript.",
 			"reviewed": "Nothing is published until a person has reviewed it.",
 			"ask": "Please make sure everyone at the table has heard this before you begin.",
 			"agree": "Everyone at this table agrees — continue",

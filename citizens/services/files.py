@@ -138,6 +138,19 @@ def list_files(session: Session, assembly: Assembly) -> dict:
             "audio_bytes": total_bytes,
             "audio_deleted": deleted_count,
         },
+        # Coverage used to be returned only by the POST that asks the phones to
+        # clear. Closing now asks by itself, so there is no button press to
+        # carry it back — and a purge nobody can see the outcome of is a purge
+        # nobody can act on when a phone still holds something.
+        "device_audio": {
+            "purge_requested_at": (
+                assembly.device_audio_purge_requested_at.isoformat()
+                if assembly.device_audio_purge_requested_at
+                else None
+            ),
+            "auto_purge": assembly.auto_purge_device_audio,
+            **device_audio_coverage(session, assembly),
+        },
         "rounds": [
             {
                 "id": round_.id,

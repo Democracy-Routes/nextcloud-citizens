@@ -27,6 +27,8 @@ export interface Assembly {
 	expected_participants: number
 	default_table_count: number
 	analysis_instructions: string
+	auto_purge_device_audio: boolean
+	redact_names: string
 	closed_at: string | null
 	created_by: string
 	created_at: string
@@ -62,8 +64,23 @@ export interface FileEntry {
 	can_retranscribe: boolean
 }
 
+/** How far a request to clear the phones actually reached.
+ *
+ * Coverage, never completion: a phone closed and carried out of the building
+ * never receives the request at all. */
+export interface DeviceAudioCoverage {
+	devices: number
+	cleared: number
+	still_holding: number
+	unknown: number
+}
+
 export interface FilesListing {
 	totals: { recordings: number; audio_bytes: number; audio_deleted: number }
+	device_audio: DeviceAudioCoverage & {
+		purge_requested_at: string | null
+		auto_purge: boolean
+	}
 	rounds: Array<{ id: string; position: number; title: string; tables: FileEntry[] }>
 }
 
@@ -78,6 +95,8 @@ export interface AssemblyUpdate {
 	expected_participants?: number
 	default_table_count?: number
 	analysis_instructions?: string
+	auto_purge_device_audio?: boolean
+	redact_names?: string
 	audio_retention_days?: number | null
 }
 

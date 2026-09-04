@@ -22,7 +22,7 @@ from citizens.db.models import (
 from citizens.domain.analysis_schemas import RoundAnalysis, TableAnalysis
 from citizens.logging_setup import get_logger
 from citizens.providers.analysis.openai_compat import AnalysisError, chat_json
-from citizens.services import provider_config
+from citizens.services import provider_config, pseudonyms
 
 log = get_logger(__name__)
 
@@ -217,6 +217,11 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     round_ = session.get(Round, recording.round_id)
     language = LANGUAGE_NAMES.get(assembly.language if assembly else "en", "English")
     valid_ids = {segment.id for segment in segments}
+    # Names people say out loud are in the transcript, and the transcript is
+    # what leaves the server. The stored text is untouched — this masks only
+    # the copy composed into the prompt, so the report's quotes still show what
+    # the table actually said.
+    hidden = pseudonyms.name_map(session, assembly) if assembly else {}
 
     lines: list[str] = []
     for index, transcript in enumerate(transcripts):
@@ -224,7 +229,8 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
             lines.append(DEVICE_CHANGE_MARKER)
         lines.extend(
             f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
-            f"({_timestamp(block['start'])}-{_timestamp(block['end'])}): {block['text']}"
+            f"({_timestamp(block['start'])}-{_timestamp(block['end'])}): "
+            f"{pseudonyms.redact(block['text'], hidden)}"
             for block in coalesce_segments(list(transcript.segments))
         )
     user_prompt = (
@@ -330,8 +336,13 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
     total_tables = len({f.table_id for f in table_findings if f.table_id})
     table_numbers = _table_numbers(session, round_)
 
+    # the table findings were drafted from already-masked text, but a name may
+    # have been added to the list since, or typed into a human edit
+    hidden = pseudonyms.name_map(session, assembly) if assembly else {}
     lines = [
-        f"[{f.id}] table {table_numbers.get(f.table_id or '', '?')} · {f.type} · {f.title}: {f.summary[:400]}"
+        f"[{f.id}] table {table_numbers.get(f.table_id or '', '?')} · {f.type} · "
+        f"{pseudonyms.redact(f.title, hidden)}: "
+        f"{pseudonyms.redact(f.summary, hidden)[:400]}"
         for f in table_findings
     ]
     user_prompt = (

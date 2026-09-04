@@ -158,3 +158,76 @@ def test_an_untouched_assembly_never_asks_its_phones_to_clear(client):
     with session_scope() as session:
         db_assembly = session.get(Assembly, assembly["id"])
         assert db_assembly.device_audio_purge_requested_at is None
+
+
+# ------------------------------------------ asking automatically when closing
+
+
+def _closed_assembly(client, auto: bool = True):
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST Auto purge",
+            "default_table_count": 1,
+            "auto_purge_device_audio": auto,
+            "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}],
+        },
+    ).json()
+    client.post(f"/api/v1/assemblies/{assembly['id']}/close")
+    return assembly
+
+
+def _purge_requested(client, assembly_id) -> bool:
+    listing = client.get(f"/api/v1/assemblies/{assembly_id}/files").json()
+    return listing["device_audio"]["purge_requested_at"] is not None
+
+
+def test_closing_asks_the_phones_by_itself(client):
+    assembly = _closed_assembly(client)
+
+    assert _purge_requested(client, assembly["id"])
+
+
+def test_closing_asks_nothing_when_the_organizer_turned_it_off(client):
+    assembly = _closed_assembly(client, auto=False)
+
+    assert not _purge_requested(client, assembly["id"])
+
+
+def test_reopening_withdraws_the_request(client):
+    """The flag the phones read is a bare "was this asked for", never
+    re-checked against closed_at. Left standing through a reopen, every phone
+    joining the reopened assembly is still told to delete — and would clear each
+    NEW recording the moment it reached AUDIO_READY, in the middle of a round."""
+    assembly = _closed_assembly(client)
+    assert _purge_requested(client, assembly["id"])
+
+    client.delete(f"/api/v1/assemblies/{assembly['id']}/close")
+
+    assert not _purge_requested(client, assembly["id"])
+
+
+def test_a_phone_joining_a_reopened_assembly_is_not_told_to_purge(client):
+    """The same thing, seen from where it actually matters."""
+    import re
+
+    assembly = _closed_assembly(client)
+    client.delete(f"/api/v1/assemblies/{assembly['id']}/close")
+    invites = client.post(f"/api/v1/assemblies/{assembly['id']}/invites/generate").json()
+    token = re.search(r"#/join/(.+)$", invites[0]["url"]).group(1)
+
+    joined = client.post(
+        "/api/v1/public/join", json={"token": token}, headers={"X-Origin-IP": "203.0.113.9"}
+    )
+
+    assert joined.status_code == 200, joined.text
+    assert joined.json()["purge_local_audio"] is False
+
+
+def test_closing_again_after_a_reopen_asks_again(client):
+    assembly = _closed_assembly(client)
+    client.delete(f"/api/v1/assemblies/{assembly['id']}/close")
+
+    client.post(f"/api/v1/assemblies/{assembly['id']}/close")
+
+    assert _purge_requested(client, assembly["id"])

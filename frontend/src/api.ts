@@ -130,6 +130,10 @@ export const api = {
 		request<RoundFindings>('GET', `/api/v1/rounds/${roundId}/findings`),
 	updateFinding: (findingId: string, payload: { status?: string; title?: string; summary?: string }) =>
 		request<unknown>('PUT', `/api/v1/findings/${findingId}`, payload),
+	approveDrafts: (roundId: string, tableNumber?: number) =>
+		request<{ approved: number }>('POST', `/api/v1/rounds/${roundId}/findings/approve`, {
+			table_number: tableNumber ?? null,
+		}),
 	requestAnalysis: (roundId: string, force = false) =>
 		request<{ queued: number }>('POST', `/api/v1/rounds/${roundId}/analyze`, { force }),
 	assemblyReport: (assemblyId: string, includeDrafts: boolean) =>

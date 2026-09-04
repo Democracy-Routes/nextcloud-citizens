@@ -899,3 +899,8 @@
    found. These are rem so that setting applies. */
 #citizens-app .cz-text-sm { font-size: 0.8125rem; }
 #citizens-app .cz-text-xs { font-size: 0.75rem; }
+
+/* A table that started noticeably later than the others: rounds are started by
+   hand per table, so they end at different times — participants reported that
+   as unfair, and the facilitator had no way to see the drift. */
+#citizens-app .cz-drifted { color: var(--cz-amber); font-weight: 600; }

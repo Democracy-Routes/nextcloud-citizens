@@ -12,7 +12,7 @@
 			"transcriptSelfHosted": "La trascrizione scritta viene sintetizzata dall'intelligenza artificiale sul server di questa organizzazione.",
 			"retentionDays": "La registrazione audio viene eliminata {days} giorni dopo la fine dell'assemblea. | La registrazione audio viene eliminata un giorno dopo la fine dell'assemblea. | La registrazione audio viene eliminata {days} giorni dopo la fine dell'assemblea.",
 			"retentionForever": "La registrazione audio viene conservata finché un organizzatore non la elimina.",
-			"speakers": "Chi parla è indicato solo come «Voce 1», «Voce 2» e così via. Nessun nome viene associato a ciò che è stato detto, a meno che un organizzatore non lo aggiunga.",
+			"speakers": "Chi parla è indicato solo come “Persona 1”, “Persona 2” e così via: la registrazione non è collegata alla tua identità. I nomi pronunciati ad alta voce vengono trascritti così come sono detti, quindi se qualcuno dice il tuo nome comparirà nella trascrizione.",
 			"reviewed": "Nulla viene pubblicato prima che una persona lo abbia verificato.",
 			"ask": "Assicuratevi che tutte le persone al tavolo abbiano sentito queste informazioni prima di iniziare.",
 			"agree": "Tutti al tavolo sono d'accordo — continua",

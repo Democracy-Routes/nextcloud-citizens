@@ -54,9 +54,13 @@ def pipeline(client, tmp_path, monkeypatch):
     )
 
     calls = {"table": 0, "round": 0}
+    # kept separately from the counters, which a test asserts on exactly: this
+    # is what actually LEFT the server, for the redaction tests
+    prompts: list[str] = []
 
     def fake_chat_json(base_url, key, model, system, user, schema):
         assert key == "an-test"
+        prompts.append(user)
         if schema is TableAnalysis:
             calls["table"] += 1
             # cite the first segment id embedded in the prompt: "[id1|id2] SPEAKER..."
@@ -111,7 +115,8 @@ def pipeline(client, tmp_path, monkeypatch):
     client.post(f"/api/v1/public/recorder/recordings/{recording_id}/complete",
                 json={"total_chunks": 1}, headers=headers)
     return {"client": client, "assembly": assembly, "round_id": round_id,
-            "recording_id": recording_id, "headers": headers, "calls": calls, "blob": blob}
+            "recording_id": recording_id, "headers": headers, "calls": calls,
+            "prompts": prompts, "blob": blob}
 
 
 def _wait(client, headers, recording_id, targets, timeout=40.0):
@@ -216,3 +221,145 @@ def test_manual_analysis_requires_configuration(client, monkeypatch):
     assert "not configured" in response.json()["detail"]
     findings = client.get(f"/api/v1/rounds/{assembly['rounds'][0]['id']}/findings").json()
     assert findings["analysis_configured"] is False
+
+
+# ------------------------------------------------------ approving in one go
+
+
+def _drafts_ready(pipeline) -> dict:
+    """Run the fixture's pipeline through to reviewable findings."""
+    client = pipeline["client"]
+    _wait(client, pipeline["headers"], pipeline["recording_id"], ("READY_FOR_REVIEW",))
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        findings = client.get(f"/api/v1/rounds/{pipeline['round_id']}/findings").json()
+        if findings["cross_table"]:
+            return findings
+        time.sleep(0.5)
+    return findings
+
+
+def _all_findings(payload: dict) -> list[dict]:
+    return payload["cross_table"] + [f for t in payload["tables"] for f in t["findings"]]
+
+
+def test_bulk_approve_takes_only_the_drafts(pipeline):
+    """Reviewing one card at a time was tedious enough that the ask was for a
+    way to skip review altogether. Approving in bulk is the version that keeps
+    the guarantee: a person still decides, once, for a whole round."""
+    client = pipeline["client"]
+    round_id = pipeline["round_id"]
+    drafts = [f for f in _all_findings(_drafts_ready(pipeline)) if f["status"] == "DRAFT"]
+    assert drafts, "the pipeline should leave drafts to approve"
+    rejected = drafts[0]["id"]
+    client.put(f"/api/v1/findings/{rejected}", json={"status": "REJECTED"})
+
+    result = client.post(f"/api/v1/rounds/{round_id}/findings/approve", json={})
+
+    assert result.status_code == 200, result.text
+    assert result.json()["approved"] == len(drafts) - 1
+    after = {f["id"]: f["status"] for f in _all_findings(
+        client.get(f"/api/v1/rounds/{round_id}/findings").json()
+    )}
+    # a rejection is a decision somebody made; a bulk approve must not reverse it
+    assert after[rejected] == "REJECTED"
+    assert "DRAFT" not in after.values()
+
+
+def test_bulk_approve_records_who_reviewed(pipeline):
+    from sqlalchemy import select
+
+    from citizens.db.models import AuditEvent, Finding
+    from citizens.db.session import session_scope
+
+    client = pipeline["client"]
+    round_id = pipeline["round_id"]
+    _drafts_ready(pipeline)
+
+    approved = client.post(
+        f"/api/v1/rounds/{round_id}/findings/approve", json={}
+    ).json()["approved"]
+
+    with session_scope() as session:
+        reviewed = session.execute(
+            select(Finding).where(Finding.round_id == round_id, Finding.status == "APPROVED")
+        ).scalars().all()
+        assert reviewed and all(f.reviewed_by and f.reviewed_at for f in reviewed)
+        ids = {f.id for f in reviewed}
+        events = session.execute(
+            select(AuditEvent).where(AuditEvent.event == "finding_reviewed")
+        ).scalars().all()
+        # one audit row per finding, not one for the batch
+        assert len([e for e in events if e.object_id in ids]) >= approved
+
+
+def test_bulk_approve_can_be_scoped_to_one_table(pipeline):
+    client = pipeline["client"]
+    round_id = pipeline["round_id"]
+    _drafts_ready(pipeline)
+
+    result = client.post(
+        f"/api/v1/rounds/{round_id}/findings/approve", json={"table_number": 1}
+    )
+
+    assert result.status_code == 200, result.text
+    after = client.get(f"/api/v1/rounds/{round_id}/findings").json()
+    # cross-table findings belong to no table, so they stay as drafts
+    assert all(f["status"] == "DRAFT" for f in after["cross_table"])
+    assert all(f["status"] == "APPROVED" for t in after["tables"] for f in t["findings"])
+
+
+def test_bulk_approve_rejects_an_unknown_table(pipeline):
+    result = pipeline["client"].post(
+        f"/api/v1/rounds/{pipeline['round_id']}/findings/approve",
+        json={"table_number": 99},
+    )
+
+    assert result.status_code == 404
+
+
+# ------------------------------------------ names must not reach the model
+
+
+def test_participant_names_are_masked_before_the_transcript_is_sent(pipeline):
+    """The end-to-end version: whatever the table said, the prompt that leaves
+    this server carries stand-ins.
+
+    The stored transcript is deliberately untouched — it is the record, and the
+    report's quotes come from it — so this asserts on what the provider was
+    handed, not on what is in the database.
+    """
+    from citizens.db.models import Assembly
+    from citizens.db.session import session_scope
+
+    with session_scope() as session:
+        assembly = session.get(Assembly, pipeline["assembly"]["id"])
+        assembly.redact_names = "Simone, Alessandro"
+
+    _drafts_ready(pipeline)
+
+    prompts = pipeline["prompts"]
+    assert prompts, "the analysis provider should have been called"
+    sent = "\n".join(prompts)
+    assert "Simone" not in sent
+    assert "Alessandro" not in sent
+
+
+def test_the_stored_transcript_keeps_the_real_words(pipeline):
+    """Redaction protects what is SENT. The record must stay intact, or the
+    report's evidence stops being what the table actually said."""
+    from sqlalchemy import select
+
+    from citizens.db.models import Assembly, TranscriptSegment
+    from citizens.db.session import session_scope
+
+    with session_scope() as session:
+        assembly = session.get(Assembly, pipeline["assembly"]["id"])
+        assembly.redact_names = "Simone"
+
+    _drafts_ready(pipeline)
+
+    with session_scope() as session:
+        segments = session.execute(select(TranscriptSegment)).scalars().all()
+        assert segments, "the pipeline should have produced a transcript"
+        assert not any("[Person" in s.text for s in segments)

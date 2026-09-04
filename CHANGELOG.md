@@ -4,6 +4,75 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### What a real assembly's report showed us — 2026-09-04
+
+A test assembly produced a thirteen-page report, and reading it end to end was
+worth more than any test suite: it found four rendering defects, and the
+participants — using the app while discussing it — reported the rest.
+
+**The report**
+
+- **Vertical accent bars ran the whole height of three pages.** The bar beside
+  a quote block is drawn from where the quotes began to where they ended, and
+  both coordinates ignored which page they were on. A block that crossed a page
+  break therefore drew its bar on the *next* page, running almost its full
+  height, while the page holding the quotes got none. Evidence blocks are now
+  kept on one page, which also reads better.
+- **The quotes under a finding were five arbitrary ones, in arbitrary order.**
+  Not the AI choosing badly, as it looked: nothing ordered them, and they were
+  stored in the order of their random identifiers. That is how "Yes." and "And
+  so this is cool." came to be cited as evidence for real findings. Excerpts are
+  now chosen for substance and read back in the order they were spoken.
+- **The cover said "0 participants (expected 50)"** for an assembly that ran
+  perfectly well — the count is of the organizer's optional roster, which
+  recording a table does not create. It now says nothing rather than zero.
+- Rounds were titled "Round 1 — Round 1 - design", which the app caused itself
+  by pre-filling the title with "Round 1". And the methodology note left two
+  orphaned lines on a page of their own.
+
+**During the assembly**
+
+- **A phone that dropped its connection could not rejoin its own round.** It was
+  told its table had already recorded — by itself — and nothing released it for
+  two minutes, which in a live round could mean the rest of the discussion. A
+  phone can now reclaim its own recording immediately; the wait still applies to
+  a different device, which is what it was written for.
+- **Rounds end on time.** They used to end only when somebody clicked, so tables
+  drifted apart — reported by participants as unfair and confusing. The Live tab
+  now counts up past the planned end and closes the round after a minute, with
+  Extend and Keep going beside it, and the phones keep their own fifteen-second
+  "Keep talking" grace so nobody is cut off mid-sentence.
+- **The Live tab shows how long each table has been recording**, and marks any
+  table that started well after the others.
+
+**Names**
+
+- **Names can be kept out of the AI analysis.** Speaker labels were always
+  anonymous, but people say each other's names out loud and the transcript
+  records what was said — the test report carried a named criticism of a
+  participant. Names listed on the assembly, plus any imported participant's
+  name, are now replaced with "Person A", "Person B" before the transcript is
+  sent for analysis. The stored transcript is untouched, so the report's quotes
+  still show what was actually said.
+- The consent screen said "Nobody's name is attached to what they said". True
+  of the speaker label, false of the content, and a participant would read it
+  as "my name will not appear". It now says what actually happens.
+
+**Afterwards**
+
+- **Closing an assembly now asks the phones to clear their audio**, on by
+  default and switchable per assembly. Every phone keeps a copy so that
+  recording survives a bad network, which matters when those are the
+  participants' own devices. The guarantee is unchanged: a phone deletes only
+  audio the server has confirmed, and keeps anything else.
+- Fixed alongside it: reopening an assembly did not withdraw a standing purge
+  request. Harmless while purging was a button somebody pressed; with closing
+  asking by itself it would have meant phones deleting each new recording
+  moments after making it.
+- **Findings can be approved in bulk**, and the Analysis tab has filters for
+  review status and type. The ask was for a way to skip review entirely, which
+  is the one thing this deliberately does not offer.
+
 ### Finishing four sweeps that had each missed one file — 2026-09-03
 
 Six defects found while writing the browser tests. Most are not new mistakes

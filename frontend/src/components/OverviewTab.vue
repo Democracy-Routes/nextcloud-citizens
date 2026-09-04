@@ -30,7 +30,7 @@ const invites = ref<Invite[]>([])
 const editingDetails = ref(false)
 const savingDetails = ref(false)
 const detailsError = ref('')
-const draft = ref({ name: '', description: '', language: 'en' })
+const draft = ref({ name: '', description: '', language: 'en', autoPurge: true, redactNames: '' })
 
 /** Has any table started recording?
  *
@@ -47,6 +47,8 @@ function startEditDetails(): void {
 		name: props.assembly.name,
 		description: props.assembly.description,
 		language: props.assembly.language,
+		autoPurge: props.assembly.auto_purge_device_audio,
+		redactNames: props.assembly.redact_names,
 	}
 	detailsError.value = ''
 	editingDetails.value = true
@@ -59,6 +61,8 @@ async function saveDetails(): Promise<void> {
 		await api.updateAssembly(props.assembly.id, {
 			name: draft.value.name.trim(),
 			description: draft.value.description.trim(),
+			auto_purge_device_audio: draft.value.autoPurge,
+			redact_names: draft.value.redactNames.trim(),
 			// never sent once recording has begun, so a stale form cannot
 			// change it behind the guard
 			...(recordingHasBegun.value ? {} : { language: draft.value.language }),
@@ -207,6 +211,37 @@ const nextStep = computed<NextStep | null>(() => {
 						Locked: this assembly has started recording. The language decides how
 						audio is transcribed, so changing it now would leave one assembly with
 						transcripts in two languages.
+					</span>
+				</div>
+				<div class="cz-field">
+					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+						<input v-model="draft.autoPurge" type="checkbox" />
+						Clear the audio off the table phones when the session is closed
+					</label>
+					<span class="cz-muted" style="font-size: 0.78rem">
+						Every phone keeps a copy of its table's audio so that recording survives a
+						bad network. This asks them to delete it once the assembly is finished —
+						which matters most when participants used their own devices. A phone only
+						ever deletes audio the server has already confirmed, so this cannot remove
+						a last copy. Turn it off to keep the phones' copies until you have
+						downloaded the export.
+					</span>
+				</div>
+				<div class="cz-field">
+					<label for="cz-redact-names">Names to keep out of the AI analysis</label>
+					<textarea
+						id="cz-redact-names"
+						v-model="draft.redactNames"
+						rows="2"
+						placeholder="Anna, Simone, Alessandro"></textarea>
+					<span class="cz-muted" style="font-size: 0.78rem">
+						Speaker labels are already anonymous, but people say each other's names
+						out loud and the transcript records what was said. Names listed here — and
+						any imported participant's name — are replaced with “Person A”, “Person B”
+						before the transcript is sent to the analysis service. The transcript kept
+						on this server is unchanged, so quotes in the report still show what was
+						actually said. This does not affect the audio sent for transcription: use
+						a self-hosted engine if that matters.
 					</span>
 				</div>
 				<div class="cz-row" style="justify-content: flex-end; margin-top: 8px">

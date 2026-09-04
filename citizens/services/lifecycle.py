@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from citizens.db.models import Assembly, Recording
 from citizens.db.models.base import utcnow
 from citizens.logging_setup import get_logger
+from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job
 from citizens.services.recording import COMPLETED_STATES, assembly_progress
 from citizens.services.report import build_report
@@ -62,6 +63,18 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
             enqueue_job(session, "ANALYZE_ROUND", {"round_id": round_.id})
     assembly.closed_at = utcnow()
     assembly.status = "COMPLETE"
+    # Every phone still holds its table's audio — that is what makes recording
+    # survive a bad network — and when those are the participants' own devices,
+    # leaving it there is the surprising outcome. Each phone deletes only what
+    # the server has already confirmed, and keeps anything else, so this cannot
+    # destroy a last copy; tables still assembling simply clear later, when
+    # their recording reaches AUDIO_READY.
+    if assembly.auto_purge_device_audio and assembly.device_audio_purge_requested_at is None:
+        assembly.device_audio_purge_requested_at = utcnow()
+        record_audit_event(
+            session, "device_audio_purge_requested", "assembly", assembly.id,
+            data={"automatic": True},
+        )
     report = snapshot_final_report(session, assembly)
     log.info(
         "assembly_closed",
@@ -76,6 +89,13 @@ def reopen_assembly(session: Session, assembly: Assembly) -> None:
     keep showing the report exactly as it was at closing."""
     assembly.closed_at = None
     assembly.status = "ACTIVE"
+    # Withdraw any standing purge request. The phone-facing flag is a bare
+    # "has this been asked for", never re-checked against closed_at, so leaving
+    # it set means every phone that joins the reopened assembly is still being
+    # told to delete — and would clear each NEW recording the moment it reached
+    # AUDIO_READY, mid-round. Harmless while purging was a button somebody had
+    # to press; not harmless now that closing asks by itself.
+    assembly.device_audio_purge_requested_at = None
     log.info("assembly_reopened", assembly_id=assembly.id)
 
 

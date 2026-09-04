@@ -221,8 +221,12 @@ phone is let in automatically after two minutes of silence; in that case the
 first recording is left open, so a phone that was merely offline rather than
 dead can still upload what it recorded while disconnected.
 
-**Participants used their own phones.** Close the session, then use **Clear
-audio from the table phones** on the Files tab. It reaches phones whose
+**Participants used their own phones.** Closing the session asks the phones to
+clear their copy automatically — that is on by default, and switchable per
+assembly under *Assembly details* on the Overview tab. Turn it off if you want
+the phones to keep their copies until you have downloaded and checked the
+export. You can also ask at any time with **Clear audio from the table phones**
+on the Files tab. It reaches phones whose
 recorder page is still open and reports how many confirmed — it is coverage,
 not a guarantee. A phone only deletes audio the server has already confirmed,
 so nothing can be lost.
@@ -239,6 +243,26 @@ inside the frozen report changes only when you update it.
 decides how audio is transcribed and which model is used — changing it then
 would leave one assembly with transcripts in two languages. Fix it before the
 first round, or create the assembly again.
+
+**A round ran past its time.** The Live tab counts up once the planned time
+has passed and offers to end the round after a minute, with **Extend 5 min** and
+**Keep going** beside it. Rounds used to end only when somebody clicked, which
+is why tables drifted apart. The phones still get their own fifteen-second
+"Keep talking" grace, so nobody is cut off mid-sentence. This runs in the Live
+tab, so with that tab closed nothing ends by itself.
+
+**Tables are ending at different times.** The Elapsed column on the Live tab
+shows how long each table has been recording, and highlights any table that
+started more than a minute after the earliest one — usually a table that armed
+late or whose phone was replaced.
+
+**Reviewing findings one at a time is slow.** The Analysis tab has filters for
+review status and finding type, and **Approve N draft(s)** approves everything
+still waiting in the round. Rejected findings are left alone, and anything
+approved can still be edited or rejected afterwards. There is deliberately no
+way to skip review: the report states that a person approved its findings, and
+approving is also what stops a finding being replaced the next time the analysis
+runs.
 
 **A table shows "low battery".** Only Chromium reports this, so a table showing
 nothing is unknown rather than fine. Swap the phone between rounds; a phone

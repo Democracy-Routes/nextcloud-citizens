@@ -13,6 +13,7 @@ import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { MicrophoneError } from '../errors'
+import { idb } from '../idb'
 import { useWakeLock } from '../useWakeLock'
 import { clearSynchronizedRecordings, RecorderEngine } from '../engine'
 
@@ -124,6 +125,10 @@ function watchForNextRound(): void {
 			// the done screen auto-records the next round, so the table counts
 			// as armed on the organizer's readiness indicator
 			if (orchestrated && status.rounds.some((r) => !r.recorded_state)) {
+				// local_recordings included: without it the finished screen —
+				// where phones sit at the end of an assembly — reported nothing
+				// about what it still held, so purge coverage read "unknown"
+				const held = await idb.countFor(props.session.assembly.id)
 				void recorderApi
 					.heartbeat(props.session.session_token, {
 						recording_active: false,
@@ -131,6 +136,7 @@ function watchForNextRound(): void {
 						local_chunks: 0,
 						acked_chunks: 0,
 						storage_ok: true,
+						local_recordings: held,
 					})
 					.catch(() => undefined)
 			}

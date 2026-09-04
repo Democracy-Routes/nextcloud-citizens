@@ -177,13 +177,41 @@ Both halves of the round are analysed as one table (`table_recordings()`), with
 a methodology note that the device changed, so the report reads as one
 discussion rather than two fragments.
 
+## Ending a round
+
+Nothing server-side acts on `duration_minutes`; there is no timer or sweep for
+it. Independent tables finish themselves from the phone's own clock, and
+orchestrated rounds used to run until a facilitator clicked — which is why
+tables drifted apart, since each one's recording starts when its phone sees the
+round open.
+
+The Live tab now drives the ending: past the planned time it counts up, and
+after a minute's grace calls the same `end_round` a click would. Deliberately
+client-side rather than a sweep — the facilitator has that tab open, it is
+where rounds are started, and a server that ended rounds while nobody was
+watching would end one during a break. The cost is stated plainly in the admin
+guide: with the tab closed, nothing ends by itself.
+
+An extension is held in the tab rather than written to the round. The stored
+duration is what the assembly was *planned* for, and rewriting it would quietly
+edit the record of what was run; a reload forgets the extension and asks again,
+which is the safe direction to fail.
+
 ## Clearing audio off the phones
 
 Recording offline-first means every phone keeps its table's audio after the
 event — which matters when participants used their own devices. Closing the
-assembly enables **Clear audio from the table phones**, which sets
-`device_audio_purge_requested_at`; the server cannot push, so the flag rides
-the status poll every recorder already makes.
+assembly sets `device_audio_purge_requested_at` — automatically when
+`auto_purge_device_audio` is on, which is the default, or on demand from **Clear
+audio from the table phones**. The server cannot push, so the flag rides the
+status poll every recorder already makes.
+
+**Reopening clears the flag.** The phone-facing value is a bare "has this been
+asked for" and is never re-checked against `closed_at`, so a request left
+standing through a reopen would tell every phone in the reopened assembly to
+delete — clearing each *new* recording the moment it reached `AUDIO_READY`,
+mid-round. That was survivable while purging was a button somebody pressed; it
+is not, now that closing asks by itself.
 
 The guarantee is one-directional and deliberate: a phone deletes only audio the
 server has already confirmed. Anything unconfirmed is kept and the phone says

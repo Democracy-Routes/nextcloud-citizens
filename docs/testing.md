@@ -21,9 +21,9 @@ Testing is part of implementation, not a final phase (brief §55).
 5. **Manual gates**: real-phone recording tests over HTTPS (Milestones 2–3,
    brief §66) and the physical multi-phone room test before release (§57).
 
-Roughly: 319 Python tests, 174 frontend tests, 5 browser tests. The first two
-gate every commit and take about ten minutes together; the browser suite is
-another seven and runs before a release.
+Roughly: 362 Python tests, 188 frontend tests, 5 browser tests. The first two
+gate every commit and take about thirteen minutes together; the browser suite
+is another seven and runs before a release.
 
 ## Running
 

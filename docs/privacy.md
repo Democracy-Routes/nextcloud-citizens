@@ -67,6 +67,22 @@ starts** — see "Consent" below.
   deletion used to reclaim one — so the sweep could report the audio purged
   while an entire copy of it remained on disk. Archives nobody collected are
   also swept after an hour.
+* **Names people say out loud are in the transcript.** Speaker labels are
+  anonymous — SPEAKER_01, never a name — but the transcript records what was
+  said, so "Simone, you spoke too much" appears as spoken, and would reach the
+  analysis service with everything else. Under *Assembly details* you can list
+  names to be replaced with "Person A", "Person B" before the transcript is
+  sent; any imported participant's name is included automatically. The
+  transcript kept on this server is unchanged, so the report's quotes still
+  show what was actually said.
+
+  Two limits worth stating in your own privacy information. The list comes from
+  the organizer, not from a detector — a name nobody listed is not replaced,
+  and no attempt is made to guess, because a list of common first names would
+  mangle ordinary words. And it protects the **analysis** step only: the audio
+  sent for transcription carries the names as spoken, so if that matters, run a
+  self-hosted engine (Vosk or a local Whisper) and nothing leaves at all.
+
 * **The table phones hold a copy too.** Every recording is written to the
   phone's own storage before it is uploaded — that is what makes recording
   survive a bad network — so at the end of an assembly each phone still has its
@@ -75,7 +91,9 @@ starts** — see "Consent" below.
   processing location outside your control**, and you should say so in your
   own privacy information.
 
-  The Files tab of a closed assembly has **Clear audio from the table phones**,
+  Closing the session asks the phones to clear their copy automatically (on by
+  default, switchable per assembly). The Files tab of a closed assembly also has
+  **Clear audio from the table phones**,
   which asks each phone to delete its local copy. Two limits matter:
 
   * It reaches phones whose recorder page is still open, because the server

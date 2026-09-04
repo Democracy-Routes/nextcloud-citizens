@@ -4,7 +4,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from citizens.db.models.base import Base, TZDateTime, new_uuid, utcnow
@@ -48,6 +48,16 @@ class Assembly(Base):
     # recorder already makes every few seconds. Set once and left set: a phone
     # that reopens days later should still honour it.
     device_audio_purge_requested_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # Ask the phones automatically when the session is closed. On by default:
+    # the case this exists for is participants recording on their own devices,
+    # where leaving the audio behind is the surprising outcome. An organizer
+    # using the organisation's own phones can turn it off and keep the local
+    # copies until the export has been downloaded and checked.
+    auto_purge_device_audio: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Names to replace with stand-ins before the transcript is sent to the
+    # analysis model. Free text, one per line or comma-separated: the organizer
+    # knows who is in the room, and a guess would mangle ordinary words.
+    redact_names: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 

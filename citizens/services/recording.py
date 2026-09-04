@@ -171,10 +171,12 @@ def device_has_gone_silent(recording: Recording) -> bool:
     return (utcnow() - recording.updated_at).total_seconds() > STALLED_DEVICE_SECONDS
 
 
-def _release_silent_recording(session: Session, recording: Recording) -> None:
+def _release_silent_recording(
+    session: Session, recording: Recording, error_code: str = "DEVICE_SILENT"
+) -> None:
     from citizens.services.live_captions import LIVE_CAPTIONS
 
-    recording.error_code = "DEVICE_SILENT"
+    recording.error_code = error_code
     recording.superseded_at = utcnow()
     transition(recording, "UPLOAD_INCOMPLETE")
     session.flush()
@@ -185,6 +187,7 @@ def _release_silent_recording(session: Session, recording: Recording) -> None:
         recording_id=recording.id,
         table_number=recording.table_number,
         received_chunks=recording.received_chunks,
+        error_code=error_code,
     )
 
 
@@ -227,6 +230,29 @@ def start_recording(
             Recording.superseded_at.is_(None),
         )
     ).scalars().first()
+    if (
+        existing is not None
+        and existing.recorder_session_id == recorder_session.id
+        # ONLY while it is still recording. A phone that finished and is
+        # uploading (FINALIZING, WAITING_FOR_CHUNKS) must resume that upload,
+        # not abandon it, and one whose audio is already assembled has simply
+        # recorded this round — reclaiming there would throw away finished work
+        # to re-record over it.
+        and existing.state == "RECORDING"
+    ):
+        # This phone's OWN recording is what is blocking it. A table that
+        # reloaded mid-round with nothing yet persisted locally lands back on
+        # the preflight screen, asks to start, and is told its table "already
+        # recorded" this round — by itself. Nothing released it for two
+        # minutes, and in orchestrated mode the round could be over by then, so
+        # a dropped connection cost the table the rest of the discussion.
+        #
+        # The wait exists to stop a DIFFERENT device stealing a live table. It
+        # has nothing to say about a phone reclaiming its own work, so this
+        # goes through the same salvage path immediately: whatever it already
+        # uploaded is kept and transcribed, and it records the rest.
+        _release_silent_recording(session, existing, "DEVICE_REJOINED")
+        existing = None
     if existing is not None and device_has_gone_silent(existing):
         # A phone that has sent nothing for minutes is not "already recording",
         # it is gone — a dead battery, most often. Blocking here left the table

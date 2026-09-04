@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { heldByAnotherDevice } from '../holding'
+import { idb } from '../idb'
 import { useWakeLock } from '../useWakeLock'
 
 /*
@@ -69,6 +70,11 @@ async function heartbeat(): Promise<void> {
 			local_chunks: 0,
 			acked_chunks: 0,
 			storage_ok: true,
+			// how much audio this phone still holds. Omitting it made every
+			// armed or finished phone report "unknown" in the purge coverage —
+			// which is most of them at the end of an assembly, exactly when the
+			// organizer is reading that number.
+			local_recordings: await idb.countFor(props.session.assembly.id),
 		})
 	} catch {
 		/* offline — retried */

@@ -1,14 +1,14 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { roundHeading } from '../labels'
-import { mdiBrain, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiRefresh } from '@mdi/js'
+import { TYPE_LABELS, TYPE_ORDER, roundHeading } from '../labels'
+import { mdiBrain, mdiCheckAll, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiFilterOutline, mdiRefresh } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
 import { BACKGROUND_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import { describeError } from '../errors'
-import type { AssemblyDetail, RoundFindings } from '../types'
+import type { AssemblyDetail, FindingData, RoundFindings } from '../types'
 import FindingCard from './FindingCard.vue'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
@@ -70,6 +70,77 @@ watch(roundId, () => {
 })
 
 const confirmRerun = ref(false)
+const confirmApproveAll = ref(false)
+
+/** Narrowing the list, not changing it.
+ *
+ * Native selects rather than a chip row: the app has no segmented control, and
+ * these inherit the styling, the keyboard behaviour and the 44px touch target
+ * the rest of the tab already has. */
+const statusFilter = ref<'all' | 'draft' | 'approved' | 'rejected'>('all')
+const typeFilter = ref('all')
+
+const STATUS_FILTERS: Array<{ value: typeof statusFilter.value; label: string }> = [
+	{ value: 'all', label: 'All findings' },
+	{ value: 'draft', label: 'Needs review' },
+	{ value: 'approved', label: 'Approved' },
+	{ value: 'rejected', label: 'Rejected' },
+]
+
+function keep(finding: FindingData): boolean {
+	if (typeFilter.value !== 'all' && finding.type !== typeFilter.value) return false
+	if (statusFilter.value === 'draft') return finding.status === 'DRAFT'
+	if (statusFilter.value === 'approved')
+		return finding.status === 'APPROVED' || finding.status === 'EDITED_AND_APPROVED'
+	if (statusFilter.value === 'rejected') return finding.status === 'REJECTED'
+	return true
+}
+
+/** The filtered view. Every empty state and section guard reads THIS, not the
+ * raw payload — otherwise a filter that matches nothing renders section
+ * headings with nothing under them and no explanation. */
+const shown = computed(() => {
+	if (!data.value) return null
+	return {
+		...data.value,
+		cross_table: data.value.cross_table.filter(keep),
+		tables: data.value.tables.map((table) => ({
+			...table,
+			findings: table.findings.filter(keep),
+		})),
+	}
+})
+
+const filtering = computed(() => statusFilter.value !== 'all' || typeFilter.value !== 'all')
+
+const shownCount = computed(() =>
+	shown.value
+		? shown.value.cross_table.length +
+			shown.value.tables.reduce((n, t) => n + t.findings.length, 0)
+		: 0,
+)
+
+const draftCount = computed(
+	() =>
+		[
+			...(data.value?.cross_table ?? []),
+			...(data.value?.tables ?? []).flatMap((t) => t.findings),
+		].filter((f) => f.status === 'DRAFT').length,
+)
+
+async function approveAll(): Promise<void> {
+	confirmApproveAll.value = false
+	busy.value = true
+	try {
+		const result = await api.approveDrafts(roundId.value)
+		toast(`${result.approved} finding(s) approved`)
+		await polling.refresh()
+	} catch (err) {
+		toast(describeError(err).message, 'error')
+	} finally {
+		busy.value = false
+	}
+}
 
 /** Findings a person has already dealt with, which a re-run would replace. */
 const reviewedCount = computed(() => {
@@ -137,9 +208,26 @@ const anyAnalyzing = () =>
 					{{ roundHeading(round.position, round.title) }}
 				</option>
 			</select>
+			<select v-if="data && hasAnyFindings()" v-model="statusFilter" aria-label="Filter by review status">
+				<option v-for="option in STATUS_FILTERS" :key="option.value" :value="option.value">
+					{{ option.label }}
+				</option>
+			</select>
+			<select v-if="data && hasAnyFindings()" v-model="typeFilter" aria-label="Filter by finding type">
+				<option value="all">All types</option>
+				<option v-for="type in TYPE_ORDER" :key="type" :value="type">
+					{{ TYPE_LABELS[type] ?? type }}
+				</option>
+			</select>
 			<template v-if="data">
 				<CzStatusPill :status="data.round_status" />
 				<span style="flex: 1"></span>
+				<CzButton
+					v-if="draftCount > 0"
+					small variant="primary" :icon="mdiCheckAll" :disabled="busy"
+					@click="confirmApproveAll = true">
+					Approve {{ draftCount }} draft(s)
+				</CzButton>
 				<CzButton
 					v-if="data.analysis_configured"
 					small :icon="mdiRefresh" :disabled="busy"
@@ -159,7 +247,7 @@ const anyAnalyzing = () =>
 
 		<CzSkeleton v-else-if="!data && !error" :rows="4" />
 
-		<template v-else-if="data">
+		<template v-else-if="data && shown">
 			<CzEmptyState
 				v-if="!data.analysis_configured"
 				:icon="mdiCogOutline"
@@ -178,8 +266,13 @@ const anyAnalyzing = () =>
 				</CzButton>
 			</CzEmptyState>
 
+			<CzEmptyState
+				v-else-if="filtering && shownCount === 0"
+				:icon="mdiFilterOutline"
+				title="No findings match this filter"
+				hint="Change the filters above to see the rest of this round's findings." />
 			<template v-else>
-				<div v-if="data.cross_table.length || data.round_summary" style="margin-bottom: 24px">
+				<div v-if="shown.cross_table.length || (data.round_summary && !filtering)" style="margin-bottom: 24px">
 					<h3 style="margin-bottom: 10px">
 						Across all tables
 						<span v-if="data.tables_with_findings" class="cz-muted" style="font-weight: 400; font-size: 0.8125rem">
@@ -191,15 +284,15 @@ const anyAnalyzing = () =>
 						{{ data.round_summary }}
 					</p>
 					<FindingCard
-						v-for="finding in data.cross_table"
+						v-for="finding in shown.cross_table"
 						:key="finding.id"
 						:finding="finding"
 						@changed="reload"
 						@editing="(open: boolean) => setEditing(finding.id, open)" />
 				</div>
 
-				<template v-for="table in data.tables" :key="table.table_number">
-					<div v-if="table.analyzed || table.findings.length" style="margin-bottom: 24px">
+				<template v-for="table in shown.tables" :key="table.table_number">
+					<div v-if="(table.analyzed && !filtering) || table.findings.length" style="margin-bottom: 24px">
 						<h3 style="margin-bottom: 10px">Table {{ table.table_number }}</h3>
 						<p v-if="table.summary" class="cz-card" style="font-size: 0.905rem; font-style: italic">
 							<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">AI SUMMARY</span>
@@ -224,6 +317,13 @@ const anyAnalyzing = () =>
 				</p>
 			</template>
 		</template>
+		<CzConfirm
+			v-if="confirmApproveAll"
+			title="Approve every draft finding?"
+			:message="`${draftCount} draft finding(s) in this round will be marked approved and included in the report. Rejected findings are left alone, and you can still edit or reject any of them afterwards.`"
+			confirm-label="Approve all drafts"
+			@confirm="approveAll"
+			@cancel="confirmApproveAll = false" />
 		<CzConfirm
 			v-if="confirmRerun"
 			title="Run the analysis again?"

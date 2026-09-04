@@ -56,6 +56,8 @@ class AssemblyCreate(BaseModel):
     # the assembly has to be deleted and made again.
     default_table_count: int = Field(default=1, ge=1, le=200)
     analysis_instructions: str = Field(default="", max_length=4000)
+    auto_purge_device_audio: bool = True
+    redact_names: str = Field(default="", max_length=2000)
     rounds: list[RoundIn] = []
 
 
@@ -68,6 +70,8 @@ class AssemblyUpdate(BaseModel):
     expected_participants: int | None = Field(default=None, ge=0, le=10000)
     default_table_count: int | None = Field(default=None, ge=1, le=200)
     analysis_instructions: str | None = Field(default=None, max_length=4000)
+    auto_purge_device_audio: bool | None = None
+    redact_names: str | None = Field(default=None, max_length=2000)
     # null follows the instance default; 0 keeps audio indefinitely
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
 
@@ -85,6 +89,8 @@ class AssemblyOut(BaseModel):
     expected_participants: int
     default_table_count: int
     analysis_instructions: str
+    auto_purge_device_audio: bool
+    redact_names: str
     closed_at: datetime | None
     audio_retention_days: int | None = None
     audio_purged_at: datetime | None = None

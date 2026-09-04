@@ -76,17 +76,102 @@ watch(roundId, () => {
 	void polling.refresh()
 })
 
+/** A table more than this far behind the earliest one is worth pointing at. */
+const DRIFT_WARNING_S = 60
+
+function startedAt(table: MonitorTable): number | null {
+	const started = table.recording?.started_at
+	return started ? new Date(started).getTime() : null
+}
+
+/** How long THIS table has been recording, mm:ss. */
+function tableElapsed(table: MonitorTable): string {
+	const started = startedAt(table)
+	if (started === null || table.recording?.state !== 'RECORDING') return ''
+	const seconds = Math.max(0, Math.floor((now.value - started) / 1000))
+	return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+/** Seconds this table started after the earliest table still recording. */
+function tableDrift(table: MonitorTable): number {
+	const started = startedAt(table)
+	if (started === null) return 0
+	const others = (monitor.value?.tables ?? [])
+		.filter((t) => t.recording?.state === 'RECORDING')
+		.map(startedAt)
+		.filter((t): t is number => t !== null)
+	return others.length ? (started - Math.min(...others)) / 1000 : 0
+}
+
+/** How long the facilitator gets to react once the round's time is up.
+ *
+ * Long enough to notice and press Extend, short enough that the round actually
+ * ends. The phones then run their own 15s "Keep talking" countdown, so a table
+ * mid-sentence still gets the last word. */
+const GRACE_SECONDS = 60
+
+/** Minutes added by pressing Extend.
+ *
+ * Held here rather than written to the round: the stored duration is what the
+ * assembly was PLANNED for, and rewriting it would quietly edit the record of
+ * what was run. The cost is that a page reload forgets an extension and offers
+ * the choice again, which is the safe direction to fail. */
+const EXTEND_MINUTES = 5
+const extraMinutes = ref(0)
+const autoEndCancelled = ref(false)
+
+/** Seconds until the round's planned end. Negative once it has overrun. */
+const secondsLeft = computed(() => {
+	if (!monitor.value || monitor.value.status !== 'ACTIVE' || !monitor.value.started_at) return null
+	const endAt =
+		new Date(monitor.value.started_at).getTime() +
+		(monitor.value.duration_minutes + extraMinutes.value) * 60_000
+	return Math.floor((endAt - now.value) / 1000)
+})
+
+function clock(seconds: number): string {
+	const whole = Math.abs(seconds)
+	return `${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`
+}
+
 const remaining = computed(() => {
-	if (!monitor.value || monitor.value.status !== 'ACTIVE' || !monitor.value.started_at) return ''
-	const endAt = new Date(monitor.value.started_at).getTime() + monitor.value.duration_minutes * 60_000
-	const seconds = Math.max(0, Math.floor((endAt - now.value) / 1000))
-	const minutes = Math.floor(seconds / 60)
-	return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+	const left = secondsLeft.value
+	if (left === null) return ''
+	// no longer clamped at zero: a round that has run over says so, rather than
+	// sitting at 00:00 looking like it just finished
+	return left < 0 ? `+${clock(left)}` : clock(left)
+})
+
+/** Time is up and nobody has extended or ended it yet. */
+const overrunning = computed(() => secondsLeft.value !== null && secondsLeft.value <= 0)
+
+/** Seconds before this round ends by itself. */
+const autoEndIn = computed(() => {
+	if (!overrunning.value || autoEndCancelled.value) return null
+	return Math.max(0, GRACE_SECONDS + (secondsLeft.value ?? 0))
+})
+
+// Rounds were ending only when a human clicked, so they ended at different
+// times across tables — reported by participants as unfair and confusing. This
+// ends them on time while leaving the facilitator in charge of the exception.
+watch(autoEndIn, (left) => {
+	if (left === 0 && monitor.value?.status === 'ACTIVE' && !busy.value) endRound()
+})
+
+function extendRound(): void {
+	extraMinutes.value += EXTEND_MINUTES
+	toast(`Round extended by ${EXTEND_MINUTES} minutes`)
+}
+
+// a new round starts its own clock
+watch(roundId, () => {
+	extraMinutes.value = 0
+	autoEndCancelled.value = false
 })
 
 const progress = computed(() => {
 	if (!monitor.value || monitor.value.status !== 'ACTIVE' || !monitor.value.started_at) return 0
-	const total = monitor.value.duration_minutes * 60_000
+	const total = (monitor.value.duration_minutes + extraMinutes.value) * 60_000
 	const elapsed = now.value - new Date(monitor.value.started_at).getTime()
 	return Math.min(100, Math.max(0, (elapsed / total) * 100))
 })
@@ -321,8 +406,27 @@ function pendingChunks(table: MonitorTable): number {
 				<div class="cz-countbar__track">
 					<div class="cz-countbar__fill" :style="{ width: progress + '%' }"></div>
 				</div>
-				<span v-if="remaining" class="cz-countbar__time">{{ remaining }}</span>
+				<span
+					v-if="remaining"
+					class="cz-countbar__time"
+					:class="{ 'cz-drifted': overrunning }">
+					{{ remaining }}
+				</span>
 				<template v-if="monitor.recording_mode === 'orchestrated'">
+					<!-- time is up: end it on time, but let the facilitator take the
+					     exception. Cutting a table off mid-sentence at a civic
+					     assembly is worse than a round running a minute long. -->
+					<template v-if="autoEndIn !== null">
+						<span class="cz-drifted" style="font-size: 0.8125rem" role="status">
+							Time is up — ending in {{ autoEndIn }}s
+						</span>
+						<CzButton variant="secondary" :disabled="busy" @click="extendRound">
+							Extend {{ EXTEND_MINUTES }} min
+						</CzButton>
+						<CzButton variant="tertiary" :disabled="busy" @click="autoEndCancelled = true">
+							Keep going
+						</CzButton>
+					</template>
 					<CzButton
 						v-if="monitor.status === 'NOT_STARTED' || monitor.status === 'ENDED'"
 						variant="primary"
@@ -375,7 +479,7 @@ function pendingChunks(table: MonitorTable): number {
 			<table class="cz-table">
 				<thead>
 					<tr>
-						<th>Table</th><th>Device</th><th>Recording</th><th>Upload</th><th>Local audio</th><th style="text-align: right">Actions</th>
+						<th>Table</th><th>Device</th><th>Recording</th><th>Elapsed</th><th>Upload</th><th>Local audio</th><th style="text-align: right">Actions</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -390,6 +494,19 @@ function pendingChunks(table: MonitorTable): number {
 								v-if="table.recording"
 								:state="table.recording.state"
 								:error-code="table.recording.error_code" />
+							<span v-else class="cz-muted">—</span>
+						</td>
+						<td>
+							<!-- rounds start at different times because each table is
+							     started by hand, so tables end at different times too.
+							     Participants reported this as unfair and confusing; the
+							     facilitator could not see the drift at all. -->
+							<span
+								v-if="tableElapsed(table)"
+								style="font-variant-numeric: tabular-nums"
+								:class="{ 'cz-drifted': tableDrift(table) > DRIFT_WARNING_S }">
+								{{ tableElapsed(table) }}
+							</span>
 							<span v-else class="cz-muted">—</span>
 						</td>
 						<td>

@@ -44,6 +44,14 @@ const confirmAllTranscripts = ref(false)
 const confirmPurge = ref(false)
 const purgeCoverage = ref<{ devices: number; cleared: number; still_holding: number; unknown: number } | null>(null)
 
+/** What the phones report, whether or not anyone pressed the button.
+ *
+ * Closing the session now asks them automatically, so there is no POST
+ * response to carry this back — and a purge whose outcome nobody can see is
+ * one nobody can act on when a phone turns out to still be holding something.
+ * The button's own response still wins while it is fresher. */
+const coverage = computed(() => purgeCoverage.value ?? listing.value?.device_audio ?? null)
+
 /** Ask the table phones to delete their local copies.
  *
  * Deliberately reports coverage rather than success: this reaches phones whose
@@ -307,14 +315,18 @@ async function deleteAll(): Promise<void> {
 				</div>
 				<!-- coverage, never "done": a phone that was closed and carried out
 				     of the building simply never receives the request -->
-				<p v-if="purgeCoverage" class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
-					<strong>{{ purgeCoverage.cleared }} of {{ purgeCoverage.devices }}</strong>
-					table phones have reported clearing their copy.
-					<template v-if="purgeCoverage.still_holding">
-						{{ purgeCoverage.still_holding }} still hold audio.
+				<p v-if="coverage" class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
+					<template v-if="listing?.device_audio?.purge_requested_at && !purgeCoverage">
+						The phones were asked to clear this assembly's audio when the session
+						was closed.
 					</template>
-					<template v-if="purgeCoverage.unknown">
-						{{ purgeCoverage.unknown }} have not reported since — they will clear
+					<strong>{{ coverage.cleared }} of {{ coverage.devices }}</strong>
+					table phones have reported clearing their copy.
+					<template v-if="coverage.still_holding">
+						{{ coverage.still_holding }} still hold audio.
+					</template>
+					<template v-if="coverage.unknown">
+						{{ coverage.unknown }} have not reported since — they will clear
 						themselves if the recorder is opened again.
 					</template>
 				</p>
