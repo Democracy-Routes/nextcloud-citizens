@@ -231,3 +231,46 @@ def test_closing_again_after_a_reopen_asks_again(client):
     client.post(f"/api/v1/assemblies/{assembly['id']}/close")
 
     assert _purge_requested(client, assembly["id"])
+
+
+def test_reopening_lets_retention_apply_again(client):
+    """Reopen cleared closed_at but not audio_purged_at, so a table that
+    recorded after a reopen-and-reclose was retained forever while the policy
+    reported the assembly purged."""
+    from citizens.db.models import Assembly
+    from citizens.db.models.base import utcnow
+    from citizens.db.session import session_scope
+
+    assembly = client.post(
+        "/api/v1/assemblies", json={"name": "TEST Reopen retention", "default_table_count": 1}
+    ).json()
+    client.post(f"/api/v1/assemblies/{assembly['id']}/close")
+    with session_scope() as session:
+        session.get(Assembly, assembly["id"]).audio_purged_at = utcnow()
+
+    client.delete(f"/api/v1/assemblies/{assembly['id']}/close")
+
+    with session_scope() as session:
+        assert session.get(Assembly, assembly["id"]).audio_purged_at is None
+
+
+def test_a_manually_requested_purge_survives_reopen(client):
+    """Reopen withdraws the AUTOMATIC request; one an organizer explicitly made
+    on a manual assembly stands."""
+    from citizens.db.models import Assembly
+    from citizens.db.models.base import utcnow
+    from citizens.db.session import session_scope
+
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={"name": "TEST Manual purge", "default_table_count": 1,
+              "auto_purge_device_audio": False},
+    ).json()
+    client.post(f"/api/v1/assemblies/{assembly['id']}/close")
+    with session_scope() as session:
+        session.get(Assembly, assembly["id"]).device_audio_purge_requested_at = utcnow()
+
+    client.delete(f"/api/v1/assemblies/{assembly['id']}/close")
+
+    with session_scope() as session:
+        assert session.get(Assembly, assembly["id"]).device_audio_purge_requested_at is not None

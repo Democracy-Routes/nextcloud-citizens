@@ -128,7 +128,8 @@
 			"serverUpload": "Server upload",
 			"pendingUpload": "Pending upload",
 			"chunksUploaded": "chunks uploaded",
-			"openingIn": "Opening in {seconds} s…"
+			"openingIn": "Opening in {seconds} s…",
+			"micLost": "The microphone was interrupted — a call or another app took it over. The recording so far was saved and is uploading. Tell the facilitator, then start again when the table is ready."
 		},
 		"recovery": {
 			"intro": "This phone has a recording that was not fully synchronized — for example after the page was reloaded or the browser closed. All locally saved audio is intact.",
@@ -145,7 +146,8 @@
 			"failed": "Recovery synchronization failed:",
 			"failedHint": "Local audio remains stored on this phone. Notify the facilitator.",
 			"title": "Recovered recording",
-			"awaitingUpload": "Awaiting upload"
+			"awaitingUpload": "Awaiting upload",
+			"uploaded": "Every part of the recording was uploaded and accepted, but the server has not confirmed the assembled audio yet. Keep this phone's copy until it has."
 		},
 		"report": {
 			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables",

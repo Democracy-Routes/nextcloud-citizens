@@ -43,3 +43,7 @@ frontend/test-results/
 frontend/playwright-report/
 # code-signing key for the App Store (NEVER commit)
 *.key
+
+# Bug-audit backlogs list unfixed weaknesses in a live civic app; kept local
+# only (the public CHANGELOG carries the fixed-only narrative).
+docs/bug-audit-*.md

@@ -17,11 +17,29 @@ const engine = new RecorderEngine()
 const state = engine.state
 
 const pending = computed(() => state.localChunks - state.ackedChunks)
+const rechecking = ref(false)
+
+async function recheck(): Promise<void> {
+	rechecking.value = true
+	try {
+		await engine.recheckServerState()
+	} finally {
+		rechecking.value = false
+	}
+}
 const confirmDelete = ref(false)
 const downloadNote = ref('')
 
-onMounted(() => {
-	void engine.resumeSync(props.session.session_token, props.recording)
+onMounted(async () => {
+	try {
+		await engine.resumeSync(props.session.session_token, props.recording)
+	} catch (error) {
+		// an un-awaited rejection here left the phase at 'idle', which the
+		// template had no branch for: a header, a chunk count, and no buttons
+		// at all — on the screen a crashed phone lands on
+		state.phase = 'failed'
+		state.error = error instanceof Error ? error.message : String(error)
+	}
 })
 
 // the server definitively lost this recording (deleted assembly / reset):
@@ -79,6 +97,17 @@ async function deleteLocal(): Promise<void> {
 				<button class="rc-btn" style="margin-top: 10px" @click="engine.retryNow()">{{ t('recorder.common.retryNow') }}</button>
 			</div>
 			<p v-else class="rc-muted rc-center">Synchronizing…</p>
+		</template>
+
+		<!-- every chunk was acknowledged but the server never confirmed the
+		     assembled audio inside the poll window. This phase had no branch,
+		     so the screen was a dead end with no buttons. -->
+		<template v-else-if="state.phase === 'uploaded'">
+			<div class="rc-note">{{ t('recorder.recovery.uploaded') }}</div>
+			<button class="rc-btn rc-primary" :disabled="rechecking" @click="recheck">
+				{{ rechecking ? t('recorder.uploaded.checking') : t('recorder.uploaded.check') }}
+			</button>
+			<button class="rc-btn rc-subtle" @click="emit('done')">{{ t('recorder.recovery.skip') }}</button>
 		</template>
 
 		<template v-else-if="state.phase === 'done'">

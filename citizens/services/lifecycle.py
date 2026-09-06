@@ -18,7 +18,7 @@ from citizens.db.models import Assembly, Recording
 from citizens.db.models.base import utcnow
 from citizens.logging_setup import get_logger
 from citizens.services.audit import record_audit_event
-from citizens.services.jobs import enqueue_job
+from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.recording import COMPLETED_STATES, assembly_progress
 from citizens.services.report import build_report
 
@@ -57,9 +57,19 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
     for round_ in assembly.rounds:
         if round_.status == "ACTIVE":
             round_.status = "ENDED"
+            # end_round() sets this; force-ending here skipped it
+            round_.ended_at = round_.ended_at or utcnow()
         # a round whose tables recorded but which never got aggregated (e.g.
-        # tables that never showed up kept it waiting) gets a final pass
-        if not round_.analysis_summary and _round_has_content(session, round_.id):
+        # tables that never showed up kept it waiting) gets a final pass.
+        # Deduped: the last table's analysis may have queued the same job in
+        # the same minute, and running both meant two model calls — and, if
+        # the first run's clusters were approved in between, a report showing
+        # both generations side by side.
+        if (
+            not round_.analysis_summary
+            and _round_has_content(session, round_.id)
+            and not has_live_job(session, "ANALYZE_ROUND", "round_id", round_.id)
+        ):
             enqueue_job(session, "ANALYZE_ROUND", {"round_id": round_.id})
     assembly.closed_at = utcnow()
     assembly.status = "COMPLETE"
@@ -94,8 +104,16 @@ def reopen_assembly(session: Session, assembly: Assembly) -> None:
     # it set means every phone that joins the reopened assembly is still being
     # told to delete — and would clear each NEW recording the moment it reached
     # AUDIO_READY, mid-round. Harmless while purging was a button somebody had
-    # to press; not harmless now that closing asks by itself.
-    assembly.device_audio_purge_requested_at = None
+    # to press; not harmless now that closing asks by itself. Only the
+    # automatic request is withdrawn — a purge an organizer explicitly asked
+    # for on a manual assembly stands.
+    if assembly.auto_purge_device_audio:
+        assembly.device_audio_purge_requested_at = None
+    # And let retention apply to audio recorded after the reopen: the sweep
+    # only considers assemblies with audio_purged_at NULL, so leaving it set
+    # meant a table that recorded post-reopen was retained forever while the
+    # policy reported the assembly purged.
+    assembly.audio_purged_at = None
     log.info("assembly_reopened", assembly_id=assembly.id)
 
 

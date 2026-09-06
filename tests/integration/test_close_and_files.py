@@ -322,6 +322,11 @@ def test_audio_retention_purges_only_after_the_window(client, tmp_path, monkeypa
 
     with session_scope() as session:
         session.get(Assembly, assembly["id"]).closed_at = utcnow() - timedelta(days=8)
+        # a transcript exists, so retention treats the audio as redundant and
+        # deletes it — the untranscribed case is kept, and covered elsewhere
+        from citizens.db.models import Transcript
+
+        session.add(Transcript(recording_id=recording_id, provider="test"))
 
     assert sweep_expired_audio() == 1
     with session_scope() as session:

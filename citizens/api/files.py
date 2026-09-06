@@ -209,7 +209,7 @@ def purge_device_audio(assembly_id: str, user: CurrentUser, session: DB):
 @router.delete("/assemblies/{assembly_id}/audio", status_code=200)
 def delete_all_audio(assembly_id: str, user: CurrentUser, session: DB):
     assembly = get_owned_assembly(session, assembly_id, user)
-    count, freed = files_svc.delete_assembly_audio(session, assembly)
+    count, freed, _ = files_svc.delete_assembly_audio(session, assembly)
     record_audit_event(
         session, "assembly_audio_deleted", "assembly", assembly.id, actor=user,
         data={"recordings": count, "freed_bytes": freed},

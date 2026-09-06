@@ -19,6 +19,15 @@ export const CHUNK_INTERVAL_MS = (() => {
 	const override = Number(new URLSearchParams(window.location.search).get('chunkms'))
 	return Number.isFinite(override) && override >= 250 ? override : 10_000
 })()
+/** Server states at or past AUDIO_READY: the audio is validated and safe.
+ *
+ * Mirrors COMPLETED_STATES in citizens/services/recording.py — this was
+ * hand-copied in two methods and nothing kept the copies agreeing. */
+export const COMPLETED_STATES = new Set([
+	'AUDIO_READY', 'TRANSCRIBING', 'TRANSCRIBED', 'TRANSCRIPTION_FAILED',
+	'ANALYZING', 'READY_FOR_REVIEW', 'REVIEWED', 'ANALYSIS_FAILED',
+])
+
 const RETRY_BASE_MS = 3_000
 const RETRY_MAX_MS = 60_000
 const HEARTBEAT_MS = 20_000
@@ -61,6 +70,10 @@ export interface EngineState {
 	/** 'gone' = the server definitively no longer knows this recording/session
 	 * (deleted assembly, reset instance) — retrying can never succeed */
 	errorKind: '' | 'gone' | 'transient'
+	/** The OS took the microphone away mid-round (a call, another app). What
+	 * was captured has been finished and is syncing — but the table must be
+	 * told, because from their side the screen just said RECORDING. */
+	micLost: boolean
 }
 
 
@@ -79,6 +92,7 @@ export class RecorderEngine {
 		serverState: '',
 		error: '',
 		errorKind: '',
+		micLost: false,
 	})
 
 	private token = ''
@@ -146,6 +160,15 @@ export class RecorderEngine {
 		this.mediaRecorder = new MediaRecorder(this.stream, { mimeType })
 		this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
 			if (event.data && event.data.size > 0) this.enqueueChunk(event.data)
+		}
+		// The OS can take the microphone at any moment — an incoming call,
+		// another app, a Bluetooth headset dropping. Nothing listened for it:
+		// the track ended, capture stopped, and the screen went on saying
+		// RECORDING and "safe" while nothing was being recorded. Finishing
+		// immediately keeps everything captured so far and tells the table.
+		this.mediaRecorder.onerror = () => void this.abortForLostMicrophone('recorder_error')
+		for (const track of this.stream.getAudioTracks()) {
+			track.onended = () => void this.abortForLostMicrophone('track_ended')
 		}
 		this.mediaRecorder.start(CHUNK_INTERVAL_MS)
 		this.startMonitors()
@@ -372,13 +395,32 @@ export class RecorderEngine {
 
 		await new Promise<void>((resolve) => {
 			this.mediaRecorder!.onstop = () => resolve()
-			this.mediaRecorder!.stop()
+			try {
+				this.mediaRecorder!.stop()
+			} catch {
+				// already inactive — the OS took the microphone. stopRequested
+				// is latched by now, so throwing here wedged the screen in a
+				// button-less 'finishing' state; what was captured still syncs.
+				resolve()
+			}
 		})
 		this.stream?.getTracks().forEach((track) => track.stop())
 
 		// wait until the final dataavailable chunk is persisted
 		await this.chunkPipeline
-		this.totalChunks = this.seq
+		// Declare what is actually ON DISK, not what was handed to us: a chunk
+		// whose putChunk failed consumed a sequence number and then vanished,
+		// and declaring it made the server wait forever for a chunk that never
+		// existed — while the phone retried the impossible resend for five
+		// minutes and then failed the whole round. The contiguous prefix is
+		// the recoverable recording; anything after a gap in a MediaRecorder
+		// stream is undecodable anyway.
+		this.totalChunks = await this.persistedPrefixLength()
+		if (this.totalChunks < this.seq) {
+			clientLog('error', 'chunks_lost_locally', {
+				captured: this.seq, persisted: this.totalChunks,
+			})
+		}
 		this.state.phase = 'syncing'
 
 		const recordings = await idb.getRecordings()
@@ -389,6 +431,29 @@ export class RecorderEngine {
 			await idb.putRecording(meta)
 		}
 		this.kickUploader()
+	}
+
+	/** The microphone died under us: salvage what was captured, loudly. */
+	private async abortForLostMicrophone(cause: string): Promise<void> {
+		if (this.state.phase !== 'recording' || this.state.micLost) return
+		this.state.micLost = true
+		clientLog('error', 'microphone_lost', { cause, recordingId: this.state.recordingId })
+		try {
+			await this.finish()
+		} catch (error) {
+			clientLog('error', 'microphone_lost_finish_failed', {
+				error: String(error).slice(0, 160),
+			})
+		}
+	}
+
+	/** How many chunks, counting from 0 with no gap, are really stored. */
+	private async persistedPrefixLength(): Promise<number> {
+		const chunks = await idb.chunksFor(this.state.recordingId)
+		const have = new Set(chunks.map((chunk) => chunk.seq))
+		let length = 0
+		while (have.has(length)) length += 1
+		return length
 	}
 
 	private async sendComplete(): Promise<void> {
@@ -408,12 +473,32 @@ export class RecorderEngine {
 					while (result.missing_sequences.length > 0) {
 						clientLog('warn', 'server_missing_chunks', { missing: result.missing_sequences.length })
 						const chunks = await idb.chunksFor(this.state.recordingId)
+						let truncatedTo: number | null = null
 						for (const seqNumber of result.missing_sequences) {
 							const chunk = chunks.find((c) => c.seq === seqNumber)
-							if (!chunk) throw new Error(`Chunk ${seqNumber} is missing locally too`)
+							if (!chunk) {
+								// The phone does not have it either — a storage
+								// failure ate it. Throwing here retried an
+								// impossible resend for five minutes and then
+								// failed the round; completing with everything
+								// BEFORE the gap salvages the recording instead.
+								truncatedTo = truncatedTo === null ? seqNumber : Math.min(truncatedTo, seqNumber)
+								continue
+							}
 							await recorderApi.uploadChunk(
 								this.token, this.state.recordingId, chunk.seq, chunk.blob, chunk.sha256,
 							)
+						}
+						if (truncatedTo !== null) {
+							clientLog('error', 'complete_truncated_to_gap', {
+								declared: this.totalChunks, salvaged: truncatedTo,
+							})
+							this.totalChunks = truncatedTo
+							if (truncatedTo === 0) {
+								this.state.phase = 'failed'
+								this.state.error = 'No audio survived on this phone'
+								return
+							}
 						}
 						result = await recorderApi.complete(this.token, this.state.recordingId, this.totalChunks)
 					}
@@ -421,6 +506,14 @@ export class RecorderEngine {
 					await this.pollUntilProcessed()
 					return
 				} catch (error) {
+					if (await this.completedDespiteConflict(error)) {
+						clientLog('info', 'complete_conflict_already_finished', {
+							recordingId: this.state.recordingId, serverState: this.state.serverState,
+						})
+						this.state.uploadOnline = true
+						await this.pollUntilProcessed()
+						return
+					}
 					if (!isGoneError(error) && isTransientError(error) && Date.now() < deadline) {
 						this.state.uploadOnline = false
 						clientLog('warn', 'sync_retrying', {
@@ -442,13 +535,29 @@ export class RecorderEngine {
 		}
 	}
 
+	/** Was that a "this recording is already finished" refusal?
+	 *
+	 * /complete 409s once the recording is ASSEMBLING or beyond — which is
+	 * exactly where a reload during the "Synchronizing" screen lands: the
+	 * server took the last chunk, started assembling, and the recovered phone
+	 * re-posts /complete. Treating that 409 as a failure told the table its
+	 * sync had failed for a recording the server had already finished, and
+	 * because serverComplete was never set, the phone re-entered the recovery
+	 * screen on every boot forever — with the purge blocked behind it.
+	 */
+	private async completedDespiteConflict(error: unknown): Promise<boolean> {
+		if (!(error instanceof RecorderApiError) || error.status !== 409) return false
+		try {
+			const status = await recorderApi.recordingStatus(this.token, this.state.recordingId)
+			this.state.serverState = status.state
+			return COMPLETED_STATES.has(status.state) || status.state === 'ASSEMBLING'
+		} catch {
+			return false
+		}
+	}
+
 	private async pollUntilProcessed(): Promise<void> {
-		// anything at or past AUDIO_READY means the audio is validated and safe
-		// (auto-transcription can move the state onward within seconds)
-		const SUCCESS = new Set([
-			'AUDIO_READY', 'TRANSCRIBING', 'TRANSCRIBED', 'TRANSCRIPTION_FAILED',
-			'ANALYZING', 'READY_FOR_REVIEW', 'REVIEWED', 'ANALYSIS_FAILED',
-		])
+		const SUCCESS = COMPLETED_STATES
 		let failedSince = 0
 		for (let i = 0; i < 150; i += 1) {
 			try {
@@ -499,10 +608,7 @@ export class RecorderEngine {
 	 * queued behind other tables.
 	 */
 	async recheckServerState(): Promise<void> {
-		const SETTLED = new Set([
-			'AUDIO_READY', 'TRANSCRIBING', 'TRANSCRIBED', 'TRANSCRIPTION_FAILED',
-			'ANALYZING', 'READY_FOR_REVIEW', 'REVIEWED', 'ANALYSIS_FAILED',
-		])
+		const SETTLED = COMPLETED_STATES
 		try {
 			const status = await recorderApi.recordingStatus(this.token, this.state.recordingId)
 			this.state.uploadOnline = true

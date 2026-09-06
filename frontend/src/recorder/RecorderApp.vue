@@ -163,6 +163,14 @@ async function enterWithSession(joined: JoinResult): Promise<void> {
 
 const CONSENT_KEY = 'citizens-recorder-consent'
 
+/** Recovery used to jump straight past consent: a phone that crashed
+ * mid-assembly recovered, landed on preflight, and recorded again without
+ * anyone seeing the data-handling screen this app calls mandatory. */
+function finishRecovery(): void {
+	recoveryRecording.value = null
+	screen.value = consentGiven() ? 'preflight' : 'consent'
+}
+
 function consentGiven(): boolean {
 	try {
 		return window.localStorage.getItem(CONSENT_KEY) === session.value?.assembly.id
@@ -377,7 +385,7 @@ function sessionStorageClear(): void {
 			v-else-if="screen === 'recovery' && session && recoveryRecording"
 			:session="session"
 			:recording="recoveryRecording"
-			@done="recoveryRecording = null; screen = 'preflight'" />
+			@done="finishRecovery" />
 
 		<ConsentScreen
 			v-else-if="screen === 'consent' && session"

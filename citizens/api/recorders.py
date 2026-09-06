@@ -22,6 +22,7 @@ from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
+from citizens.services.recording import salvage_total_chunks
 from citizens.services.recording_states import transition
 from citizens.storage.paths import device_log_path
 
@@ -136,12 +137,16 @@ def replace_device(recording_id: str, user: CurrentUser, session: DB):
     # the feature would defeat itself.
     recording.superseded_at = utcnow()
 
-    # Assemble what did arrive. missing_sequences() returns [] when
-    # total_chunks is NULL — the phone never sent /complete — so this proceeds
-    # with whatever chunks exist rather than waiting for a completion that is
-    # never coming.
-    assembling = recording.received_chunks > 0
+    # Assemble what can still become audio: the contiguous chunk prefix.
+    # The old reasoning — "missing_sequences() returns [] when total_chunks is
+    # NULL" — was inverted for WAITING_FOR_CHUNKS, the first state on this
+    # endpoint's own list: a recording is there precisely BECAUSE /complete
+    # declared chunks that never arrived, so the assemble job bounced it
+    # straight back and the salvaged audio could never be used by anything.
+    salvaged = salvage_total_chunks(session, recording)
+    assembling = salvaged > 0
     if assembling:
+        recording.total_chunks = salvaged
         transition(recording, "ASSEMBLING")
         enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": recording.id})
     else:
@@ -153,10 +158,11 @@ def replace_device(recording_id: str, user: CurrentUser, session: DB):
         data={
             "table_number": recording.table_number,
             "received_chunks": recording.received_chunks,
+            "salvaged_chunks": salvaged,
             "assembling": assembling,
         },
     )
-    return {"state": recording.state, "assembling": assembling}
+    return {"state": recording.state, "assembling": assembling, "salvaged_chunks": salvaged}
 
 
 @router.post("/recordings/{recording_id}/assemble", status_code=202)

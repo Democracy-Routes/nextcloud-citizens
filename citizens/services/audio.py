@@ -69,6 +69,12 @@ def assemble_recording(session: Session, recording: Recording) -> list | None:
     canonical.parent.mkdir(parents=True, exist_ok=True)
 
     chunks = sorted(recording.chunks, key=lambda c: c.sequence_number)
+    # Only up to the declared total. A salvaged recording (dead phone, chunk
+    # lost to a full disk) deliberately truncates total_chunks to the
+    # contiguous prefix — but rows past the gap may still be stored, and a
+    # MediaRecorder stream concatenated across a gap is not decodable audio.
+    if recording.total_chunks is not None:
+        chunks = [c for c in chunks if c.sequence_number < recording.total_chunks]
     # assembly writes a full raw concat plus the remuxed copy, so it needs
     # roughly twice the recording free before it starts
     needed = sum(chunk.size_bytes for chunk in chunks) * 2

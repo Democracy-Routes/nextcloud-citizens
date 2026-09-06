@@ -363,3 +363,46 @@ def test_the_stored_transcript_keeps_the_real_words(pipeline):
         segments = session.execute(select(TranscriptSegment)).scalars().all()
         assert segments, "the pipeline should have produced a transcript"
         assert not any("[Person" in s.text for s in segments)
+
+
+def test_closing_mid_analysis_still_freezes_a_complete_report(pipeline):
+    """close_assembly enqueues a round's final analysis and freezes the report
+    in the same transaction, so the snapshot was taken before the summary it
+    was waiting for could exist. The analysis landing after the close now
+    refreshes the frozen copy — participants must not be left reading a report
+    with the round summary missing forever."""
+    import json
+
+    from citizens.db.models import Assembly, Round
+    from citizens.db.session import session_scope
+
+    client = pipeline["client"]
+    assembly_id = pipeline["assembly"]["id"]
+    round_id = pipeline["round_id"]
+    _wait(client, pipeline["headers"], pipeline["recording_id"], ("READY_FOR_REVIEW",))
+
+    # force the pre-close state the bug needs: a round with no summary yet, so
+    # close both enqueues its analysis AND freezes the report
+    with session_scope() as session:
+        session.get(Round, round_id).analysis_summary = ""
+
+    client.post(f"/api/v1/assemblies/{assembly_id}/close")
+
+    # the frozen snapshot catches up once the queued analysis runs
+    deadline = time.time() + 30
+    summary = ""
+    while time.time() < deadline:
+        with session_scope() as session:
+            frozen = session.get(Assembly, assembly_id).final_report_json
+            round_ = session.get(Round, round_id)
+            if frozen and round_.analysis_summary:
+                data = json.loads(frozen)
+                frozen_summary = next(
+                    (r["summary"] for r in data["rounds"] if r["summary"]), ""
+                )
+                if frozen_summary:
+                    summary = frozen_summary
+                    break
+        time.sleep(0.5)
+
+    assert summary, "the frozen report never caught up with the post-close analysis"

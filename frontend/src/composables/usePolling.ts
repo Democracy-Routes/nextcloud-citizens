@@ -33,6 +33,12 @@ export function usePolling(
 	async function refresh(): Promise<void> {
 		// a slow response must not let calls stack up behind it
 		if (inFlight) return
+		// paused means paused: the pause exists to protect an open editor from
+		// having its card replaced under it, and actions that finished with a
+		// courtesy refresh (bulk approve, a sibling card's save) were walking
+		// straight through it — the exact text loss it was built to prevent.
+		// resume() clears the flag before refreshing, so resuming still works.
+		if (paused.value) return
 		inFlight = true
 		try {
 			await poll()

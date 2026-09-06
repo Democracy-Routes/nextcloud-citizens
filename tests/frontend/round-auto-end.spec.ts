@@ -81,6 +81,47 @@ describe('a round whose time is up', () => {
 		// the countdown used to clamp at zero, so a round an hour over looked
 		// like one that had just finished
 		expect(wrapper.text()).toMatch(/\+0[01]:/)
+		// the assertion the audit found missing: this exact test used to
+		// trigger an instant endRound underneath and never checked
+		expect(endRound).not.toHaveBeenCalled()
+	})
+
+	it('gives a full grace window even when the tab opens onto an overrun round', async () => {
+		// F5, a tab switch, or opening the assembly mid-overrun used to end
+		// the round about a second after mount — the grace only existed for a
+		// facilitator whose tab was already open when time ran out
+		const wrapper = await mount(35)
+		expect(endRound).not.toHaveBeenCalled()
+		expect(wrapper.text()).toContain('Time is up')
+
+		await vi.advanceTimersByTimeAsync(30_000)
+		expect(endRound).not.toHaveBeenCalled()
+
+		await vi.advanceTimersByTimeAsync(31_000)
+		expect(endRound).toHaveBeenCalledWith('round-1')
+	})
+
+	it('fires exactly once even while the end request is slow', async () => {
+		// the trigger runs every tick; without the latch a 3-second POST
+		// would be issued three times
+		endRound.mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 5_000)))
+		await mount(30)
+
+		await vi.advanceTimersByTimeAsync(63_000)
+
+		expect(endRound).toHaveBeenCalledTimes(1)
+	})
+
+	it('never auto-ends an independent round', async () => {
+		roundMonitor.mockResolvedValue({ ...monitor(45), recording_mode: 'independent' })
+		mountWithI18n(MonitorTab, {
+			props: { assembly: { ...ASSEMBLY, recording_mode: 'independent' } },
+		})
+		await flushPromises()
+
+		await vi.advanceTimersByTimeAsync(120_000)
+
+		expect(endRound).not.toHaveBeenCalled()
 	})
 
 	it('offers the facilitator the exception before ending', async () => {

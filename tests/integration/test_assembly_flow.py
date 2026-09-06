@@ -196,3 +196,69 @@ def test_the_name_description_and_language_can_be_edited(client):
     assert updated.json()["name"] == "TEST Corrected"
     assert updated.json()["description"] == "Mobility"
     assert updated.json()["language"] == "it"
+
+
+def test_restarting_an_ended_round_runs_from_now(client):
+    """The original started_at was kept on restart, so a re-run round was
+    instantly deep in overrun: the Live tab counted up from half an hour ago
+    and its grace window ended the round the facilitator had just restarted."""
+    from datetime import timedelta
+
+    from citizens.db.models import Round
+    from citizens.db.models.base import utcnow
+    from citizens.db.session import session_scope
+
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST Restart clock",
+            "default_table_count": 1,
+            "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}],
+        },
+    ).json()
+    round_id = assembly["rounds"][0]["id"]
+    client.post(f"/api/v1/rounds/{round_id}/start")
+    # age the first run, then end it
+    with session_scope() as session:
+        session.get(Round, round_id).started_at = utcnow() - timedelta(minutes=45)
+    client.post(f"/api/v1/rounds/{round_id}/end")
+
+    restarted = client.post(f"/api/v1/rounds/{round_id}/start")
+
+    assert restarted.status_code == 200, restarted.text
+    with session_scope() as session:
+        round_ = session.get(Round, round_id)
+        age = (utcnow() - round_.started_at).total_seconds()
+        assert age < 60, f"restart kept a started_at {age:.0f}s old"
+        assert round_.ended_at is None
+
+
+def test_language_cannot_change_once_recording_exists(client):
+    """The client hides the control once recording starts, but a stale second
+    tab or a direct PUT could still send it — so the rule lives on the server
+    too. Name and description stay editable."""
+    import re
+
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={"name": "TEST Lang lock", "language": "en", "default_table_count": 1,
+              "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}]},
+    ).json()
+    round_id = assembly["rounds"][0]["id"]
+    client.post(f"/api/v1/rounds/{round_id}/start")
+    invites = client.post(f"/api/v1/assemblies/{assembly['id']}/invites/generate").json()
+    token = re.search(r"#/join/(.+)$", invites[0]["url"]).group(1)
+    joined = client.post("/api/v1/public/join", json={"token": token},
+                         headers={"X-Origin-IP": "203.0.113.1"}).json()
+    client.post("/api/v1/public/recorder/start",
+                json={"round_id": round_id, "mime_type": "audio/webm"},
+                headers={"Authorization": f"Bearer {joined['session_token']}"})
+
+    blocked = client.put(f"/api/v1/assemblies/{assembly['id']}", json={"language": "it"})
+    assert blocked.status_code == 409
+    assert "language" in blocked.json()["detail"]
+
+    ok = client.put(f"/api/v1/assemblies/{assembly['id']}", json={"description": "Fine"})
+    assert ok.status_code == 200
+    same = client.put(f"/api/v1/assemblies/{assembly['id']}", json={"language": "en"})
+    assert same.status_code == 200

@@ -97,6 +97,7 @@ def _state(recording_id):
         return recording.state, recording.error_code
 
 
+
 @pytest.fixture
 def table_recording(client):
     """One table, mid-round, with some audio already uploaded."""
@@ -342,11 +343,13 @@ def test_reclaiming_keeps_the_audio_already_uploaded(client, table_recording):
 
     _start(client, table_recording["headers"], table_recording["round_id"])
 
-    # salvaged the same way a replaced device is: parked for its chunks, not
-    # discarded, so the first half of the round still becomes a transcript
+    # salvaged the same way a replaced device is: the phone that owns this
+    # recording is right here starting a new one, so its backlog is never
+    # coming — the uploaded half is assembled now, not left to retention. The
+    # release stamps DEVICE_REJOINED, then salvage moves it into ASSEMBLING.
     state, error = _state(table_recording["recording_id"])
-    assert state == "UPLOAD_INCOMPLETE"
-    assert error == "DEVICE_REJOINED"
+    assert state in ("ASSEMBLING", "AUDIO_READY", "TRANSCRIBING", "TRANSCRIBED",
+                     "ANALYZING", "READY_FOR_REVIEW")
 
 
 def test_another_phone_still_waits_its_two_minutes(client, table_recording):
@@ -378,3 +381,80 @@ def test_a_phone_cannot_re_record_a_round_it_finished(client, table_recording):
 
     assert response.status_code == 409
     assert "already recorded" in response.json()["detail"]
+
+
+# --------------------------------------- salvaging a gap-truncated recording
+
+
+def _complete(client, headers, recording_id, total):
+    return client.post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/complete",
+        json={"total_chunks": total}, headers=headers,
+    )
+
+
+def test_replace_device_salvages_the_chunks_before_a_gap(client):
+    """A phone that uploaded 0,1,2, skipped 3, then sent /complete(total=5)
+    lands in WAITING_FOR_CHUNKS — reached ONLY because chunks are missing. The
+    old code claimed to assemble it and the job bounced straight back; the real
+    audio (the contiguous prefix) could never become a transcript."""
+    assembly = _assembly(client, name="TEST Salvage gap")
+    round_id = assembly["rounds"][0]["id"]
+    headers = _join(client, assembly)
+    recording_id = _start(client, headers, round_id).json()["recording_id"]
+    for seq in (0, 1, 2, 4):  # 3 missing
+        assert _upload(client, headers, recording_id, seq).status_code == 200
+    assert _complete(client, headers, recording_id, 5).json()["missing_sequences"] == [3]
+    assert _state(recording_id)[0] == "WAITING_FOR_CHUNKS"
+
+    response = client.post(f"/api/v1/recordings/{recording_id}/replace-device")
+
+    assert response.status_code == 200, response.text
+    # the contiguous prefix 0,1,2 is salvaged; the gap at 3 truncates the rest.
+    # The old code claimed to assemble and the job bounced straight back with
+    # nothing usable — now total_chunks is rewritten so assembly can proceed.
+    assert response.json()["salvaged_chunks"] == 3
+    assert response.json()["assembling"] is True
+    with session_scope() as session:
+        recording = session.get(Recording, recording_id)
+        assert recording.total_chunks == 3
+        assert recording.state == "ASSEMBLING"
+        jobs = session.execute(
+            select(AppJob).where(
+                AppJob.type == "ASSEMBLE_AUDIO",
+                AppJob.payload_json.contains(recording_id),
+            )
+        ).scalars().all()
+    assert jobs, "the salvaged prefix must be queued for assembly"
+
+
+def test_a_rejoining_phone_salvages_what_it_already_sent(client):
+    """The reclaim path enqueues assembly too: this phone is starting a NEW
+    recording, so its backlog is never coming and the uploaded half must be
+    assembled now rather than stranded until retention deletes it."""
+    assembly = _assembly(client, name="TEST Rejoin salvage")
+    round_id = assembly["rounds"][0]["id"]
+    headers = _join(client, assembly)
+    first = _start(client, headers, round_id).json()["recording_id"]
+    for seq in (0, 1, 2):
+        assert _upload(client, headers, first, seq).status_code == 200
+
+    # same session reloads and starts again — reclaims its own RECORDING row
+    second = _start(client, headers, round_id)
+    assert second.status_code == 201
+
+    # the release stamps DEVICE_REJOINED, then salvage assembles the prefix —
+    # this phone will never come back to /complete the old id, so the uploaded
+    # half must be assembled now rather than stranded until retention
+    with session_scope() as session:
+        recording = session.get(Recording, first)
+        assert recording.error_code == "DEVICE_REJOINED"
+        assert recording.state == "ASSEMBLING"
+        assert recording.total_chunks == 3
+        jobs = session.execute(
+            select(AppJob).where(
+                AppJob.type == "ASSEMBLE_AUDIO",
+                AppJob.payload_json.contains(first),
+            )
+        ).scalars().all()
+    assert jobs, "the rejoining phone's uploaded half must be queued for assembly"

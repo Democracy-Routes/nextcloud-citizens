@@ -22,7 +22,7 @@ from citizens.services.audio import (
     assemble_recording,
     reclaim_chunks,
 )
-from citizens.services.jobs import enqueue_job
+from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.recording_states import transition
 from citizens.storage.paths import live_caption_path
 
@@ -55,7 +55,11 @@ def handle_assemble_audio(session: Session, payload: dict) -> None:
     if recording is None:
         raise PermanentJobError(f"Recording {payload['recording_id']} no longer exists")
     if recording.state == "AUDIO_READY":
-        return  # already done (job retried after success)
+        # Already assembled — this is a retry. The retry may exist precisely
+        # because the enqueue after success failed, so repair that rather than
+        # skipping it.
+        _maybe_enqueue_transcription(session, recording)
+        return
     if recording.state != "ASSEMBLING":
         transition(recording, "ASSEMBLING")
     try:
@@ -83,19 +87,38 @@ def handle_assemble_audio(session: Session, payload: dict) -> None:
 
 
 def _maybe_enqueue_transcription(session: Session, recording: Recording) -> None:
+    """Queue the next stage after assembly.
+
+    Failing to read the config here must NOT fail the assembly — the audio is
+    safely AUDIO_READY and re-running assembly would be pointless work. But a
+    swallowed failure used to leave the recording in AUDIO_READY forever with
+    nothing queued, a green pill blocking the round's analysis, because nothing
+    else ever enqueued transcription. So: log loudly, and let
+    sweep_missed_enqueues() be the backstop that retries when Nextcloud is
+    reachable again.
+    """
+    recording_id = recording.id
+    # Release the writer slot BEFORE the OCS round-trips: these are HTTPS calls
+    # to Nextcloud, and holding the write transaction across them queued every
+    # concurrent chunk upload behind busy_timeout (runner.py's contract).
+    session.commit()
     try:
         store = provider_config.default_store()
-        if transcription_svc.batch_transcription_ready(store):
-            enqueue_job(session, "TRANSCRIBE_FINAL", {"recording_id": recording.id})
-            log.info("transcription_enqueued", recording_id=recording.id)
-        elif transcription_svc.live_transcription_ready(store):
-            # captions are the only transcript this assembly will get, so they
-            # become the record rather than being discarded with the session
-            enqueue_job(session, "TRANSCRIBE_FROM_LIVE", {"recording_id": recording.id})
-            log.info("live_transcription_enqueued", recording_id=recording.id)
+        batch = transcription_svc.batch_transcription_ready(store)
+        live = transcription_svc.live_transcription_ready(store)
     except Exception:
-        # never let STT config problems endanger the assembled audio
-        log.warning("transcription_enqueue_failed", recording_id=recording.id, exc_info=True)
+        log.warning(
+            "transcription_enqueue_deferred", recording_id=recording_id, exc_info=True
+        )
+        return
+    if batch and not has_live_job(session, "TRANSCRIBE_FINAL", "recording_id", recording_id):
+        enqueue_job(session, "TRANSCRIBE_FINAL", {"recording_id": recording_id})
+        log.info("transcription_enqueued", recording_id=recording_id)
+    elif live and not has_live_job(session, "TRANSCRIBE_FROM_LIVE", "recording_id", recording_id):
+        # captions are the only transcript this assembly will get, so they
+        # become the record rather than being discarded with the session
+        enqueue_job(session, "TRANSCRIBE_FROM_LIVE", {"recording_id": recording_id})
+        log.info("live_transcription_enqueued", recording_id=recording_id)
 
 
 def handle_transcribe_final(session: Session, payload: dict) -> None:
@@ -103,12 +126,18 @@ def handle_transcribe_final(session: Session, payload: dict) -> None:
     if recording is None:
         raise PermanentJobError(f"Recording {payload['recording_id']} no longer exists")
     if recording.state == "TRANSCRIBED" and not payload.get("force"):
+        _maybe_enqueue_analysis(session, recording)
         return
     if recording.state in ("AUDIO_READY", "TRANSCRIPTION_FAILED", "TRANSCRIBED"):
         transition(recording, "TRANSCRIBING")
     elif recording.state != "TRANSCRIBING":
         raise PermanentJobError(f"Recording is {recording.state}; cannot transcribe")
 
+    # persist TRANSCRIBING and release the writer slot before the OCS reads
+    # inside default_store()/transcribe_recording — holding it across HTTPS
+    # round-trips is the lock-starvation regression this codebase has fixed
+    # three times (runner.py's contract)
+    session.commit()
     store = provider_config.default_store()
     try:
         transcription_svc.transcribe_recording(session, store, recording)
@@ -143,6 +172,7 @@ def handle_transcribe_from_live(session: Session, payload: dict) -> None:
     if recording is None:
         raise PermanentJobError(f"Recording {payload['recording_id']} no longer exists")
     if recording.state == "TRANSCRIBED" and not payload.get("force"):
+        _maybe_enqueue_analysis(session, recording)
         return
     if recording.state in ("AUDIO_READY", "TRANSCRIPTION_FAILED", "TRANSCRIBED"):
         transition(recording, "TRANSCRIBING")
@@ -219,16 +249,22 @@ def _table_still_transcribing(session: Session, recording: Recording) -> bool:
 
 
 def _maybe_enqueue_analysis(session: Session, recording: Recording) -> None:
+    """Same contract as _maybe_enqueue_transcription: a failed config read is
+    logged and left to the sweep, never fatal to the transcription job."""
+    recording_id = recording.id
+    if _table_still_transcribing(session, recording):
+        log.info("analysis_waiting_for_sibling", recording_id=recording_id)
+        return
+    # commit before the OCS round-trips — see _maybe_enqueue_transcription
+    session.commit()
     try:
-        if _table_still_transcribing(session, recording):
-            log.info("analysis_waiting_for_sibling", recording_id=recording.id)
-            return
-        store = provider_config.default_store()
-        if analysis_svc.analysis_ready(store):
-            enqueue_job(session, "ANALYZE_TABLE", {"recording_id": recording.id})
-            log.info("analysis_enqueued", recording_id=recording.id)
+        ready = analysis_svc.analysis_ready(provider_config.default_store())
     except Exception:
-        log.warning("analysis_enqueue_failed", recording_id=recording.id, exc_info=True)
+        log.warning("analysis_enqueue_deferred", recording_id=recording_id, exc_info=True)
+        return
+    if ready and not has_live_job(session, "ANALYZE_TABLE", "recording_id", recording_id):
+        enqueue_job(session, "ANALYZE_TABLE", {"recording_id": recording_id})
+        log.info("analysis_enqueued", recording_id=recording_id)
 
 
 def handle_analyze_table(session: Session, payload: dict) -> None:
@@ -242,6 +278,8 @@ def handle_analyze_table(session: Session, payload: dict) -> None:
     elif recording.state != "ANALYZING":
         raise PermanentJobError(f"Recording is {recording.state}; cannot analyze")
 
+    # commit before the OCS reads — see handle_transcribe_final
+    session.commit()
     store = provider_config.default_store()
     try:
         analysis_svc.analyze_table(session, store, recording)
@@ -255,6 +293,15 @@ def handle_analyze_table(session: Session, payload: dict) -> None:
         raise
     recording.error_code = ""
     transition(recording, "READY_FOR_REVIEW")
+    # The analysis covered the whole TABLE — both halves of a replaced-device
+    # round — but only the recording named in the payload was transitioned.
+    # When the superseded half transcribed last, the job ran under ITS id, the
+    # live half stayed TRANSCRIBED (a pending state), and the round's
+    # cross-table analysis never ran until close or a manual re-run.
+    for sibling in analysis_svc.table_recordings(session, recording):
+        if sibling.id != recording.id and sibling.state == "TRANSCRIBED":
+            transition(sibling, "ANALYZING")
+            transition(sibling, "READY_FOR_REVIEW")
     maybe_enqueue_round_analysis(session, recording)
 
 
@@ -285,10 +332,26 @@ def maybe_enqueue_round_analysis(session: Session, recording: Recording) -> None
         log.info("round_analysis_enqueued", round_id=recording.round_id)
 
 
+def _refresh_frozen_report_if_closed(session: Session, round_) -> None:
+    """close_assembly enqueues this round's final analysis and freezes the
+    report IN THE SAME TRANSACTION — so the snapshot participants read was
+    taken before the summaries it was waiting for could exist. When the
+    analysis lands after the close, the frozen copy catches up here."""
+    assembly = round_.assembly
+    if assembly is None or assembly.closed_at is None:
+        return
+    from citizens.services.lifecycle import snapshot_final_report
+
+    snapshot_final_report(session, assembly)
+    log.info("frozen_report_refreshed_after_analysis", assembly_id=assembly.id)
+
+
 def handle_analyze_round(session: Session, payload: dict) -> None:
     round_ = session.get(Round, payload["round_id"])
     if round_ is None:
         raise PermanentJobError(f"Round {payload['round_id']} no longer exists")
+    # even a bare read opened BEGIN IMMEDIATE — commit before the OCS reads
+    session.commit()
     store = provider_config.default_store()
     try:
         analysis_svc.analyze_round(session, store, round_)
@@ -299,6 +362,7 @@ def handle_analyze_round(session: Session, payload: dict) -> None:
         raise
     if round_.status in ("ENDED", "PROCESSING"):
         round_.status = "READY_FOR_REVIEW"
+    _refresh_frozen_report_if_closed(session, round_)
 
 
 HANDLERS = {

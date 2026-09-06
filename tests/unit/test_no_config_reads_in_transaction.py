@@ -56,6 +56,39 @@ def _offending_calls(path: pathlib.Path) -> list[str]:
     return found
 
 
+def _offending_session_functions(path: pathlib.Path) -> list[str]:
+    """Config reads in a function that HOLDS an injected session, with no
+    commit first.
+
+    The check above was vacuous for citizens/jobs/handlers.py: the runner
+    injects the session, so the file never contains `with session_scope()` and
+    the walk scanned zero nodes — which is exactly where the regression came
+    back. Any statement on an injected session opens BEGIN IMMEDIATE, so a
+    function that takes a `session` parameter is in-transaction from its first
+    line unless a `session.commit()` appears before the config call.
+    """
+    tree = ast.parse(path.read_text())
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        args = [a.arg for a in node.args.args]
+        if "session" not in args:
+            continue
+        committed_line = None
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Call):
+                continue
+            name = _call_name(inner)
+            if name == "commit" and isinstance(inner.func, ast.Attribute):
+                if committed_line is None or inner.lineno < committed_line:
+                    committed_line = inner.lineno
+            elif name in CONFIG_CALLS:
+                if committed_line is None or inner.lineno < committed_line:
+                    found.append(f"{path.name}:{inner.lineno} {name}() in {node.name}()")
+    return found
+
+
 @pytest.mark.parametrize(
     "relative_path",
     [
@@ -76,6 +109,24 @@ def test_background_work_never_reads_config_inside_a_transaction(relative_path):
     offenders = _offending_calls(ROOT / relative_path)
     assert not offenders, (
         "provider config is read inside a database transaction: "
+        + ", ".join(offenders)
+    )
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "citizens/jobs/handlers.py",
+        "citizens/jobs/sweep.py",
+    ],
+)
+def test_injected_session_functions_commit_before_reading_config(relative_path):
+    """The vacuous-guard fix: handlers receive their session from the runner,
+    so the with-block scan above never saw them — and the OCS-under-writer-slot
+    regression returned through exactly that gap."""
+    offenders = _offending_session_functions(ROOT / relative_path)
+    assert not offenders, (
+        "config read on an injected session with no commit released first: "
         + ", ".join(offenders)
     )
 

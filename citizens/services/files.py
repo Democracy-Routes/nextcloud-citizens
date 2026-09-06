@@ -89,6 +89,7 @@ def list_files(session: Session, assembly: Assembly) -> dict:
     by_round: dict[str, list[dict]] = {}
     total_bytes = 0
     deleted_count = 0
+    kept_past_retention = 0
     for recording in recordings:
         path = canonical_path(recording)
         size = path.stat().st_size if path else 0
@@ -103,6 +104,16 @@ def list_files(session: Session, assembly: Assembly) -> dict:
         total_bytes += size
         if recording.audio_deleted_at is not None:
             deleted_count += 1
+        # audio the retention sweep refused to delete: for a recording with no
+        # transcript the audio IS the record, and it is the organizer's to
+        # resolve — retry transcription, or delete it deliberately
+        if (
+            assembly.audio_purged_at is not None
+            and recording.audio_deleted_at is None
+            and size > 0
+            and recording.id not in transcribed
+        ):
+            kept_past_retention += 1
         by_round.setdefault(recording.round_id, []).append(
             {
                 "recording_id": recording.id,
@@ -137,6 +148,7 @@ def list_files(session: Session, assembly: Assembly) -> dict:
             "recordings": len(recordings),
             "audio_bytes": total_bytes,
             "audio_deleted": deleted_count,
+            "kept_past_retention": kept_past_retention,
         },
         # Coverage used to be returned only by the POST that asks the phones to
         # clear. Closing now asks by itself, so there is no button press to
@@ -335,13 +347,42 @@ def device_audio_coverage(session: Session, assembly: Assembly) -> dict:
     }
 
 
-def delete_assembly_audio(session: Session, assembly: Assembly) -> tuple[int, int]:
+def delete_assembly_audio(
+    session: Session, assembly: Assembly, keep_untranscribed: bool = False
+) -> tuple[int, int, int]:
+    """Delete this assembly's audio. Returns (deleted, freed_bytes, kept).
+
+    keep_untranscribed is the retention sweep's mode: audio whose recording has
+    NO transcript is skipped, because for those rows the audio is not a copy of
+    anything — it is the only representation of that part of the discussion.
+    Deleting it on a timer turned a failed transcription plus an expiry into a
+    silently lost conversation. The organizer's explicit "Delete all audio"
+    keeps deleting everything: a person chose, and the confirm dialog says so.
+    """
+    transcribed = {
+        row
+        for row in session.execute(
+            select(Transcript.recording_id)
+            .join(Recording, Recording.id == Transcript.recording_id)
+            .where(Recording.assembly_id == assembly.id)
+        ).scalars()
+    }
     freed = 0
     count = 0
+    kept = 0
     for recording in session.execute(
         select(Recording).where(Recording.assembly_id == assembly.id)
     ).scalars():
         if recording.audio_deleted_at is not None and canonical_path(recording) is None:
+            continue
+        if keep_untranscribed and recording.id not in transcribed:
+            kept += 1
+            log.warning(
+                "retention_skipped_no_transcript",
+                recording_id=recording.id,
+                table_number=recording.table_number,
+                state=recording.state,
+            )
             continue
         freed += delete_recording_audio(session, recording)
         count += 1
@@ -351,7 +392,7 @@ def delete_assembly_audio(session: Session, assembly: Assembly) -> tuple[int, in
     # retention sweep takes, so missing it meant reporting the audio purged
     # while a complete copy of it remained on disk.
     freed += purge_assembly_exports(_storage_root(), assembly.id)
-    return count, freed
+    return count, freed, kept
 
 
 def build_audio_zip(session: Session, assembly: Assembly) -> Path:

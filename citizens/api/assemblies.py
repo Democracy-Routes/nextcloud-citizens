@@ -4,7 +4,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -58,10 +58,38 @@ def get_assembly(assembly_id: str, user: CurrentUser, session: ReadDB):
 @router.put("/assemblies/{assembly_id}", response_model=schemas.AssemblyDetail)
 def update_assembly(assembly_id: str, data: schemas.AssemblyUpdate, user: CurrentUser, session: DB):
     assembly = svc.get_owned_assembly(session, assembly_id, user)
-    for field, value in data.model_dump(exclude_unset=True).items():
+    fields = data.model_dump(exclude_unset=True)
+    # Language and recording mode decide how audio is transcribed and whether a
+    # phone may record without the facilitator; changing either once any audio
+    # exists would leave one assembly with transcripts in two languages, or
+    # flip recording rules mid-event. The client hides them once recording
+    # starts, but a stale second tab or a direct PUT could still send them, so
+    # the rule lives here too. Name, description, instructions, toggles stay
+    # editable throughout.
+    locked = {"language", "recording_mode"}
+    changed = {
+        field
+        for field in locked & fields.keys()
+        if fields[field] != getattr(assembly, field)
+    }
+    if changed and _assembly_has_recordings(session, assembly_id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot change {', '.join(sorted(changed))} once recording has begun.",
+        )
+    for field, value in fields.items():
         setattr(assembly, field, value)
     session.flush()
     return _detail(session, assembly)
+
+
+def _assembly_has_recordings(session: Session, assembly_id: str) -> bool:
+    return (
+        session.execute(
+            select(Recording.id).where(Recording.assembly_id == assembly_id).limit(1)
+        ).first()
+        is not None
+    )
 
 
 @router.delete("/assemblies/{assembly_id}", status_code=204)

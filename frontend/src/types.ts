@@ -76,7 +76,14 @@ export interface DeviceAudioCoverage {
 }
 
 export interface FilesListing {
-	totals: { recordings: number; audio_bytes: number; audio_deleted: number }
+	totals: {
+		recordings: number
+		audio_bytes: number
+		audio_deleted: number
+		/** audio the retention sweep refused to delete: no transcript exists,
+		 * so for these recordings the audio is the only record */
+		kept_past_retention: number
+	}
 	device_audio: DeviceAudioCoverage & {
 		purge_requested_at: string | null
 		auto_purge: boolean
@@ -164,6 +171,16 @@ export interface MonitorTable {
 		total_chunks: number | null
 		error_code: string
 	} | null
+	/** Recordings from a phone this table has since replaced. The server ships
+	 * these so the salvaged half of a round stays visible while it finishes
+	 * transcribing — otherwise it vanished from the Live tab the moment the
+	 * replacement started. */
+	superseded_recordings: Array<{
+		id: string
+		state: string
+		error_code: string
+		received_chunks: number
+	}>
 }
 
 export type SttProvider = 'mistral' | 'deepgram' | 'whisper' | 'vosk'

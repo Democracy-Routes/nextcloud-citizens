@@ -128,7 +128,8 @@
 			"serverUpload": "Caricamento sul server",
 			"pendingUpload": "In attesa di caricamento",
 			"chunksUploaded": "frammenti caricati",
-			"openingIn": "Apertura tra {seconds} s…"
+			"openingIn": "Apertura tra {seconds} s…",
+			"micLost": "Il microfono è stato interrotto — una chiamata o un'altra app lo ha preso in uso. La registrazione fatta finora è salva ed è in caricamento. Avvisa chi facilita e poi ricominciate quando il tavolo è pronto."
 		},
 		"recovery": {
 			"intro": "Questo telefono ha una registrazione non completamente sincronizzata — per esempio dopo il ricaricamento della pagina o la chiusura del browser. Tutto l'audio salvato in locale è integro.",
@@ -145,7 +146,8 @@
 			"failed": "La sincronizzazione di recupero non è riuscita:",
 			"failedHint": "L'audio locale resta salvato su questo telefono. Avvisate il facilitatore.",
 			"title": "Registrazione recuperata",
-			"awaitingUpload": "In attesa di caricamento"
+			"awaitingUpload": "In attesa di caricamento",
+			"uploaded": "Ogni parte della registrazione è stata caricata e accettata, ma il server non ha ancora confermato l'audio assemblato. Conserva la copia su questo telefono finché non lo avrà fatto."
 		},
 		"report": {
 			"mentionedAt": "Citato a {count} tavolo | Citato a {count} tavolo | Citato a {count} tavoli",

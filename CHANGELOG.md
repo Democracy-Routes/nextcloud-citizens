@@ -4,6 +4,72 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Fix the worst of a 51-finding audit — 2026-09-06
+
+A three-way code audit (recorder, backend pipeline, organizer) plus a re-audit
+of the previous week's commits found 51 issues; this fixes the twenty that can
+lose audio, break a live event, or misreport a privacy operation. The full list,
+with a status for each, is in docs/bug-audit-2026-09-06.md. The honest lesson is
+recorded there too: four of the five live-event bugs had shipped in the previous
+72 hours, and a test suite passed while triggering one of them.
+
+**Audio can no longer be lost**
+
+- A reload during "Synchronizing" no longer bricks the recording. The server
+  409s a re-sent /complete once it has started assembling — which a recovered
+  phone always does — and the phone treated that as a permanent sync failure,
+  re-entering recovery on every boot forever and blocking the purge. It now asks
+  the server and treats an already-finished recording as done.
+- Replacing a dead phone actually salvages its audio. A recording that had
+  declared more chunks than arrived could never assemble — the job bounced
+  straight back — so the real audio (everything before the gap) was lost.
+  Replace-device, the automatic rejoin, and a new sweep now truncate to the
+  contiguous prefix and assemble that.
+- Audio that never became a transcript is no longer deleted on the retention
+  timer. For a recording whose transcription failed, the audio is the only
+  record of that discussion; the sweep now keeps it and the Files tab says so,
+  rather than silently destroying it. (This settles the retention question left
+  open since the first hardening tranche.)
+- A microphone the operating system takes away — a call, another app — is now
+  detected. The recording so far is saved and the table is told, instead of the
+  screen going on showing "recording" while nothing is captured.
+- A single failed chunk write no longer poisons the whole recording. The phone
+  declares only what it actually stored and salvages everything before a gap,
+  instead of waiting forever for a chunk that never existed.
+- The recovery screen no longer dead-ends with no buttons in two reachable
+  states. And a local write now counts only once the browser has truly
+  committed it, not while the transaction can still abort.
+
+**Live events**
+
+- The Live tab no longer ends a round the instant it is opened. A round already
+  past its time got no grace window at all — a refresh or a tab switch ended it
+  within a second. The grace now starts when the tab first sees the overrun, is
+  driven every second rather than on a single missable edge, and never touches
+  an independent assembly.
+- Restarting an ended round runs from now, not from its original start — it was
+  instantly "expired" and auto-ended again.
+- Job handlers no longer hold the database's single writer while calling
+  Nextcloud, the lock-starvation regression that has recurred three times; the
+  guard test that was supposed to catch it, and silently didn't, now does.
+- Closing a session while a round is still analysing no longer freezes a report
+  with the summary missing forever — the frozen copy catches up when the
+  analysis lands. And a table whose phone was replaced no longer wedges the
+  round's analysis when its two halves finish out of order.
+
+**Privacy and trust**
+
+- The Files tab no longer tells every assembly that its phones failed to clear
+  their audio when no purge was ever requested.
+- Bulk-approving findings, or a neighbouring card saving, no longer refreshes
+  through the "paused while you edit" guard and discards what someone is typing.
+- Language and recording mode are now locked on the server once recording has
+  begun, not only hidden in the UI — a stale tab could change them before.
+- The consent screen is shown after a crash recovery, where it used to be
+  skipped. Reopening an assembly lets retention apply to new audio again. And
+  the salvaged half of a replaced table's recording is shown on the Live tab,
+  which is what the server was already sending it for.
+
 ### What a real assembly's report showed us — 2026-09-04
 
 A test assembly produced a thirteen-page report, and reading it end to end was

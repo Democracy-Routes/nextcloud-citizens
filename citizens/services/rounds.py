@@ -25,8 +25,15 @@ def start_round(session: Session, round_: Round) -> Round:
     ]
     if other_active:
         raise HTTPException(status_code=409, detail="Another round is already active")
+    # A restart runs from NOW. Keeping the original started_at made a
+    # restarted round instantly "overrunning": the countdown counted up from
+    # a start half an hour past, and the Live tab's grace window ended the
+    # round the facilitator had just restarted within seconds.
+    restarted = round_.status == "ENDED"
     round_.status = "ACTIVE"
-    round_.started_at = round_.started_at or utcnow()
+    round_.started_at = utcnow() if restarted or round_.started_at is None else round_.started_at
+    if restarted:
+        round_.ended_at = None
     if round_.assembly.status in ("DRAFT", "READY"):
         round_.assembly.status = "ACTIVE"
     session.flush()

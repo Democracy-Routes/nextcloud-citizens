@@ -553,6 +553,9 @@ async function clearSynced(): Promise<void> {
 
 		<template v-else-if="state.phase === 'syncing'">
 			<div class="rc-scroll">
+				<div v-if="state.micLost" class="rc-alert" role="alert">
+					{{ t('recorder.recording.micLost') }}
+				</div>
 				<div class="rc-hero">
 					<div class="rc-hero__icon"><SvgIcon :path="mdiCloudUploadOutline" :size="44" style="color: var(--rc-blue)" /></div>
 					<h1>Synchronizing</h1>

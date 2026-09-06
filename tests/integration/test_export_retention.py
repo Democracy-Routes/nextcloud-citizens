@@ -129,3 +129,54 @@ def test_the_sweep_runs_with_the_others(client):
     import inspect
 
     assert "sweep_stale_exports" in inspect.getsource(sweep.run_sweeps)
+
+
+def test_retention_keeps_audio_that_has_no_transcript(client, monkeypatch):
+    """A recording that never got a transcript (failed STT, a stranded partial,
+    both switches off) has audio that is the ONLY representation of that part of
+    the discussion. Deleting it on the retention timer turned a failed
+    transcription plus an expiry into a silently lost conversation."""
+    import hashlib
+    import re
+    from datetime import timedelta
+
+    from citizens.db.models import Assembly, Recording
+    from citizens.db.models.base import utcnow
+    from citizens.db.session import session_scope
+    from citizens.services import files as files_svc
+    from citizens.services import provider_config
+
+    # a real recording, via the recorder flow, then forced to TRANSCRIPTION_FAILED
+    assembly = _assembly(client, name="TEST Keep untranscribed")
+    round_id = assembly["rounds"][0]["id"]
+    client.post(f"/api/v1/rounds/{round_id}/start")
+    invites = client.post(f"/api/v1/assemblies/{assembly['id']}/invites/generate").json()
+    token = re.search(r"#/join/(.+)$", invites[0]["url"]).group(1)
+    joined = client.post("/api/v1/public/join", json={"token": token},
+                         headers={"X-Origin-IP": "203.0.113.2"}).json()
+    headers = {"Authorization": f"Bearer {joined['session_token']}"}
+    rec_id = client.post("/api/v1/public/recorder/start",
+                         json={"round_id": round_id, "mime_type": "audio/webm"},
+                         headers=headers).json()["recording_id"]
+    blob = b"audio-bytes"
+    client.post(f"/api/v1/public/recorder/recordings/{rec_id}/chunks/0", content=blob,
+                headers={**headers, "Content-Type": "application/octet-stream",
+                         "X-Chunk-SHA256": hashlib.sha256(blob).hexdigest()})
+    with session_scope() as session:
+        session.get(Recording, rec_id).state = "TRANSCRIPTION_FAILED"
+
+    monkeypatch.setattr(provider_config, "get_setting", lambda _store, _key: "1")
+    monkeypatch.setattr(provider_config, "default_store", lambda: object())
+    with session_scope() as session:
+        db_assembly = session.get(Assembly, assembly["id"])
+        db_assembly.closed_at = utcnow() - timedelta(days=2)
+        db_assembly.audio_retention_days = 1
+
+    sweep.sweep_expired_audio()
+
+    with session_scope() as session:
+        assert session.get(Recording, rec_id).audio_deleted_at is None, (
+            "retention deleted the only copy of an untranscribed discussion"
+        )
+        listing = files_svc.list_files(session, session.get(Assembly, assembly["id"]))
+        assert listing["totals"]["kept_past_retention"] == 1

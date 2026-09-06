@@ -50,7 +50,15 @@ const purgeCoverage = ref<{ devices: number; cleared: number; still_holding: num
  * response to carry this back — and a purge whose outcome nobody can see is
  * one nobody can act on when a phone turns out to still be holding something.
  * The button's own response still wins while it is fresher. */
-const coverage = computed(() => purgeCoverage.value ?? listing.value?.device_audio ?? null)
+const coverage = computed(() => {
+	// Only once a purge has actually been requested. The listing always
+	// carries device_audio now, and falling back to it unconditionally told
+	// every open assembly "0 of 8 phones have reported clearing their copy" —
+	// a privacy operation that never happened, reported as failing.
+	if (purgeCoverage.value) return purgeCoverage.value
+	const fromListing = listing.value?.device_audio
+	return fromListing?.purge_requested_at ? fromListing : null
+})
 
 /** Ask the table phones to delete their local copies.
  *
@@ -329,6 +337,17 @@ async function deleteAll(): Promise<void> {
 						{{ coverage.unknown }} have not reported since — they will clear
 						themselves if the recorder is opened again.
 					</template>
+				</p>
+
+				<p
+					v-if="listing.totals.kept_past_retention"
+					class="cz-error"
+					style="margin: 12px 0 0; font-size: 0.845rem"
+					role="alert">
+					{{ listing.totals.kept_past_retention }} recording(s) were kept past the
+					retention period because no transcript exists for them — for those, the
+					audio is the only record of the discussion. Retry transcription, or
+					delete them deliberately.
 				</p>
 
 				<p class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">

@@ -145,21 +145,60 @@ const remaining = computed(() => {
 /** Time is up and nobody has extended or ended it yet. */
 const overrunning = computed(() => secondsLeft.value !== null && secondsLeft.value <= 0)
 
-/** Seconds before this round ends by itself. */
+/** When the grace window closes, as a wall-clock time — or 0 while not armed.
+ *
+ * Measured from when THIS TAB first observes the overrun, never from the
+ * round's planned end. The previous version derived it from the planned end,
+ * which meant a tab mounted onto a round already a minute over computed zero
+ * on its first poll and ended the round about a second later, grace buttons
+ * flashing past — F5 or a tab-switch was enough. The facilitator gets the
+ * full window from the moment their screen could actually show it. */
+const graceEndsAt = ref(0)
+const autoEndFired = ref(false)
+
+/** Seconds before this round ends by itself, for the countdown text. */
 const autoEndIn = computed(() => {
-	if (!overrunning.value || autoEndCancelled.value) return null
-	return Math.max(0, GRACE_SECONDS + (secondsLeft.value ?? 0))
+	if (!overrunning.value || autoEndCancelled.value || graceEndsAt.value === 0) return null
+	return Math.max(0, Math.ceil((graceEndsAt.value - now.value) / 1000))
 })
 
 // Rounds were ending only when a human clicked, so they ended at different
 // times across tables — reported by participants as unfair and confusing. This
 // ends them on time while leaving the facilitator in charge of the exception.
-watch(autoEndIn, (left) => {
-	if (left === 0 && monitor.value?.status === 'ACTIVE' && !busy.value) endRound()
+//
+// Driven from the 1 Hz tick, not a watch on the countdown reaching zero: that
+// was a single edge, and if `busy` happened to be true at that one tick the
+// auto-end was lost forever while the bar promised "ending in 0s". A tick that
+// finds the deadline passed just tries again next second. Orchestrated only —
+// independent tables run on their own schedule and their phones already
+// auto-finish; ending the round under them would be a silent, uncancellable
+// interruption with none of this UI visible.
+watch(now, () => {
+	if (monitor.value?.recording_mode !== 'orchestrated') return
+	if (!overrunning.value || autoEndCancelled.value) {
+		graceEndsAt.value = 0
+		autoEndFired.value = false
+		return
+	}
+	if (graceEndsAt.value === 0) {
+		graceEndsAt.value = now.value + GRACE_SECONDS * 1000
+		return
+	}
+	if (
+		!autoEndFired.value &&
+		now.value >= graceEndsAt.value &&
+		monitor.value?.status === 'ACTIVE' &&
+		!busy.value
+	) {
+		autoEndFired.value = true
+		endRound()
+	}
 })
 
 function extendRound(): void {
 	extraMinutes.value += EXTEND_MINUTES
+	// extending moves the planned end forward, so `overrunning` drops and the
+	// grace state resets itself on the next tick
 	toast(`Round extended by ${EXTEND_MINUTES} minutes`)
 }
 
@@ -167,6 +206,8 @@ function extendRound(): void {
 watch(roundId, () => {
 	extraMinutes.value = 0
 	autoEndCancelled.value = false
+	graceEndsAt.value = 0
+	autoEndFired.value = false
 })
 
 const progress = computed(() => {
@@ -495,6 +536,18 @@ function pendingChunks(table: MonitorTable): number {
 								:state="table.recording.state"
 								:error-code="table.recording.error_code" />
 							<span v-else class="cz-muted">—</span>
+							<!-- the half a replaced phone left behind: still finishing
+							     its transcript, and it used to vanish from here the
+							     instant the replacement started -->
+							<div
+								v-for="prior in table.superseded_recordings"
+								:key="prior.id"
+								class="cz-muted"
+								style="font-size: 0.78rem; margin-top: 4px">
+								<CzStatusPill :status="prior.state" />
+								<CzFailureNote :state="prior.state" :error-code="prior.error_code" />
+								<span>(replaced device)</span>
+							</div>
 						</td>
 						<td>
 							<!-- rounds start at different times because each table is

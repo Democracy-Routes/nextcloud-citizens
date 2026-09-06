@@ -252,6 +252,17 @@ def start_recording(
         # goes through the same salvage path immediately: whatever it already
         # uploaded is kept and transcribed, and it records the rest.
         _release_silent_recording(session, existing, "DEVICE_REJOINED")
+        # And assemble what it already sent, NOW. Unlike the silent-device
+        # path, there is no backlog to wait for: the phone that owns this
+        # recording is right here asking to start a new one, so what the
+        # server holds is all there will ever be. Without this the uploaded
+        # half sat in UPLOAD_INCOMPLETE with no transcript until somebody
+        # found the manual Retry — and retention would eventually delete it.
+        salvaged = salvage_total_chunks(session, existing)
+        if salvaged > 0:
+            existing.total_chunks = salvaged
+            transition(existing, "ASSEMBLING")
+            enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": existing.id})
         existing = None
     if existing is not None and device_has_gone_silent(existing):
         # A phone that has sent nothing for minutes is not "already recording",
@@ -376,6 +387,30 @@ def receive_chunk(
         size_bytes=len(data),
     )
     return {"acknowledged": True, "duplicate": False, "sequence_number": sequence_number}
+
+
+def salvage_total_chunks(session: Session, recording: Recording) -> int:
+    """How much of this recording can still become audio: the contiguous
+    chunk prefix starting at 0.
+
+    Giving up on a dead phone used to enqueue assembly with whatever
+    total_chunks the phone had declared — but a recording in
+    WAITING_FOR_CHUNKS is there precisely BECAUSE chunks are missing, so the
+    job bounced it straight back and the uploaded audio could never be used.
+    A MediaRecorder stream is one container split at arbitrary byte offsets:
+    the prefix is decodable, anything after a gap is not, and chunk 0 holds
+    the header. Salvaging means declaring the prefix as the whole recording.
+    """
+    stored = {
+        row
+        for row in session.execute(
+            select(AudioChunk.sequence_number).where(AudioChunk.recording_id == recording.id)
+        ).scalars()
+    }
+    length = 0
+    while length in stored:
+        length += 1
+    return length
 
 
 def missing_sequences(session: Session, recording: Recording) -> list[int]:

@@ -144,4 +144,24 @@ describe('usePolling', () => {
 		await vi.advanceTimersByTimeAsync(0)
 		expect(poll).toHaveBeenCalledTimes(2)
 	})
+
+	it('does not refresh while paused', async () => {
+		// the pause protects an open editor; a courtesy refresh (bulk approve,
+		// a sibling save) used to walk straight through it and unmount the card
+		vi.useRealTimers()
+		const poll = vi.fn().mockResolvedValue(undefined)
+		const { polling } = mountPolling(poll, { intervalMs: 10_000 })
+		await Promise.resolve()
+		const initial = poll.mock.calls.length
+
+		polling().pause()
+		await polling().refresh()
+		expect(poll.mock.calls.length).toBe(initial)
+
+		// resume() clears the flag before refreshing, so it still works
+		polling().resume()
+		await Promise.resolve()
+		expect(poll.mock.calls.length).toBeGreaterThan(initial)
+	})
+
 })

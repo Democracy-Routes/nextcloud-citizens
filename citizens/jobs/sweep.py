@@ -24,7 +24,7 @@ from citizens.db.session import session_scope
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.logging_setup import get_logger
 from citizens.services.audit import record_audit_event
-from citizens.services.jobs import has_live_job
+from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording_states import transition
 
@@ -41,6 +41,98 @@ STALLED_UPLOAD_MINUTES = 20
 # still queued, running or backing off for it — i.e. when nothing is going to
 # move it, ever.
 STALLED_ASSEMBLY_MINUTES = 30
+
+
+#: How long a superseded recording's phone gets to come back and upload its
+#: backlog before we assemble what the server already holds. Generous — a
+#: phone that reconnects resumes normally well inside this — but finite,
+#: because "maybe it returns" must not mean the uploaded half of a discussion
+#: never becomes a transcript.
+SUPERSEDED_SALVAGE_MINUTES = 30
+
+
+def sweep_missed_enqueues() -> int:
+    """Re-queue a stage whose enqueue was lost to a config-read failure.
+
+    Assembling, transcribing and analysing each queue the next stage as a
+    follow-on. If the OCS config read failed at that moment (Nextcloud
+    restarting, a proxy 502), the stage was skipped — and because nothing else
+    ever queued it, the recording sat in AUDIO_READY or TRANSCRIBED forever: a
+    green pill, no error, blocking the round's cross-table analysis. This picks
+    those up once Nextcloud is reachable again. Idempotent via has_live_job.
+    """
+    from citizens.jobs.handlers import (
+        _maybe_enqueue_analysis,
+        _maybe_enqueue_transcription,
+    )
+
+    requeued = 0
+    with session_scope() as session:
+        ready = list(
+            session.execute(
+                select(Recording).where(Recording.state == "AUDIO_READY")
+            ).scalars()
+        )
+        for recording in ready:
+            if not has_live_job(session, "TRANSCRIBE_FINAL", "recording_id", recording.id) \
+                    and not has_live_job(session, "TRANSCRIBE_FROM_LIVE", "recording_id", recording.id):
+                _maybe_enqueue_transcription(session, recording)
+                requeued += 1
+        transcribed = list(
+            session.execute(
+                select(Recording).where(Recording.state == "TRANSCRIBED")
+            ).scalars()
+        )
+        for recording in transcribed:
+            if not has_live_job(session, "ANALYZE_TABLE", "recording_id", recording.id):
+                _maybe_enqueue_analysis(session, recording)
+                requeued += 1
+    return requeued
+
+
+def sweep_superseded_partials() -> int:
+    """Assemble the audio a dead phone left behind.
+
+    The automatic takeover deliberately leaves the old recording open in
+    UPLOAD_INCOMPLETE so a merely-offline phone can still upload its backlog.
+    But nothing ever gave up waiting: if the phone truly died, the chunks it
+    DID upload sat there with no transcript — invisible in the report, and
+    eventually deleted by retention as if they were redundant.
+    """
+    from citizens.services.recording import salvage_total_chunks
+
+    cutoff = utcnow() - timedelta(minutes=SUPERSEDED_SALVAGE_MINUTES)
+    salvaged = 0
+    with session_scope() as session:
+        candidates = [
+            recording
+            for recording in session.execute(
+                select(Recording).where(
+                    Recording.state == "UPLOAD_INCOMPLETE",
+                    Recording.superseded_at.is_not(None),
+                    Recording.received_chunks > 0,
+                    Recording.updated_at < cutoff,
+                )
+            ).scalars()
+            if not has_live_job(session, "ASSEMBLE_AUDIO", "recording_id", recording.id)
+        ]
+        for recording in candidates:
+            total = salvage_total_chunks(session, recording)
+            if total == 0:
+                continue
+            recording.total_chunks = total
+            transition(recording, "ASSEMBLING")
+            enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": recording.id})
+            salvaged += 1
+            log.info(
+                "superseded_partial_salvaged",
+                recording_id=recording.id,
+                table_number=recording.table_number,
+                salvaged_chunks=total,
+            )
+        if salvaged:
+            session.flush()
+    return salvaged
 
 
 def sweep_stalled_uploads() -> int:
@@ -171,12 +263,21 @@ def sweep_expired_audio() -> int:
                 continue
             # audio only — transcripts and findings are the record of the
             # assembly, so quoted evidence keeps rendering after the purge
-            count, freed = files_svc.delete_assembly_audio(session, assembly)
+            count, freed, kept = files_svc.delete_assembly_audio(
+                session, assembly, keep_untranscribed=True
+            )
+            # audio_purged_at is set even when some audio was held back:
+            # revisiting every 60 seconds would re-log the same warning
+            # forever. Held-back audio is the organizer's to resolve — the
+            # Files tab says so — by retrying transcription or deleting it.
             assembly.audio_purged_at = now
             purged += 1
             record_audit_event(
                 session, "audio_retention_purge", "assembly", assembly.id, actor="system",
-                data={"retention_days": days, "recordings": count, "freed_bytes": freed},
+                data={
+                    "retention_days": days, "recordings": count,
+                    "freed_bytes": freed, "kept_no_transcript": kept,
+                },
             )
             log.info(
                 "audio_retention_purge",
@@ -225,6 +326,8 @@ def sweep_stale_exports() -> int:
 def run_sweeps() -> None:
     for name, sweep in (
         ("stalled_uploads", sweep_stalled_uploads),
+        ("superseded_partials", sweep_superseded_partials),
+        ("missed_enqueues", sweep_missed_enqueues),
         ("expired_audio", sweep_expired_audio),
         ("stale_exports", sweep_stale_exports),
     ):

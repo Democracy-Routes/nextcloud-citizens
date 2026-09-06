@@ -80,8 +80,23 @@ function tx<T>(
 			new Promise<T>((resolve, reject) => {
 				const transaction = db.transaction(storeName, mode)
 				const request = run(transaction.objectStore(storeName))
-				request.onsuccess = () => resolve(request.result)
 				request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'))
+				if (mode === 'readwrite') {
+					// request.onsuccess fires while the transaction is still
+					// uncommitted; a commit-time abort (disk full, storage
+					// eviction) after it meant a chunk was counted, logged as
+					// saved, and shown as "safe" — and did not exist. A write
+					// only counts once the transaction has actually committed.
+					let result: T
+					request.onsuccess = () => {
+						result = request.result
+					}
+					transaction.oncomplete = () => resolve(result)
+					transaction.onabort = () =>
+						reject(transaction.error ?? new Error('IndexedDB transaction aborted'))
+				} else {
+					request.onsuccess = () => resolve(request.result)
+				}
 			}),
 	)
 }

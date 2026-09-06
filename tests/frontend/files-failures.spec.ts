@@ -37,7 +37,8 @@ vi.mock('../../frontend/src/api', () => ({
 
 function listing(overrides: Record<string, unknown>) {
 	return {
-		totals: { recordings: 1, audio_bytes: 1024, audio_deleted: 0 },
+		totals: { recordings: 1, audio_bytes: 1024, audio_deleted: 0, kept_past_retention: 0 },
+		device_audio: { purge_requested_at: null, auto_purge: true, devices: 0, cleared: 0, still_holding: 0, unknown: 0 },
 		rounds: [
 			{
 				id: 'round-1',
@@ -133,5 +134,45 @@ describe('failure explanations', () => {
 		const wrapper = mountWithI18n(CzFailureNote, { props: { state: 'READY_FOR_REVIEW' } })
 
 		expect(wrapper.text()).toBe('')
+	})
+})
+
+describe('the device-audio purge line', () => {
+	const CLOSED = { id: 'a1', name: 'Bologna', closed_at: '2026-09-05T10:00:00Z', rounds: [] }
+
+	function withDeviceAudio(over: Record<string, unknown>) {
+		const base = listing({})
+		return {
+			...base,
+			device_audio: {
+				purge_requested_at: null,
+				auto_purge: true,
+				devices: 8,
+				cleared: 0,
+				still_holding: 8,
+				unknown: 0,
+				...over,
+			},
+		}
+	}
+
+	it('says nothing when no purge was ever requested', async () => {
+		// the listing always carries device_audio now; falling back to it
+		// unconditionally told every assembly "0 of 8 phones cleared their copy"
+		listFiles.mockResolvedValue(withDeviceAudio({ purge_requested_at: null }))
+		const wrapper = mountWithI18n(FilesTab, { props: { assembly: CLOSED } })
+		await flushPromises()
+
+		expect(wrapper.text()).not.toContain('reported clearing their copy')
+	})
+
+	it('shows coverage once a purge has been requested', async () => {
+		listFiles.mockResolvedValue(
+			withDeviceAudio({ purge_requested_at: '2026-09-05T11:00:00Z', cleared: 6, still_holding: 2 }),
+		)
+		const wrapper = mountWithI18n(FilesTab, { props: { assembly: CLOSED } })
+		await flushPromises()
+
+		expect(wrapper.text()).toContain('6 of 8')
 	})
 })
