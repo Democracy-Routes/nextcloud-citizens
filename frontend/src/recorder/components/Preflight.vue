@@ -13,7 +13,7 @@ import {
 	mdiServerNetwork,
 	mdiWaveform,
 } from '@mdi/js'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
@@ -31,15 +31,27 @@ const { t } = useI18n()
 // orchestrated tables arm with READY and the facilitator starts the round
 const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
 
-const openRounds = computed(() => props.session.rounds.filter((r) => !r.recorded_state))
+// The round list is kept live here, not read straight off the prop. The prop
+// is the join/resume snapshot and nothing refreshes it, so after a failed sync
+// and Back the just-failed round still showed as open — re-offered, then 409'd
+// by the server, and the report button never appeared.
+const rounds = ref<RoundInfo[]>([...props.session.rounds])
+const openRounds = computed(() => rounds.value.filter((r) => !r.recorded_state))
+const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
 
-/** A round this table is mid-way through on a device that is not this one. */
-const recordingElsewhere = computed(() => heldByAnotherDevice(props.session.rounds))
-const selectedRound = ref<RoundInfo | null>(
-	props.session.rounds.filter((r) => !r.recorded_state).find((r) => r.status === 'ACTIVE') ??
-		props.session.rounds.filter((r) => !r.recorded_state)[0] ??
-		null,
-)
+function pickRound(): RoundInfo | null {
+	const open = rounds.value.filter((r) => !r.recorded_state)
+	return open.find((r) => r.status === 'ACTIVE') ?? open[0] ?? null
+}
+const selectedRound = ref<RoundInfo | null>(pickRound())
+
+// when the refreshed list no longer has the selected round open, re-pick
+watch(rounds, () => {
+	if (!selectedRound.value || selectedRound.value.recorded_state
+		|| !rounds.value.some((r) => r.id === selectedRound.value?.id && !r.recorded_state)) {
+		selectedRound.value = pickRound()
+	}
+})
 const reportAvailable = ref(false)
 const tableSummaries = ref<Array<{ position: number; summary: string }>>([])
 
@@ -51,6 +63,9 @@ async function pollReport(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
 		reportAvailable.value = status.report_available ?? false
+		// keep the round list current — the whole point: a round recorded on
+		// another device (or by a sync that just failed) drops out of openRounds
+		if (status.rounds?.length) rounds.value = status.rounds
 		tableSummaries.value = status.rounds
 			.filter((r) => r.recorded_state)
 			.map((r) => ({ position: r.position, summary: r.table_summary ?? '' }))
@@ -147,7 +162,10 @@ async function runChecks(): Promise<void> {
 		set('server', 'warn', 'Server unreachable — recording still works locally')
 	}
 
-	if (!orchestrated && openRounds.value.length === 0 && props.session.rounds.length > 0) {
+	// Independent tables poll throughout, not only once every round is done:
+	// the list must stay fresh while rounds are still open, so a round recorded
+	// elsewhere or a just-failed sync is reflected rather than re-offered.
+	if (!orchestrated && rounds.value.length > 0) {
 		void pollReport()
 		reportTimer = window.setInterval(() => void pollReport(), 20_000)
 	}
@@ -289,9 +307,9 @@ const STATE_CLASS: Record<CheckState, string> = {
 					<select
 						style="width: 100%; padding: 11px; border-radius: 10px; background: var(--rc-surface-2); color: var(--rc-text); border: 1px solid var(--rc-border); font-size: 1rem"
 						:value="selectedRound.id"
-						@change="selectedRound = session.rounds.find((r) => r.id === ($event.target as HTMLSelectElement).value) ?? selectedRound">
+						@change="selectedRound = rounds.find((r) => r.id === ($event.target as HTMLSelectElement).value) ?? selectedRound">
 						<option
-							v-for="round in session.rounds"
+							v-for="round in rounds"
 							:key="round.id"
 							:value="round.id"
 							:disabled="!!round.recorded_state">

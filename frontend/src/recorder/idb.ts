@@ -8,6 +8,17 @@
 const DB_NAME = 'citizens-recorder'
 const DB_VERSION = 2
 
+/** Does this recording match the assembly a scoped operation is asking about?
+ *
+ * No assemblyId (an unscoped call) matches everything. A recording with no
+ * assemblyId of its own — written before that field existed — matches ONLY the
+ * unscoped call, never a specific assembly: treating "unknown" as "belongs to
+ * whoever asks" let it block or be deleted by any assembly's purge.
+ */
+export function belongsTo(recording: { assemblyId?: string }, assemblyId?: string): boolean {
+	return !assemblyId || recording.assemblyId === assemblyId
+}
+
 export interface StoredRecording {
 	recordingId: string
 	/** Which assembly this audio belongs to.
@@ -162,9 +173,7 @@ export const idb = {
 		try {
 			const all = await this.getRecordings()
 			return all.filter(
-				(r) =>
-					r.recordingId !== '__selftest__' &&
-					(!assemblyId || !r.assemblyId || r.assemblyId === assemblyId),
+				(r) => r.recordingId !== '__selftest__' && belongsTo(r, assemblyId),
 			).length
 		} catch {
 			return 0
@@ -177,17 +186,17 @@ export const idb = {
 	 * an unscoped scan meant a phone carrying audio from a previous assembly
 	 * was diverted into recovering THAT before it could record this one.
 	 *
-	 * Recordings with no assembly (stored before this field existed) are
-	 * included: we cannot attribute them, and failing to offer real unsynced
-	 * audio loses it, while offering it needlessly only costs a tap.
+	 * A legacy recording (no assemblyId) matches ONLY the unscoped call — see
+	 * belongsTo. Treating it as "belongs to whoever asks" made one such record
+	 * block every assembly's purge forever and let one assembly's clear delete
+	 * another's audio; scoping it out of specific-assembly queries fixes both,
+	 * while the no-arg boot recovery scan still finds it.
 	 */
 	async unfinishedRecordings(assemblyId?: string): Promise<StoredRecording[]> {
 		const all = await this.getRecordings()
 		return all.filter(
 			(r) =>
-				r.recordingId !== '__selftest__' &&
-				!r.serverComplete &&
-				(!assemblyId || !r.assemblyId || r.assemblyId === assemblyId),
+				r.recordingId !== '__selftest__' && !r.serverComplete && belongsTo(r, assemblyId),
 		)
 	},
 }

@@ -210,6 +210,10 @@ async function checkForPurgeRequest(): Promise<void> {
 	if (!current || capturing.value) return
 	try {
 		const status = await recorderApi.status(current.session_token)
+		// re-check after the round trip: a round can have started while the
+		// status request was in flight, and honouring a purge then would tear
+		// down a live recording
+		if (capturing.value) return
 		await honourPurgeRequest({ ...status, assembly: current.assembly })
 	} catch {
 		/* offline, or the session ended — nothing to do either way */

@@ -117,7 +117,7 @@
 			"finishButton": "Finish recording",
 			"keepRecording": "Keep recording",
 			"keepTalking": "Keep talking",
-			"finishingIn": "{ended} — finishing in {seconds} s.",
+			"finishingIn": "Finishing in {seconds} s — tap Keep talking to carry on.",
 			"storageErrorShort": "Storage error",
 			"storageErrorBanner": "✕ STORAGE ERROR",
 			"captionsUnavailable": "Live captions temporarily unavailable. Recording continues safely.",

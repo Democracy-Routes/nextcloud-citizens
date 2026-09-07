@@ -197,6 +197,24 @@ def handle_transcribe_from_live(session: Session, payload: dict) -> None:
         _fail_transcription(session, recording, "LIVE_CAPTIONS_UNREADABLE")
         raise PermanentJobError(f"Live captions unreadable: {exc}") from exc
 
+    # A file exists, but a session that died mid-round writes a partial file
+    # that looks identical to a complete one. Wait for the terminal write
+    # (final=true, stamped only when the recording is finished) before adopting
+    # it as the transcript of record — otherwise the job could promote a prefix
+    # read before the successor session appended the rest.
+    if not data.get("final"):
+        waited = (utcnow() - recording.updated_at).total_seconds()
+        if waited < LIVE_CAPTIONS_GRACE_SECONDS:
+            raise RuntimeError("Live captions have not been finalized yet")
+        # past the grace window the terminal write is not coming (a crash or
+        # restart mid-dispose). A partial transcript beats none — preserve what
+        # was captured, loudly, rather than failing the table out of the report.
+        log.warning(
+            "live_transcript_accepted_without_final",
+            recording_id=recording.id,
+            waited=round(waited),
+        )
+
     normalized = transcription_svc.transcript_from_live_captions(data)
     if not normalized.segments:
         # the engine never connected, or heard nothing it was confident about.

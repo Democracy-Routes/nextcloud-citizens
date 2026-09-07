@@ -117,7 +117,7 @@
 			"finishButton": "Termina la registrazione",
 			"keepRecording": "Continua a registrare",
 			"keepTalking": "Continuate a parlare",
-			"finishingIn": "{ended} — termina tra {seconds} s.",
+			"finishingIn": "Termina tra {seconds} s — tocca Continua a parlare per proseguire.",
 			"storageErrorShort": "Errore di memoria",
 			"storageErrorBanner": "✕ ERRORE DI MEMORIA",
 			"captionsUnavailable": "Sottotitoli in diretta momentaneamente non disponibili. La registrazione prosegue in sicurezza.",

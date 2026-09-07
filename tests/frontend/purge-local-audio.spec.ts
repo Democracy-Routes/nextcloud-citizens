@@ -37,7 +37,7 @@ vi.mock('../../frontend/src/recorder/idb', () => ({
 			return store.recordings.filter(
 				(r) =>
 					!r.serverComplete &&
-					(!assemblyId || !r.assemblyId || r.assemblyId === assemblyId),
+					(!assemblyId || r.assemblyId === assemblyId),
 			)
 		},
 	},
@@ -116,4 +116,20 @@ describe('purging this phone on the organizer’s request', () => {
 
 		expect(outcome).toEqual({ cleared: 0, keptUnsynced: 0 })
 	})
+
+	it('is not blocked or miscounted by another era\'s unscoped audio', async () => {
+		// a legacy recording (no assemblyId) used to match every assembly, so it
+		// inflated keptUnsynced and — via hasUnfinishedAudio — blocked the purge
+		store.recordings = [
+			recording({ recordingId: 'legacy', assemblyId: undefined, serverComplete: false }),
+			recording({ recordingId: 'mine', assemblyId: 'a1', serverComplete: true }),
+		]
+
+		const outcome = await purgeLocalAudio('a1')
+
+		expect(outcome.cleared).toBe(1)
+		expect(outcome.keptUnsynced).toBe(0) // the legacy record is not counted here
+		expect(store.deleted).toEqual(['mine'])
+	})
+
 })

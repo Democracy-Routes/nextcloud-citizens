@@ -406,3 +406,44 @@ def test_closing_mid_analysis_still_freezes_a_complete_report(pipeline):
         time.sleep(0.5)
 
     assert summary, "the frozen report never caught up with the post-close analysis"
+
+
+def test_cross_table_findings_inherit_evidence_from_their_source_tables(pipeline):
+    """A cross-table finding stores no evidence of its own — only the table
+    findings it clustered. It used to render with zero quotes, silently
+    breaking the app's 'every finding cites evidence' promise. It now borrows a
+    sample from the contributing tables, each labelled with its table."""
+    client = pipeline["client"]
+    round_id = pipeline["round_id"]
+    _drafts_ready(pipeline)
+
+    # the API payload the Analysis tab reads
+    cross = client.get(f"/api/v1/rounds/{round_id}/findings").json()["cross_table"]
+    assert cross, "the pipeline should produce a cross-table finding"
+    evidence = cross[0]["evidence"]
+    assert evidence, "cross-table finding must inherit evidence from its sources"
+    assert all(q.get("table_number") for q in evidence), "each quote is labelled with its table"
+    assert all(q["text"] for q in evidence)
+
+    # and the same in the report (drafts included so the finding appears)
+    report = client.get(
+        f"/api/v1/assemblies/{pipeline['assembly']['id']}/report?include_drafts=true"
+    ).json()
+    report_cross = report["rounds"][0]["cross_table"][0]
+    assert report_cross["evidence"], "the report's cross-table finding must carry quotes"
+    assert report_cross["evidence"][0]["table_number"]
+
+
+def test_cross_table_markdown_is_no_longer_quoteless(pipeline):
+    from citizens.db.models import Assembly
+    from citizens.db.session import session_scope
+    from citizens.services.report import build_report, render_markdown
+
+    _drafts_ready(pipeline)
+
+    with session_scope() as session:
+        assembly = session.get(Assembly, pipeline["assembly"]["id"])
+        markdown = render_markdown(build_report(session, assembly, include_drafts=True))
+
+    # the cross-table quote carries its table label, e.g. "Table 1 · [mm:ss]"
+    assert "Table 1 ·" in markdown

@@ -80,7 +80,7 @@ in order.
 | 1 | Project identity and authorship | **Done** — `61f5e8a`: moved to `Democracy-Routes`, Alessandro Oppo as maintainer, Philip as contributor. Existing SPDX headers deliberately unchanged. |
 | 2 | Documentation consistency | **Done** — `61f5e8a`. No "still to come" claim survives in `README.md`, `info.xml` or `docs/`. |
 | 3 | Freeze V1 scope | **Done** — no product feature has been added since; every commit below is a fix, a test or metadata. |
-| 4 | Run the full test suite | **Done** — 372 Python and 197 frontend tests pass, plus 5 browser tests in the separate pre-release suite; lint clean, store schema validation passes. |
+| 4 | Run the full test suite | **Done** — 375 Python and 205 frontend tests pass, plus 5 browser tests in the separate pre-release suite; lint clean, store schema validation passes. |
 
 ### Testing (§5–§11)
 

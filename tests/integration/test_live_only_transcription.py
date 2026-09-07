@@ -82,8 +82,12 @@ def live_only(client, tmp_path, monkeypatch):
         headers=headers,
     ).json()["recording_id"]
 
-    def finish(captions=CAPTIONS):
-        """Stand in for the caption session ending and writing what it heard."""
+    def finish(captions=CAPTIONS, final=True):
+        """Stand in for the caption session ending and writing what it heard.
+
+        `final` mirrors the real marker the manager writes only on the terminal
+        dispose; a normally-finished session is final=True.
+        """
         if captions is not None:
             path = live_caption_path(
                 get_settings().app_persistent_storage, assembly["id"], recording_id
@@ -91,7 +95,8 @@ def live_only(client, tmp_path, monkeypatch):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps({
                 "recording_id": recording_id, "provider": "vosk",
-                "model": "vosk-model-small-it-0.22", "language": "it", "lines": captions,
+                "model": "vosk-model-small-it-0.22", "language": "it",
+                "final": final, "lines": captions,
             }))
         client.post(
             f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0",
@@ -243,3 +248,37 @@ def test_deleting_a_transcript_takes_the_captions_it_came_from(live_only):
     )
     assert response.status_code == 200, response.text
     assert not path.exists(), "captions survived the transcript being deleted"
+
+
+def test_a_partial_caption_file_is_not_adopted_until_it_is_final(live_only):
+    """A session that died mid-round writes a file that looks complete. The job
+    must wait for the terminal 'final' marker rather than promote a prefix —
+    otherwise a later append (the successor session's half) is lost."""
+    # first write: a non-final partial (the dead session's prefix)
+    live_only["finish"](captions=CAPTIONS[:1], final=False)
+
+    # it must NOT become the transcript of record while unfinalized: within the
+    # grace window the job retries rather than adopting the partial
+    status = _wait_state(live_only, {"TRANSCRIBED", "READY_FOR_REVIEW"}, timeout=6.0)
+    assert status["state"] not in ("TRANSCRIBED", "READY_FOR_REVIEW"), (
+        "a partial, non-final caption file was adopted as the transcript"
+    )
+
+    # the terminal write lands: the full text, marked final
+    path = live_caption_path(
+        get_settings().app_persistent_storage,
+        live_only["assembly"]["id"], live_only["recording_id"],
+    )
+    path.write_text(json.dumps({
+        "recording_id": live_only["recording_id"], "provider": "vosk",
+        "model": "vosk-model-small-it-0.22", "language": "it",
+        "final": True, "lines": CAPTIONS,
+    }))
+
+    status = _wait_state(live_only, {"TRANSCRIBED", "ANALYZING", "READY_FOR_REVIEW"})
+    assert status["state"] != "AUDIO_READY", status
+    transcript = live_only["client"].get(
+        f"/api/v1/recordings/{live_only['recording_id']}/transcript"
+    ).json()
+    # the full text, not just the partial prefix
+    assert [seg["text"] for seg in transcript["segments"]] == [c["text"] for c in CAPTIONS]

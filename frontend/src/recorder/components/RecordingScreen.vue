@@ -47,7 +47,13 @@ const clearedNote = ref('')
 
 const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
 
+// How long "Keep talking" holds off the auto-finish before it re-arms. Long
+// enough to finish a thought; bounded, so a table that taps it and walks away
+// still ends — the latch used to be permanent, and the recording ran into an
+// ENDED round until battery or storage gave out.
+const KEEP_TALKING_REPRIEVE_MS = 120_000
 let countdownTimer = 0
+let reprieveTimer = 0
 let nextStartTimer = 0
 
 // orchestrated: the facilitator ended the round → auto-finish after a short
@@ -69,7 +75,14 @@ function cancelFinishCountdown(): void {
 	window.clearInterval(countdownTimer)
 	countdownTimer = 0
 	finishCountdown.value = 0
+	// a reprieve, not a permanent latch: after the window the auto-finish
+	// re-arms (the next ENDED poll or duration check restarts the countdown),
+	// so an abandoned table is still finished
 	keepTalking.value = true
+	window.clearTimeout(reprieveTimer)
+	reprieveTimer = window.setTimeout(() => {
+		keepTalking.value = false
+	}, KEEP_TALKING_REPRIEVE_MS)
 }
 const showLive = ref(true)
 const liveLines = ref<Array<{ t: number; text: string; speaker?: number | null }>>([])
@@ -281,7 +294,13 @@ onBeforeUnmount(() => {
 	window.clearInterval(countdownTimer)
 	window.clearInterval(nextStartTimer)
 	window.clearInterval(reportOpenTimer)
+	window.clearTimeout(reprieveTimer)
 	audioContext?.close()
+	// Abandon live capture if the screen leaves while still recording — a purge
+	// arriving mid-round, or an exit. Without this the MediaRecorder, the mic
+	// tracks and the engine's own timers kept running with nothing owning them.
+	// Don't touch a legitimate in-flight sync (finishing/syncing/uploaded).
+	if (state.phase === 'recording') engine.stop()
 })
 
 function startLivePoll(): void {
@@ -303,6 +322,7 @@ function startLivePoll(): void {
 async function finishRecording(): Promise<void> {
 	confirmFinish.value = false
 	roundEnded.value = false
+	window.clearTimeout(reprieveTimer)
 	await engine.finish()
 }
 
@@ -481,26 +501,20 @@ async function clearSynced(): Promise<void> {
 			</div>
 
 			<div v-if="roundEnded && state.phase === 'recording'" class="rc-note">
+				<!-- the ended/time-up line stands alone; the countdown is its own
+				     sentence, so the two no longer splice into "The round has
+				     ended. — finishing in 6 s." -->
+				<strong style="display: block">
+					{{ orchestrated ? t('recorder.recording.roundEnded') : t('recorder.recording.timeUp') }}
+				</strong>
 				<template v-if="finishCountdown > 0">
-					<strong>
-						{{
-							t('recorder.recording.finishingIn', {
-								ended: orchestrated
-									? t('recorder.recording.roundEnded')
-									: t('recorder.recording.timeUp'),
-								seconds: finishCountdown,
-							})
-						}}
-					</strong>
+					<span>{{ t('recorder.recording.finishingIn', { seconds: finishCountdown }) }}</span>
 					<button class="rc-btn" style="margin-top: 10px" @click="cancelFinishCountdown">
 						{{ t('recorder.recording.keepTalking') }}
 					</button>
 				</template>
 				<template v-else>
-					<strong>
-						{{ orchestrated ? t('recorder.recording.roundEnded') : t('recorder.recording.timeUp') }}
-					</strong>
-					{{ t('recorder.recording.finishQuestion') }}
+					<span>{{ t('recorder.recording.finishQuestion') }}</span>
 					<button class="rc-btn rc-primary" style="margin-top: 10px" @click="finishRecording">
 						{{ t('recorder.recording.finish') }}
 					</button>

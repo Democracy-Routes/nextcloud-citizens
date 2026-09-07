@@ -4,6 +4,55 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Audit tranche 2 — the medium-severity findings, and two report fixes — 2026-09-07
+
+The medium-severity items from the 2026-09-06 audit that could drain a phone or
+lose a transcript mid-event, plus two report-credibility issues from the
+September review.
+
+**Recording lifecycle**
+
+- **"Keep talking" no longer records forever.** It was a one-way latch: once a
+  table tapped it to finish a sentence, nothing ever re-armed the auto-finish,
+  so a table that then walked away recorded into an ended round until the
+  battery or storage gave out. It is now a bounded reprieve — the auto-finish
+  re-arms after two minutes, so an abandoned table still ends, while an active
+  one carries on by tapping again.
+- **Leaving the recording screen actually stops the recording.** A purge
+  arriving mid-round (or any exit) used to unmount the screen while leaving the
+  microphone, the recorder and the engine's timers running with nothing owning
+  them. There is now a real teardown, called on unmount and guarded so it never
+  interrupts a legitimate in-flight upload.
+- **Preflight no longer re-offers a round that is already recorded.** Its round
+  list was frozen at join, so after a failed sync and Back the just-recorded
+  round was offered again, refused by the server, and the report link stayed
+  hidden. The list is now kept live from the status poll.
+- **A caption session that died mid-round can no longer be adopted as the whole
+  transcript.** The file carried no "finished" marker, so a partial one — or
+  one read before its successor session appended the rest — looked complete. The
+  terminal write now marks the captions final, and the job waits for that marker
+  before promoting them (falling back to best-effort only after a long grace, so
+  a crash never loses what was captured).
+
+**Privacy**
+
+- **Audio from a previous assembly can no longer block or be deleted by
+  tonight's.** A recording stored before assemblies were tracked was treated as
+  belonging to whichever assembly asked — so one such recording blocked every
+  purge on that phone, and one assembly's clear could delete another's audio. It
+  now matches only the unscoped recovery scan.
+
+**Report**
+
+- **Cross-table findings now cite evidence.** A cross-table finding stored only
+  the table findings it clustered, so it rendered with no quotes at all —
+  quietly breaking the promise that every finding cites the transcript. It now
+  borrows a sample of the supporting quotes from each contributing table, each
+  labelled with its table ("Table 3 · …").
+- **The phone no longer reads "The round has ended. — finishing in 6 s."** The
+  countdown spliced a whole sentence into a placeholder; the ended line and the
+  countdown are now separate, self-consistent text.
+
 ### Fix the worst of a 51-finding audit — 2026-09-06
 
 A three-way code audit (recorder, backend pipeline, organizer) plus a re-audit

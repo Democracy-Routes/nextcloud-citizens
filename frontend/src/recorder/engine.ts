@@ -106,6 +106,8 @@ export class RecorderEngine {
 	private chunkPipeline: Promise<void> = Promise.resolve()
 	private uploaderActive = false
 	private stopRequested = false
+	/** Capture was abandoned (screen left, purge) — tear down, do not upload. */
+	private abandoned = false
 	private retryDelay = RETRY_BASE_MS
 	private wakeUploader: (() => void) | null = null
 	private heartbeatTimer = 0
@@ -318,6 +320,7 @@ export class RecorderEngine {
 		try {
 			for (;;) {
 				const pending = (await idb.chunksFor(this.state.recordingId)).filter((c) => !c.acked)
+				if (this.abandoned) break
 				if (pending.length === 0) {
 					if (this.totalChunks !== null) break // finished and everything acked
 					if (this.state.phase !== 'recording' && this.state.phase !== 'finishing') break
@@ -387,8 +390,40 @@ export class RecorderEngine {
 		})
 	}
 
+	/** Abandon capture without uploading — the screen is being left (a purge
+	 * landed, the table exited). RecordingScreen unmounting used to tear down
+	 * only its own timers, leaving the MediaRecorder, the mic tracks and the
+	 * engine's heartbeat/storage intervals running with nothing owning them.
+	 *
+	 * Distinct from finish(): finish() keeps and uploads the audio; this drops
+	 * it. Anything already persisted to IndexedDB survives for recovery on the
+	 * next boot — this only stops the live capture and its timers.
+	 */
+	stop(): void {
+		if (this.abandoned) return
+		this.abandoned = true
+		// stop late chunk/track events from re-entering
+		if (this.mediaRecorder) {
+			this.mediaRecorder.ondataavailable = null
+			this.mediaRecorder.onerror = null
+			try {
+				if (this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop()
+			} catch {
+				/* already inactive */
+			}
+		}
+		for (const track of this.stream?.getTracks() ?? []) {
+			track.onended = null
+			track.stop()
+		}
+		this.stream = null
+		this.stopMonitors()
+		// let the uploader loop's idleWait resolve so it sees `abandoned` and exits
+		if (this.wakeUploader) this.wakeUploader()
+	}
+
 	async finish(): Promise<void> {
-		if (!this.mediaRecorder || this.stopRequested) return
+		if (!this.mediaRecorder || this.stopRequested || this.abandoned) return
 		this.stopRequested = true
 		this.state.phase = 'finishing'
 		clientLog('info', 'finish_requested')
@@ -666,9 +701,10 @@ export async function clearSynchronizedRecordings(assemblyId?: string): Promise<
 		// confirmed it holds is ever removed, so this can never destroy the
 		// last copy of anything.
 		if (!recording.serverComplete) continue
-		// and only this assembly's, or audio predating the field — clearing one
-		// event must not quietly delete another's from a citizen's own phone
-		if (assemblyId && recording.assemblyId && recording.assemblyId !== assemblyId) continue
+		// only this assembly's. A legacy recording (no assemblyId) is left for
+		// the unscoped done-screen clear — a specific assembly's purge must not
+		// delete another event's audio from a citizen's own phone.
+		if (assemblyId && recording.assemblyId !== assemblyId) continue
 		await idb.deleteChunksFor(recording.recordingId)
 		await idb.deleteRecording(recording.recordingId)
 		cleared += 1

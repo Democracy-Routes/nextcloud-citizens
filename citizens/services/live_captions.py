@@ -94,6 +94,10 @@ class _BaseSession:
         self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=64)
         self.lines: list[dict] = []
         self.truncated = False
+        # set true only on the TERMINAL dispose (from finish(), i.e. /complete
+        # or a device-replace/silent release) so the persisted file can say the
+        # captions are complete — the job must not adopt a partial one
+        self.final = False
         self.active = True
         self.failed_at: float | None = None
         self.last_fed = time.monotonic()
@@ -756,6 +760,11 @@ class LiveCaptionManager:
             "model": session.model,
             "language": session.language,
             "truncated": session.truncated,
+            # whether THIS write is the recording's terminal one. A partial file
+            # from a session that died mid-round is indistinguishable from a
+            # complete one without this, so the job used to promote whichever it
+            # happened to read first.
+            "final": session.final,
             "lines": lines,
         }
         path = live_caption_path(
@@ -790,6 +799,9 @@ class LiveCaptionManager:
         session = self._sessions.pop(recording_id, None)
         if session is None:
             return
+        # the recording is done: this dispose is terminal, so its persisted
+        # transcript is the complete one the job may adopt
+        session.final = True
         await self._dispose(session)
 
     async def _dispose(self, session: "_BaseSession | None") -> None:

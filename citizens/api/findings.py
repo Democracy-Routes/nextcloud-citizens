@@ -19,6 +19,7 @@ from citizens.services.analysis import analysis_ready
 from citizens.services.assemblies import get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job
+from citizens.services.report import _cross_table_evidence
 
 router = APIRouter()
 
@@ -41,6 +42,21 @@ def _finding_payload(session: Session, finding: Finding, table_numbers: dict[str
                 "text": segment.text,
             }
             for segment in sorted(segments, key=lambda s: s.start_seconds)
+        ]
+    elif finding.scope == "round":
+        # a cross-table finding stores no evidence of its own; borrow a sample
+        # from the table findings it clustered, labelled per table, so the
+        # Analysis tab shows the same verifiable quotes the report does
+        evidence = [
+            {
+                "segment_id": quote["segment_id"],
+                "table_number": quote["table_number"],
+                "speaker": quote["speaker"],
+                "start": quote["start"],
+                "end": quote["end"],
+                "text": quote["text"],
+            }
+            for quote in _cross_table_evidence(session, finding, table_numbers)
         ]
     return {
         "id": finding.id,

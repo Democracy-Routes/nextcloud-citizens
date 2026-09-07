@@ -170,7 +170,8 @@ def _finding(pdf: _ReportPDF, finding: dict, cross: bool) -> None:
                        indent=5)
     if quotes:
         lines = [
-            f"[{evidence['timestamp']}] {evidence['speaker'] or 'Speaker'}: “{evidence['text']}”"
+            (f"Table {evidence['table_number']} · " if evidence.get("table_number") else "")
+            + f"[{evidence['timestamp']}] {evidence['speaker'] or 'Speaker'}: “{evidence['text']}”"
             for evidence in quotes
         ]
         # The accent bar is one line() from where the quotes began to where they
