@@ -191,37 +191,19 @@ def _release_silent_recording(
     )
 
 
-def start_recording(
-    session: Session, recorder_session: RecorderSession, round_id: str, mime_type: str
-) -> Recording:
-    round_ = session.get(Round, round_id)
-    if round_ is None or round_.assembly_id != recorder_session.assembly_id:
-        raise HTTPException(status_code=404, detail="Round not found")
-    table = session.execute(
-        select(Table).where(Table.round_id == round_id, Table.number == recorder_session.table_number)
-    ).scalar_one_or_none()
-    if table is None:
-        raise HTTPException(status_code=422, detail="This round has no table with your number")
+def _guard_one_recording_per_table(
+    session: Session, recorder_session: RecorderSession, round_: Round, table: Table
+) -> None:
+    """One healthy recording per table+round.
 
-    # a closed session accepts no new audio: the report is already final
-    if round_.assembly.closed_at is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="This assembly has been closed by the organizer",
-        )
-
-    # orchestrated assemblies record only while the facilitator has the round
-    # open; independent assemblies let each table record on its own schedule
-    if round_.assembly.recording_mode == "orchestrated" and round_.status != "ACTIVE":
-        raise HTTPException(
-            status_code=409, detail="The facilitator has not started this round yet"
-        )
-
-    # one healthy recording per table+round: prevents accidental extra
-    # recordings after a table already finished (unless the earlier attempt failed)
+    Prevents accidental extra recordings after a table already finished (unless
+    the earlier attempt failed), while letting a phone reclaim its OWN
+    interrupted recording and freeing a table whose device has gone silent.
+    Not applied in plenary mode, where concurrent devices are expected.
+    """
     existing = session.execute(
         select(Recording).where(
-            Recording.round_id == round_id,
+            Recording.round_id == round_.id,
             Recording.table_id == table.id,
             Recording.state.notin_(RERECORDABLE_STATES),
             # a superseded recording is still progressing towards a transcript
@@ -283,6 +265,39 @@ def start_recording(
             detail=f"This table already recorded round {round_.position} "
             f"(recording is {existing.state}). Ask the facilitator if a re-recording is needed.",
         )
+
+
+def start_recording(
+    session: Session, recorder_session: RecorderSession, round_id: str, mime_type: str
+) -> Recording:
+    round_ = session.get(Round, round_id)
+    if round_ is None or round_.assembly_id != recorder_session.assembly_id:
+        raise HTTPException(status_code=404, detail="Round not found")
+    table = session.execute(
+        select(Table).where(Table.round_id == round_id, Table.number == recorder_session.table_number)
+    ).scalar_one_or_none()
+    if table is None:
+        raise HTTPException(status_code=422, detail="This round has no table with your number")
+
+    # a closed session accepts no new audio: the report is already final
+    if round_.assembly.closed_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This assembly has been closed by the organizer",
+        )
+
+    # orchestrated and plenary record only while the facilitator has the round
+    # open; independent lets each table record on its own schedule
+    if round_.assembly.recording_mode in ("orchestrated", "plenary") and round_.status != "ACTIVE":
+        raise HTTPException(
+            status_code=409, detail="The facilitator has not started this round yet"
+        )
+
+    # Plenary is the whole room recorded by many phones at once: several
+    # concurrent recordings on the one table are the point, not an accident, so
+    # none of the one-per-table guard below applies. Every other mode keeps it.
+    if round_.assembly.recording_mode != "plenary":
+        _guard_one_recording_per_table(session, recorder_session, round_, table)
 
     recording = Recording(
         assembly_id=recorder_session.assembly_id,

@@ -90,7 +90,9 @@ async function deleteAssembly(): Promise<void> {
 					<h2 style="overflow-wrap: anywhere">{{ assembly.name }}</h2>
 					<p class="cz-muted" style="margin: 4px 0 0">
 						{{ assembly.participant_count }} / {{ assembly.expected_participants }} participants ·
-						{{ assembly.default_table_count }} tables · {{ assembly.rounds.length }} rounds ·
+						<template v-if="assembly.recording_mode === 'plenary'">Plenary (one shared recorder)</template>
+						<template v-else>{{ assembly.default_table_count }} tables</template> ·
+						{{ assembly.rounds.length }} rounds ·
 						{{ assembly.language.toUpperCase() }}
 					</p>
 				</div>

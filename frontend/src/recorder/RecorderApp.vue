@@ -43,7 +43,9 @@ const recoveryRecording = ref<StoredRecording | null>(null)
 
 const joinBusy = ref(false)
 
-const orchestrated = computed(() => session.value?.assembly.recording_mode === 'orchestrated')
+// facilitator-led modes (orchestrated AND plenary): the phone arms and the
+// facilitator opens the round. Independent tables start on their own.
+const orchestrated = computed(() => session.value?.assembly.recording_mode !== 'independent')
 
 /** Every table scans its QR within the same minute, so a burst at the door is
  * normal traffic, not abuse. A 429 here used to leave that table on a dead

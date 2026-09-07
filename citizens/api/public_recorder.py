@@ -333,10 +333,20 @@ def _assembly_state(
     # is scoped to the table, not the session, so "this round is being recorded"
     # was read as "...by somebody else" even when the somebody was itself.
     own_rounds: set[str] = set()
+    # In plenary the whole room is recorded by many phones at once, so a round
+    # is "recorded" only from THIS phone's point of view — another device
+    # recording the same round must not lock it out. Every other mode scopes to
+    # the table (one phone per table), where any device's recording means done.
+    plenary = assembly.recording_mode == "plenary"
+    recorded_scope = (
+        Recording.recorder_session_id == recorder_session.id
+        if plenary
+        else Recording.table_number == recorder_session.table_number
+    )
     for recording in session.execute(
         select(Recording).where(
             Recording.assembly_id == assembly.id,
-            Recording.table_number == recorder_session.table_number,
+            recorded_scope,
             Recording.state.notin_(RERECORDABLE_STATES),
             # A superseded recording belonged to a phone that has gone. Counting
             # it as "this round is recorded" told the REPLACEMENT phone the

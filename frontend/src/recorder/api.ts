@@ -29,7 +29,7 @@ export interface AssemblyInfo {
 	id: string
 	name: string
 	language: string
-	recording_mode: 'orchestrated' | 'independent'
+	recording_mode: 'orchestrated' | 'independent' | 'plenary'
 }
 
 /** What the table is told before recording — names and durations only. */

@@ -28,8 +28,8 @@ const emit = defineEmits<{ ready: []; start: [round: RoundInfo]; report: [] }>()
 const { t } = useI18n()
 
 // independent tables pick a round and start right here — one screen, one tap;
-// orchestrated tables arm with READY and the facilitator starts the round
-const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
+// orchestrated AND plenary arm with READY and the facilitator starts the round
+const orchestrated = props.session.assembly.recording_mode !== 'independent'
 
 // The round list is kept live here, not read straight off the prop. The prop
 // is the join/resume snapshot and nothing refreshes it, so after a failed sync

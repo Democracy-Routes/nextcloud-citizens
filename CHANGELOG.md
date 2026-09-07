@@ -4,6 +4,36 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Plenary mode — one room, many phones, one merged transcript (Milestone 1) — 2026-09-07
+
+A third recording mode for a single in-person group: 30 people in a circle, or
+one person recording a meeting. The whole room is ONE discussion, captured by
+any number of phones from different positions — every device records and
+transcribes, and the recordings are merged into a single deduplicated transcript
+and analysed once. It sits beside the existing orchestrated and independent
+modes, gated behind the mode flag, reusing the whole recorder and pipeline.
+
+This milestone is the backend core and the paths to reach it:
+
+- **Concurrent devices on one group.** A plenary assembly is one table joined by
+  one shared code; the "one healthy recording per table" guard is relaxed for
+  plenary only, so several phones record the same round at once. Every other
+  mode still refuses a second device. The phone-side "round already recorded"
+  signal is scoped to the device in plenary, so another phone recording the same
+  round does not lock anyone out.
+- **The merge.** The devices' transcripts are aligned on the server clock
+  (each recording's start plus its segment offsets) and near-duplicate
+  utterances within a few seconds are dropped — so a sentence three phones heard
+  is counted once, while a line only one phone caught survives. No audio signal
+  processing; a stdlib fuzzy text match. The merged transcript feeds one
+  analysis, so evidence and the report work exactly as for a single recording.
+- **One shared code.** The whole room scans the same QR; adding a phone is just
+  scanning it again. The QR tab shows a single code for a plenary assembly, and
+  the wizard offers the third mode and fixes it to one group.
+
+Still to come (Milestones 2+): per-device rows on the Live tab, a two-phone
+browser test, and a one-tap self-start for the solo meeting-recorder case.
+
 ### Audit tranche 2 — the medium-severity findings, and two report fixes — 2026-09-07
 
 The medium-severity items from the 2026-09-06 audit that could drain a phone or

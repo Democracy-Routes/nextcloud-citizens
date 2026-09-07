@@ -30,6 +30,9 @@ def get_owned_round(session: Session, round_id: str, user_id: str) -> Round:
 
 
 def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate) -> Assembly:
+    # Plenary is the whole room as one group, joined by one shared code, so it
+    # always has exactly one table however many the request asked for.
+    table_count = 1 if data.recording_mode == "plenary" else data.default_table_count
     assembly = Assembly(
         name=data.name,
         description=data.description,
@@ -37,14 +40,14 @@ def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate
         scheduled_at=data.scheduled_at,
         recording_mode=data.recording_mode,
         expected_participants=data.expected_participants,
-        default_table_count=data.default_table_count,
+        default_table_count=table_count,
         analysis_instructions=data.analysis_instructions,
         auto_purge_device_audio=data.auto_purge_device_audio,
         redact_names=data.redact_names,
         created_by=user_id,
     )
     for position, round_in in enumerate(data.rounds, start=1):
-        assembly.rounds.append(_build_round(round_in, position, data.default_table_count))
+        assembly.rounds.append(_build_round(round_in, position, table_count))
     session.add(assembly)
     session.flush()
     return assembly

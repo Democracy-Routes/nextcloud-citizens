@@ -23,7 +23,7 @@ export interface Assembly {
 	language: string
 	scheduled_at: string | null
 	status: string
-	recording_mode: 'orchestrated' | 'independent'
+	recording_mode: 'orchestrated' | 'independent' | 'plenary'
 	expected_participants: number
 	default_table_count: number
 	analysis_instructions: string
@@ -98,7 +98,7 @@ export interface AssemblyUpdate {
 	description?: string
 	language?: string
 	scheduled_at?: string | null
-	recording_mode?: 'orchestrated' | 'independent'
+	recording_mode?: 'orchestrated' | 'independent' | 'plenary'
 	expected_participants?: number
 	default_table_count?: number
 	analysis_instructions?: string
@@ -327,7 +327,7 @@ export interface RoundMonitor {
 	status: string
 	started_at: string | null
 	duration_minutes: number
-	recording_mode: 'orchestrated' | 'independent'
+	recording_mode: 'orchestrated' | 'independent' | 'plenary'
 	tables_ready: number
 	tables_total: number
 	tables: MonitorTable[]
