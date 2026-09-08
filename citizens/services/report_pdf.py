@@ -145,6 +145,59 @@ class _ReportPDF(FPDF):
         self.cell(2, 4.6, "", new_x="RIGHT", new_y="TOP")
 
 
+# mirrors the Analysis tab's donut palette (SpeakingBalanceCard.vue); grey is
+# always "Others"
+BALANCE_PALETTE = [
+    (58, 123, 213), (23, 163, 152), (224, 139, 45),
+    (176, 85, 155), (90, 160, 44), (214, 86, 78),
+]
+BALANCE_OTHERS = (138, 143, 152)
+
+
+def _balance_color(index: int, label: str) -> tuple:
+    return BALANCE_OTHERS if label == "Others" else BALANCE_PALETTE[index % len(BALANCE_PALETTE)]
+
+
+def _speaking_balance(pdf: _ReportPDF, balance: dict) -> None:
+    """Talk-time per detected voice: a 100%-stacked bar and a legend.
+
+    A bar prints better than a donut and fpdf2 draws it with plain rects. Kept
+    on one page — a bar split from its legend reads as two broken graphics.
+    """
+    voices = balance["voices"]
+    legend_h = 4.6 * len(voices)
+    caption = (
+        "Detected voices, not identified by name — from the clearest single "
+        "recording. Talk-time, not influence."
+    )
+    caption_h = pdf.block_height(caption, size=8, height=4.2)
+    pdf.keep_together(6 + 5 + 2 + legend_h + caption_h + 4)
+
+    pdf.eyebrow("Speaking balance")
+    width = pdf.w - pdf.l_margin - pdf.r_margin
+    x = pdf.l_margin
+    y = pdf.get_y()
+    for index, voice in enumerate(voices):
+        seg = width * voice["percent"] / 100
+        pdf.set_fill_color(*_balance_color(index, voice["label"]))
+        pdf.rect(x, y, seg, 4.2, style="F")
+        x += seg
+    pdf.set_y(y + 4.2 + 2)
+    for index, voice in enumerate(voices):
+        swatch_y = pdf.get_y() + 0.7
+        pdf.set_fill_color(*_balance_color(index, voice["label"]))
+        pdf.rect(pdf.l_margin, swatch_y, 3, 3, style="F")
+        name = "Others" if voice["label"] == "Others" else f"Voice {voice['label']}"
+        minutes, seconds = divmod(int(voice["seconds"]), 60)
+        pdf.text_block(
+            f"{name} — {voice['percent']}%  ({minutes}:{seconds:02d})",
+            size=8.5, height=4.6, indent=5,
+        )
+    pdf.ln(0.5)
+    pdf.text_block(caption, size=8, color=MUTED, height=4.2)
+    pdf.ln(2.5)
+
+
 def _finding(pdf: _ReportPDF, finding: dict, cross: bool) -> None:
     # enough for the badge, the title and the first line of the summary; the
     # evidence block below measures itself
@@ -290,16 +343,36 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             pdf.text_block(round_["summary"], height=5)
             pdf.ln(1.5)
 
+    plenary = report["assembly"].get("recording_mode") == "plenary"
+
     # ---- rounds ----
     for round_ in report["rounds"]:
         pdf.section_banner(round_heading(round_["position"], round_["title"]))
         if round_["question"]:
             pdf.text_block(f"“{round_['question']}”", size=11.5, style="B", color=ACCENT)
             pdf.ln(1.5)
-        if round_["summary"]:
-            pdf.eyebrow("AI summary — all tables")
-            pdf.text_block(round_["summary"], height=5)
-            pdf.ln(1.5)
+        # The round summary is NOT repeated here: the Executive summary above
+        # already carries every round's summary verbatim, and printing it a
+        # second time at the head of each round section was pure duplication.
+
+        balance = round_.get("speaking_balance")
+        if balance and len(balance["voices"]) >= 2:
+            # one voice means no diarization — nothing worth printing
+            _speaking_balance(pdf, balance)
+
+        if plenary:
+            # One group = one table. Its findings ARE the round's findings, so
+            # render them once, with no cross-table section (none exists) and no
+            # "Table detail / Table N" framing that a single group makes noise.
+            table = round_["tables"][0] if round_["tables"] else None
+            findings = table["findings"] if table else []
+            for type_, label, group in group_findings_by_type(findings):
+                pdf.group_heading(label, AMBER if type_ == "disagreement" else ACCENT)
+                for finding in group:
+                    _finding(pdf, finding, cross=False)
+            if not findings:
+                pdf.text_block("No findings for this round yet.", color=MUTED)
+            continue
 
         for type_, label, group in group_findings_by_type(round_["cross_table"]):
             pdf.group_heading(label, AMBER if type_ == "disagreement" else ACCENT)

@@ -121,6 +121,8 @@
 			"storageErrorShort": "Errore di memoria",
 			"storageErrorBanner": "✕ ERRORE DI MEMORIA",
 			"captionsUnavailable": "Sottotitoli in diretta momentaneamente non disponibili. La registrazione prosegue in sicurezza.",
+			"captionsListening": "In ascolto — i sottotitoli compaiono quando qualcuno parla.",
+			"captionsCapacity": "Sottotitoli in diretta disattivati su questo telefono — la sala è al completo. La registrazione prosegue in sicurezza.",
 			"waitingCaptions": "In attesa dei sottotitoli…",
 			"hideTranscript": "Nascondi la trascrizione in diretta",
 			"showTranscript": "Mostra la trascrizione in diretta",
@@ -173,6 +175,12 @@
 			"roundAndDuration": "Turno {position} · {minutes} minuti",
 			"tryAgain": "Riprova",
 			"retryNow": "Riprova ora"
+		},
+		"addDevice": {
+			"button": "Aggiungi un altro dispositivo",
+			"title": "Scansiona per unirti a questa sala",
+			"hint": "Ogni telefono che scansiona questo codice registra la stessa discussione.",
+			"unavailable": "Il codice di accesso non è più disponibile — chiedi all'organizzatore."
 		}
 	},
 	"error": {

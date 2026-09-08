@@ -6,12 +6,15 @@ import {
 	mdiCheckCircle,
 	mdiCloudUploadOutline,
 	mdiDatabaseOutline,
+	mdiQrcode,
 	mdiTrayFull,
 } from '@mdi/js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
+import AddDeviceQr from './AddDeviceQr.vue'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
 import { useWakeLock } from '../useWakeLock'
@@ -46,6 +49,8 @@ const nextStartCountdown = ref(0)
 const clearedNote = ref('')
 
 const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
+const plenary = props.session.assembly.recording_mode === 'plenary'
+const showAddDevice = ref(false)
 
 // How long "Keep talking" holds off the auto-finish before it re-arms. Long
 // enough to finish a thought; bounded, so a table that taps it and walks away
@@ -86,7 +91,13 @@ function cancelFinishCountdown(): void {
 }
 const showLive = ref(true)
 const liveLines = ref<Array<{ t: number; text: string; speaker?: number | null }>>([])
-const liveChecked = ref(false)
+// What the caption footer says when there are no lines to show. Decided by
+// captionState.ts from the server's active/reason flags — never from "the
+// lines are empty", which is true at the start of every round and used to
+// flash "temporarily unavailable" at people whose captions were merely warming
+// up.
+const captionState = ref<CaptionFooter>('waiting')
+let captionHistory: CaptionHistory = { sawLines: false, consecutiveInactive: 0 }
 const captionsBox = ref<HTMLElement | null>(null)
 const nextRound = ref<RoundInfo | null>(null)
 const reportAvailable = ref(false)
@@ -305,14 +316,28 @@ onBeforeUnmount(() => {
 
 function startLivePoll(): void {
 	if (livePollTimer) return
+	let polledRecordingId = ''
 	const poll = async () => {
 		if (!showLive.value || !state.recordingId || state.phase !== 'recording') return
+		if (state.recordingId !== polledRecordingId) {
+			// a new round is a new caption session — its history starts clean
+			polledRecordingId = state.recordingId
+			captionHistory = { sawLines: false, consecutiveInactive: 0 }
+			captionState.value = 'waiting'
+		}
 		try {
 			const result = await recorderApi.liveTranscript(props.session.session_token, state.recordingId)
-			liveLines.value = result.lines.slice(-40)
-			liveChecked.value = true
+			// Keep what people were reading: an empty response from an
+			// inactive session (a blip, a failure cooldown) must not blank
+			// the strip. An ACTIVE session that reports no lines is a genuine
+			// fresh start and may clear it.
+			if (result.lines.length > 0 || result.active) {
+				liveLines.value = result.lines.slice(-40)
+			}
+			captionHistory = updateHistory(result, captionHistory)
+			captionState.value = captionFooter(result, captionHistory)
 		} catch {
-			/* captions are best-effort */
+			/* captions are best-effort; the footer keeps its last state */
 		}
 	}
 	void poll()
@@ -526,9 +551,13 @@ async function clearSynced(): Promise<void> {
 					<p class="rc-eyebrow">{{ t('recorder.recording.liveTranscript') }}</p>
 					<p v-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 0.875rem; margin: 0">
 						{{
-							liveChecked
-								? t('recorder.recording.captionsUnavailable')
-								: t('recorder.recording.waitingCaptions')
+							captionState === 'capacity'
+								? t('recorder.recording.captionsCapacity')
+								: captionState === 'unavailable'
+									? t('recorder.recording.captionsUnavailable')
+									: captionState === 'listening'
+										? t('recorder.recording.captionsListening')
+										: t('recorder.recording.waitingCaptions')
 						}}
 					</p>
 					<div v-else ref="captionsBox" class="rc-captions">
@@ -548,6 +577,13 @@ async function clearSynced(): Promise<void> {
 							: t('recorder.recording.showTranscript')
 					}}
 				</button>
+				<!-- plenary: the room shares one code, so the nearest copy of it
+				     is this phone — the next device joins by scanning it here -->
+				<button v-if="plenary" class="rc-btn rc-subtle" @click="showAddDevice = !showAddDevice">
+					<SvgIcon :path="mdiQrcode" :size="18" />
+					{{ t('recorder.addDevice.button') }}
+				</button>
+				<AddDeviceQr v-if="plenary && showAddDevice" :token="props.session.session_token" />
 			</template>
 			</div>
 

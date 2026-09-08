@@ -42,11 +42,13 @@ def live_stt_snapshot() -> dict:
             # Vosk only: language -> model path, carried here so the caption
             # path never has to make an OCS call per chunk
             "vosk_models": vosk_language_models(store) if provider == "vosk" else {},
+            # per-provider cap on concurrent LIVE caption sessions (DEFAULTS)
+            "concurrency": stt_concurrency_limit(store, provider, "live"),
         }
     except Exception:
         log.warning("live_stt_snapshot_failed", exc_info=True)
         snapshot = {"enabled": False, "provider": "", "api_key": None, "model": "",
-                    "endpoint": "", "vosk_models": {}}
+                    "endpoint": "", "vosk_models": {}, "concurrency": 0}
     _live_snapshot = (now, snapshot)
     return snapshot
 
@@ -267,6 +269,22 @@ DEFAULTS = {
     "vosk_language_models": "",
     "vosk_batch_model": "",  # legacy: superseded by vosk_language_models
     "vosk_live_model": "",
+    # Server-wide caps on concurrent transcription work, per provider and per
+    # kind. Live: every recording phone opens its own caption session, so an
+    # uncapped plenary room can saturate a self-hosted Vosk server (or a
+    # hosted provider's rate limit), drop every session, and put the whole
+    # room into failure cooldown — over-cap phones keep recording and their
+    # captions wait for a slot. Batch (final) is a separate pool: the job
+    # runner is single-worker today, so these mostly bound what a future
+    # concurrent runner could open at once.
+    "stt_concurrency_deepgram_live": "10",
+    "stt_concurrency_deepgram_batch": "5",
+    "stt_concurrency_mistral_live": "15",
+    "stt_concurrency_mistral_batch": "5",
+    "stt_concurrency_vosk_live": "5",
+    "stt_concurrency_vosk_batch": "2",
+    "stt_concurrency_whisper_live": "2",
+    "stt_concurrency_whisper_batch": "1",
     "analysis_base_url": "https://api.mistral.ai/v1",
     "analysis_model": "mistral-large-latest",
     "analysis_enabled": "1",
@@ -340,6 +358,23 @@ def get_setting(store: ConfigStore, key: str) -> str:
     return value
 
 
+def stt_concurrency_limit(store: "ConfigStore", provider: str, kind: str) -> int:
+    """The provider's concurrent-transcription cap for `kind` ("live" or
+    "batch"), tolerant of bad input.
+
+    A typo in Settings must degrade to the shipped default, never to zero —
+    zero would silently turn captions off for everyone.
+    """
+    key = f"stt_concurrency_{provider}_{kind}"
+    if key not in DEFAULTS:
+        return 0  # unknown provider or kind: no cap to speak of
+    try:
+        value = int(get_setting(store, key))
+    except (TypeError, ValueError):
+        value = int(DEFAULTS[key])
+    return value if value > 0 else int(DEFAULTS[key])
+
+
 def set_settings(store: ConfigStore, values: dict[str, str]) -> list[str]:
     """Store the provided fields; empty string clears a key field. Returns the
     list of field names changed (for audit — never the values)."""
@@ -387,6 +422,16 @@ def providers_summary(store: ConfigStore) -> dict:
             "vosk_url": get_setting(store, "vosk_url"),
             "vosk_language_models": vosk_language_models(store),
             "vosk_batch_model": get_setting(store, "vosk_batch_model"),
+            # per-provider caps on concurrent transcription work, live and
+            # final (batch) as independent pools, server-wide
+            "stt_concurrency_deepgram_live": stt_concurrency_limit(store, "deepgram", "live"),
+            "stt_concurrency_deepgram_batch": stt_concurrency_limit(store, "deepgram", "batch"),
+            "stt_concurrency_mistral_live": stt_concurrency_limit(store, "mistral", "live"),
+            "stt_concurrency_mistral_batch": stt_concurrency_limit(store, "mistral", "batch"),
+            "stt_concurrency_vosk_live": stt_concurrency_limit(store, "vosk", "live"),
+            "stt_concurrency_vosk_batch": stt_concurrency_limit(store, "vosk", "batch"),
+            "stt_concurrency_whisper_live": stt_concurrency_limit(store, "whisper", "live"),
+            "stt_concurrency_whisper_batch": stt_concurrency_limit(store, "whisper", "batch"),
         },
         "analysis": {
             "base_url": get_setting(store, "analysis_base_url"),

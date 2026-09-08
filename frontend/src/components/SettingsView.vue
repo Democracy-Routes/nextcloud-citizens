@@ -39,6 +39,20 @@ const whisperBatchModel = ref('')
 const whisperLiveModel = ref('')
 const voskUrl = ref('')
 const voskBatchModel = ref('')
+// per-provider caps on concurrent transcription work — live caption sessions
+// and final (batch) transcriptions as independent pools, server-wide.
+// Uncapped, a plenary room of phones can saturate a self-hosted Vosk server
+// or a provider's rate limit — then EVERY phone's captions fail at once.
+const concurrency = ref<Record<SttProvider, { live: number; batch: number }>>({
+	deepgram: { live: 10, batch: 5 },
+	mistral: { live: 15, batch: 5 },
+	vosk: { live: 5, batch: 2 },
+	whisper: { live: 2, batch: 1 },
+})
+
+function clampCap(value: number): number {
+	return Math.min(100, Math.max(1, Number(value) || 1))
+}
 
 // the languages an assembly can be run in (AssemblyWizard.vue). Vosk needs its
 // own model for each, so every one gets a row whether or not it is configured.
@@ -52,6 +66,13 @@ const ASSEMBLY_LANGUAGES: Array<{ code: string; label: string }> = [
 const voskModels = ref<Record<string, { live: string; final: string }>>(
 	Object.fromEntries(ASSEMBLY_LANGUAGES.map((l) => [l.code, { live: '', final: '' }])),
 )
+
+const PROVIDER_LABELS: Record<SttProvider, string> = {
+	mistral: 'Mistral (Voxtral)',
+	deepgram: 'Deepgram',
+	whisper: 'Whisper (OpenAI-compatible)',
+	vosk: 'Vosk (offline)',
+}
 
 // every engine produces live captions, each through its own protocol
 const CAPTION_NOTE: Record<SttProvider, string> = {
@@ -138,6 +159,24 @@ async function reload(): Promise<void> {
 	whisperLiveModel.value = summary.value.stt.whisper_live_model ?? ''
 	voskUrl.value = summary.value.stt.vosk_url
 	voskBatchModel.value = summary.value.stt.vosk_batch_model
+	concurrency.value = {
+		deepgram: {
+			live: summary.value.stt.stt_concurrency_deepgram_live ?? 10,
+			batch: summary.value.stt.stt_concurrency_deepgram_batch ?? 5,
+		},
+		mistral: {
+			live: summary.value.stt.stt_concurrency_mistral_live ?? 15,
+			batch: summary.value.stt.stt_concurrency_mistral_batch ?? 5,
+		},
+		vosk: {
+			live: summary.value.stt.stt_concurrency_vosk_live ?? 5,
+			batch: summary.value.stt.stt_concurrency_vosk_batch ?? 2,
+		},
+		whisper: {
+			live: summary.value.stt.stt_concurrency_whisper_live ?? 2,
+			batch: summary.value.stt.stt_concurrency_whisper_batch ?? 1,
+		},
+	}
 	const stored = summary.value.stt.vosk_language_models ?? {}
 	voskModels.value = Object.fromEntries(
 		ASSEMBLY_LANGUAGES.map(({ code }) => [
@@ -206,6 +245,16 @@ function currentPayload(): Record<string, unknown> {
 			whisper_live_model: whisperLiveModel.value.trim(),
 			vosk_url: voskUrl.value.trim(),
 			vosk_batch_model: voskBatchModel.value.trim(),
+			// clamp locally so a cleared field round-trips as the minimum
+			// rather than a 422 from the server
+			stt_concurrency_deepgram_live: clampCap(concurrency.value.deepgram.live),
+			stt_concurrency_deepgram_batch: clampCap(concurrency.value.deepgram.batch),
+			stt_concurrency_mistral_live: clampCap(concurrency.value.mistral.live),
+			stt_concurrency_mistral_batch: clampCap(concurrency.value.mistral.batch),
+			stt_concurrency_vosk_live: clampCap(concurrency.value.vosk.live),
+			stt_concurrency_vosk_batch: clampCap(concurrency.value.vosk.batch),
+			stt_concurrency_whisper_live: clampCap(concurrency.value.whisper.live),
+			stt_concurrency_whisper_batch: clampCap(concurrency.value.whisper.batch),
 			vosk_language_models: JSON.stringify(
 				Object.fromEntries(
 					Object.entries(voskModels.value)
@@ -337,22 +386,30 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 				<div class="cz-row" style="margin-bottom: 16px">
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'mistral' }">
 						<input v-model="sttProvider" type="radio" value="mistral" />
+						<SvgIcon v-if="sttProvider === 'mistral'" :path="mdiCheck" :size="16" />
 						Mistral (Voxtral)
 					</label>
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'deepgram' }">
 						<input v-model="sttProvider" type="radio" value="deepgram" />
+						<SvgIcon v-if="sttProvider === 'deepgram'" :path="mdiCheck" :size="16" />
 						Deepgram
 					</label>
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'whisper' }">
 						<input v-model="sttProvider" type="radio" value="whisper" />
+						<SvgIcon v-if="sttProvider === 'whisper'" :path="mdiCheck" :size="16" />
 						Whisper (OpenAI-compatible)
 					</label>
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'vosk' }">
 						<input v-model="sttProvider" type="radio" value="vosk" />
+						<SvgIcon v-if="sttProvider === 'vosk'" :path="mdiCheck" :size="16" />
 						Vosk (offline)
 					</label>
 				</div>
 
+				<p style="font-size: 0.875rem; margin: -4px 0 10px">
+					Selected service: <strong style="color: var(--cz-primary)">{{ PROVIDER_LABELS[sttProvider] }}</strong>
+					— the fields below configure it.
+				</p>
 				<p class="cz-muted" style="font-size: 0.8125rem; margin: -6px 0 14px">
 					{{ CAPTION_NOTE[sttProvider] }}
 					Captions are provisional — the canonical transcript is always produced from
@@ -390,6 +447,21 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 							<span>Used for the canonical transcript after each round.</span>
 						</div>
 					</div>
+					<div class="cz-field" style="grid-column: span 2">
+						<div class="cz-modelhead">
+							<span>Max concurrent live caption sessions</span>
+							<span>Max concurrent final transcriptions</span>
+						</div>
+						<div class="cz-modelrow">
+							<input v-model.number="concurrency.mistral.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
+							<input v-model.number="concurrency.mistral.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+						</div>
+						<div class="cz-modelhead cz-modelhead--hint">
+							<span>Server-wide; one session per recording phone. Phones past the cap
+								keep recording — their captions wait for a free slot.</span>
+							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
+						</div>
+					</div>
 				</div>
 				<div v-else-if="sttProvider === 'deepgram'" class="cz-fieldgrid">
 					<div class="cz-field">
@@ -420,6 +492,21 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 						<div class="cz-modelhead cz-modelhead--hint">
 							<span>Streams natively and carries speaker labels.</span>
 							<span>Used for the canonical transcript after each round.</span>
+						</div>
+					</div>
+					<div class="cz-field" style="grid-column: span 2">
+						<div class="cz-modelhead">
+							<span>Max concurrent live caption sessions</span>
+							<span>Max concurrent final transcriptions</span>
+						</div>
+						<div class="cz-modelrow">
+							<input v-model.number="concurrency.deepgram.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
+							<input v-model.number="concurrency.deepgram.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+						</div>
+						<div class="cz-modelhead cz-modelhead--hint">
+							<span>Server-wide; one session per recording phone. Phones past the cap
+								keep recording — their captions wait for a free slot.</span>
+							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
 						</div>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
@@ -458,6 +545,21 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								final model.</span>
 							<span>A name containing “diarize” (e.g. gpt-4o-transcribe-diarize) is
 								requested in diarized mode and returns speaker labels.</span>
+						</div>
+					</div>
+					<div class="cz-field" style="grid-column: span 2">
+						<div class="cz-modelhead">
+							<span>Max concurrent live caption sessions</span>
+							<span>Max concurrent final transcriptions</span>
+						</div>
+						<div class="cz-modelrow">
+							<input v-model.number="concurrency.whisper.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
+							<input v-model.number="concurrency.whisper.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+						</div>
+						<div class="cz-modelhead cz-modelhead--hint">
+							<span>Server-wide; one session per recording phone. Phones past the cap
+								keep recording — their captions wait for a free slot.</span>
+							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
 						</div>
 					</div>
 					<div class="cz-field">
@@ -541,6 +643,21 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 							back to whatever model the server started with, so a half-filled table never
 							stops a recording being transcribed.
 						</span>
+					</div>
+					<div class="cz-field" style="grid-column: span 2">
+						<div class="cz-modelhead">
+							<span>Max concurrent live caption sessions</span>
+							<span>Max concurrent final transcriptions</span>
+						</div>
+						<div class="cz-modelrow">
+							<input v-model.number="concurrency.vosk.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
+							<input v-model.number="concurrency.vosk.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+						</div>
+						<div class="cz-modelhead cz-modelhead--hint">
+							<span>Server-wide; one session per recording phone. Phones past the cap
+								keep recording — their captions wait for a free slot.</span>
+							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
+						</div>
 					</div>
 					<div class="cz-field">
 						<label>Model label (optional)</label>

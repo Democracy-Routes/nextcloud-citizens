@@ -20,6 +20,7 @@ from citizens.services.assemblies import get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job
 from citizens.services.report import _cross_table_evidence
+from citizens.services.speaking import round_speaking_balance
 
 router = APIRouter()
 
@@ -120,6 +121,7 @@ def round_findings(round_id: str, user: CurrentUser, session: DB):
         "cross_table": [
             _finding_payload(session, f, table_numbers) for f in findings if f.scope == "round"
         ],
+        "speaking_balance": round_speaking_balance(session, round_),
         "tables": tables_payload,
     }
 

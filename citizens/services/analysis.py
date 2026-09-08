@@ -386,6 +386,25 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
 
 def analyze_round(session: Session, store: provider_config.ConfigStore, round_: Round) -> int:
     """Cluster all table findings of a round into cross-table findings."""
+    assembly = session.get(Assembly, round_.assembly_id)
+    if assembly is not None and assembly.recording_mode == "plenary":
+        # Plenary is one group (one table), so there is nothing to cluster
+        # ACROSS tables — the table findings ARE the round's findings. Producing
+        # round-scope clusters here just echoed every finding a second time in
+        # the report. Skip the model call; set the round summary from the group.
+        _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
+        summary = session.execute(
+            select(Recording.analysis_summary).where(
+                Recording.round_id == round_.id, Recording.analysis_summary != ""
+            )
+        ).scalars().first()
+        round_.analysis_summary = summary or (
+            "No substantive findings emerged from this round's discussion."
+        )
+        session.flush()
+        log.info("analysis_round_plenary_no_clustering", round_id=round_.id)
+        return 0
+
     table_findings = list(
         session.execute(
             select(Finding).where(
@@ -414,7 +433,6 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
         log.info("analysis_round_no_findings", round_id=round_.id)
         return 0
 
-    assembly = session.get(Assembly, round_.assembly_id)
     language = LANGUAGE_NAMES.get(assembly.language if assembly else "en", "English")
     tables_by_finding: dict[str, str | None] = {f.id: f.table_id for f in table_findings}
     total_tables = len({f.table_id for f in table_findings if f.table_id})

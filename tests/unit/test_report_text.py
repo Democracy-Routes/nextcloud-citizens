@@ -74,3 +74,82 @@ class TestCoverParticipants:
         # the rest of the cover is unaffected
         assert "- Tables: 10" in markdown
         assert "- Language: EN" in markdown
+
+
+def _finding(fid: str, title: str, type_: str = "proposal") -> dict:
+    return {
+        "id": fid, "type": type_, "title": title, "summary": "A neutral description.",
+        "is_draft": False, "mentioned_table_count": 0, "evidence": [],
+        "evidence_removed": False,
+    }
+
+
+def _plenary_report() -> dict:
+    r = _report()
+    r["assembly"]["recording_mode"] = "plenary"
+    r["rounds"][0]["summary"] = "The group discussed transport."
+    r["rounds"][0]["tables"] = [
+        {"table_number": 1, "summary": "The group discussed transport.",
+         "analyzed": True,
+         "findings": [_finding("f1", "Later evening buses"),
+                      _finding("f2", "Safer cycle lanes", "concern")]},
+    ]
+    return r
+
+
+class TestPlenaryReportHasNoDuplication:
+    """A plenary run is one group. Rendering its findings once — with no
+    cross-table section and no 'Table 1' framing — is the whole point of the
+    de-duplication pass."""
+
+    def test_each_finding_appears_exactly_once(self):
+        md = render_markdown(_plenary_report())
+        assert md.count("Later evening buses") == 1
+        assert md.count("Safer cycle lanes") == 1
+
+    def test_no_across_all_tables_or_table_heading(self):
+        md = render_markdown(_plenary_report())
+        assert "Across all tables" not in md
+        assert "### Table 1" not in md
+
+    def test_the_round_summary_still_shows_once(self):
+        md = render_markdown(_plenary_report())
+        assert md.count("The group discussed transport.") == 1
+
+
+def _balanced_report() -> dict:
+    r = _report()
+    r["rounds"][0]["speaking_balance"] = {
+        "voices": [
+            {"label": "A", "seconds": 750, "percent": 60},
+            {"label": "B", "seconds": 375, "percent": 30},
+            {"label": "Others", "seconds": 125, "percent": 10},
+        ],
+        "total_seconds": 1250,
+        "from_recording_id": "rec-1",
+    }
+    return r
+
+
+class TestSpeakingBalanceInReport:
+    """The Analysis tab's talk-time chart, ported to the exports — only when
+    diarization actually produced distinct voices. One voice means the whole
+    recording was a single label (no diarization) and says nothing."""
+
+    def test_voices_and_caption_render(self):
+        md = render_markdown(_balanced_report())
+        assert "Speaking balance" in md
+        assert "- Voice A — 60% (12:30)" in md
+        assert "- Others — 10%" in md
+        assert "not identified by name" in md
+
+    def test_a_single_voice_is_not_printed(self):
+        r = _balanced_report()
+        r["rounds"][0]["speaking_balance"]["voices"] = [
+            {"label": "A", "seconds": 100, "percent": 100},
+        ]
+        assert "Speaking balance" not in render_markdown(r)
+
+    def test_an_old_snapshot_without_the_key_still_renders(self):
+        # frozen final reports predate the field; .get() must carry them
+        assert "Speaking balance" not in render_markdown(_report())

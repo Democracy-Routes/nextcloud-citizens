@@ -105,3 +105,54 @@ def test_orchestrated_and_independent_still_refuse_a_second_device(client):
     _, headers_b = _join(client, assembly, "203.0.113.7")
     assert _start(client, headers_a, round_id).status_code == 201
     assert _start(client, headers_b, round_id).status_code == 409, "orchestrated must stay one-per-table"
+
+
+# ------------------------------------------------- add-a-device QR
+
+
+def test_a_joined_phone_can_show_the_rooms_join_code(client):
+    """The nearest copy of the shared code is the phone beside you: a joined
+    plenary device re-publishes the QR so the next phone scans it there."""
+    assembly = _plenary(client)
+    _, headers = _join(client, assembly, "203.0.113.10")
+
+    card = client.get("/api/v1/public/recorder/invite-qr", headers=headers)
+
+    assert card.status_code == 200
+    body = card.json()
+    assert body["available"] is True
+    assert "<svg" in body["qr_svg"]
+    assert "recorder.html#/join/" in body["url"]
+
+    # and the code it shows actually admits the next phone
+    token = re.search(r"#/join/(.+)$", body["url"]).group(1)
+    second = client.post(
+        "/api/v1/public/join", json={"token": token}, headers={"X-Origin-IP": "203.0.113.11"}
+    )
+    assert second.status_code == 200, second.text
+
+
+def test_other_modes_get_no_shared_code_endpoint(client):
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST Orchestrated",
+            "default_table_count": 1,
+            "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}],
+        },
+    ).json()
+    _, headers = _join(client, assembly, "203.0.113.12")
+
+    assert client.get("/api/v1/public/recorder/invite-qr", headers=headers).status_code == 404
+
+
+def test_a_revoked_invite_shows_no_dead_qr(client):
+    assembly = _plenary(client)
+    _, headers = _join(client, assembly, "203.0.113.13")
+    # regenerating revokes the invite this phone joined through
+    client.post(f"/api/v1/assemblies/{assembly['id']}/invites/generate")
+
+    card = client.get("/api/v1/public/recorder/invite-qr", headers=headers)
+
+    assert card.status_code == 200
+    assert card.json() == {"available": False}

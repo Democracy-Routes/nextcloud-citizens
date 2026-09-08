@@ -119,6 +119,29 @@ def invite_links(session: Session, assembly: Assembly) -> list[schemas.InviteGen
     return cards
 
 
+def session_invite_card(
+    session: Session, recorder_session: RecorderSession
+) -> schemas.InviteGenerated | None:
+    """The join card for the invite THIS phone joined through, or None.
+
+    Lets a plenary phone show the room's shared QR so the next phone joins by
+    scanning it, with no trip to the organizer. None when the invite has since
+    been revoked or expired, or its token cannot be decrypted (legacy invite,
+    rotated app secret) — a dead QR on screen is worse than none.
+    """
+    invite = session.get(RecorderInvite, recorder_session.invite_id)
+    if invite is None or invite.revoked_at is not None:
+        return None
+    if invite.expires_at is not None and invite.expires_at <= utcnow():
+        return None
+    if not invite.token_encrypted:
+        return None
+    token = decrypt_token(invite.token_encrypted)
+    if token is None:
+        return None
+    return _invite_card(invite.table_number, token)
+
+
 def list_invites(session: Session, assembly_id: str) -> list[schemas.InviteOut]:
     invites = session.execute(
         select(RecorderInvite)

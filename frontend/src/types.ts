@@ -210,6 +210,16 @@ export interface ProvidersSummary {
 		/** language code -> model NAME for captions and for the final transcript */
 		vosk_language_models: Record<string, { live: string; final: string }>
 		vosk_batch_model: string
+		/** per-provider caps on concurrent transcription — live captions and
+		 * final (batch) as independent pools, server-wide */
+		stt_concurrency_deepgram_live: number
+		stt_concurrency_deepgram_batch: number
+		stt_concurrency_mistral_live: number
+		stt_concurrency_mistral_batch: number
+		stt_concurrency_vosk_live: number
+		stt_concurrency_vosk_batch: number
+		stt_concurrency_whisper_live: number
+		stt_concurrency_whisper_batch: number
 	}
 	analysis: {
 		base_url: string
@@ -263,6 +273,18 @@ export interface FindingData {
 	evidence: FindingEvidence[]
 }
 
+export interface SpeakingVoice {
+	label: string
+	seconds: number
+	percent: number
+}
+
+export interface SpeakingBalance {
+	voices: SpeakingVoice[]
+	total_seconds: number
+	from_recording_id: string
+}
+
 export interface RoundFindings {
 	round_id: string
 	round_status: string
@@ -270,6 +292,7 @@ export interface RoundFindings {
 	analysis_configured: boolean
 	tables_with_findings: number
 	cross_table: FindingData[]
+	speaking_balance: SpeakingBalance | null
 	tables: Array<{
 		table_number: number
 		recording: { id: string; state: string } | null

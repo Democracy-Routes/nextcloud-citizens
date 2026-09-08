@@ -283,3 +283,151 @@ def test_sweeping_a_stalled_upload_ends_its_caption_session(client, monkeypatch)
 
     assert sweep.sweep_stalled_uploads() == 1
     assert finished == [recording_id], "the swept recording's caption session was left running"
+
+
+# ---------------------------------------------------------------- capacity
+
+
+def test_the_capacity_gate_holds_and_frees(settings_env, monkeypatch):
+    asyncio.run(_test_the_capacity_gate_holds_and_frees(settings_env, monkeypatch))
+
+
+async def _test_the_capacity_gate_holds_and_frees(settings_env, monkeypatch):
+    """With the provider capped at one, a second phone's captions wait —
+    honestly labelled — and take the slot the moment the first phone is done."""
+    from citizens.services import stt_capacity
+
+    stt_capacity.reset_for_tests()
+    manager = LiveCaptionManager()
+    manager.set_loop(asyncio.get_running_loop())
+
+    created = []
+
+    class _Recording(_BaseSession):
+        wants_pcm = False
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            created.append(self)
+
+        async def run(self):
+            await self.queue.get()
+
+    monkeypatch.setitem(lc.SESSION_TYPES, "deepgram", _Recording)
+    config = {"provider": "deepgram", "api_key": "k", "concurrency": 1}
+
+    await manager._feed_async("rec-a", b"audio", config, "en", "asm-1")
+    await manager._feed_async("rec-b", b"audio", config, "en", "asm-1")
+
+    assert len(created) == 1, "the cap did not hold"
+    assert "rec-b" not in manager._sessions
+    assert manager.status("rec-b") == {"active": False, "lines": [], "reason": "capacity"}
+    assert stt_capacity.in_use("deepgram:live") == 1
+
+    # the first phone finishes: its lease comes back, and the next chunk from
+    # the waiting phone gets a session — no restart, no organizer action
+    await manager._finish_async("rec-a")
+    assert stt_capacity.in_use("deepgram:live") == 0
+
+    await manager._feed_async("rec-b", b"audio", config, "en", "asm-1")
+    assert len(created) == 2
+    assert "rec-b" in manager._sessions
+    assert "reason" not in manager.status("rec-b")
+
+    await manager.shutdown()
+    stt_capacity.reset_for_tests()
+
+
+def test_a_config_without_a_cap_means_no_cap(settings_env, monkeypatch):
+    asyncio.run(_test_a_config_without_a_cap_means_no_cap(settings_env, monkeypatch))
+
+
+async def _test_a_config_without_a_cap_means_no_cap(settings_env, monkeypatch):
+    """A snapshot cached across an upgrade has no concurrency key; absence
+    must mean "unlimited", never "captions off for everyone"."""
+    from citizens.services import stt_capacity
+
+    stt_capacity.reset_for_tests()
+    manager = LiveCaptionManager()
+    manager.set_loop(asyncio.get_running_loop())
+
+    created = []
+
+    class _Recording(_BaseSession):
+        wants_pcm = False
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            created.append(self)
+
+        async def run(self):
+            await self.queue.get()
+
+    monkeypatch.setitem(lc.SESSION_TYPES, "deepgram", _Recording)
+    config = {"provider": "deepgram", "api_key": "k"}  # no "concurrency"
+
+    for rec in ("rec-1", "rec-2", "rec-3"):
+        await manager._feed_async(rec, b"audio", config, "en", "asm-1")
+
+    assert len(created) == 3
+    assert stt_capacity.in_use("deepgram:live") == 0, "an uncapped session took a lease"
+
+    await manager.shutdown()
+    stt_capacity.reset_for_tests()
+
+
+def test_a_failed_sessions_replacement_does_not_leak_the_lease(settings_env, monkeypatch):
+    asyncio.run(_test_a_failed_sessions_replacement_does_not_leak_the_lease(settings_env, monkeypatch))
+
+
+async def _test_a_failed_sessions_replacement_does_not_leak_the_lease(settings_env, monkeypatch):
+    """The failed session is disposed (lease back) before its replacement
+    acquires — so a cap of one survives the failure/replace cycle instead of
+    deadlocking the recording out of its own slot."""
+    from citizens.services import stt_capacity
+
+    stt_capacity.reset_for_tests()
+    manager = LiveCaptionManager()
+    manager.set_loop(asyncio.get_running_loop())
+
+    created = []
+
+    class _Recording(_BaseSession):
+        wants_pcm = False
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            created.append(self)
+
+        async def run(self):
+            await self.queue.get()
+
+    monkeypatch.setitem(lc.SESSION_TYPES, "deepgram", _Recording)
+    config = {"provider": "deepgram", "api_key": "k", "concurrency": 1}
+
+    await manager._feed_async("rec-x", b"audio", config, "en", "asm-1")
+    assert stt_capacity.in_use("deepgram:live") == 1
+    # the session fails; its cooldown expires
+    manager._sessions["rec-x"].failed_at = time.monotonic() - (lc.FAILURE_COOLDOWN + 5)
+
+    await manager._feed_async("rec-x", b"audio", config, "en", "asm-1")
+
+    assert len(created) == 2, "the replacement was denied its own freed slot"
+    assert stt_capacity.in_use("deepgram:live") == 1, "the failed session's lease leaked"
+
+    await manager.shutdown()
+    assert stt_capacity.in_use("deepgram:live") == 0
+    stt_capacity.reset_for_tests()
+
+
+def test_status_names_the_cooldown_after_a_failure(settings_env):
+    manager = LiveCaptionManager()
+    session = _BaseSession("rec-err", "", "m", "en", assembly_id="asm-1")
+    session.active = False
+    session.failed_at = time.monotonic()
+    manager._sessions["rec-err"] = session
+
+    status = manager.status("rec-err")
+
+    assert status["active"] is False
+    assert status["reason"] == "error"

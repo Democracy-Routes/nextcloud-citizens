@@ -3,7 +3,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { mdiQrcode } from '@mdi/js'
+import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import AddDeviceQr from './AddDeviceQr.vue'
 import { heldByAnotherDevice } from '../holding'
 import { idb } from '../idb'
 import { useWakeLock } from '../useWakeLock'
@@ -24,6 +27,10 @@ const emit = defineEmits<{ start: [round: RoundInfo]; back: []; report: [] }>()
 
 const rounds = ref<RoundInfo[]>(props.session.rounds)
 const offline = ref(false)
+// plenary: the armed screen is where phones sit between rounds, so it is the
+// natural place to show the room's shared code for the next device to scan
+const plenary = props.session.assembly.recording_mode === 'plenary'
+const showAddDevice = ref(false)
 const reportAvailable = ref(false)
 
 const { t } = useI18n()
@@ -178,6 +185,11 @@ onBeforeUnmount(() => {
 				<div v-if="offline" class="rc-note">
 					{{ t('recorder.armed.offline') }}
 				</div>
+				<button v-if="plenary" class="rc-btn rc-subtle" @click="showAddDevice = !showAddDevice">
+					<SvgIcon :path="mdiQrcode" :size="18" />
+					{{ t('recorder.addDevice.button') }}
+				</button>
+				<AddDeviceQr v-if="plenary && showAddDevice" :token="props.session.session_token" />
 			</template>
 		</div>
 

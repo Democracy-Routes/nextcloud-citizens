@@ -113,6 +113,18 @@ class ProvidersUpdate(BaseModel):
     # JSON map of language code -> model path on the Vosk server
     vosk_language_models: str | None = Field(default=None, max_length=2000)
     vosk_batch_model: str | None = Field(default=None, max_length=100)
+    # per-provider caps on concurrent transcription work — live captions and
+    # final (batch) as independent pools, server-wide; ge=1 because 0 would
+    # silently disable captions for everyone — turning them off has its own
+    # switch
+    stt_concurrency_deepgram_live: int | None = Field(default=None, ge=1, le=100)
+    stt_concurrency_deepgram_batch: int | None = Field(default=None, ge=1, le=100)
+    stt_concurrency_mistral_live: int | None = Field(default=None, ge=1, le=100)
+    stt_concurrency_mistral_batch: int | None = Field(default=None, ge=1, le=100)
+    stt_concurrency_vosk_live: int | None = Field(default=None, ge=1, le=100)
+    stt_concurrency_vosk_batch: int | None = Field(default=None, ge=1, le=100)
+    stt_concurrency_whisper_live: int | None = Field(default=None, ge=1, le=100)
+    stt_concurrency_whisper_batch: int | None = Field(default=None, ge=1, le=100)
     analysis_base_url: str | None = Field(default=None, max_length=500)
     analysis_model: str | None = Field(default=None, max_length=200)
     analysis_api_key: str | None = Field(default=None, max_length=500)

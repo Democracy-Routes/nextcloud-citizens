@@ -16,6 +16,7 @@ from citizens.db.models import (
     TranscriptSegment,
 )
 from citizens.services.recording import assembly_progress as progress
+from citizens.services.speaking import round_speaking_balance
 
 METHODOLOGY_NOTE = (
     "AI was used to assist transcription and analysis. "
@@ -376,6 +377,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                 "status": round_.status,
                 "summary": round_.analysis_summary,
                 "recordings": recordings_by_round.get(round_.id, 0),
+                # talk-time per detected voice (services/speaking.py); the
+                # renderers show it only when diarization produced >= 2 voices
+                "speaking_balance": round_speaking_balance(session, round_),
                 "cross_table": cross,
                 "tables": [
                     {
@@ -394,6 +398,7 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             "description": assembly.description,
             "language": assembly.language,
             "status": assembly.status,
+            "recording_mode": assembly.recording_mode,
             "participants": participant_count,
             "expected_participants": assembly.expected_participants,
             "tables": assembly.default_table_count,
@@ -460,12 +465,40 @@ def render_markdown(report: dict) -> str:
         report["method"],
         "",
     ]
+    plenary = assembly.get("recording_mode") == "plenary"
     for round_ in report["rounds"]:
         lines += [f"## {round_heading(round_['position'], round_['title'])}", ""]
         if round_["question"]:
             lines += [f"> {round_['question']}", ""]
         if round_["summary"]:
             lines += [f"*AI summary:* {round_['summary']}", ""]
+        balance = round_.get("speaking_balance")
+        if balance and len(balance["voices"]) >= 2:
+            lines += ["**Speaking balance**", ""]
+            lines += [
+                f"- Voice {v['label']} — {v['percent']}% ({_timestamp(v['seconds'])})"
+                if v["label"] != "Others"
+                else f"- Others — {v['percent']}% ({_timestamp(v['seconds'])})"
+                for v in balance["voices"]
+            ]
+            lines += [
+                "",
+                "*Detected voices, not identified by name — from the clearest "
+                "single recording. Talk-time, not influence.*",
+                "",
+            ]
+        if plenary:
+            # One group = one table: render its findings once, grouped by type,
+            # with no "Across all tables" section and no "Table N" heading.
+            table = round_["tables"][0] if round_["tables"] else None
+            findings = table["findings"] if table else []
+            for _type, label, group in group_findings_by_type(findings):
+                lines += [f"### {label}", ""]
+                for finding in group:
+                    lines += _markdown_finding(finding, cross=False)
+            if not findings:
+                lines += ["_No findings for this round yet._", ""]
+            continue
         if round_["cross_table"]:
             lines += ["### Across all tables", ""]
             for _type, label, group in group_findings_by_type(round_["cross_table"]):

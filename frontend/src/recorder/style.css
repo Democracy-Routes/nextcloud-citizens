@@ -472,3 +472,21 @@ body {
 		transition-duration: 0.01ms !important;
 	}
 }
+
+/* ================= add-a-device QR (plenary) ================= */
+
+/* A QR must sit on a light ground with a quiet zone whatever the theme, or
+   scanners misread it. segno emits the SVG with omitsize, so the img needs an
+   explicit width. */
+.rc-qr-card {
+	background: #fff;
+	border-radius: 12px;
+	padding: 14px;
+	margin: 6px auto 10px;
+	width: fit-content;
+}
+.rc-qr {
+	display: block;
+	width: min(78vw, 300px);
+	height: auto;
+}

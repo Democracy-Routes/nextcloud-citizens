@@ -92,6 +92,55 @@
 	padding: 12px;
 }
 
+/* Desktop collapse of the assemblies column, like Calendar's navigation
+   toggle. Scoped to >768px: on mobile the sidebar is an off-canvas drawer
+   driven by transform, and a remembered desktop collapse must not zero the
+   drawer's width there. */
+@media (min-width: 769px) {
+	#citizens-app .cz-sidebar {
+		transition: width 0.18s ease, flex-basis 0.18s ease;
+	}
+	#citizens-app .cz-sidebar--collapsed {
+		width: 0;
+		flex-basis: 0;
+		border-right: none;
+	}
+	#citizens-app .cz-sidebar-toggle {
+		position: absolute;
+		top: 14px;
+		/* straddles the sidebar's right border, Calendar-style */
+		left: 285px;
+		z-index: 6;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		padding: 0;
+		border: 1px solid var(--cz-border);
+		border-radius: 50%;
+		background: var(--cz-bg);
+		color: var(--cz-text-muted);
+		cursor: pointer;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+		transition: left 0.18s ease, background 0.12s ease, color 0.12s ease;
+	}
+	#citizens-app .cz-sidebar-toggle--collapsed {
+		left: 8px;
+	}
+	#citizens-app .cz-sidebar-toggle:hover {
+		background: var(--cz-bg-hover);
+		color: var(--cz-text);
+	}
+}
+
+/* on phones the mobile bar's "Assemblies" button owns this job */
+@media (max-width: 768px) {
+	#citizens-app .cz-sidebar-toggle {
+		display: none;
+	}
+}
+
 #citizens-app .cz-sidebar__list {
 	flex: 1 1 auto;
 	overflow-y: auto;
@@ -464,7 +513,8 @@
 
 #citizens-app .cz-radiocard--checked {
 	border-color: var(--cz-primary);
-	background: color-mix(in srgb, var(--cz-primary) 6%, var(--cz-bg));
+	background: color-mix(in srgb, var(--cz-primary) 12%, var(--cz-bg));
+	color: var(--cz-primary);
 }
 
 /* ================= notes / alerts ================= */

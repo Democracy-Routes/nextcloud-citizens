@@ -14,7 +14,7 @@ from citizens.logging_setup import get_logger
 from citizens.providers.analysis.openai_compat import AnalysisError
 from citizens.providers.transcription.base import TranscriptionError
 from citizens.services import analysis as analysis_svc
-from citizens.services import provider_config
+from citizens.services import provider_config, stt_capacity
 from citizens.services import transcription as transcription_svc
 from citizens.services.audio import (
     AudioAssemblyError,
@@ -31,6 +31,15 @@ log = get_logger(__name__)
 
 class PermanentJobError(Exception):
     """Raised when retrying cannot help; the job goes straight to FAILED."""
+
+
+class CapacityBusyError(Exception):
+    """The provider is at its concurrency cap; nothing is wrong with the job.
+
+    The runner reschedules it shortly WITHOUT counting the attempt — during a
+    live event the caption sessions can hold every slot for an hour or more,
+    and a busy hour must not march a perfectly good job to FAILED.
+    """
 
 
 def _commit_failure_state(session: Session) -> None:
@@ -139,6 +148,20 @@ def handle_transcribe_final(session: Session, payload: dict) -> None:
     # three times (runner.py's contract)
     session.commit()
     store = provider_config.default_store()
+    # One transcription = one lease against the provider's BATCH concurrency
+    # cap — its own pool, separate from the live caption sessions'. When every
+    # batch slot is taken, this job politely waits its turn instead of adding
+    # one more connection to a saturated backend. limit == 0 means the
+    # provider has no cap entry (unknown name) — let transcribe_recording
+    # produce the real error rather than waiting forever on a slot that
+    # cannot exist.
+    provider = provider_config.get_setting(store, "stt_provider")
+    limit = provider_config.stt_concurrency_limit(store, provider, "batch")
+    lease: str | None = None
+    if limit > 0:
+        if not stt_capacity.try_acquire(f"{provider}:batch", limit):
+            raise CapacityBusyError(f"{provider} is at its batch concurrency cap")
+        lease = f"{provider}:batch"
     try:
         transcription_svc.transcribe_recording(session, store, recording)
     except TranscriptionError as exc:
@@ -149,6 +172,9 @@ def handle_transcribe_final(session: Session, payload: dict) -> None:
         if exc.permanent:
             raise PermanentJobError(str(exc)) from exc
         raise  # temporary (429/5xx/network) → job retry with backoff
+    finally:
+        if lease is not None:
+            stt_capacity.release(lease)
     recording.error_code = ""
     transition(recording, "TRANSCRIBED")
     _maybe_enqueue_analysis(session, recording)

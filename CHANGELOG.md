@@ -4,6 +4,79 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Add a device from a phone, speaking balance in the report, UI polish — 2026-09-08
+
+- **Plenary: add the next phone from the last one.** A joined plenary device
+  can now show the room's shared join QR ("Add another device", on the armed
+  screen and while recording) — the next phone scans it there instead of
+  finding the organizer's screen. New session-authenticated endpoint rebuilds
+  the code server-side; a revoked or expired invite honestly says the code is
+  gone rather than showing a dead QR. Plenary only — the other modes keep
+  per-table codes. (Known bound: the join rate limiter allows 10 joins/min
+  per shared code; phones past it retry automatically.)
+- **Speaking balance in the report.** The Analysis tab's talk-time chart now
+  also prints in the PDF (a stacked bar + legend per round) and the Markdown
+  export — only when diarization produced at least two distinct voices, so it
+  appears with Deepgram or a diarizing Whisper server and stays honest
+  everywhere else. Same anonymity caption as on the tab.
+- **Settings: the selected speech-to-text service is unmistakable.** The
+  chosen provider card carries a check mark and a stronger highlight, and a
+  "Selected service: …" line sits above the provider's fields.
+- **The assemblies column collapses.** A Calendar-style toggle on its edge
+  hides the list on desktop and gives the assembly the full width; the choice
+  is remembered per browser. Phones keep the existing drawer.
+
+### Honest caption status, and a cap on concurrent transcriptions — 2026-09-08
+
+"Live captions temporarily unavailable. Recording continues safely." kept
+appearing on phones that were mostly fine. Two causes, both fixed.
+
+- **The message fired on the wrong signal.** The recorder showed it whenever a
+  poll returned no caption lines — which is routinely true at the start of
+  every round (captions race the first chunk upload) and for a whole minute
+  after any hiccup. The server now says *why* there are no lines (its `active`
+  flag and a `reason`), and the footer reads that instead: "Waiting…" while
+  connecting, "Listening…" when the session is live but nobody has spoken,
+  and the alarm only when captions that should be working are persistently
+  down (three polls in a row, ~18 s). An empty blip no longer blanks the
+  lines people were reading.
+- **Concurrent transcriptions are now capped per provider.** Every recording
+  phone opens its own live transcription session; with several phones (worst
+  in plenary) a self-hosted Vosk server saturates, every session drops at
+  once, and the whole room cycles through failure cooldown. A server-wide
+  ledger now bounds concurrent transcription work, with **separate pools per
+  provider for live captions and for final (batch) transcription**. Live
+  defaults: Mistral 15, Deepgram 10, Vosk 5, Whisper 2; final defaults:
+  Mistral 5, Deepgram 5, Vosk 2, Whisper 1 — each editable inside its
+  provider's own section in Settings → Audio, aligned under that provider's
+  live/final model fields. Phones past the live cap keep recording and say so
+  honestly ("Live captions are off on this phone — the room is at capacity");
+  they pick up a freed slot within one chunk upload. A batch job that finds
+  its pool full waits politely (retry in a minute, no attempt consumed)
+  instead of piling on or marching to FAILED — and a busy live event never
+  blocks it, since the pools are independent.
+
+### Report de-duplication and a speaking-balance chart — 2026-09-07
+
+Two follow-ups from reading a real report.
+
+- **The report no longer repeats itself.** The round summary was printed twice
+  in the PDF — once under the Executive summary and again verbatim at the head
+  of each round section; the second copy is gone. And in a plenary run (one
+  group = one table) the analysis used to cluster that single table's findings
+  into "cross-table" findings and the report rendered them *and* the same
+  findings again under "Table 1". Plenary now skips the meaningless clustering
+  (saving a model call) and renders the group's findings once, with no
+  cross-table section and no "Table N" framing. Multi-table reports keep their
+  legitimate cross-table layer unchanged.
+- **A speaking-balance chart on the Analysis tab.** A per-round donut of how
+  much each detected voice spoke, computed from the single recording that
+  captured the most speech — because diarization labels are consistent only
+  within one recording, never across devices. The voices are deliberately
+  anonymous (A, B, C…, quietest folded into "Others") and the caption says so:
+  detected voices, not identified by name, an estimate of talk-time and not of
+  participation or influence. Hidden when a round has no diarized speech.
+
 ### Plenary mode — one room, many phones, one merged transcript (Milestone 1) — 2026-09-07
 
 A third recording mode for a single in-person group: 30 people in a circle, or

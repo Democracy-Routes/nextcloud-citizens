@@ -23,7 +23,7 @@ from sqlalchemy import and_, or_, select
 from citizens.db.models import AppJob
 from citizens.db.models.base import utcnow
 from citizens.db.session import session_scope
-from citizens.jobs.handlers import HANDLERS, PermanentJobError
+from citizens.jobs.handlers import HANDLERS, CapacityBusyError, PermanentJobError
 from citizens.jobs.sweep import SWEEP_INTERVAL_SECONDS, run_sweeps
 from citizens.logging_setup import get_logger
 
@@ -32,6 +32,10 @@ log = get_logger(__name__)
 POLL_INTERVAL_SECONDS = 3.0
 BACKOFF_BASE_SECONDS = 30
 BACKOFF_MAX_SECONDS = 3600
+# How soon to look again when a job is merely waiting for a transcription
+# slot (CapacityBusyError). Fixed rather than exponential: the wait is not a
+# failure, and live caption sessions free their slots on a minutes scale.
+CAPACITY_RETRY_SECONDS = 60
 # How long a RUNNING job may hold its lease before another pass reclaims it.
 # Generous, because a long transcription legitimately takes many minutes.
 # Safe because exactly one worker runs (a single container, one run_forever
@@ -140,6 +144,19 @@ def _run_job_inner(job_id: str) -> None:
             job.last_error = str(exc)[:2000]
             job.locked_at = None
             log.error("job_failed_permanently", job_id=job.id, job_type=job.type)
+        except CapacityBusyError as exc:
+            # not a failure: every transcription slot is taken (usually by
+            # live captions during an event). Look again shortly, and give
+            # the attempt back — waiting for a busy hour to pass must never
+            # march a good job to FAILED.
+            session.rollback()
+            job = session.get(AppJob, job_id)
+            job.attempts = max(0, job.attempts - 1)
+            job.state = "RETRY"
+            job.locked_at = None
+            job.last_error = str(exc)[:2000]
+            job.next_attempt_at = utcnow() + timedelta(seconds=CAPACITY_RETRY_SECONDS)
+            log.info("job_waiting_for_capacity", job_id=job.id, job_type=job.type)
         except Exception as exc:
             session.rollback()
             job = session.get(AppJob, job_id)
