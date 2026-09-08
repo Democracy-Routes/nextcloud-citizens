@@ -5,6 +5,7 @@
 anything without valid evidence is dropped, never stored.
 """
 
+import difflib
 import json
 
 from sqlalchemy import select
@@ -156,6 +157,78 @@ def build_system_prompt(
 
 #: Marks where a table's phone was replaced, so the model reads the join as an
 #: interruption rather than an unexplained jump in the conversation.
+#: Two blocks from DIFFERENT devices this close in global time and this similar
+#: in text are the same utterance heard twice — one is dropped. Loose enough to
+#: absorb clock skew (started_at is the /start moment, not the first audio
+#: sample) and diarization boundary differences; tight enough not to merge two
+#: genuinely different lines.
+PLENARY_DEDUPE_WINDOW_S = 6.0
+PLENARY_DEDUPE_RATIO = 0.78
+
+
+def _normalise(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def merge_plenary_segments(recordings: list[Recording], transcripts: list) -> list[dict]:
+    """Merge the room's overlapping device transcripts into one, deduped.
+
+    Every device captured the same discussion from a different spot, so their
+    transcripts overlap. Naively concatenating them would count each statement
+    once per device ("mentioned at 3 tables" for one sentence) — the exact
+    artifact a multi-mic recording produces. This aligns them on the server
+    clock and drops near-duplicate utterances, keeping what only one device
+    caught.
+
+    Returns coalesced blocks (same shape coalesce_segments produces, so the
+    prompt builder and evidence citations are unchanged), each carrying its
+    segment ids and a global start time.
+    """
+    by_recording = {t.recording_id: t for t in transcripts}
+    blocks: list[dict] = []
+    for recording in recordings:
+        transcript = by_recording.get(recording.id)
+        if transcript is None or recording.started_at is None:
+            continue
+        base = recording.started_at.timestamp()
+        # coalesce within the device first: same-speaker merge and start_seconds
+        # comparisons are only valid on one recording's own timeline
+        for block in coalesce_segments(list(transcript.segments)):
+            blocks.append(
+                {
+                    **block,
+                    "global_start": base + block["start"],
+                    "global_end": base + block["end"],
+                    "recording_id": recording.id,
+                }
+            )
+    blocks.sort(key=lambda b: b["global_start"])
+
+    kept: list[dict] = []
+    for block in blocks:
+        duplicate = None
+        for other in reversed(kept):
+            if block["global_start"] - other["global_start"] > PLENARY_DEDUPE_WINDOW_S:
+                break  # sorted by global_start, so nothing earlier is in range
+            if other["recording_id"] == block["recording_id"]:
+                continue  # never dedupe a device against itself
+            ratio = difflib.SequenceMatcher(
+                None, _normalise(other["text"]), _normalise(block["text"])
+            ).ratio()
+            if ratio >= PLENARY_DEDUPE_RATIO:
+                duplicate = other
+                break
+        if duplicate is None:
+            kept.append(block)
+        elif len(block["text"]) > len(duplicate["text"]):
+            # the same utterance, better captured on this device — keep its text
+            # and its ids (evidence points at the clearer copy)
+            duplicate["text"] = block["text"]
+            duplicate["ids"] = block["ids"]
+    kept.sort(key=lambda b: b["global_start"])
+    return kept
+
+
 DEVICE_CHANGE_MARKER = (
     "[--- the table's phone was replaced here; the discussion continued on "
     "another device, and a short part of it was not recorded ---]"
@@ -224,15 +297,26 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     hidden = pseudonyms.name_map(session, assembly) if assembly else {}
 
     lines: list[str] = []
-    for index, transcript in enumerate(transcripts):
-        if index:
-            lines.append(DEVICE_CHANGE_MARKER)
-        lines.extend(
-            f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
-            f"({_timestamp(block['start'])}-{_timestamp(block['end'])}): "
-            f"{pseudonyms.redact(block['text'], hidden)}"
-            for block in coalesce_segments(list(transcript.segments))
-        )
+    if assembly is not None and assembly.recording_mode == "plenary" and len(siblings) > 1:
+        # The whole room on many phones: one discussion, overlapping captures.
+        # Merge and dedupe into a single timeline rather than concatenating the
+        # devices back to back (which would count each statement once per phone).
+        for block in merge_plenary_segments(siblings, transcripts):
+            lines.append(
+                f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
+                f"({_timestamp(block['start'])}-{_timestamp(block['end'])}): "
+                f"{pseudonyms.redact(block['text'], hidden)}"
+            )
+    else:
+        for index, transcript in enumerate(transcripts):
+            if index:
+                lines.append(DEVICE_CHANGE_MARKER)
+            lines.extend(
+                f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
+                f"({_timestamp(block['start'])}-{_timestamp(block['end'])}): "
+                f"{pseudonyms.redact(block['text'], hidden)}"
+                for block in coalesce_segments(list(transcript.segments))
+            )
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title if round_ else ''}\n"
@@ -302,6 +386,25 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
 
 def analyze_round(session: Session, store: provider_config.ConfigStore, round_: Round) -> int:
     """Cluster all table findings of a round into cross-table findings."""
+    assembly = session.get(Assembly, round_.assembly_id)
+    if assembly is not None and assembly.recording_mode == "plenary":
+        # Plenary is one group (one table), so there is nothing to cluster
+        # ACROSS tables — the table findings ARE the round's findings. Producing
+        # round-scope clusters here just echoed every finding a second time in
+        # the report. Skip the model call; set the round summary from the group.
+        _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
+        summary = session.execute(
+            select(Recording.analysis_summary).where(
+                Recording.round_id == round_.id, Recording.analysis_summary != ""
+            )
+        ).scalars().first()
+        round_.analysis_summary = summary or (
+            "No substantive findings emerged from this round's discussion."
+        )
+        session.flush()
+        log.info("analysis_round_plenary_no_clustering", round_id=round_.id)
+        return 0
+
     table_findings = list(
         session.execute(
             select(Finding).where(
@@ -330,7 +433,6 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
         log.info("analysis_round_no_findings", round_id=round_.id)
         return 0
 
-    assembly = session.get(Assembly, round_.assembly_id)
     language = LANGUAGE_NAMES.get(assembly.language if assembly else "en", "English")
     tables_by_finding: dict[str, str | None] = {f.id: f.table_id for f in table_findings}
     total_tables = len({f.table_id for f in table_findings if f.table_id})

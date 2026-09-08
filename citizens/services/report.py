@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Assembly report: approved findings with evidence references (brief §42)."""
 
+import json
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -14,6 +16,7 @@ from citizens.db.models import (
     TranscriptSegment,
 )
 from citizens.services.recording import assembly_progress as progress
+from citizens.services.speaking import round_speaking_balance
 
 METHODOLOGY_NOTE = (
     "AI was used to assist transcription and analysis. "
@@ -130,6 +133,78 @@ MAX_QUOTES = 5
 #: real report — a citation a reader can check and find empty damages the claim
 #: more than no citation would.
 MIN_QUOTE_CHARS = 25
+
+
+def _cross_table_evidence(
+    session: Session, finding: Finding, table_numbers: dict[str, int]
+) -> list[dict]:
+    """Quotes for a cross-table finding, borrowed from the table findings it
+    clustered and labelled with the table each came from.
+
+    A round-scope finding stores no evidence of its own — only
+    `source_finding_ids`, the table findings it aggregated. Those findings and
+    their evidence survive (analyze_round deletes only round drafts), so the
+    honest evidence for "this recurred across tables" is a sample of the
+    supporting quotes from each contributing table. One best quote per table,
+    round-robin, so no single table dominates the citation.
+
+    Fetched by id rather than from build_report's preloaded set: a source table
+    finding may still be a draft while this cross-table finding is approved, so
+    it is not necessarily in the loaded findings.
+    """
+    try:
+        source_ids = json.loads(finding.source_finding_ids or "[]")
+    except ValueError:
+        return []
+    if not source_ids:
+        return []
+    sources = session.execute(
+        select(Finding).where(Finding.id.in_(source_ids)).options(selectinload(Finding.evidence))
+    ).scalars().all()
+    segment_ids = {e.transcript_segment_id for f in sources for e in f.evidence}
+    segments = {
+        s.id: s
+        for s in session.execute(
+            select(TranscriptSegment).where(TranscriptSegment.id.in_(segment_ids))
+        ).scalars()
+    } if segment_ids else {}
+
+    # best-first segments per contributing table (substance, then chronology)
+    per_table: dict[int, list[TranscriptSegment]] = {}
+    for source in sources:
+        number = table_numbers.get(source.table_id or "")
+        if number is None:
+            continue
+        cited = [segments[e.transcript_segment_id] for e in source.evidence
+                 if e.transcript_segment_id in segments]
+        if not cited:
+            continue
+        substantial = [c for c in cited if len(c.text.strip()) >= MIN_QUOTE_CHARS] or cited
+        ranked = sorted(substantial, key=lambda c: len(c.text.strip()), reverse=True)
+        per_table[number] = sorted(ranked, key=lambda c: c.start_seconds)
+
+    # round-robin across tables, in table order, until MAX_QUOTES
+    chosen: list[tuple[int, TranscriptSegment]] = []
+    cursors = {number: 0 for number in per_table}
+    while len(chosen) < MAX_QUOTES and any(
+        cursors[number] < len(per_table[number]) for number in per_table
+    ):
+        for number in sorted(per_table):
+            if cursors[number] < len(per_table[number]) and len(chosen) < MAX_QUOTES:
+                chosen.append((number, per_table[number][cursors[number]]))
+                cursors[number] += 1
+    return [
+        {
+            "table_number": number,
+            "segment_id": segment.id,
+            "speaker": segment.speaker_label,
+            "start": segment.start_seconds,
+            "end": segment.end_seconds,
+            "timestamp": _timestamp(segment.start_seconds),
+            "text": segment.text,
+        }
+        for number, segment in chosen
+    ]
 
 
 def _quotes(cited: list[TranscriptSegment]) -> list[dict]:
@@ -262,12 +337,18 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             # the quotes went away with a deleted/replaced transcript — say so
             # rather than rendering a finding that looks unsupported
             "evidence_removed": finding.evidence_removed_at is not None,
-            "evidence": _quotes(
-                [
-                    segments[e.transcript_segment_id]
-                    for e in finding.evidence
-                    if e.transcript_segment_id in segments
-                ]
+            "evidence": (
+                # a cross-table finding has no evidence of its own; borrow it
+                # from the table findings it clustered, labelled per table
+                _cross_table_evidence(session, finding, table_numbers)
+                if finding.scope == "round"
+                else _quotes(
+                    [
+                        segments[e.transcript_segment_id]
+                        for e in finding.evidence
+                        if e.transcript_segment_id in segments
+                    ]
+                )
             ),
         }
 
@@ -296,6 +377,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                 "status": round_.status,
                 "summary": round_.analysis_summary,
                 "recordings": recordings_by_round.get(round_.id, 0),
+                # talk-time per detected voice (services/speaking.py); the
+                # renderers show it only when diarization produced >= 2 voices
+                "speaking_balance": round_speaking_balance(session, round_),
                 "cross_table": cross,
                 "tables": [
                     {
@@ -314,6 +398,7 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             "description": assembly.description,
             "language": assembly.language,
             "status": assembly.status,
+            "recording_mode": assembly.recording_mode,
             "participants": participant_count,
             "expected_participants": assembly.expected_participants,
             "tables": assembly.default_table_count,
@@ -380,12 +465,40 @@ def render_markdown(report: dict) -> str:
         report["method"],
         "",
     ]
+    plenary = assembly.get("recording_mode") == "plenary"
     for round_ in report["rounds"]:
         lines += [f"## {round_heading(round_['position'], round_['title'])}", ""]
         if round_["question"]:
             lines += [f"> {round_['question']}", ""]
         if round_["summary"]:
             lines += [f"*AI summary:* {round_['summary']}", ""]
+        balance = round_.get("speaking_balance")
+        if balance and len(balance["voices"]) >= 2:
+            lines += ["**Speaking balance**", ""]
+            lines += [
+                f"- Voice {v['label']} — {v['percent']}% ({_timestamp(v['seconds'])})"
+                if v["label"] != "Others"
+                else f"- Others — {v['percent']}% ({_timestamp(v['seconds'])})"
+                for v in balance["voices"]
+            ]
+            lines += [
+                "",
+                "*Detected voices, not identified by name — from the clearest "
+                "single recording. Talk-time, not influence.*",
+                "",
+            ]
+        if plenary:
+            # One group = one table: render its findings once, grouped by type,
+            # with no "Across all tables" section and no "Table N" heading.
+            table = round_["tables"][0] if round_["tables"] else None
+            findings = table["findings"] if table else []
+            for _type, label, group in group_findings_by_type(findings):
+                lines += [f"### {label}", ""]
+                for finding in group:
+                    lines += _markdown_finding(finding, cross=False)
+            if not findings:
+                lines += ["_No findings for this round yet._", ""]
+            continue
         if round_["cross_table"]:
             lines += ["### Across all tables", ""]
             for _type, label, group in group_findings_by_type(round_["cross_table"]):
@@ -420,7 +533,9 @@ def _markdown_finding(finding: dict, cross: bool) -> list[str]:
         lines.insert(3, "")
     for evidence in finding["evidence"]:
         speaker = evidence["speaker"] or "Speaker"
-        lines += [f"> [{evidence['timestamp']}] {speaker}: “{evidence['text']}”", ""]
+        # cross-table quotes are labelled with the table they came from
+        where = f"Table {evidence['table_number']} · " if evidence.get("table_number") else ""
+        lines += [f"> {where}[{evidence['timestamp']}] {speaker}: “{evidence['text']}”", ""]
     if not finding["evidence"] and finding.get("evidence_removed"):
         lines += ["_Evidence removed with the transcript._", ""]
     return lines

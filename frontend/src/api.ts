@@ -76,7 +76,7 @@ export const api = {
 		name: string
 		description: string
 		language: string
-		recording_mode: 'orchestrated' | 'independent'
+		recording_mode: 'orchestrated' | 'independent' | 'plenary'
 		expected_participants: number
 		default_table_count: number
 		analysis_instructions: string

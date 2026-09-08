@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiAccountVoice, mdiCog, mdiMenu, mdiPlus } from '@mdi/js'
+import { mdiAccountVoice, mdiChevronLeft, mdiChevronRight, mdiCog, mdiMenu, mdiPlus } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
 import { describeError, type UiError } from './errors'
 import { api, ApiError } from './api'
@@ -21,6 +21,24 @@ const loaded = ref(false)
 const view = ref<View>({ name: 'empty' })
 const isAdmin = ref(false)
 const sidebarOpen = ref(false)
+// Desktop collapse of the assemblies column, like Calendar's navigation
+// toggle. Remembered per browser; localStorage can throw in private windows,
+// so both sides are guarded and the default is simply "open".
+const sidebarCollapsed = ref(false)
+try {
+	sidebarCollapsed.value = localStorage.getItem('citizens-sidebar-collapsed') === '1'
+} catch {
+	/* default open */
+}
+
+function toggleSidebar(): void {
+	sidebarCollapsed.value = !sidebarCollapsed.value
+	try {
+		localStorage.setItem('citizens-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0')
+	} catch {
+		/* preference simply not remembered */
+	}
+}
 // QR codes generated at creation: handed to the detail view exactly once
 /** QR codes from a just-created assembly, handed to the detail view.
  *
@@ -104,7 +122,7 @@ async function onDeleted(): Promise<void> {
 </script>
 
 <template>
-	<aside class="cz-sidebar" :class="{ 'cz-sidebar--open': sidebarOpen }">
+	<aside class="cz-sidebar" :class="{ 'cz-sidebar--open': sidebarOpen, 'cz-sidebar--collapsed': sidebarCollapsed }">
 		<div class="cz-sidebar__top">
 			<CzButton variant="primary" :icon="mdiPlus" wide @click="openCreate">New assembly</CzButton>
 		</div>
@@ -153,6 +171,14 @@ async function onDeleted(): Promise<void> {
 	<div v-if="sidebarOpen" class="cz-scrim" @click="sidebarOpen = false"></div>
 
 	<main class="cz-content">
+		<button
+			class="cz-sidebar-toggle"
+			:class="{ 'cz-sidebar-toggle--collapsed': sidebarCollapsed }"
+			:aria-label="sidebarCollapsed ? 'Show assembly list' : 'Hide assembly list'"
+			:title="sidebarCollapsed ? 'Show assembly list' : 'Hide assembly list'"
+			@click="toggleSidebar">
+			<SvgIcon :path="sidebarCollapsed ? mdiChevronRight : mdiChevronLeft" :size="20" />
+		</button>
 		<div class="cz-mobilebar">
 			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">Assemblies</CzButton>
 		</div>

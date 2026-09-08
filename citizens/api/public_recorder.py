@@ -26,6 +26,7 @@ from citizens.security.rate_limit import (
     client_ip,
     token_key,
 )
+from citizens.services import invites as invites_svc
 from citizens.services import provider_config
 from citizens.services import recording as rec_svc
 from citizens.services.live_captions import LIVE_CAPTIONS
@@ -98,6 +99,27 @@ def join(data: JoinIn, request: Request, session: DB):
 @router.get("/recorder/status")
 def status(recorder_session: ReadingSess, session: ReadDB):
     return _assembly_state(session, recorder_session)
+
+
+@router.get("/recorder/invite-qr")
+def invite_qr(recorder_session: ReadingSess, session: ReadDB):
+    """The join QR for the invite THIS phone came through — plenary only.
+
+    A plenary room shares one code, so a phone that already joined can show it
+    for the next phone to scan; the room adds devices without the organizer.
+    Deliberately absent in the other modes: their invites are per table, and a
+    phone re-publishing its table's code is not an asked-for flow. Exposing
+    the token to this session reveals nothing new — the phone joined by
+    holding this very token in its URL.
+    """
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None or assembly.recording_mode != "plenary":
+        raise HTTPException(status_code=404, detail="No shared join code here")
+    card = invites_svc.session_invite_card(session, recorder_session)
+    if card is None:
+        # revoked, expired, or undecryptable — a dead QR is worse than none
+        return {"available": False}
+    return {"available": True, "url": card.url, "qr_svg": card.qr_svg}
 
 
 class StartIn(BaseModel):
@@ -333,10 +355,20 @@ def _assembly_state(
     # is scoped to the table, not the session, so "this round is being recorded"
     # was read as "...by somebody else" even when the somebody was itself.
     own_rounds: set[str] = set()
+    # In plenary the whole room is recorded by many phones at once, so a round
+    # is "recorded" only from THIS phone's point of view — another device
+    # recording the same round must not lock it out. Every other mode scopes to
+    # the table (one phone per table), where any device's recording means done.
+    plenary = assembly.recording_mode == "plenary"
+    recorded_scope = (
+        Recording.recorder_session_id == recorder_session.id
+        if plenary
+        else Recording.table_number == recorder_session.table_number
+    )
     for recording in session.execute(
         select(Recording).where(
             Recording.assembly_id == assembly.id,
-            Recording.table_number == recorder_session.table_number,
+            recorded_scope,
             Recording.state.notin_(RERECORDABLE_STATES),
             # A superseded recording belonged to a phone that has gone. Counting
             # it as "this round is recorded" told the REPLACEMENT phone the

@@ -4,6 +4,158 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Add a device from a phone, speaking balance in the report, UI polish — 2026-09-08
+
+- **Plenary: add the next phone from the last one.** A joined plenary device
+  can now show the room's shared join QR ("Add another device", on the armed
+  screen and while recording) — the next phone scans it there instead of
+  finding the organizer's screen. New session-authenticated endpoint rebuilds
+  the code server-side; a revoked or expired invite honestly says the code is
+  gone rather than showing a dead QR. Plenary only — the other modes keep
+  per-table codes. (Known bound: the join rate limiter allows 10 joins/min
+  per shared code; phones past it retry automatically.)
+- **Speaking balance in the report.** The Analysis tab's talk-time chart now
+  also prints in the PDF (a stacked bar + legend per round) and the Markdown
+  export — only when diarization produced at least two distinct voices, so it
+  appears with Deepgram or a diarizing Whisper server and stays honest
+  everywhere else. Same anonymity caption as on the tab.
+- **Settings: the selected speech-to-text service is unmistakable.** The
+  chosen provider card carries a check mark and a stronger highlight, and a
+  "Selected service: …" line sits above the provider's fields.
+- **The assemblies column collapses.** A Calendar-style toggle on its edge
+  hides the list on desktop and gives the assembly the full width; the choice
+  is remembered per browser. Phones keep the existing drawer.
+
+### Honest caption status, and a cap on concurrent transcriptions — 2026-09-08
+
+"Live captions temporarily unavailable. Recording continues safely." kept
+appearing on phones that were mostly fine. Two causes, both fixed.
+
+- **The message fired on the wrong signal.** The recorder showed it whenever a
+  poll returned no caption lines — which is routinely true at the start of
+  every round (captions race the first chunk upload) and for a whole minute
+  after any hiccup. The server now says *why* there are no lines (its `active`
+  flag and a `reason`), and the footer reads that instead: "Waiting…" while
+  connecting, "Listening…" when the session is live but nobody has spoken,
+  and the alarm only when captions that should be working are persistently
+  down (three polls in a row, ~18 s). An empty blip no longer blanks the
+  lines people were reading.
+- **Concurrent transcriptions are now capped per provider.** Every recording
+  phone opens its own live transcription session; with several phones (worst
+  in plenary) a self-hosted Vosk server saturates, every session drops at
+  once, and the whole room cycles through failure cooldown. A server-wide
+  ledger now bounds concurrent transcription work, with **separate pools per
+  provider for live captions and for final (batch) transcription**. Live
+  defaults: Mistral 15, Deepgram 10, Vosk 5, Whisper 2; final defaults:
+  Mistral 5, Deepgram 5, Vosk 2, Whisper 1 — each editable inside its
+  provider's own section in Settings → Audio, aligned under that provider's
+  live/final model fields. Phones past the live cap keep recording and say so
+  honestly ("Live captions are off on this phone — the room is at capacity");
+  they pick up a freed slot within one chunk upload. A batch job that finds
+  its pool full waits politely (retry in a minute, no attempt consumed)
+  instead of piling on or marching to FAILED — and a busy live event never
+  blocks it, since the pools are independent.
+
+### Report de-duplication and a speaking-balance chart — 2026-09-07
+
+Two follow-ups from reading a real report.
+
+- **The report no longer repeats itself.** The round summary was printed twice
+  in the PDF — once under the Executive summary and again verbatim at the head
+  of each round section; the second copy is gone. And in a plenary run (one
+  group = one table) the analysis used to cluster that single table's findings
+  into "cross-table" findings and the report rendered them *and* the same
+  findings again under "Table 1". Plenary now skips the meaningless clustering
+  (saving a model call) and renders the group's findings once, with no
+  cross-table section and no "Table N" framing. Multi-table reports keep their
+  legitimate cross-table layer unchanged.
+- **A speaking-balance chart on the Analysis tab.** A per-round donut of how
+  much each detected voice spoke, computed from the single recording that
+  captured the most speech — because diarization labels are consistent only
+  within one recording, never across devices. The voices are deliberately
+  anonymous (A, B, C…, quietest folded into "Others") and the caption says so:
+  detected voices, not identified by name, an estimate of talk-time and not of
+  participation or influence. Hidden when a round has no diarized speech.
+
+### Plenary mode — one room, many phones, one merged transcript (Milestone 1) — 2026-09-07
+
+A third recording mode for a single in-person group: 30 people in a circle, or
+one person recording a meeting. The whole room is ONE discussion, captured by
+any number of phones from different positions — every device records and
+transcribes, and the recordings are merged into a single deduplicated transcript
+and analysed once. It sits beside the existing orchestrated and independent
+modes, gated behind the mode flag, reusing the whole recorder and pipeline.
+
+This milestone is the backend core and the paths to reach it:
+
+- **Concurrent devices on one group.** A plenary assembly is one table joined by
+  one shared code; the "one healthy recording per table" guard is relaxed for
+  plenary only, so several phones record the same round at once. Every other
+  mode still refuses a second device. The phone-side "round already recorded"
+  signal is scoped to the device in plenary, so another phone recording the same
+  round does not lock anyone out.
+- **The merge.** The devices' transcripts are aligned on the server clock
+  (each recording's start plus its segment offsets) and near-duplicate
+  utterances within a few seconds are dropped — so a sentence three phones heard
+  is counted once, while a line only one phone caught survives. No audio signal
+  processing; a stdlib fuzzy text match. The merged transcript feeds one
+  analysis, so evidence and the report work exactly as for a single recording.
+- **One shared code.** The whole room scans the same QR; adding a phone is just
+  scanning it again. The QR tab shows a single code for a plenary assembly, and
+  the wizard offers the third mode and fixes it to one group.
+
+Still to come (Milestones 2+): per-device rows on the Live tab, a two-phone
+browser test, and a one-tap self-start for the solo meeting-recorder case.
+
+### Audit tranche 2 — the medium-severity findings, and two report fixes — 2026-09-07
+
+The medium-severity items from the 2026-09-06 audit that could drain a phone or
+lose a transcript mid-event, plus two report-credibility issues from the
+September review.
+
+**Recording lifecycle**
+
+- **"Keep talking" no longer records forever.** It was a one-way latch: once a
+  table tapped it to finish a sentence, nothing ever re-armed the auto-finish,
+  so a table that then walked away recorded into an ended round until the
+  battery or storage gave out. It is now a bounded reprieve — the auto-finish
+  re-arms after two minutes, so an abandoned table still ends, while an active
+  one carries on by tapping again.
+- **Leaving the recording screen actually stops the recording.** A purge
+  arriving mid-round (or any exit) used to unmount the screen while leaving the
+  microphone, the recorder and the engine's timers running with nothing owning
+  them. There is now a real teardown, called on unmount and guarded so it never
+  interrupts a legitimate in-flight upload.
+- **Preflight no longer re-offers a round that is already recorded.** Its round
+  list was frozen at join, so after a failed sync and Back the just-recorded
+  round was offered again, refused by the server, and the report link stayed
+  hidden. The list is now kept live from the status poll.
+- **A caption session that died mid-round can no longer be adopted as the whole
+  transcript.** The file carried no "finished" marker, so a partial one — or
+  one read before its successor session appended the rest — looked complete. The
+  terminal write now marks the captions final, and the job waits for that marker
+  before promoting them (falling back to best-effort only after a long grace, so
+  a crash never loses what was captured).
+
+**Privacy**
+
+- **Audio from a previous assembly can no longer block or be deleted by
+  tonight's.** A recording stored before assemblies were tracked was treated as
+  belonging to whichever assembly asked — so one such recording blocked every
+  purge on that phone, and one assembly's clear could delete another's audio. It
+  now matches only the unscoped recovery scan.
+
+**Report**
+
+- **Cross-table findings now cite evidence.** A cross-table finding stored only
+  the table findings it clustered, so it rendered with no quotes at all —
+  quietly breaking the promise that every finding cites the transcript. It now
+  borrows a sample of the supporting quotes from each contributing table, each
+  labelled with its table ("Table 3 · …").
+- **The phone no longer reads "The round has ended. — finishing in 6 s."** The
+  countdown spliced a whole sentence into a placeholder; the ended line and the
+  countdown are now separate, self-consistent text.
+
 ### Fix the worst of a 51-finding audit — 2026-09-06
 
 A three-way code audit (recorder, backend pipeline, organizer) plus a re-audit

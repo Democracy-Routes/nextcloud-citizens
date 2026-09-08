@@ -117,10 +117,12 @@
 			"finishButton": "Finish recording",
 			"keepRecording": "Keep recording",
 			"keepTalking": "Keep talking",
-			"finishingIn": "{ended} — finishing in {seconds} s.",
+			"finishingIn": "Finishing in {seconds} s — tap Keep talking to carry on.",
 			"storageErrorShort": "Storage error",
 			"storageErrorBanner": "✕ STORAGE ERROR",
 			"captionsUnavailable": "Live captions temporarily unavailable. Recording continues safely.",
+			"captionsListening": "Listening — captions appear as people speak.",
+			"captionsCapacity": "Live captions are off on this phone — the room is at capacity. Recording continues safely.",
 			"waitingCaptions": "Waiting for captions…",
 			"hideTranscript": "Hide live transcript",
 			"showTranscript": "Show live transcript",
@@ -173,6 +175,12 @@
 			"roundAndDuration": "Round {position} · {minutes} minutes",
 			"tryAgain": "Try again",
 			"retryNow": "Retry now"
+		},
+		"addDevice": {
+			"button": "Add another device",
+			"title": "Scan to join this room",
+			"hint": "Any phone that scans this code records the same discussion.",
+			"unavailable": "The join code is no longer available — ask the organizer."
 		}
 	},
 	"error": {

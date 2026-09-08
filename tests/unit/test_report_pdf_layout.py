@@ -120,3 +120,73 @@ def test_the_methodology_note_does_not_widow_onto_its_own_page():
 # font, so the content stream holds 2-byte glyph ids rather than characters —
 # a substring check against it silently passes for any string at all. The
 # wording lives in report.py and is tested there, against real strings.
+
+
+def _captured_text(pdf_bytes_fn, monkeypatch) -> list[str]:
+    """Every string the renderer draws, captured before glyph encoding.
+
+    The PDF content stream stores glyph ids, not characters, so a substring
+    search over the bytes proves nothing. Spying on the text methods lets us
+    assert on what was actually asked to be drawn.
+    """
+    from citizens.services import report_pdf as mod
+
+    seen: list[str] = []
+    for name in ("text_block", "eyebrow", "group_heading", "section_banner"):
+        original = getattr(mod._ReportPDF, name)
+
+        def wrapper(self, text, *a, __orig=original, **k):
+            seen.append(text)
+            return __orig(self, text, *a, **k)
+
+        monkeypatch.setattr(mod._ReportPDF, name, wrapper)
+    pdf_bytes_fn()
+    return seen
+
+
+def test_the_round_summary_is_drawn_once_not_twice(monkeypatch):
+    """It belongs to the Executive summary; repeating it at the head of the
+    round section was pure duplication."""
+    seen = _captured_text(
+        lambda: render_pdf(_report("Short but real quote text here.", findings=2)),
+        monkeypatch,
+    )
+    assert seen.count("A summary of the round.") == 1
+
+
+def _plenary_pdf_report() -> dict:
+    r = _report("Short but real quote text here.", findings=2)
+    r["assembly"]["recording_mode"] = "plenary"
+    r["rounds"][0]["cross_table"] = list(r["rounds"][0]["tables"][0]["findings"])
+    return r
+
+
+def test_plenary_report_has_no_table_detail_heading(monkeypatch):
+    """One group = one table: its findings render directly, with no cross-table
+    section and no 'Table detail' / 'Table N' framing."""
+    seen = _captured_text(lambda: render_pdf(_plenary_pdf_report()), monkeypatch)
+    assert "Table detail" not in seen
+    assert not any(t.startswith("Table ") for t in seen)
+
+
+def test_the_speaking_balance_strip_draws_once_when_voices_exist(monkeypatch):
+    report = _report("Short but real quote text here.", findings=2)
+    report["rounds"][0]["speaking_balance"] = {
+        "voices": [
+            {"label": "A", "seconds": 300, "percent": 70},
+            {"label": "B", "seconds": 129, "percent": 30},
+        ],
+        "total_seconds": 429,
+        "from_recording_id": "rec-1",
+    }
+    seen = _captured_text(lambda: render_pdf(report), monkeypatch)
+    assert seen.count("Speaking balance") == 1
+    assert any(t.startswith("Voice A — 70%") for t in seen)
+
+
+def test_no_strip_without_diarized_voices(monkeypatch):
+    seen = _captured_text(
+        lambda: render_pdf(_report("Short but real quote text here.", findings=2)),
+        monkeypatch,
+    )
+    assert "Speaking balance" not in seen

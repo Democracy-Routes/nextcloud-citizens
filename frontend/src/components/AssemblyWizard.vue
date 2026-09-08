@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiPlus } from '@mdi/js'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { api } from '../api'
 import type { InviteGenerated, RoundIn } from '../types'
 import CzButton from './ui/CzButton.vue'
@@ -16,7 +16,7 @@ const saving = ref(false)
 const name = ref('')
 const description = ref('')
 const language = ref('en')
-const recordingMode = ref<'orchestrated' | 'independent'>('orchestrated')
+const recordingMode = ref<'orchestrated' | 'independent' | 'plenary'>('orchestrated')
 const expectedParticipants = ref(50)
 const tableCount = ref(10)
 const analysisInstructions = ref('')
@@ -27,6 +27,12 @@ const rounds = ref<RoundIn[]>([{ title: 'Round 1', question: '', duration_minute
  * rows, therefore no QR codes, therefore no phone can ever join it, and
  * nothing in the UI can repair it afterwards. */
 const basicsValid = computed(() => !!name.value.trim() && tableCount.value >= 1)
+
+// Plenary is the whole room as one group joined by one shared code, so it
+// always has exactly one table (the server enforces this too).
+watch(recordingMode, (mode) => {
+	if (mode === 'plenary') tableCount.value = 1
+})
 
 function addRound(): void {
 	rounds.value.push({
@@ -121,6 +127,17 @@ async function submit(): Promise<void> {
 							Each table records the shared questions on its own schedule — even days apart.
 						</span>
 					</label>
+					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': recordingMode === 'plenary' }" style="flex: 1; min-width: 240px; align-items: flex-start; flex-direction: column; gap: 4px">
+						<span style="display: flex; align-items: center; gap: 8px">
+							<input v-model="recordingMode" type="radio" value="plenary" />
+							One shared recorder (plenary)
+						</span>
+						<span class="cz-muted" style="font-weight: 400; font-size: 0.78rem">
+							The whole room is one discussion. Any number of phones scan one code and
+							record it together from different spots; the recordings are merged into a
+							single transcript. Also for a personal in-person meeting recorder.
+						</span>
+					</label>
 				</div>
 			</div>
 			<div class="cz-field">
@@ -149,7 +166,7 @@ async function submit(): Promise<void> {
 					<label>Expected participants</label>
 					<input v-model.number="expectedParticipants" type="number" min="0" max="10000" />
 				</div>
-				<div class="cz-field">
+				<div v-if="recordingMode !== 'plenary'" class="cz-field">
 					<label>Number of tables</label>
 					<input v-model.number="tableCount" type="number" min="1" max="200" />
 					<span v-if="tableCount < 1" style="font-size: 0.78rem; color: var(--cz-orange)">

@@ -10,6 +10,7 @@ import { usePolling } from '../composables/usePolling'
 import { describeError } from '../errors'
 import type { AssemblyDetail, FindingData, RoundFindings } from '../types'
 import FindingCard from './FindingCard.vue'
+import SpeakingBalanceCard from './SpeakingBalanceCard.vue'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
@@ -272,6 +273,10 @@ const anyAnalyzing = () =>
 				title="No findings match this filter"
 				hint="Change the filters above to see the rest of this round's findings." />
 			<template v-else>
+				<SpeakingBalanceCard
+					v-if="data.speaking_balance && data.speaking_balance.voices.length"
+					:balance="data.speaking_balance" />
+
 				<div v-if="shown.cross_table.length || (data.round_summary && !filtering)" style="margin-bottom: 24px">
 					<h3 style="margin-bottom: 10px">
 						Across all tables

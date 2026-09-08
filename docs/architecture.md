@@ -134,8 +134,37 @@ client log ring (IndexedDB)           ──►  logs/devices/<session>.jsonl
   needed); Start/End round controls are hidden on the Live tab. Cross-table
   clustering re-runs incrementally as each table's analysis lands (draft
   round findings are replaced, reviewed ones kept).
-- Both modes: one healthy recording per table+round; the recorder locks after
-  finish so no stray recordings appear.
+- **Plenary** (one shared recorder): the whole room is a single discussion
+  captured by many phones at once — 30 people in a circle, or one person
+  recording a meeting. Facilitator-led like orchestrated (arm, the facilitator
+  opens/ends the one shared round), but the "one recording per table" guard is
+  lifted: a plenary assembly is one table joined by one shared code, and any
+  number of devices record the same round concurrently. The phone-side "already
+  recorded" state is scoped per device so no phone locks another out.
+- Orchestrated and independent: one healthy recording per table+round; the
+  recorder locks after finish so no stray recordings appear. Plenary is the
+  exception — concurrent recordings on the one table are the point.
+
+### Merging the room's devices
+
+Several phones capture the same talk from different spots, so their transcripts
+overlap; concatenating them would count each statement once per phone. Instead
+`merge_plenary_segments` (`citizens/services/analysis.py`) aligns every
+segment on the server clock — `recording.started_at + segment.start_seconds`,
+which is the shared time reference across devices — coalesces within each device
+first, then drops near-duplicate utterances from *different* devices within a
+few-second window (a stdlib `difflib` fuzzy match), keeping the longer/cleaner
+copy and its segment ids so evidence citations stay valid. A line only one phone
+caught survives. The merged transcript feeds one `analyze_table`, so findings,
+evidence and the report are unchanged. `started_at` is the `/start` moment, not
+the first audio sample, so a per-device offset of a second or two is expected
+and the window absorbs it; audio cross-correlation is deliberately out of scope.
+Speakers are not unified across devices (diarization is per-recording).
+
+Every device transcribes independently, so plenary costs N× transcription for
+one discussion — the trade for multi-position coverage. The "wait for all the
+table's recordings to finish transcribing before analysing" barrier
+(`_table_still_transcribing`) already holds the group together, unchanged.
 
 ## Losing a phone mid-round
 

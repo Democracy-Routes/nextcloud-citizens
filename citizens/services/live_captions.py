@@ -30,7 +30,7 @@ import urllib.parse
 
 from citizens.config import get_settings
 from citizens.logging_setup import get_logger
-from citizens.services import live_audio
+from citizens.services import live_audio, stt_capacity
 from citizens.storage.paths import live_caption_path
 
 log = get_logger(__name__)
@@ -94,8 +94,15 @@ class _BaseSession:
         self.queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=64)
         self.lines: list[dict] = []
         self.truncated = False
+        # set true only on the TERMINAL dispose (from finish(), i.e. /complete
+        # or a device-replace/silent release) so the persisted file can say the
+        # captions are complete — the job must not adopt a partial one
+        self.final = False
         self.active = True
         self.failed_at: float | None = None
+        # the capacity lease this session holds (provider name), released
+        # exactly once by _dispose — see services/stt_capacity.py
+        self.lease_provider: str | None = None
         self.last_fed = time.monotonic()
         self.task: asyncio.Task | None = None
         # engines fed with PCM own a decoder for this recording, and the task
@@ -586,6 +593,10 @@ PROVIDER_NAMES = {session: name for name, session in SESSION_TYPES.items()}
 class LiveCaptionManager:
     def __init__(self):
         self._sessions: dict[str, _BaseSession] = {}
+        # recordings denied a session because the provider is at its
+        # concurrency cap: recording_id -> when. Only for honest status() —
+        # the phone keeps recording and re-asks with every chunk.
+        self._over_capacity: dict[str, float] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -636,11 +647,19 @@ class LiveCaptionManager:
     def status(self, recording_id: str) -> dict:
         session = self._sessions.get(recording_id)
         if session is None:
+            if recording_id in self._over_capacity:
+                # captions are intentionally off on this phone — the provider
+                # is at its concurrency cap. The phone shows an honest message
+                # instead of the alarming "unavailable" one.
+                return {"active": False, "lines": [], "reason": "capacity"}
             return {"active": False, "lines": []}
         # a display window, not the record: self.lines is the whole session and
         # can run to thousands of entries, which must never reach a phone that
         # polls this every couple of seconds
-        return {"active": session.active, "lines": session.lines[-MAX_LINES:]}
+        result = {"active": session.active, "lines": session.lines[-MAX_LINES:]}
+        if session.failed_at is not None:
+            result["reason"] = "error"  # failed, in cooldown before a retry
+        return result
 
     async def _feed_async(
         self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
@@ -659,6 +678,23 @@ class LiveCaptionManager:
             session = None
         if session is None:
             provider = config["provider"]
+            # The capacity gate. Each session is one connection to the
+            # provider (and one ffmpeg); past the per-provider cap a new
+            # phone's captions wait rather than pile onto a struggling
+            # backend and take everyone's captions down with it. Recording
+            # is untouched, and every chunk re-asks — a freed slot is picked
+            # up within one upload interval. A config with no concurrency
+            # key means no cap (a hand-built config, or a snapshot cached
+            # across an upgrade) — absence must never turn captions off.
+            lease: str | None = None
+            limit = config.get("concurrency")
+            if limit is not None:
+                # live and batch are independent pools per provider
+                if not stt_capacity.try_acquire(f"{provider}:live", int(limit)):
+                    self._over_capacity[recording_id] = time.monotonic()
+                    return
+                lease = f"{provider}:live"
+            self._over_capacity.pop(recording_id, None)
             session_type = SESSION_TYPES[provider]
             model = config.get("model", "")
             if provider == "vosk":
@@ -674,6 +710,7 @@ class LiveCaptionManager:
                 endpoint=config.get("endpoint", ""),
                 assembly_id=assembly_id,
             )
+            session.lease_provider = lease
             # Registered BEFORE anything can fail or await. Starting the task
             # first and storing the session last meant that a PcmStream which
             # refused to start returned with the task already running (holding
@@ -756,6 +793,11 @@ class LiveCaptionManager:
             "model": session.model,
             "language": session.language,
             "truncated": session.truncated,
+            # whether THIS write is the recording's terminal one. A partial file
+            # from a session that died mid-round is indistinguishable from a
+            # complete one without this, so the job used to promote whichever it
+            # happened to read first.
+            "final": session.final,
             "lines": lines,
         }
         path = live_caption_path(
@@ -787,9 +829,13 @@ class LiveCaptionManager:
         )
 
     async def _finish_async(self, recording_id: str) -> None:
+        self._over_capacity.pop(recording_id, None)
         session = self._sessions.pop(recording_id, None)
         if session is None:
             return
+        # the recording is done: this dispose is terminal, so its persisted
+        # transcript is the complete one the job may adopt
+        session.final = True
         await self._dispose(session)
 
     async def _dispose(self, session: "_BaseSession | None") -> None:
@@ -804,6 +850,14 @@ class LiveCaptionManager:
         if session is None:
             return
         session.active = False
+        # Every terminal path funnels through here (finish, reap, failed
+        # replacement, shutdown), so this is the one place the capacity lease
+        # goes back. The flag is cleared first: dispose can in principle be
+        # reached twice, and a double release would free a slot someone else
+        # still holds.
+        if session.lease_provider is not None:
+            lease, session.lease_provider = session.lease_provider, None
+            stt_capacity.release(lease)
         try:
             if session.pcm_stream is not None:
                 # closing ffmpeg's stdin flushes the tail; _pump_pcm then ends
@@ -852,6 +906,11 @@ class LiveCaptionManager:
         held for nothing.
         """
         now = time.monotonic()
+        # over-capacity markers age out on the same clock: once the phone
+        # stops uploading, its "captions waiting for a slot" state is over
+        for recording_id, when in list(self._over_capacity.items()):
+            if now - when > SESSION_IDLE_TIMEOUT:
+                self._over_capacity.pop(recording_id, None)
         stale = [
             (recording_id, session)
             for recording_id, session in list(self._sessions.items())

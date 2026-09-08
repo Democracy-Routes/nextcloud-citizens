@@ -29,7 +29,7 @@ export interface AssemblyInfo {
 	id: string
 	name: string
 	language: string
-	recording_mode: 'orchestrated' | 'independent'
+	recording_mode: 'orchestrated' | 'independent' | 'plenary'
 }
 
 /** What the table is told before recording — names and durations only. */
@@ -176,8 +176,23 @@ export const recorderApi = {
 	recordingStatus: (token: string, recordingId: string) =>
 		request<RecordingStatus>('GET', `/api/v1/public/recorder/recordings/${recordingId}`, { token }),
 
+	/** The room's shared join QR, for adding another phone (plenary only). */
+	inviteQr: (token: string) =>
+		request<{ available: boolean; url?: string; qr_svg?: string }>(
+			'GET',
+			'/api/v1/public/recorder/invite-qr',
+			{ token },
+		),
+
 	liveTranscript: (token: string, recordingId: string) =>
-		request<{ active: boolean; lines: Array<{ t: number; text: string; speaker?: number | null }> }>(
+		request<{
+			active: boolean
+			lines: Array<{ t: number; text: string; speaker?: number | null }>
+			// why there are no captions: "capacity" (concurrency cap reached,
+			// intentionally off on this phone) or "error" (session failed,
+			// cooling down before a retry). Absent when nothing is wrong.
+			reason?: string
+		}>(
 			'GET',
 			`/api/v1/public/recorder/recordings/${recordingId}/live`,
 			{ token },

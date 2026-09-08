@@ -43,7 +43,9 @@ const recoveryRecording = ref<StoredRecording | null>(null)
 
 const joinBusy = ref(false)
 
-const orchestrated = computed(() => session.value?.assembly.recording_mode === 'orchestrated')
+// facilitator-led modes (orchestrated AND plenary): the phone arms and the
+// facilitator opens the round. Independent tables start on their own.
+const orchestrated = computed(() => session.value?.assembly.recording_mode !== 'independent')
 
 /** Every table scans its QR within the same minute, so a burst at the door is
  * normal traffic, not abuse. A 429 here used to leave that table on a dead
@@ -210,6 +212,10 @@ async function checkForPurgeRequest(): Promise<void> {
 	if (!current || capturing.value) return
 	try {
 		const status = await recorderApi.status(current.session_token)
+		// re-check after the round trip: a round can have started while the
+		// status request was in flight, and honouring a purge then would tear
+		// down a live recording
+		if (capturing.value) return
 		await honourPurgeRequest({ ...status, assembly: current.assembly })
 	} catch {
 		/* offline, or the session ended — nothing to do either way */

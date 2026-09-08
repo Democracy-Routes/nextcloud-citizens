@@ -174,7 +174,8 @@ const autoEndIn = computed(() => {
 // auto-finish; ending the round under them would be a silent, uncancellable
 // interruption with none of this UI visible.
 watch(now, () => {
-	if (monitor.value?.recording_mode !== 'orchestrated') return
+	// facilitator-led (orchestrated and plenary) run the auto-end; independent does not
+	if (monitor.value?.recording_mode === 'independent') return
 	if (!overrunning.value || autoEndCancelled.value) {
 		graceEndsAt.value = 0
 		autoEndFired.value = false
@@ -271,7 +272,8 @@ async function startNextRound(): Promise<void> {
 function startRound(): void {
 	// orchestrated: warn (never block) when tables haven't armed yet
 	if (
-		monitor.value?.recording_mode === 'orchestrated' &&
+		monitor.value &&
+		monitor.value.recording_mode !== 'independent' &&
 		monitor.value.tables_ready < monitor.value.tables_total &&
 		!confirmStartUnready.value
 	) {
@@ -404,7 +406,7 @@ function pendingChunks(table: MonitorTable): number {
 		<div v-if="error" class="cz-error">{{ error }}</div>
 
 		<div
-			v-if="nextUp && monitor?.recording_mode === 'orchestrated'"
+			v-if="nextUp && monitor?.recording_mode !== 'independent'"
 			class="cz-card cz-nextstep">
 			<div>
 				<strong>This round has finished.</strong>
@@ -438,7 +440,7 @@ function pendingChunks(table: MonitorTable): number {
 			<template v-if="monitor">
 				<CzStatusPill :status="monitor.status" />
 				<span
-					v-if="monitor.recording_mode === 'orchestrated'"
+					v-if="monitor.recording_mode !== 'independent'"
 					class="cz-pill"
 					:class="monitor.tables_ready === monitor.tables_total ? 'cz-pill--green' : 'cz-pill--amber'"
 					style="text-transform: none">
@@ -453,7 +455,7 @@ function pendingChunks(table: MonitorTable): number {
 					:class="{ 'cz-drifted': overrunning }">
 					{{ remaining }}
 				</span>
-				<template v-if="monitor.recording_mode === 'orchestrated'">
+				<template v-if="monitor.recording_mode !== 'independent'">
 					<!-- time is up: end it on time, but let the facilitator take the
 					     exception. Cutting a table off mid-sentence at a civic
 					     assembly is worse than a round running a minute long. -->

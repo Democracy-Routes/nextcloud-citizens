@@ -48,7 +48,7 @@ class AssemblyCreate(BaseModel):
     description: str = ""
     language: Language = "en"
     scheduled_at: datetime | None = None
-    recording_mode: Literal["orchestrated", "independent"] = "orchestrated"
+    recording_mode: Literal["orchestrated", "independent", "plenary"] = "orchestrated"
     expected_participants: int = Field(default=0, ge=0, le=10000)
     # At least one: with zero tables no Table rows are built, so no QR codes are
     # generated and no phone can ever join. Nothing in the UI can repair that
@@ -66,7 +66,7 @@ class AssemblyUpdate(BaseModel):
     description: str | None = None
     language: Language | None = None
     scheduled_at: datetime | None = None
-    recording_mode: Literal["orchestrated", "independent"] | None = None
+    recording_mode: Literal["orchestrated", "independent", "plenary"] | None = None
     expected_participants: int | None = Field(default=None, ge=0, le=10000)
     default_table_count: int | None = Field(default=None, ge=1, le=200)
     analysis_instructions: str | None = Field(default=None, max_length=4000)

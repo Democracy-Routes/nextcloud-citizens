@@ -38,7 +38,7 @@ vi.mock('../../frontend/src/recorder/idb', () => ({
 				(r) =>
 					r.recordingId !== '__selftest__' &&
 					!r.serverComplete &&
-					(!assemblyId || !r.assemblyId || r.assemblyId === assemblyId),
+					(!assemblyId || r.assemblyId === assemblyId),
 			)
 		},
 	},
@@ -80,14 +80,14 @@ describe('finding audio to recover', () => {
 		expect(found.map((r) => r.recordingId)).toEqual(['tonight'])
 	})
 
-	it('still offers audio recorded before assemblies were tracked', async () => {
-		// we cannot say whose it is, and failing to offer real unsynced audio
-		// loses it — while offering it needlessly costs a tap
+	it('offers audio predating assemblies only to the unscoped boot scan', async () => {
+		// "unknown belongs to whoever asks" made one legacy record block every
+		// assembly's purge and let one assembly's clear delete another's. It now
+		// matches only the no-arg recovery scan, never a specific assembly.
 		store.recordings = [recording({ recordingId: 'legacy', assemblyId: undefined })]
 
-		const found = await idb.unfinishedRecordings('assembly-tonight')
-
-		expect(found.map((r) => r.recordingId)).toEqual(['legacy'])
+		expect(await idb.unfinishedRecordings('assembly-tonight')).toEqual([])
+		expect((await idb.unfinishedRecordings()).map((r) => r.recordingId)).toEqual(['legacy'])
 	})
 
 	it('offers everything when there is no assembly to scope by', async () => {
@@ -130,13 +130,17 @@ describe('clearing this assembly’s audio', () => {
 		expect(store.deleted).toEqual([])
 	})
 
-	it('clears audio predating the assembly field', async () => {
-		// the server holds it, so removing it cannot lose anything
+	it('leaves legacy audio alone under a scoped clear, takes it unscoped', async () => {
+		// a specific assembly's purge must not delete another event's audio
+		// from a citizen's own phone; the done-screen unscoped clear still does
 		store.recordings = [
 			recording({ recordingId: 'legacy', assemblyId: undefined, serverComplete: true }),
 		]
 
-		expect(await clearSynchronizedRecordings('a1')).toBe(1)
+		expect(await clearSynchronizedRecordings('a1')).toBe(0)
+		expect(store.deleted).toEqual([])
+		expect(await clearSynchronizedRecordings()).toBe(1)
+		expect(store.deleted).toEqual(['legacy'])
 	})
 
 	it('clears everything confirmed when no assembly is given', async () => {

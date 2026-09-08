@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiContentCopy, mdiPrinter, mdiQrcode, mdiRefresh, mdiCancel } from '@mdi/js'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, BASE } from '../api'
 import { downloadFromApi } from '../download'
 import { describeError, type UiError } from '../errors'
@@ -16,6 +16,9 @@ import CzSkeleton from './ui/CzSkeleton.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail; initialGenerated?: InviteGenerated[] }>()
+
+// plenary is one shared code the whole room scans, not one code per table
+const plenary = computed(() => props.assembly.recording_mode === 'plenary')
 const emit = defineEmits<{ consumed: [] }>()
 
 const invites = ref<Invite[]>([])
@@ -133,10 +136,17 @@ const hasActive = () => invites.value.some((i) => i.active)
 		<div class="cz-card">
 			<div class="cz-row cz-row--spread">
 				<div style="flex: 1; min-width: 240px">
-					<h3>Table recorder QR codes</h3>
+					<h3>{{ plenary ? 'Room recording code' : 'Table recorder QR codes' }}</h3>
 					<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
-						One code per physical table. Codes can be re-viewed and re-printed here
-						anytime. <strong>Regenerating revokes all previous codes.</strong>
+						<template v-if="plenary">
+							One shared code for the whole room. Any number of phones scan it to
+							record together. Re-viewable and re-printable here anytime.
+						</template>
+						<template v-else>
+							One code per physical table. Codes can be re-viewed and re-printed here
+							anytime.
+						</template>
+						<strong>Regenerating revokes all previous codes.</strong>
 					</p>
 				</div>
 				<div class="cz-row" style="flex-wrap: nowrap">
