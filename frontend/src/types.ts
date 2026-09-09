@@ -69,6 +69,7 @@ export interface FileEntry {
  * Coverage, never completion: a phone closed and carried out of the building
  * never receives the request at all. */
 export interface DeviceAudioCoverage {
+	/** Recorder sessions, including older sessions; not distinct physical phones. */
 	devices: number
 	cleared: number
 	still_holding: number

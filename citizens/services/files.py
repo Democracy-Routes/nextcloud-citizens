@@ -311,7 +311,7 @@ def refresh_frozen_report(session: Session, assembly: Assembly) -> None:
 
 
 def device_audio_coverage(session: Session, assembly: Assembly) -> dict:
-    """How many of this assembly's phones still hold audio locally.
+    """Count recorder sessions, including replaced, revoked and expired ones.
 
     Reported so the organizer sees coverage rather than a claim of success:
     a purge reaches phones whose recorder is still open, and one that was
@@ -325,35 +325,27 @@ def device_audio_coverage(session: Session, assembly: Assembly) -> dict:
         session.execute(
             select(RecorderSession).where(
                 RecorderSession.assembly_id == assembly.id,
-                RecorderSession.revoked_at.is_(None),
             )
         ).scalars()
     )
-    # one phone per table: the newest session for each table number is the
-    # device actually in use, and older ones are replaced phones
-    newest: dict[int, RecorderSession] = {}
-    for recorder_session in sessions:
-        current = newest.get(recorder_session.table_number)
-        if current is None or recorder_session.created_at > current.created_at:
-            newest[recorder_session.table_number] = recorder_session
-
     cleared = 0
     holding = 0
     unknown = 0
-    for recorder_session in newest.values():
+    for recorder_session in sessions:
         try:
             status = json.loads(recorder_session.last_status_json or "{}")
         except ValueError:
             status = {}
-        remaining = status.get("local_recordings")
-        if not isinstance(remaining, int):
+        remaining = status.get("local_recordings") if isinstance(status, dict) else None
+        if type(remaining) is not int or remaining < 0:
             unknown += 1
         elif remaining > 0:
             holding += 1
         else:
             cleared += 1
     return {
-        "devices": len(newest),
+        # Keep the API key for compatibility; there is no physical-device ID.
+        "devices": len(sessions),
         "cleared": cleared,
         "still_holding": holding,
         "unknown": unknown,
