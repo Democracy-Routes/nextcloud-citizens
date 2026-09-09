@@ -4,6 +4,70 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Live captions survive a provider reconnect — 2026-09-09
+
+A 30-minute load test proved captions never recovered after a mid-recording
+failure. When Mistral dropped the realtime websocket (it does, around 17
+minutes), the session was rebuilt but a NEW ffmpeg was started and fed the
+audio from the middle of the WebM stream — with no chunk-0 container header it
+died instantly with "Invalid data", and `stderr` was discarded so the death
+was completely silent. The rebuilt session then held a live websocket sending
+almost no audio; caption throughput collapsed ~85% and never came back.
+
+- **The decoder now outlives the session.** One ffmpeg per recording lives on
+  the caption manager and survives a reconnect: when the provider drops, only
+  the websocket is rebuilt, and it inherits a decoder that still holds the
+  container state. It is kept fed even through the failure cooldown, and its
+  buffered backlog is drained on reconnect so the replacement opens on live
+  audio, not a minute-old gap.
+- **ffmpeg is no longer silent.** Its stderr is captured and logged
+  (rate-limited), the exit code is logged when the decoder ends early, and a
+  dead decoder is detected before writing (asyncio pipe writes to a dead
+  process don't raise). A decoder that ends while still recording now marks the
+  session failed — so it is rebuilt and the phone honestly shows the cooldown —
+  instead of becoming a zombie holding a capacity lease until the round ends.
+
+### End an assembly early: phones stop and offer the report — 2026-09-09
+
+An orchestrated assembly ended during round 1, with later rounds still not
+started, left the table phones advancing into round 2 and never showing the
+published report — they stayed stuck. The phone-facing status poll carried no
+assembly-level state at all, so a `NOT_STARTED` round 2 was indistinguishable
+from "round 2 is coming", and `report_available` (which the poll did carry) was
+only read on the screens that assumed every round had been recorded.
+
+- The status poll now carries `assembly_closed`. A phone that sees it stops
+  advancing — whatever the round rows say — and, on both the recording and
+  armed screens, shows "The assembly has ended" with a **Vedi report / View
+  report** button when one is published (no auto-open, by choice).
+- The server now refuses to start a round on a closed assembly (409), and the
+  organizer's Live tab no longer offers "Start Round N" once the assembly is
+  closed — the two paths that pushed phones into the next round after an early
+  end.
+
+### Responsive layout pass for iPhone and small screens — 2026-09-09
+
+A full audit of both surfaces (the phone recorder and the organizer app),
+fixing the breakages on notched iPhones, 375 px phones and short landscape.
+
+- **Recorder**: the consent screen — the first thing every citizen sees — was
+  referencing CSS classes that never existed, so its primary button rendered
+  grey; fixed to the real classes. Safe-area insets now clear the notch (top)
+  and home indicator (bottom, on the screens without a pinned action bar). The
+  short-screen rules were widened well beyond the timer ring so landscape
+  phones still fit the header, question bar, level meter and buttons; the
+  add-a-device QR no longer sizes off the long axis in landscape; small tap
+  targets were raised to 44 px and fixed text sizes moved to `rem` so the
+  phone's own text-size setting reaches them.
+- **Organizer**: a wide widget used to scroll the whole page sideways —
+  heading and mobile bar included — because the content pane's x-overflow
+  computed to `auto`; it is pinned now, and dense tables and the count bar
+  scroll inside their own box. Modals gained a `max-height` and internal
+  scroll, so a long confirm body no longer pushes its confirm button off the
+  screen inside the `overflow:hidden` shell. The Settings field grid, the
+  concurrency inputs, the count bar and flex inputs all fit 375 px, and the
+  mobile "Assemblies" button stays in reach on long pages.
+
 ### Add a device from a phone, speaking balance in the report, UI polish — 2026-09-08
 
 - **Plenary: add the next phone from the last one.** A joined plenary device

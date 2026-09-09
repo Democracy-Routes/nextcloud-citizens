@@ -37,10 +37,15 @@ class PcmStream:
         self.process: asyncio.subprocess.Process | None = None
         self.pcm: asyncio.Queue[bytes | None] = asyncio.Queue()
         self.failed = False
+        # last time a chunk was written in. The decoder now outlives the
+        # caption session that consumes it (it survives a provider reconnect),
+        # so the manager reaps an idle decoder on this rather than on a session.
+        self.last_fed = time.monotonic()
         self._queued_bytes = 0
         self._dropped_bytes = 0
         self._last_drop_warning = 0.0
         self._reader: asyncio.Task | None = None
+        self._stderr_reader: asyncio.Task | None = None
 
     async def start(self) -> bool:
         try:
@@ -55,14 +60,42 @@ class PcmStream:
                 "pipe:1",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
+                # captured, not discarded: "Invalid data found when processing
+                # input" from a decoder fed mid-stream used to vanish here, so
+                # a dead ffmpeg was completely silent in the logs.
+                stderr=asyncio.subprocess.PIPE,
             )
         except OSError:
             log.warning("pcm_stream_start_failed", recording_id=self.recording_id, exc_info=True)
             self.failed = True
             return False
         self._reader = asyncio.create_task(self._read_loop())
+        self._stderr_reader = asyncio.create_task(self._stderr_loop())
         return True
+
+    async def _stderr_loop(self) -> None:
+        """Surface ffmpeg's own diagnostics, rate-limited.
+
+        Draining stderr also matters mechanically: a full stderr pipe would
+        block ffmpeg. loglevel=error keeps this quiet in the normal case.
+        """
+        assert self.process is not None and self.process.stderr is not None
+        last = 0.0
+        try:
+            while True:
+                line = await self.process.stderr.readline()
+                if not line:
+                    break
+                now = time.monotonic()
+                if now - last >= DROP_WARNING_SECONDS:
+                    last = now
+                    log.warning(
+                        "pcm_stream_stderr",
+                        recording_id=self.recording_id,
+                        detail=line.decode("utf-8", "replace").strip()[:200],
+                    )
+        except Exception:
+            pass
 
     async def _read_loop(self) -> None:
         assert self.process is not None and self.process.stdout is not None
@@ -92,18 +125,55 @@ class PcmStream:
         except Exception:
             log.warning("pcm_stream_read_failed", recording_id=self.recording_id, exc_info=True)
         finally:
+            code = self.process.returncode if self.process is not None else None
+            if code:
+                # a non-zero exit means ffmpeg gave up on the input — the exact
+                # failure that used to be invisible. code is None on a clean EOF.
+                log.warning("pcm_stream_ffmpeg_exited", recording_id=self.recording_id, code=code)
             self.pcm.put_nowait(None)
 
     def feed(self, chunk: bytes) -> None:
         """Append one uploaded chunk. Order matters: the stream is continuous."""
         if self.failed or self.process is None or self.process.stdin is None:
             return
+        # asyncio's write() to a dead pipe does NOT raise — it drops the bytes
+        # and logs a generic warning only after five occurrences. So the real
+        # signal that ffmpeg has exited is its returncode, checked here.
+        if self.process.returncode is not None:
+            if not self.failed:
+                log.warning("pcm_stream_write_failed", recording_id=self.recording_id)
+            self.failed = True
+            return
+        self.last_fed = time.monotonic()
         try:
             self.process.stdin.write(chunk)
         except (BrokenPipeError, ConnectionResetError, RuntimeError):
             # ffmpeg gone: captions end here, the recording is unaffected
             log.warning("pcm_stream_write_failed", recording_id=self.recording_id)
             self.failed = True
+
+    def drain(self) -> None:
+        """Discard PCM buffered while no consumer was attached.
+
+        A decoder that outlives a failed session keeps decoding through the
+        reconnect gap. Without this, the replacement session would open by
+        transcribing up to two minutes of stale audio before catching up.
+        """
+        discarded = 0
+        while True:
+            try:
+                item = self.pcm.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if item is not None:
+                discarded += len(item)
+        self._queued_bytes = 0
+        if discarded:
+            log.info(
+                "live_pcm_drained",
+                recording_id=self.recording_id,
+                seconds=round(discarded / BYTES_PER_SECOND, 1),
+            )
 
     async def read(self) -> bytes | None:
         """Next decoded PCM block, or None when the stream ended."""
@@ -131,6 +201,8 @@ class PcmStream:
                 await asyncio.wait_for(self._reader, timeout=10)
             except (TimeoutError, asyncio.CancelledError):
                 self._reader.cancel()
+        if self._stderr_reader is not None:
+            self._stderr_reader.cancel()
         try:
             self.process.kill()
         except ProcessLookupError:

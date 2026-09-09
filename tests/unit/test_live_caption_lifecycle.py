@@ -29,6 +29,9 @@ class _FakeStream:
     def __init__(self, *, starts: bool = True):
         self.starts = starts
         self.closed = False
+        self.fed: list[bytes] = []
+        self.drained = 0
+        self.last_fed = time.monotonic()
 
     async def start(self) -> bool:
         return self.starts
@@ -36,8 +39,12 @@ class _FakeStream:
     async def close(self) -> None:
         self.closed = True
 
-    def feed(self, _data: bytes) -> None:
-        pass
+    def feed(self, data: bytes) -> None:
+        self.fed.append(data)
+        self.last_fed = time.monotonic()
+
+    def drain(self) -> None:
+        self.drained += 1
 
     async def read(self):
         # a real PcmStream returns None once closed, which is what lets the
@@ -102,24 +109,33 @@ def test_a_failed_session_is_disposed_before_its_replacement(settings_env, monke
 
 
 async def _test_a_failed_session_is_disposed_before_its_replacement(settings_env, monkeypatch):
-    """The cooldown path used to drop the session without closing the stream,
-    orphaning ffmpeg: _pump_pcm parks forever on a queue nobody drains, so its
-    cleanup never runs and the reaper can no longer see the session either."""
+    """A failed session is replaced, but its DECODER survives the reconnect.
+
+    Mistral drops the websocket mid-recording; the replacement must inherit an
+    ffmpeg that still holds the WebM container state, or it is fed an orphaned
+    mid-stream chunk it cannot decode and captions never recover. So: the
+    decoder is NOT closed, its stale backlog is drained, the dead session's
+    pump is cancelled (never orphaned), and the new session reuses the same
+    stream object."""
     manager = LiveCaptionManager()
     manager.set_loop(asyncio.get_running_loop())
 
+    # the decoder that outlived the failed session, held by the manager
+    stream = _FakeStream()
+    manager._streams["rec-2"] = stream
+
     dead = _BaseSession("rec-2", "", "m", "en", assembly_id="asm-1")
-    dead.pcm_stream = _FakeStream()
+    dead.pcm_stream = stream
     dead.failed_at = time.monotonic() - (lc.FAILURE_COOLDOWN + 5)
     dead.pump_task = asyncio.get_running_loop().create_task(
-        LiveCaptionManager()._pump_pcm(dead, dead.pcm_stream)
+        LiveCaptionManager()._pump_pcm(dead, stream)
     )
     manager._sessions["rec-2"] = dead
 
     created = []
 
-    class _Recording(_BaseSession):
-        wants_pcm = False
+    class _PcmRecording(_BaseSession):
+        wants_pcm = True
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -128,17 +144,20 @@ async def _test_a_failed_session_is_disposed_before_its_replacement(settings_env
         async def run(self):
             await self.queue.get()
 
-    monkeypatch.setitem(lc.SESSION_TYPES, "deepgram", _Recording)
+    monkeypatch.setitem(lc.SESSION_TYPES, "mistral", _PcmRecording)
 
     await manager._feed_async(
-        "rec-2", b"audio", {"provider": "deepgram", "api_key": "k"}, "en", "asm-1"
+        "rec-2", b"audio", {"provider": "mistral", "api_key": "k"}, "en", "asm-1"
     )
 
-    assert dead.pcm_stream.closed, "the failed session's decoder was never closed"
+    assert not stream.closed, "the decoder was closed instead of reused"
+    assert stream.drained == 1, "the reconnect gap backlog was not drained"
     assert dead.pump_task.cancelled() or dead.pump_task.done(), "its pump task leaked"
     assert len(created) == 1
+    assert manager._sessions["rec-2"].pcm_stream is stream, "the new session built a fresh decoder"
 
     await manager.shutdown()
+    assert stream.closed, "shutdown left the decoder running"
 
 
 def test_a_decoder_that_cannot_start_does_not_leak_a_session(settings_env, monkeypatch):
@@ -431,3 +450,63 @@ def test_status_names_the_cooldown_after_a_failure(settings_env):
 
     assert status["active"] is False
     assert status["reason"] == "error"
+
+
+def test_the_decoder_is_kept_fed_during_the_failure_cooldown(settings_env):
+    asyncio.run(_test_the_decoder_is_kept_fed_during_the_failure_cooldown(settings_env))
+
+
+async def _test_the_decoder_is_kept_fed_during_the_failure_cooldown(settings_env):
+    """Starving ffmpeg for the 60 s cooldown would punch exactly the mid-stream
+    hole the persistent decoder exists to avoid, so chunks must still reach it
+    while the session waits to be rebuilt."""
+    manager = LiveCaptionManager()
+    manager.set_loop(asyncio.get_running_loop())
+
+    stream = _FakeStream()
+    manager._streams["rec"] = stream
+    dead = _BaseSession("rec", "", "m", "en", assembly_id="asm-1")
+    dead.pcm_stream = stream
+    dead.failed_at = time.monotonic()  # just failed -> still cooling down
+    manager._sessions["rec"] = dead
+
+    await manager._feed_async(
+        "rec", b"chunk", {"provider": "mistral", "api_key": "k"}, "en", "asm-1"
+    )
+
+    assert b"chunk" in stream.fed, "the decoder went unfed during the cooldown"
+    assert manager._sessions["rec"] is dead, "a replacement was built during the cooldown"
+    assert not stream.closed
+
+
+def test_a_decoder_that_dies_under_us_marks_the_session_failed(settings_env):
+    asyncio.run(_test_a_decoder_that_dies_under_us_marks_the_session_failed(settings_env))
+
+
+async def _test_a_decoder_that_dies_under_us_marks_the_session_failed(settings_env):
+    """If ffmpeg ends while the session is still active, that is a failure, not
+    an orderly close — the session must become rebuildable and status() must be
+    able to report the cooldown, instead of a silent zombie holding a lease."""
+    manager = LiveCaptionManager()
+    session = _BaseSession("rec", "", "m", "en", assembly_id="asm-1")
+    session.active = True
+    stream = _FakeStream()
+    stream.closed = True  # read() returns None immediately, as a dead ffmpeg does
+
+    await manager._pump_pcm(session, stream)
+
+    assert session.failed_at is not None, "a dead decoder left the session looking healthy"
+
+
+def test_drain_discards_the_buffered_pcm():
+    from citizens.services.live_audio import PcmStream
+
+    stream = PcmStream("rec")
+    stream.pcm.put_nowait(b"x" * 100)
+    stream.pcm.put_nowait(b"y" * 100)
+    stream._queued_bytes = 200
+
+    stream.drain()
+
+    assert stream.pcm.empty()
+    assert stream._queued_bytes == 0

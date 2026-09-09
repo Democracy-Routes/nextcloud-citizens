@@ -397,6 +397,11 @@ def _assembly_state(
         },
         # phones learn about report availability through the status poll
         "report_available": _report_available(session, assembly, analysis_enabled),
+        # the assembly is over: the organizer closed it (possibly mid-round).
+        # Without this the phone reads only the round rows, where a NOT_STARTED
+        # round 2 is indistinguishable from "round 2 is coming", so it advanced
+        # into it instead of stopping. Rides the same poll as purge_local_audio.
+        "assembly_closed": assembly.closed_at is not None,
         # what the table is told before recording starts (brief §43): engine
         # name, whether it is a hosted service, and how long audio is kept
         "data_handling": {

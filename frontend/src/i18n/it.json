@@ -181,6 +181,10 @@
 			"title": "Scansiona per unirti a questa sala",
 			"hint": "Ogni telefono che scansiona questo codice registra la stessa discussione.",
 			"unavailable": "Il codice di accesso non è più disponibile — chiedi all'organizzatore."
+		},
+		"assembly": {
+			"overTitle": "L'assemblea è terminata",
+			"overBody": "Grazie per aver partecipato."
 		}
 	},
 	"error": {

@@ -181,6 +181,10 @@
 			"title": "Scan to join this room",
 			"hint": "Any phone that scans this code records the same discussion.",
 			"unavailable": "The join code is no longer available — ask the organizer."
+		},
+		"assembly": {
+			"overTitle": "The assembly has ended",
+			"overBody": "Thank you for taking part."
 		}
 	},
 	"error": {

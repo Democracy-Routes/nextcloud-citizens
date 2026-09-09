@@ -56,6 +56,8 @@ export interface JoinResult {
 export interface RecorderStatus {
 	assembly: AssemblyInfo
 	report_available?: boolean
+	/** the organizer closed the assembly (possibly mid-round): stop, don't advance */
+	assembly_closed?: boolean
 	data_handling?: DataHandling
 	table_number: number
 	rounds: RoundInfo[]

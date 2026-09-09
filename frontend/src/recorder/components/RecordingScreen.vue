@@ -101,6 +101,9 @@ let captionHistory: CaptionHistory = { sawLines: false, consecutiveInactive: 0 }
 const captionsBox = ref<HTMLElement | null>(null)
 const nextRound = ref<RoundInfo | null>(null)
 const reportAvailable = ref(false)
+// the organizer ended the assembly (possibly mid-round): stop advancing, and
+// offer the report rather than roll into a round that will never come
+const assemblyClosed = ref(false)
 const reportOpenCountdown = ref(0)
 const tableSummaries = ref<Array<{ position: number; title: string; summary: string }>>([])
 
@@ -146,6 +149,7 @@ function watchForNextRound(): void {
 		try {
 			const status = await recorderApi.status(props.session.session_token)
 			reportAvailable.value = status.report_available ?? false
+			assemblyClosed.value = status.assembly_closed ?? false
 			// the done screen auto-records the next round, so the table counts
 			// as armed on the organizer's readiness indicator
 			if (orchestrated && status.rounds.some((r) => !r.recorded_state)) {
@@ -170,12 +174,15 @@ function watchForNextRound(): void {
 				beginReportAutoOpen()
 			}
 			// orchestrated waits for the facilitator to activate the next round;
-			// independent tables advance to any round they haven't recorded yet
-			nextRound.value = orchestrated
-				? (status.rounds.find(
-						(r) => r.status === 'ACTIVE' && !r.recorded_state && r.id !== props.round.id,
-					) ?? null)
-				: (status.rounds.find((r) => !r.recorded_state && r.id !== props.round.id) ?? null)
+			// independent tables advance to any round they haven't recorded yet.
+			// A closed assembly is over: never advance, whatever round rows say.
+			nextRound.value = assemblyClosed.value
+				? null
+				: orchestrated
+					? (status.rounds.find(
+							(r) => r.status === 'ACTIVE' && !r.recorded_state && r.id !== props.round.id,
+						) ?? null)
+					: (status.rounds.find((r) => !r.recorded_state && r.id !== props.round.id) ?? null)
 			// this table's per-round AI summaries for the final screen
 			tableSummaries.value = status.rounds
 				.filter((r) => r.recorded_state)
@@ -685,7 +692,7 @@ async function clearSynced(): Promise<void> {
 							</template>
 						</div>
 						<p class="rc-muted rc-center" style="margin-top: 14px; font-size: 0.845rem">
-							{{ t('recorder.recording.reportPending') }}
+							{{ assemblyClosed ? t('recorder.assembly.overBody') : t('recorder.recording.reportPending') }}
 						</p>
 					</template>
 				</div>
