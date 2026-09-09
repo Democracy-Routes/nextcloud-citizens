@@ -27,6 +27,7 @@ from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording_states import transition
+from citizens.storage import exports
 
 log = get_logger(__name__)
 
@@ -297,11 +298,9 @@ EXPORT_TTL_MINUTES = 60
 def sweep_stale_exports() -> int:
     """Remove generated archives nobody collected.
 
-    _zip_response unlinks the archive in a Starlette BackgroundTask once it has
-    been streamed. That task never runs if the client disconnects mid-download,
-    which on a venue connection downloading a multi-gigabyte bundle is the
-    normal outcome rather than the exceptional one. Each abandoned archive is a
-    complete second copy of the assembly's audio.
+    Response cleanup normally removes archives, including on disconnect. This
+    catches process crashes and failed cleanup, while leaving active builds and
+    streams alone even if they take longer than the expiry window.
 
     Touches no database at all, so it holds no lock.
     """
@@ -314,10 +313,9 @@ def sweep_stale_exports() -> int:
     removed = 0
     for archive in root.glob("*/*.zip"):
         try:
-            if archive.stat().st_mtime >= cutoff:
+            freed = exports.remove_expired(archive, cutoff)
+            if freed is None:
                 continue
-            freed = archive.stat().st_size
-            archive.unlink(missing_ok=True)
         except OSError:
             log.warning("stale_export_cleanup_failed", path=str(archive), exc_info=True)
             continue

@@ -4,10 +4,11 @@
 
 from typing import Annotated
 
+from anyio import CancelScope
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from citizens.api.downloads import NO_STORE
 from citizens.db.models import Recording
@@ -18,6 +19,7 @@ from citizens.services import files as files_svc
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import has_live_job
+from citizens.storage import exports
 
 router = APIRouter()
 
@@ -104,17 +106,25 @@ def _audit_after_build(event: str, assembly_id: str, user: str) -> None:
 @router.get("/assemblies/{assembly_id}/audio.zip")
 def download_all_audio(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)
-    archive = files_svc.build_audio_zip(session, assembly)
-    _audit_after_build("audio_bundle_downloaded", assembly.id, user)
-    return _zip_response(archive, f"{_slug(assembly.name)}-audio.zip")
+    archive = files_svc.build_audio_zip(session, assembly, retain=True)
+    try:
+        _audit_after_build("audio_bundle_downloaded", assembly.id, user)
+        return _zip_response(archive, f"{_slug(assembly.name)}-audio.zip")
+    except BaseException:
+        exports.cleanup(archive)
+        raise
 
 
 @router.get("/assemblies/{assembly_id}/export.zip")
 def download_session_export(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)
-    archive = files_svc.build_session_export(session, assembly)
-    _audit_after_build("session_exported", assembly.id, user)
-    return _zip_response(archive, f"{_slug(assembly.name)}-session-export.zip")
+    archive = files_svc.build_session_export(session, assembly, retain=True)
+    try:
+        _audit_after_build("session_exported", assembly.id, user)
+        return _zip_response(archive, f"{_slug(assembly.name)}-session-export.zip")
+    except BaseException:
+        exports.cleanup(archive)
+        raise
 
 
 @router.delete("/recordings/{recording_id}/audio", status_code=200)
@@ -221,12 +231,25 @@ def _slug(name: str) -> str:
     return "".join(c if c.isalnum() or c in "-_" else "-" for c in name)[:40].strip("-") or "assembly"
 
 
+class _ExportResponse(FileResponse):
+    async def __call__(self, scope, receive, send) -> None:
+        # Own the file through the last byte; a pathsend handoff would let the
+        # server open it after our finally block had already removed it.
+        scope = {**scope, "extensions": {
+            key: value for key, value in scope.get("extensions", {}).items()
+            if key != "http.response.pathsend"
+        }}
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            with CancelScope(shield=True):
+                await run_in_threadpool(exports.cleanup, self.path)
+
+
 def _zip_response(archive, filename: str) -> FileResponse:
-    # the archive is a throwaway build artifact: stream it, then remove it
-    return FileResponse(
+    return _ExportResponse(
         archive,
         media_type="application/zip",
         filename=filename,
         headers={"Cache-Control": NO_STORE},
-        background=BackgroundTask(lambda: archive.unlink(missing_ok=True)),
     )

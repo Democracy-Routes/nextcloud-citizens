@@ -8,9 +8,8 @@ logged audio_retention_purge with a freed_bytes figure while an entire copy of
 the audio sat in exports/<assembly>/audio-*.zip indefinitely. The operator's
 retention policy said the recordings were gone; the disk disagreed.
 
-They accumulate in the first place because _zip_response unlinks the archive in
-a background task that never runs when a client disconnects mid-download —
-which, downloading gigabytes over venue WiFi, is the ordinary outcome.
+Response cleanup handles completed and disconnected downloads. The expiry
+sweep remains the backstop for process crashes and failed cleanup.
 """
 
 import os
@@ -111,15 +110,15 @@ def test_a_fresh_archive_is_left_alone(client):
     assert len(_exports(assembly["id"])) == 1
 
 
-def test_building_a_second_archive_replaces_the_first(client):
-    """Otherwise every abandoned download leaves another full copy on disk."""
+def test_completed_downloads_leave_no_archives(client):
+    """Each completed response removes its own temporary copy."""
     assembly = _assembly(client)
 
     client.get(f"/api/v1/assemblies/{assembly['id']}/audio.zip")
     client.get(f"/api/v1/assemblies/{assembly['id']}/audio.zip")
 
     audio_archives = [p for p in _exports(assembly["id"]) if p.name.startswith("audio-")]
-    assert len(audio_archives) <= 1, (
+    assert audio_archives == [], (
         f"{len(audio_archives)} archives accumulated, each a full copy of the audio"
     )
 

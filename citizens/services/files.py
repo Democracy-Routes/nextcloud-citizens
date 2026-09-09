@@ -31,8 +31,8 @@ from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
 from citizens.services.transcription import transcript_payload
+from citizens.storage.exports import build_target
 from citizens.storage.paths import (
-    exports_dir,
     live_caption_path,
     purge_assembly_exports,
     recording_dir,
@@ -408,9 +408,13 @@ def delete_assembly_audio(
     return count, freed, kept
 
 
-def build_audio_zip(session: Session, assembly: Assembly) -> Path:
+def build_audio_zip(session: Session, assembly: Assembly, *, retain: bool = False) -> Path:
     """Every table's canonical audio in one archive."""
-    target = _export_target(assembly, "audio")
+    with build_target(_storage_root(), assembly.id, "audio", retain) as target:
+        return _build_audio_zip(session, assembly, target)
+
+
+def _build_audio_zip(session: Session, assembly: Assembly, target: Path) -> Path:
     positions = {round_.id: round_.position for round_ in assembly.rounds}
     with zipfile.ZipFile(target, "w", zipfile.ZIP_STORED) as archive:
         for recording in _recordings(session, assembly):
@@ -421,13 +425,17 @@ def build_audio_zip(session: Session, assembly: Assembly) -> Path:
     return target
 
 
-def build_session_export(session: Session, assembly: Assembly) -> Path:
+def build_session_export(session: Session, assembly: Assembly, *, retain: bool = False) -> Path:
     """Portable archive of the whole session: metadata, audio, transcripts,
     findings and the report — enough to move it to another server."""
+    with build_target(_storage_root(), assembly.id, "session", retain) as target:
+        return _build_session_export(session, assembly, target)
+
+
+def _build_session_export(session: Session, assembly: Assembly, target: Path) -> Path:
     from citizens.services.branding import logo_path, organization_name
     from citizens.services.report_pdf import render_pdf
 
-    target = _export_target(assembly, "session")
     positions = {round_.id: round_.position for round_ in assembly.rounds}
     recordings = _recordings(session, assembly)
     report = build_report(session, assembly, include_drafts=True)
@@ -532,19 +540,6 @@ def _recordings(session: Session, assembly: Assembly) -> list[Recording]:
             .order_by(Recording.table_number, Recording.created_at)
         ).scalars()
     )
-
-
-def _export_target(assembly: Assembly, kind: str) -> Path:
-    directory = exports_dir(_storage_root(), assembly.id)
-    directory.mkdir(parents=True, exist_ok=True)
-    # Drop any earlier archive of the same kind. Each is a throwaway build
-    # artifact meant to be streamed and unlinked, but the unlink runs in a
-    # background task that never fires if the client disconnects mid-download —
-    # so on a venue connection they accumulated, each one a full copy.
-    for stale in directory.glob(f"{kind}-*.zip"):
-        stale.unlink(missing_ok=True)
-    stamp = utcnow().strftime("%Y%m%d-%H%M%S")
-    return directory / f"{kind}-{stamp}.zip"
 
 
 _README = """Nextcloud Citizens — session export
