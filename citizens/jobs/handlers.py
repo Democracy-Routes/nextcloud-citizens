@@ -107,6 +107,8 @@ def _maybe_enqueue_transcription(session: Session, recording: Recording) -> None
     reachable again.
     """
     recording_id = recording.id
+    if recording.transcript_deleted_at is not None:
+        return
     # Release the writer slot BEFORE the OCS round-trips: these are HTTPS calls
     # to Nextcloud, and holding the write transaction across them queued every
     # concurrent chunk upload behind busy_timeout (runner.py's contract).
@@ -119,6 +121,10 @@ def _maybe_enqueue_transcription(session: Session, recording: Recording) -> None
         log.warning(
             "transcription_enqueue_deferred", recording_id=recording_id, exc_info=True
         )
+        return
+    # Config reads release the transaction: deletion may have happened meanwhile.
+    recording = session.get(Recording, recording_id, populate_existing=True)
+    if recording is None or recording.transcript_deleted_at is not None:
         return
     if batch and not has_live_job(session, "TRANSCRIBE_FINAL", "recording_id", recording_id):
         enqueue_job(session, "TRANSCRIBE_FINAL", {"recording_id": recording_id})
@@ -134,6 +140,8 @@ def handle_transcribe_final(session: Session, payload: dict) -> None:
     recording = session.get(Recording, payload["recording_id"])
     if recording is None:
         raise PermanentJobError(f"Recording {payload['recording_id']} no longer exists")
+    if recording.transcript_deleted_at is not None:
+        raise PermanentJobError("Transcript was deliberately deleted")
     if recording.state == "TRANSCRIBED" and not payload.get("force"):
         _maybe_enqueue_analysis(session, recording)
         return
@@ -197,6 +205,8 @@ def handle_transcribe_from_live(session: Session, payload: dict) -> None:
     recording = session.get(Recording, payload["recording_id"])
     if recording is None:
         raise PermanentJobError(f"Recording {payload['recording_id']} no longer exists")
+    if recording.transcript_deleted_at is not None:
+        raise PermanentJobError("Transcript was deliberately deleted")
     if recording.state == "TRANSCRIBED" and not payload.get("force"):
         _maybe_enqueue_analysis(session, recording)
         return
@@ -287,6 +297,7 @@ def _table_still_transcribing(session: Session, recording: Recording) -> bool:
             Recording.round_id == recording.round_id,
             Recording.table_id == recording.table_id,
             Recording.id != recording.id,
+            Recording.transcript_deleted_at.is_(None),
         )
     ).scalars()
     return any(state in TABLE_PENDING_STATES for state in states)
@@ -354,7 +365,10 @@ def maybe_enqueue_round_analysis(session: Session, recording: Recording) -> None
     states = [
         row
         for row in session.execute(
-            select(Recording.state).where(Recording.round_id == recording.round_id)
+            select(Recording.state).where(
+                Recording.round_id == recording.round_id,
+                Recording.transcript_deleted_at.is_(None),
+            )
         ).scalars()
     ]
     healthy_pending = {

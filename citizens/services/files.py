@@ -11,6 +11,7 @@ import json
 import zipfile
 from pathlib import Path
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from citizens.db.models.base import utcnow
 from citizens.db.models.findings import Finding, FindingEvidence
 from citizens.db.models.recording import AudioChunk
 from citizens.logging_setup import get_logger
+from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
 from citizens.services.transcription import transcript_payload
@@ -246,15 +248,29 @@ def mark_evidence_removed(session: Session, transcript: Transcript) -> int:
     return len(findings)
 
 
+def _refuse_transcription_in_progress(session: Session, recording: Recording) -> None:
+    if any(
+        has_live_job(session, kind, "recording_id", recording.id)
+        for kind in ("TRANSCRIBE_FINAL", "TRANSCRIBE_FROM_LIVE")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=("Transcription is queued or in progress. "
+                    "Wait for it to finish before deleting transcripts."),
+        )
+
+
 def delete_recording_transcript(session: Session, recording: Recording) -> bool:
     """Erase the verbatim text of one recording: transcript rows, the raw
     provider JSON, and the quotes inside findings. The findings and the AI
     summaries survive; the audio (if still present) can be transcribed again."""
+    _refuse_transcription_in_progress(session, recording)
     transcript = session.execute(
         select(Transcript).where(Transcript.recording_id == recording.id)
     ).scalar_one_or_none()
     if transcript is None:
         return False
+    recording.transcript_deleted_at = utcnow()
     marked = mark_evidence_removed(session, transcript)
     if transcript.raw_response_path:
         (_storage_root() / transcript.raw_response_path).unlink(missing_ok=True)
@@ -280,8 +296,12 @@ def delete_recording_transcript(session: Session, recording: Recording) -> bool:
 
 
 def delete_assembly_transcripts(session: Session, assembly: Assembly) -> int:
+    recordings = _recordings(session, assembly)
+    # Filesystem erasure cannot be rolled back, so check every conflict first.
+    for recording in recordings:
+        _refuse_transcription_in_progress(session, recording)
     count = 0
-    for recording in _recordings(session, assembly):
+    for recording in recordings:
         if delete_recording_transcript(session, recording):
             count += 1
     return count

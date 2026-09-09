@@ -70,7 +70,10 @@ def sweep_missed_enqueues() -> int:
     with session_scope() as session:
         ready = list(
             session.execute(
-                select(Recording).where(Recording.state == "AUDIO_READY")
+                select(Recording).where(
+                    Recording.state == "AUDIO_READY",
+                    Recording.transcript_deleted_at.is_(None),
+                )
             ).scalars()
         )
         for recording in ready:

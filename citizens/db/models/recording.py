@@ -79,6 +79,8 @@ class Recording(Base):
     # audio deliberately removed (Files tab / retention); the transcript,
     # findings and report survive, so the row stays with its metadata
     audio_deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # Automatic recovery must distinguish deliberate erasure from missed work.
+    transcript_deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     # this table's phone was replaced mid-round and another device took over.
     # The recording is still real and still transcribed — it holds most of the
     # round — but it must stop blocking a new one for the same table, which
