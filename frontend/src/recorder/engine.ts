@@ -97,7 +97,7 @@ export class RecorderEngine {
 
 	private token = ''
 	/** so the heartbeat can report how much of THIS assembly is still here */
-	private assemblyId = ''
+	private assemblyId: string | undefined
 	private stream: MediaStream | null = null
 	private mediaRecorder: MediaRecorder | null = null
 	private seq = 0
@@ -190,6 +190,7 @@ export class RecorderEngine {
 		const chunks = await idb.chunksFor(recording.recordingId)
 		this.seq = chunks.length === 0 ? 0 : Math.max(...chunks.map((c) => c.seq)) + 1
 		this.totalChunks = recording.totalChunks ?? this.seq
+		this.assemblyId = recording.assemblyId
 		this.state.localChunks = chunks.length
 		this.state.ackedChunks = chunks.filter((c) => c.acked).length
 		this.state.phase = 'syncing'
@@ -263,7 +264,7 @@ export class RecorderEngine {
 				storage_ok: !this.state.storageError,
 				storage_free_mb: freeMb,
 				battery_level: await readBatteryLevel(),
-				local_recordings: await idb.countFor(this.assemblyId),
+				local_recordings: this.assemblyId ? await idb.countFor(this.assemblyId) : undefined,
 			})
 		} catch {
 			/* offline — heartbeats resume when the network does */

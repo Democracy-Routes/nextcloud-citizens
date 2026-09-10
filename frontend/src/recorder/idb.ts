@@ -169,14 +169,14 @@ export const idb = {
 	 * reads storage — putting it there would make engine and purge import each
 	 * other.
 	 */
-	async countFor(assemblyId?: string): Promise<number> {
+	async countFor(assemblyId?: string): Promise<number | undefined> {
 		try {
 			const all = await this.getRecordings()
 			return all.filter(
 				(r) => r.recordingId !== '__selftest__' && belongsTo(r, assemblyId),
 			).length
 		} catch {
-			return 0
+			return undefined // unreadable is not an empty phone
 		}
 	},
 
