@@ -21,9 +21,8 @@ Testing is part of implementation, not a final phase (brief §55).
 5. **Manual gates**: real-phone recording tests over HTTPS (Milestones 2–3,
    brief §66) and the physical multi-phone room test before release (§57).
 
-Roughly: 375 Python tests, 205 frontend tests, 5 browser tests. The first two
-gate every commit and take about thirteen minutes together; the browser suite
-is another seven and runs before a release.
+The Python and frontend suites gate changes; browser scenarios run before a
+release. Counts and timings change as coverage grows; use the runner summaries.
 
 ## Running
 
@@ -96,6 +95,21 @@ Notes: Chromium 151's `--use-fake-device-for-media-capture` no longer provides
 a fake microphone on this host — the Playwright config uses **Firefox** with
 `media.navigator.streams.fake`. The recorder accepts `?chunkms=2000` to speed
 up chunking in tests.
+
+Recording safety regression scenarios:
+
+```bash
+cd frontend
+npx playwright test offline.spec.ts recording-safety.spec.ts device-purge.spec.ts
+```
+
+Run these only against the throwaway instance above. `recording-safety.spec.ts`
+deliberately restarts `citizens-browser-test` to verify persisted upload receipts.
+It also verifies recovery after session revocation and simultaneous recordings
+at two tables. The API suite reconstructs a real WebM chunk larger than 5 MiB;
+frontend tests reject mismatched manifests, missing audio and unverified legacy
+completion flags. See [recording reliability](recording-reliability.md) for the
+remaining real-device and deployment checks.
 
 Test F (10 concurrent devices):
 

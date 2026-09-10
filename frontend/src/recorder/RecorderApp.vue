@@ -40,6 +40,7 @@ const error = ref('')
 const session = ref<JoinResult | null>(null)
 const selectedRound = ref<RoundInfo | null>(null)
 const recoveryRecording = ref<StoredRecording | null>(null)
+const skippedRecovery = new Set<string>()
 
 const joinBusy = ref(false)
 
@@ -124,15 +125,16 @@ function startRound(round: RoundInfo): void {
 async function scanForRecovery(assemblyId?: string): Promise<boolean> {
 	try {
 		const unfinished = await idb.unfinishedRecordings(assemblyId)
-		const candidate = unfinished.find((r) => r.totalChunks !== null || r.startedAt > 0)
-		if (!candidate) return false
-		const chunks = await idb.chunksFor(candidate.recordingId)
-		if (chunks.length > 0) {
-			recoveryRecording.value = candidate
-			screen.value = 'recovery'
-			return true
+		for (const candidate of unfinished) {
+			if (skippedRecovery.has(candidate.recordingId)) continue
+			if (session.value && candidate.tableNumber !== session.value.table_number) continue
+			const chunks = await idb.chunksFor(candidate.recordingId)
+			if (chunks.length > 0) {
+				recoveryRecording.value = candidate
+				screen.value = 'recovery'
+				return true
+			}
 		}
-		await idb.deleteRecording(candidate.recordingId)
 	} catch {
 		/* recovery scan failure must not block a fresh session */
 	}
@@ -168,9 +170,11 @@ const CONSENT_KEY = 'citizens-recorder-consent'
 /** Recovery used to jump straight past consent: a phone that crashed
  * mid-assembly recovered, landed on preflight, and recorded again without
  * anyone seeing the data-handling screen this app calls mandatory. */
-function finishRecovery(): void {
+async function finishRecovery(): Promise<void> {
+	if (recoveryRecording.value) skippedRecovery.add(recoveryRecording.value.recordingId)
 	recoveryRecording.value = null
-	screen.value = consentGiven() ? 'preflight' : 'consent'
+	if (await scanForRecovery(session.value?.assembly.id)) return
+	screen.value = session.value ? (consentGiven() ? 'preflight' : 'consent') : 'no-invite'
 }
 
 function consentGiven(): boolean {
@@ -226,25 +230,45 @@ onMounted(() => {
 	purgePollTimer = window.setInterval(() => void checkForPurgeRequest(), PURGE_POLL_MS)
 })
 
-onBeforeUnmount(() => window.clearInterval(purgePollTimer))
+onBeforeUnmount(() => {
+	window.clearInterval(purgePollTimer)
+	window.removeEventListener('hashchange', joinHashChanged)
+})
 
-onMounted(async () => {
-	// 1) fresh QR join: #/join/<token>
+let joinInProgress = false
+function joinHashChanged(): void {
+	void joinFromHash()
+}
+
+async function joinFromHash(): Promise<boolean> {
+	// A QR opened in this same tab can be a fragment-only navigation: Vue
+	// remains mounted. Do not tear down a live microphone to switch sessions.
 	const match = window.location.hash.match(/#\/join\/(.+)$/)
-	if (match) {
+	if (match && !capturing.value && !joinInProgress) {
+		joinInProgress = true
+		screen.value = 'joining'
 		try {
 			const joined = await joinWithRetry(decodeURIComponent(match[1]))
 			sessionStore(joined)
+			skippedRecovery.clear()
 			// remove the invite secret from the visible URL (brief §14)
 			history.replaceState(null, '', window.location.pathname + window.location.search)
 			await enterWithSession(joined)
-			return
+			return true
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : String(err)
 			screen.value = 'error'
-			return
+			return true
+		} finally {
+			joinInProgress = false
 		}
 	}
+	return false
+}
+
+onMounted(async () => {
+	window.addEventListener('hashchange', joinHashChanged)
+	if (await joinFromHash()) return
 	// 2) returning device with a stored session
 	const stored = sessionLoad()
 	if (stored) {
@@ -388,7 +412,8 @@ function sessionStorageClear(): void {
 		</div>
 
 		<RecoverySync
-			v-else-if="screen === 'recovery' && session && recoveryRecording"
+			v-else-if="screen === 'recovery' && recoveryRecording"
+			:key="recoveryRecording.recordingId"
 			:session="session"
 			:recording="recoveryRecording"
 			@done="finishRecovery" />

@@ -2,7 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { recorderApi, RecorderApiError } from '../../frontend/src/recorder/api'
 import { transferChunk } from '../../frontend/src/recorder/transfer'
-import { sha256Blob } from '../../frontend/src/recorder/sha'
+import { sha256Blob, sha256Hex } from '../../frontend/src/recorder/sha'
 import type { StoredChunk } from '../../frontend/src/recorder/idb'
 
 vi.mock('../../frontend/src/recorder/api', async (original) => ({
@@ -11,11 +11,20 @@ vi.mock('../../frontend/src/recorder/api', async (original) => ({
 }))
 
 async function chunk(bytes: number): Promise<StoredChunk> {
-	const blob = new Blob([new Uint8Array(bytes).fill(7)])
+	const data = new Uint8Array(bytes)
+	for (let start = 0; start < bytes; start += 1024 * 1024) {
+		data.fill(7 + start / (1024 * 1024), start, Math.min(bytes, start + 1024 * 1024))
+	}
+	const blob = new Blob([data])
 	return { key: 'rec:0', recordingId: 'rec', seq: 0, blob, sha256: await sha256Blob(blob),
 		sizeBytes: blob.size, createdAt: 1, acked: false, attempts: 0 }
 }
 beforeEach(() => vi.resetAllMocks())
+
+it('incremental hashing matches WebCrypto across part boundaries', async () => {
+	const c = await chunk(3 * 1024 * 1024 + 37)
+	expect(c.sha256).toBe(await sha256Hex(await c.blob.arrayBuffer()))
+})
 
 it('falls back after a 413 and sends bounded parts without changing the original chunk', async () => {
 	const c = await chunk(2 * 1024 * 1024 + 3)
