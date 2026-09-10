@@ -36,7 +36,7 @@ vi.mock('../../frontend/src/recorder/idb', () => ({
 		async unfinishedRecordings(assemblyId?: string) {
 			return store.recordings.filter(
 				(r) =>
-					!r.serverComplete &&
+					(!r.serverComplete || r.verificationVersion !== 1 || r.captureIncomplete) &&
 					(!assemblyId || r.assemblyId === assemblyId),
 			)
 		},
@@ -55,6 +55,7 @@ function recording(over: Partial<StoredRecording>): StoredRecording {
 		finishedAt: null,
 		totalChunks: null,
 		serverComplete: false,
+		verificationVersion: 1,
 		...over,
 	}
 }
@@ -65,6 +66,14 @@ beforeEach(() => {
 })
 
 describe('purging this phone on the organizer’s request', () => {
+	it('retains legacy completion flags and incomplete captures', async () => {
+		store.recordings = [
+			recording({ assemblyId: 'a1', serverComplete: true, verificationVersion: undefined }),
+			recording({ assemblyId: 'a1', serverComplete: true, captureIncomplete: true }),
+		]
+		expect(await purgeLocalAudio('a1')).toEqual({ cleared: 0, keptUnsynced: 2 })
+		expect(store.deleted).toEqual([])
+	})
 	it('removes the audio the server has confirmed', async () => {
 		store.recordings = [
 			recording({ recordingId: 'safe', assemblyId: 'a1', serverComplete: true }),

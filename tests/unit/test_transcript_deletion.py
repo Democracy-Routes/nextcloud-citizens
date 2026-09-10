@@ -146,3 +146,8 @@ def test_migration_preserves_existing_recordings(recordings, database):
     command.upgrade(cfg, "head")
     with session_scope() as session:
         assert all(session.get(Recording, rid).transcript_deleted_at is None for rid in recordings[1])
+        for rid in recordings[1]:
+            recording = session.get(Recording, rid)
+            assert recording.audio_manifest_sha256 is None
+            assert recording.audio_manifest_bytes is None
+            assert (database.app_persistent_storage / recording.canonical_audio_path).is_file()

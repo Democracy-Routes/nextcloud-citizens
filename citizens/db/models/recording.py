@@ -73,6 +73,8 @@ class Recording(Base):
     canonical_audio_path: Mapped[str] = mapped_column(Text, default="")
     duration_seconds: Mapped[float | None] = mapped_column()
     sha256: Mapped[str] = mapped_column(String(64), default="")
+    audio_manifest_sha256: Mapped[str | None] = mapped_column(String(64))
+    audio_manifest_bytes: Mapped[int | None] = mapped_column(Integer)
     error_code: Mapped[str] = mapped_column(String(64), default="")
     # neutral AI description of the table discussion (always produced by analysis)
     analysis_summary: Mapped[str] = mapped_column(Text, default="")
@@ -110,3 +112,20 @@ class AudioChunk(Base):
     received_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
 
     recording: Mapped[Recording] = relationship(back_populates="chunks")
+
+
+class AudioPart(Base):
+    __tablename__ = "audio_parts"
+    __table_args__ = (UniqueConstraint("recording_id", "sequence_number", "part_number"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    recording_id: Mapped[str] = mapped_column(
+        ForeignKey("recordings.id", ondelete="CASCADE"), index=True
+    )
+    sequence_number: Mapped[int] = mapped_column(Integer)
+    part_number: Mapped[int] = mapped_column(Integer)
+    total_bytes: Mapped[int] = mapped_column(Integer)
+    chunk_sha256: Mapped[str] = mapped_column(String(64))
+    sha256: Mapped[str] = mapped_column(String(64))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    path: Mapped[str] = mapped_column(Text)

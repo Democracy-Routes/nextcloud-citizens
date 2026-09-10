@@ -13,6 +13,7 @@
 	},
 	"dependencies": {
 		"@mdi/js": "^7.4.47",
+		"@noble/hashes": "2.0.1",
 		"vue": "^3.5.13",
 		"vue-i18n": "^11.4.2"
 	},

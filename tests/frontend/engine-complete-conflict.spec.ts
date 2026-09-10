@@ -30,16 +30,16 @@ vi.mock('../../frontend/src/recorder/api', () => ({
 }))
 
 const putRecording = vi.fn().mockResolvedValue(undefined)
-const storedRecording = { recordingId: 'rec-1', serverComplete: false }
+const storedRecording = { recordingId: 'rec-1', serverComplete: false, totalChunks: 1 }
 vi.mock('../../frontend/src/recorder/idb', () => ({
 	idb: {
 		getRecordings: vi.fn(async () => [storedRecording]),
 		putRecording: (...a: unknown[]) => putRecording(...a),
-		chunksFor: vi.fn(async () => []),
+		chunksFor: vi.fn(async () => [{ seq: 0, sizeBytes: 5, sha256: 'chunk' }]),
 	},
 }))
 vi.mock('../../frontend/src/recorder/logger', () => ({ clientLog: vi.fn() }))
-vi.mock('../../frontend/src/recorder/sha', () => ({ sha256Hex: vi.fn() }))
+vi.mock('../../frontend/src/recorder/sha', () => ({ sha256Hex: vi.fn(async () => 'manifest') }))
 
 const { RecorderEngine } = await import('../../frontend/src/recorder/engine')
 const { RecorderApiError } = await import('../../frontend/src/recorder/api')
@@ -64,13 +64,24 @@ describe('a /complete that 409s because the recording is already finished', () =
 
 	it('recognises the recording as done and marks it complete', async () => {
 		complete.mockRejectedValue(new RecorderApiError(409, 'Recording is ASSEMBLING'))
-		recordingStatus.mockResolvedValue({ state: 'AUDIO_READY', error_code: '' })
+		recordingStatus.mockResolvedValue({ state: 'AUDIO_READY', error_code: '', total_chunks: 1,
+			audio_available: true, audio_manifest_sha256: 'manifest', audio_manifest_bytes: 5 })
 		const engine = newEngine()
 
 		await runComplete(engine)
 
 		expect(engine.state.phase).toBe('done')
 		expect(storedRecording.serverComplete).toBe(true)
+	})
+
+	it('retains the local copy when the server only salvaged a prefix', async () => {
+		complete.mockRejectedValue(new RecorderApiError(409, 'Recording is AUDIO_READY'))
+		recordingStatus.mockResolvedValue({ state: 'AUDIO_READY', total_chunks: 1,
+			audio_available: true, audio_manifest_sha256: 'different', audio_manifest_bytes: 2 })
+		const engine = newEngine()
+		await runComplete(engine)
+		expect(engine.state.phase).toBe('failed')
+		expect(storedRecording.serverComplete).toBe(false)
 	})
 
 	it('still fails on a 409 for a recording the server has NOT finished', async () => {

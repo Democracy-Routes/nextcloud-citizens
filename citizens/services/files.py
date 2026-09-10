@@ -25,7 +25,7 @@ from citizens.db.models import (
 )
 from citizens.db.models.base import utcnow
 from citizens.db.models.findings import Finding, FindingEvidence
-from citizens.db.models.recording import AudioChunk
+from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
 from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
@@ -205,6 +205,12 @@ def delete_recording_audio(session: Session, recording: Recording) -> int:
         except OSError:
             pass
     recording.received_chunks = 0
+    for part in session.scalars(select(AudioPart).where(AudioPart.recording_id == recording.id)):
+        part_path = root / part.path
+        if part_path.is_file():
+            freed += part.size_bytes
+            part_path.unlink(missing_ok=True)
+        session.delete(part)
     recording.audio_deleted_at = utcnow()
     # Any export archive of this assembly still contains this audio in full.
     # Leaving them is the difference between the retention sweep reporting the

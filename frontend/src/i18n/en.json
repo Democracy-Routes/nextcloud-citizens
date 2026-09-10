@@ -134,6 +134,8 @@
 			"micLost": "The microphone was interrupted — a call or another app took it over. The recording so far was saved and is uploading. Tell the facilitator, then start again when the table is ready."
 		},
 		"recovery": {
+			"sessionNeeded": "Saved audio is still on this phone. Scan a current QR code for the same assembly and table to resume uploading. You can download the local copy now. Do not clear browser storage.",
+			"downloadStarted": "Download started. Check that the file opens before deleting any local audio.",
 			"intro": "This phone has a recording that was not fully synchronized — for example after the page was reloaded or the browser closed. All locally saved audio is intact.",
 			"chunks": "Chunks stored locally",
 			"waiting": "Waiting for network… the audio is safe on this phone. Keep this page open.",
@@ -150,6 +152,12 @@
 			"title": "Recovered recording",
 			"awaitingUpload": "Awaiting upload",
 			"uploaded": "Every part of the recording was uploaded and accepted, but the server has not confirmed the assembled audio yet. Keep this phone's copy until it has."
+		},
+		"safety": {
+			"storageUnavailable": "Some audio could not be saved locally. Keep this page open and download the audio. Notify the facilitator immediately.",
+			"incomplete": "Audio chunks are missing. This recording is incomplete; keep the local copy.",
+			"unverified": "The server has not verified this complete recording. Keep the local audio.",
+			"uploadBlocked": "The server rejected the upload. Recording continues locally. Notify the facilitator; keep this page open. A current QR code may be needed after recording ends."
 		},
 		"report": {
 			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables",

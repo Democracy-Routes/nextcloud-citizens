@@ -12,6 +12,7 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
+import { downloadBlob } from '../../download'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
@@ -125,6 +126,11 @@ function beginReportAutoOpen(): void {
 }
 const qbarOpen = ref(false)
 const techOpen = ref(false)
+async function downloadLocal(): Promise<void> {
+	const blob = await engine.localAudio()
+	const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+	downloadBlob(blob, `citizens-${state.recordingId}.${ext}`)
+}
 
 // consecutive caption fragments from the same speaker flow together as one
 // block; a new block starts when the speaker changes
@@ -514,6 +520,11 @@ async function clearSynced(): Promise<void> {
 			<div v-if="state.storageError" class="rc-alert">
 				<strong>{{ t('recorder.recording.storageErrorTitle') }}</strong><br />
 				{{ t('recorder.recording.storageErrorBody') }}
+				<p>{{ t('recorder.safety.storageUnavailable') }}</p>
+				<button class="rc-btn" @click="downloadLocal">{{ t('recorder.recovery.download') }}</button>
+			</div>
+			<div v-else-if="state.errorKind === 'gone' || state.errorKind === 'rejected'" class="rc-alert">
+				{{ t('recorder.safety.uploadBlocked') }}
 			</div>
 			<div v-else-if="!state.uploadOnline" class="rc-note">
 				<template v-if="state.uploadFailure === 'server'">
@@ -725,7 +736,7 @@ async function clearSynced(): Promise<void> {
 				<div class="rc-alert" style="margin-top: 30px">
 					<strong>{{ t('recorder.recording.syncFailed') }}</strong><br />{{ state.error }}
 					<br /><br />
-					{{ t('recorder.recording.syncFailedSafe') }}
+					{{ state.storageError ? t('recorder.safety.storageUnavailable') : t('recorder.recording.syncFailedSafe') }}
 					{{ t('recorder.recording.tryAgainLater') }}
 				</div>
 			</div>
@@ -733,7 +744,8 @@ async function clearSynced(): Promise<void> {
 				<button class="rc-btn rc-primary" style="margin-top: 0" @click="engine.retrySync()">
 					{{ t('recorder.common.tryAgain') }}
 				</button>
-				<button class="rc-btn rc-subtle" @click="emit('exit')">Back</button>
+				<button class="rc-btn" @click="downloadLocal">{{ t('recorder.recovery.download') }}</button>
+				<button v-if="!state.storageError" class="rc-btn rc-subtle" @click="emit('exit')">Back</button>
 			</div>
 		</template>
 	</div>

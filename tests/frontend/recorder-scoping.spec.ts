@@ -37,7 +37,7 @@ vi.mock('../../frontend/src/recorder/idb', () => ({
 			return store.recordings.filter(
 				(r) =>
 					r.recordingId !== '__selftest__' &&
-					!r.serverComplete &&
+					(!r.serverComplete || r.verificationVersion !== 1 || r.captureIncomplete) &&
 					(!assemblyId || r.assemblyId === assemblyId),
 			)
 		},
@@ -57,6 +57,7 @@ function recording(over: Partial<StoredRecording>): StoredRecording {
 		finishedAt: null,
 		totalChunks: null,
 		serverComplete: false,
+		verificationVersion: 1,
 		...over,
 	}
 }

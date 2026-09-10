@@ -7,7 +7,7 @@
  * failure, so finish() declared a total_chunks counting a chunk that was never
  * stored. The server waited for it forever; the phone retried the impossible
  * resend for five minutes and then failed the whole round. The contiguous
- * prefix is the recoverable recording — declare that instead.
+ * prefix can be salvaged, but must never be declared the complete recording.
  */
 import { describe, expect, it, vi } from 'vitest'
 
@@ -40,7 +40,7 @@ vi.mock('../../frontend/src/recorder/api', () => ({
 const { RecorderEngine } = await import('../../frontend/src/recorder/engine')
 
 describe('finish() when a chunk was lost locally', () => {
-	it('declares only the contiguous prefix, not the highest sequence seen', async () => {
+	it('detects the contiguous prefix without hiding a missing chunk', async () => {
 		const engine = new RecorderEngine()
 		const priv = engine as unknown as {
 			state: { recordingId: string }
@@ -52,5 +52,20 @@ describe('finish() when a chunk was lost locally', () => {
 
 		// 0,1,2 are contiguous from zero; 4 sits past the gap at 3
 		expect(await priv.persistedPrefixLength()).toBe(3)
+	})
+
+	it('finish preserves the full declaration and flags the capture incomplete', async () => {
+		const engine = new RecorderEngine()
+		const priv = engine as unknown as {
+			seq: number
+			mediaRecorder: { onstop: (() => void) | null; stop(): void }
+		}
+		engine.state.recordingId = 'rec-1'
+		priv.seq = 5
+		priv.mediaRecorder = { onstop: null, stop() { this.onstop?.() } }
+		await engine.finish()
+		expect(stored.totalChunks).toBe(5)
+		expect(stored).toHaveProperty('captureIncomplete', true)
+		expect(engine.state.phase).toBe('failed')
 	})
 })

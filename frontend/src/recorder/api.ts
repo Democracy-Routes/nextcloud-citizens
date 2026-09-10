@@ -96,6 +96,9 @@ export interface PublishedFinding {
 }
 
 export interface RecordingStatus {
+	audio_manifest_sha256?: string | null
+	audio_manifest_bytes?: number | null
+	audio_available?: boolean
 	recording_id: string
 	state: string
 	received_chunks: number
@@ -147,6 +150,20 @@ async function request<T>(
 }
 
 export const recorderApi = {
+	partStatus: (token: string, recordingId: string, seq: number) =>
+		request<{ part_bytes: number; complete: boolean; chunk_sha256: string | null;
+			total_bytes: number | null; parts: Array<{ number: number; sha256: string }> }>(
+			'GET', `/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/parts`, { token }),
+	uploadPart: (token: string, recordingId: string, seq: number, part: number,
+		totalBytes: number, chunkHash: string, partHash: string, blob: Blob) =>
+		request<{ acknowledged: boolean }>('POST',
+			`/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/parts/${part}`, {
+				token, body: blob, headers: { 'Content-Type': 'application/octet-stream',
+					'X-Total-Bytes': String(totalBytes), 'X-Chunk-SHA256': chunkHash, 'X-Part-SHA256': partHash },
+			}),
+	finalizeChunk: (token: string, recordingId: string, seq: number) =>
+		request<{ acknowledged: boolean; sha256: string; size_bytes: number }>('POST',
+			`/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/finalize`, { token }),
 	join: (token: string) => request<JoinResult>('POST', '/api/v1/public/join', { json: { token } }),
 
 	status: (token: string) => request<RecorderStatus>('GET', '/api/v1/public/recorder/status', { token }),

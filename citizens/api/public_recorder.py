@@ -133,7 +133,7 @@ def start(data: StartIn, recorder_session: RecorderSess, session: DB):
     return {"recording_id": recording.id, "state": recording.state}
 
 
-async def _read_capped_body(request: Request) -> bytes:
+async def _read_capped_body(request: Request, limit: int = MAX_CHUNK_BYTES) -> bytes:
     """Read the request body, refusing anything over one chunk's worth.
 
     Content-Length is the normal path — the recorder always sets it, so an
@@ -142,12 +142,12 @@ async def _read_capped_body(request: Request) -> bytes:
     as the accumulated body passes the limit rather than at the end.
     """
     declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > MAX_CHUNK_BYTES:
+    if declared.isdigit() and int(declared) > limit:
         raise HTTPException(status_code=413, detail="Chunk too large")
     buffer = bytearray()
     async for part in request.stream():
         buffer.extend(part)
-        if len(buffer) > MAX_CHUNK_BYTES:
+        if len(buffer) > limit:
             raise HTTPException(status_code=413, detail="Chunk too large")
     return bytes(buffer)
 
@@ -198,6 +198,7 @@ async def upload_chunk(
         if not outcome.get("duplicate"):
             assembly = session.get(Assembly, recording.assembly_id)
             language = assembly.language if assembly else ""
+        session.commit()  # durable receipt before an acknowledgement can leave the server
         return outcome, recording.id, language, stt, recording.assembly_id
 
     result, recording_id_out, language, stt, assembly_id = await run_in_threadpool(_persist)
@@ -205,6 +206,65 @@ async def upload_chunk(
         # provisional live captions ride on the safety upload — failures here
         # never affect the recording (brief §51)
         LIVE_CAPTIONS.feed(recording_id_out, body, stt, language, assembly_id)
+    return result
+
+
+@router.get("/recorder/recordings/{recording_id}/chunks/{sequence_number}/parts")
+def uploaded_parts(recording_id: str, sequence_number: int, recorder_session: ReadingSess, session: ReadDB):
+    from citizens.services.multipart_audio import part_status
+
+    recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    return part_status(session, recording, sequence_number)
+
+
+@router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/parts/{part_number}")
+async def upload_part(
+    recording_id: str, sequence_number: int, part_number: int, request: Request, session: DB,
+    authorization: Annotated[str, Header()] = "",
+    x_chunk_sha256: Annotated[str, Header()] = "",
+    x_part_sha256: Annotated[str, Header()] = "",
+    x_total_bytes: Annotated[int, Header()] = 0,
+):
+    import re
+
+    from citizens.services import multipart_audio
+
+    if not 0 <= sequence_number <= 100000 or part_number < 0 or not 0 < x_total_bytes <= 2**53 - 1:
+        raise HTTPException(422, "Invalid part metadata")
+    if not all(re.fullmatch("[a-f0-9]{64}", value) for value in (x_chunk_sha256, x_part_sha256)):
+        raise HTTPException(422, "Invalid checksum")
+    body = await _read_capped_body(request, multipart_audio.PART_BYTES)
+
+    def persist():
+        recorder_session = _session_from_authorization(session, authorization)
+        recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+        return multipart_audio.receive_part(session, recording, sequence_number, part_number,
+                                            x_total_bytes, x_chunk_sha256, x_part_sha256, body)
+
+    return await run_in_threadpool(persist)
+
+
+@router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/finalize")
+def finalize_uploaded_chunk(
+    recording_id: str, sequence_number: int, recorder_session: RecorderSess, session: DB
+):
+    from citizens.services.multipart_audio import finalize_chunk
+    from citizens.storage.paths import chunk_path, recording_dir
+
+    recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    result = finalize_chunk(session, recording, sequence_number)
+    if not result["duplicate"]:
+        session.commit()
+        stt = live_stt_snapshot()
+        assembly = session.get(Assembly, recording.assembly_id)
+        language = assembly.language if assembly else ""
+        session.commit()
+        root = get_settings().app_persistent_storage
+        path = chunk_path(recording_dir(root, recording.assembly_id, recording.round_id,
+                                        recording.table_id, recording.id), sequence_number)
+        with path.open("rb") as audio:
+            while body := audio.read(1024 * 1024):
+                LIVE_CAPTIONS.feed(recording.id, body, stt, language, recording.assembly_id)
     return result
 
 

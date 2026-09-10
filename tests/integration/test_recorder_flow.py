@@ -122,6 +122,13 @@ def test_full_recording_pipeline(recorder, tmp_path, settings_env):
     status = _wait_for_state(recorder, recording_id, "AUDIO_READY")
     assert status["state"] == "AUDIO_READY", status
     assert status["duration_seconds"] == pytest.approx(3.0, abs=0.5)
+    manifest = "".join(
+        f"{seq}:{len(blob)}:{hashlib.sha256(blob).hexdigest()}\n"
+        for seq, blob in enumerate(chunks)
+    )
+    assert status["audio_available"] is True
+    assert status["audio_manifest_sha256"] == hashlib.sha256(manifest.encode()).hexdigest()
+    assert status["audio_manifest_bytes"] == len(audio)
 
     # canonical file exists and is valid audio
     assembled = list((settings_env.app_persistent_storage / "assembled").rglob("*.webm"))
@@ -414,3 +421,110 @@ def test_giving_up_on_a_table_is_reversible(recorder, tmp_path):
     ).json()
     assert done["state"] == "ASSEMBLING"
     assert _wait_for_state(recorder, recording_id, "AUDIO_READY")["state"] == "AUDIO_READY"
+
+
+def _part(recorder, recording_id, data, number, **overrides):
+    size = 1024 * 1024
+    body = data[number * size:(number + 1) * size]
+    return recorder["client"].post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0/parts/{number}",
+        content=body,
+        headers={**recorder["headers"], "X-Total-Bytes": str(len(data)),
+                 "X-Chunk-SHA256": hashlib.sha256(data).hexdigest(),
+                 "X-Part-SHA256": hashlib.sha256(body).hexdigest(), **overrides},
+    )
+
+
+def test_oversized_chunk_resumes_and_verifies_whole_recording(recorder, tmp_path):
+    path = tmp_path / "large.webm"
+    subprocess.run([
+        "ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+        "sine=frequency=440:duration=150", "-ac", "2", "-c:a", "libopus", "-b:a", "320k",
+        "-vbr", "off", str(path),
+    ], check=True, timeout=120)
+    data = path.read_bytes()
+    assert len(data) > 5 * 1024 * 1024
+    recording_id = _start(recorder)
+    url = f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0"
+    client, headers = recorder["client"], recorder["headers"]
+    assert _upload(recorder, recording_id, 0, data).status_code == 413
+    assert _part(recorder, recording_id, data, 0).status_code == 200
+    # Lost acknowledgement: retry the same part, then resume in fresh requests.
+    assert _part(recorder, recording_id, data, 0).status_code == 200
+    status = client.get(url + "/parts", headers=headers).json()
+    assert [p["number"] for p in status["parts"]] == [0]
+    assert not status["complete"]
+    assert client.post(url + "/finalize", headers=headers).status_code == 409
+    for number in range(1, (len(data) + 1024 * 1024 - 1) // (1024 * 1024)):
+        response = _part(recorder, recording_id, data, number)
+        assert response.status_code == 200, response.text
+    finalized = client.post(url + "/finalize", headers=headers)
+    assert finalized.status_code == 200, finalized.text
+    assert finalized.json()["sha256"] == hashlib.sha256(data).hexdigest()
+    assert client.post(url + "/finalize", headers=headers).json()["duplicate"]
+    assert client.get(url + "/parts", headers=headers).json()["complete"]
+    assert client.post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/complete",
+        headers=headers, json={"total_chunks": 1},
+    ).status_code == 200
+    status = _wait_for_state(recorder, recording_id, "AUDIO_READY", timeout=60)
+    assert status["state"] == "AUDIO_READY", status
+    manifest = f"0:{len(data)}:{hashlib.sha256(data).hexdigest()}\n"
+    assert status["audio_manifest_sha256"] == hashlib.sha256(manifest.encode()).hexdigest()
+    assert status["audio_manifest_bytes"] == len(data)
+    assert status["duration_seconds"] == pytest.approx(150, abs=1)
+
+
+@pytest.mark.parametrize("damage", ["missing", "corrupt"])
+def test_parts_can_be_repaired_without_losing_the_local_chunk(recorder, settings_env, damage):
+    from sqlalchemy import select
+
+    from citizens.db.models.recording import AudioPart
+    from citizens.db.session import session_scope
+
+    recording_id = _start(recorder)
+    data = b"original bytes"
+    assert _part(recorder, recording_id, data, 0).status_code == 200
+    with session_scope() as session:
+        part = session.scalar(select(AudioPart).where(AudioPart.recording_id == recording_id))
+        path = settings_env.app_persistent_storage / part.path
+    if damage == "missing":
+        path.unlink()
+    else:
+        path.write_bytes(b"damaged")
+    url = f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0/finalize"
+    assert recorder["client"].post(url, headers=recorder["headers"]).status_code == 409
+    assert _part(recorder, recording_id, data, 0).status_code == 200
+    assert recorder["client"].post(url, headers=recorder["headers"]).status_code == 200
+
+
+def test_part_checksums_metadata_and_auth_are_enforced(recorder):
+    recording_id = _start(recorder)
+    data = b"audio"
+    assert _part(recorder, recording_id, data, 0, **{"X-Part-SHA256": "0" * 64}).status_code == 400
+    assert _part(recorder, recording_id, data, 0).status_code == 200
+    assert _part(recorder, recording_id, b"other", 0).status_code == 409
+    assert _part(recorder, recording_id, data, 0, Authorization="Bearer wrong").status_code == 401
+    url = f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0"
+    assert recorder["client"].get(url + "/parts").status_code == 401
+    assert recorder["client"].post(url + "/finalize").status_code == 401
+
+
+def test_part_finalize_releases_writer_lock_during_copy(recorder, monkeypatch, writer_slot_probe):
+    from pathlib import Path
+
+    recording_id = _start(recorder)
+    assert _part(recorder, recording_id, b"audio", 0).status_code == 200
+    original = Path.read_bytes
+
+    def checked_read(path):
+        if "parts" in path.parts:
+            writer_slot_probe()
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", checked_read)
+    result = recorder["client"].post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0/finalize",
+        headers=recorder["headers"],
+    )
+    assert result.status_code == 200, result.text

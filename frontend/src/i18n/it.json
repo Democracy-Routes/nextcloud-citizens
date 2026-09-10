@@ -134,6 +134,8 @@
 			"micLost": "Il microfono è stato interrotto — una chiamata o un'altra app lo ha preso in uso. La registrazione fatta finora è salva ed è in caricamento. Avvisa chi facilita e poi ricominciate quando il tavolo è pronto."
 		},
 		"recovery": {
+			"sessionNeeded": "L'audio salvato è ancora su questo telefono. Scansionate un codice QR valido della stessa assemblea e dello stesso tavolo per riprendere il caricamento. Potete scaricare subito la copia locale. Non cancellate i dati del browser.",
+			"downloadStarted": "Download avviato. Verificate che il file si apra prima di eliminare qualsiasi copia locale.",
 			"intro": "Questo telefono ha una registrazione non completamente sincronizzata — per esempio dopo il ricaricamento della pagina o la chiusura del browser. Tutto l'audio salvato in locale è integro.",
 			"chunks": "Frammenti salvati in locale",
 			"waiting": "In attesa della rete… l'audio è al sicuro su questo telefono. Tenete aperta questa pagina.",
@@ -150,6 +152,12 @@
 			"title": "Registrazione recuperata",
 			"awaitingUpload": "In attesa di caricamento",
 			"uploaded": "Ogni parte della registrazione è stata caricata e accettata, ma il server non ha ancora confermato l'audio assemblato. Conserva la copia su questo telefono finché non lo avrà fatto."
+		},
+		"safety": {
+			"storageUnavailable": "Non è stato possibile salvare parte dell'audio in locale. Tenete aperta questa pagina e scaricate l'audio. Avvisate subito il facilitatore.",
+			"incomplete": "Mancano frammenti audio. La registrazione è incompleta: conservate la copia locale.",
+			"unverified": "Il server non ha verificato questa registrazione completa. Conservate l'audio locale.",
+			"uploadBlocked": "Il server ha rifiutato il caricamento. La registrazione continua in locale. Avvisate il facilitatore e tenete aperta questa pagina. Al termine potrebbe servire un codice QR aggiornato."
 		},
 		"report": {
 			"mentionedAt": "Citato a {count} tavolo | Citato a {count} tavolo | Citato a {count} tavoli",
