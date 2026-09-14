@@ -206,6 +206,7 @@ def purge_device_audio(assembly_id: str, user: CurrentUser, session: DB):
         )
     if assembly.device_audio_purge_requested_at is None:
         assembly.device_audio_purge_requested_at = utcnow()
+        assembly.purge_requested_automatically = False
         session.flush()
         record_audit_event(
             session, "device_audio_purge_requested", "assembly", assembly.id, actor=user,

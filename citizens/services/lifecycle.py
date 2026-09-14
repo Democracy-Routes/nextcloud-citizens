@@ -81,6 +81,7 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
     # their recording reaches AUDIO_READY.
     if assembly.auto_purge_device_audio and assembly.device_audio_purge_requested_at is None:
         assembly.device_audio_purge_requested_at = utcnow()
+        assembly.purge_requested_automatically = True
         record_audit_event(
             session, "device_audio_purge_requested", "assembly", assembly.id,
             data={"automatic": True},
@@ -104,11 +105,15 @@ def reopen_assembly(session: Session, assembly: Assembly) -> None:
     # it set means every phone that joins the reopened assembly is still being
     # told to delete — and would clear each NEW recording the moment it reached
     # AUDIO_READY, mid-round. Harmless while purging was a button somebody had
-    # to press; not harmless now that closing asks by itself. Only the
-    # automatic request is withdrawn — a purge an organizer explicitly asked
-    # for on a manual assembly stands.
-    if assembly.auto_purge_device_audio:
+    # to press; not harmless now that closing asks by itself. Key on WHO asked,
+    # not on the toggle: flipping auto_purge_device_audio off between close
+    # and reopen must not leave the automatic request standing — the organizer
+    # just said phones keep their audio. (NULL only ever means no request
+    # stands: migration 0021 backfilled every pre-provenance request as
+    # automatic, so a reopen withdraws it — the safety direction.)
+    if assembly.purge_requested_automatically:
         assembly.device_audio_purge_requested_at = None
+        assembly.purge_requested_automatically = None
     # And let retention apply to audio recorded after the reopen: the sweep
     # only considers assemblies with audio_purged_at NULL, so leaving it set
     # meant a table that recorded post-reopen was retained forever while the

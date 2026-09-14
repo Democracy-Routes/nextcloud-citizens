@@ -48,6 +48,14 @@ class Assembly(Base):
     # recorder already makes every few seconds. Set once and left set: a phone
     # that reopens days later should still honour it.
     device_audio_purge_requested_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # Whether the standing purge request came from close_assembly (True) or an
+    # organizer pressing the button (False). Reopening withdraws only the
+    # automatic kind — keying that off the toggle's CURRENT value meant turning
+    # auto-purge off between close and reopen left the request standing: the
+    # first status poll after the reopen told every phone to delete each new
+    # recording the moment it reached AUDIO_READY. NULL for rows written
+    # before this column existed.
+    purge_requested_automatically: Mapped[bool | None] = mapped_column(Boolean)
     # Ask the phones automatically when the session is closed. On by default:
     # the case this exists for is participants recording on their own devices,
     # where leaving the audio behind is the surprising outcome. An organizer
