@@ -93,6 +93,18 @@ class Round(Base):
     duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
     status: Mapped[str] = mapped_column(String(20), default="NOT_STARTED")
     analysis_summary: Mapped[str] = mapped_column(Text, default="")
+    # Is the cross-table clustering current? input bumps whenever the findings
+    # it reads change (a table re-analysed, an organizer rejecting or editing);
+    # applied is set from the input revision a run STARTED from. Stale ⇔
+    # input > applied. A timestamp cannot express this: a job's updated_at is
+    # stamped when the runner marks it done — after the model call — so a
+    # review landing mid-run looked older than the run that never saw it.
+    analysis_input_revision: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
+    analysis_applied_revision: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
     started_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     ended_at: Mapped[datetime | None] = mapped_column(TZDateTime())
 

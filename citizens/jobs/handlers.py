@@ -8,13 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import AppJob, Recording, Round
+from citizens.db.models import Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.logging_setup import get_logger
 from citizens.providers.analysis.openai_compat import AnalysisError
 from citizens.providers.transcription.base import TranscriptionError
 from citizens.services import analysis as analysis_svc
-from citizens.services import provider_config, stt_capacity
+from citizens.services import provider_config, round_analysis, stt_capacity
 from citizens.services import transcription as transcription_svc
 from citizens.services.audio import (
     AudioAssemblyError,
@@ -361,33 +361,16 @@ def handle_analyze_table(session: Session, payload: dict) -> None:
 
 
 def maybe_enqueue_round_analysis(session: Session, recording: Recording) -> None:
-    """When the last analyzed table of the round is done, cluster cross-table."""
-    states = [
-        row
-        for row in session.execute(
-            select(Recording.state).where(
-                Recording.round_id == recording.round_id,
-                Recording.transcript_deleted_at.is_(None),
-            )
-        ).scalars()
-    ]
-    healthy_pending = {
-        "CREATED", "RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS", "ASSEMBLING",
-        "AUDIO_READY", "TRANSCRIBING", "TRANSCRIBED", "ANALYZING",
-    }
-    if any(state in healthy_pending for state in states):
-        return
-    payload = json.dumps({"round_id": recording.round_id})
-    already = session.execute(
-        select(AppJob).where(
-            AppJob.type == "ANALYZE_ROUND",
-            AppJob.state.in_(("QUEUED", "RUNNING", "RETRY")),
-            AppJob.payload_json == payload,
-        )
-    ).scalar_one_or_none()
-    if already is None:
-        enqueue_job(session, "ANALYZE_ROUND", {"round_id": recording.round_id})
-        log.info("round_analysis_enqueued", round_id=recording.round_id)
+    """This recording's contribution to its round changed: (re)cluster.
+
+    Called when a table finishes analysis, and when a table drops out of the
+    round (abandoned, replaced, swept). Both change what the clustering reads,
+    so the round's input revision moves; whether a run actually queues — no
+    table still pending, no job already covering this revision — is decided in
+    services/round_analysis. Reviews reach the same gate from api/findings.
+    """
+    round_analysis.bump_round_inputs(session, recording.round_id)
+    round_analysis.enqueue_round_analysis_if_stale(session, recording.round_id)
 
 
 def _refresh_frozen_report_if_closed(session: Session, round_) -> None:
@@ -408,6 +391,8 @@ def handle_analyze_round(session: Session, payload: dict) -> None:
     round_ = session.get(Round, payload["round_id"])
     if round_ is None:
         raise PermanentJobError(f"Round {payload['round_id']} no longer exists")
+    # what this run will read; a review landing after this point is not in it
+    captured = round_analysis.record_run_started(session, round_.id)
     # even a bare read opened BEGIN IMMEDIATE — commit before the OCS reads
     session.commit()
     store = provider_config.default_store()
@@ -418,6 +403,7 @@ def handle_analyze_round(session: Session, payload: dict) -> None:
         if exc.permanent:
             raise PermanentJobError(str(exc)) from exc
         raise
+    round_analysis.record_run_applied(session, round_.id, captured)
     if round_.status in ("ENDED", "PROCESSING"):
         round_.status = "READY_FOR_REVIEW"
     _refresh_frozen_report_if_closed(session, round_)
