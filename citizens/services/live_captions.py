@@ -47,6 +47,10 @@ SESSION_IDLE_TIMEOUT = 90.0
 REAP_INTERVAL_SECONDS = 15.0
 #: how long a session gets to finish writing its transcript before it is cancelled
 DISPOSE_TIMEOUT_SECONDS = 20.0
+#: how long _finish_async waits for a recording's still-pending feeds before
+#: disposing anyway — the fence that keeps the sentinel behind queued audio.
+#: Waited on the event loop, never by a caller holding the database.
+FINISH_TIMEOUT_SECONDS = 60.0
 FAILURE_COOLDOWN = 60.0
 KEEPALIVE_SECONDS = 5.0
 # how many lines the phone and the monitor are shown — a display window, not
@@ -603,6 +607,9 @@ class LiveCaptionManager:
         # concurrency cap: recording_id -> when. Only for honest status() —
         # the phone keeps recording and re-asks with every chunk.
         self._over_capacity: dict[str, float] = {}
+        # feeds scheduled but not yet finished, per recording — what
+        # _finish_async fences behind so the sentinel never overtakes audio
+        self._pending_feeds: dict[str, set[asyncio.Task]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     async def _close_stream(self, recording_id: str) -> None:
@@ -643,17 +650,34 @@ class LiveCaptionManager:
             if provider in ("vosk", "whisper") and not config.get("endpoint"):
                 return
             asyncio.run_coroutine_threadsafe(
-                self._feed_async(recording_id, data, config, language, assembly_id), self._loop
+                self._tracked_feed(recording_id, data, config, language, assembly_id), self._loop
             )
         except Exception:
             log.warning("live_stt_feed_failed", recording_id=recording_id, exc_info=True)
 
     def finish(self, recording_id: str) -> None:
+        """End the recording's caption session. Fire-and-forget, deliberately.
+
+        Every caller holds SQLite's single writer slot — BEGIN IMMEDIATE is
+        taken at the request's first statement and released only when its
+        session commits, after the handler returns: /complete, /abandon-upload,
+        device-replace, and the silent-device release inside /start. A blocking
+        wait here, even a bounded one, kept that slot for the whole caption
+        dispose, and any hold past busy_timeout turned every other phone's
+        chunk upload into "database is locked". So this returns at once.
+
+        The ordering problem that once argued for waiting — parts of an
+        oversized chunk are fed from the same threadpool /complete runs on, and
+        /complete winning that race put the None sentinel ahead of still-queued
+        audio, truncating what is (with batch transcription off) the transcript
+        of record — is solved on the event loop instead: _finish_async waits
+        for this recording's pending feeds before it disposes anything.
+        """
         try:
             if self._loop is not None:
                 asyncio.run_coroutine_threadsafe(self._finish_async(recording_id), self._loop)
         except Exception:
-            pass
+            log.warning("live_stt_finish_failed", recording_id=recording_id, exc_info=True)
 
     def status(self, recording_id: str) -> dict:
         session = self._sessions.get(recording_id)
@@ -671,6 +695,28 @@ class LiveCaptionManager:
         if session.failed_at is not None:
             result["reason"] = "error"  # failed, in cooldown before a retry
         return result
+
+    async def _tracked_feed(
+        self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
+    ) -> None:
+        """_feed_async, registered so finish() can fence behind it.
+
+        Tasks handed to the loop through run_coroutine_threadsafe start in the
+        order they were scheduled, and this registers itself before its first
+        await — so when a later-scheduled _finish_async runs, every feed that
+        preceded it is already in the set it waits on.
+        """
+        task = asyncio.current_task()
+        pending = self._pending_feeds.setdefault(recording_id, set())
+        if task is not None:
+            pending.add(task)
+        try:
+            await self._feed_async(recording_id, data, config, language, assembly_id)
+        finally:
+            if task is not None:
+                pending.discard(task)
+            if not pending:
+                self._pending_feeds.pop(recording_id, None)
 
     async def _feed_async(
         self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
@@ -867,6 +913,18 @@ class LiveCaptionManager:
         )
 
     async def _finish_async(self, recording_id: str) -> None:
+        # The fence: feeds already scheduled for this recording must land
+        # before the sentinel, or the tail of the audio is lost. Bounded, so a
+        # stuck decoder cannot hold the recording open forever — and waited
+        # here, on the loop, never by a caller holding the database.
+        pending = [task for task in self._pending_feeds.get(recording_id, ()) if not task.done()]
+        if pending:
+            _, unfinished = await asyncio.wait(pending, timeout=FINISH_TIMEOUT_SECONDS)
+            if unfinished:
+                log.warning(
+                    "live_stt_finish_fence_timeout",
+                    recording_id=recording_id, pending=len(unfinished),
+                )
         self._over_capacity.pop(recording_id, None)
         session = self._sessions.pop(recording_id, None)
         if session is not None:

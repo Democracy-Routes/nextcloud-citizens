@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from citizens.config import get_settings
 from citizens.db.models import RecorderSession, Recording, Round, Table
 from citizens.db.models.base import utcnow
-from citizens.db.models.recording import AudioChunk
+from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
 from citizens.security.recorder_tokens import generate_token, hash_token
 from citizens.services import invites as invite_svc
@@ -377,6 +377,17 @@ def receive_chunk(
         if existing.sha256 == actual:
             # duplicate upload of the identical chunk: idempotent ACK
             return {"acknowledged": True, "duplicate": True, "sequence_number": sequence_number}
+        raise HTTPException(status_code=409, detail="Sequence already stored with different content")
+    parts = session.execute(
+        select(AudioPart).where(
+            AudioPart.recording_id == recording.id,
+            AudioPart.sequence_number == sequence_number,
+        ).limit(1)
+    ).scalars().first()
+    if parts is not None and parts.chunk_sha256 != actual:
+        # the parts route and this one store the SAME sequence; a conflicting
+        # upload here would leave a chunk and parts describing different bytes
+        # (see multipart_audio.receive_part for the mirrored check)
         raise HTTPException(status_code=409, detail="Sequence already stored with different content")
 
     root = get_settings().app_persistent_storage

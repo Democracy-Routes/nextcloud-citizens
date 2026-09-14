@@ -7,9 +7,11 @@ pipeline (concat + ffprobe + remux), exercising duplicate-upload (brief
 Test D) and missing-chunk (Test E) behaviour.
 """
 
+import concurrent.futures
 import hashlib
 import re
 import subprocess
+import threading
 import time
 from datetime import timedelta
 
@@ -423,11 +425,11 @@ def test_giving_up_on_a_table_is_reversible(recorder, tmp_path):
     assert _wait_for_state(recorder, recording_id, "AUDIO_READY")["state"] == "AUDIO_READY"
 
 
-def _part(recorder, recording_id, data, number, **overrides):
+def _part(recorder, recording_id, data, number, sequence=0, **overrides):
     size = 1024 * 1024
     body = data[number * size:(number + 1) * size]
     return recorder["client"].post(
-        f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0/parts/{number}",
+        f"/api/v1/public/recorder/recordings/{recording_id}/chunks/{sequence}/parts/{number}",
         content=body,
         headers={**recorder["headers"], "X-Total-Bytes": str(len(data)),
                  "X-Chunk-SHA256": hashlib.sha256(data).hexdigest(),
@@ -528,3 +530,147 @@ def test_part_finalize_releases_writer_lock_during_copy(recorder, monkeypatch, w
         headers=recorder["headers"],
     )
     assert result.status_code == 200, result.text
+
+
+def test_a_retried_part_feeds_live_captions_once(recorder, monkeypatch):
+    """The part receipt is idempotent on disk; the caption feed was not. A
+    retry after a lost ack — or the client's force-resend after a finalize
+    conflict — pushed the same audio into the caption stream a second time,
+    mid-stream, where the decoder cannot tell it from new speech. With batch
+    transcription off that stream IS the transcript of record."""
+    from citizens.api import public_recorder
+
+    fed: list[int] = []
+    monkeypatch.setattr(
+        public_recorder.LIVE_CAPTIONS, "feed",
+        lambda recording_id, body, *a, **k: fed.append(len(body)),
+    )
+    recording_id = _start(recorder)
+    data = b"once and only once " * 1024
+    assert _part(recorder, recording_id, data, 0).status_code == 200
+    assert _part(recorder, recording_id, data, 0).status_code == 200  # the retry
+    assert len(fed) == 1, f"the same part was fed {len(fed)} times"
+
+
+def test_concurrent_finalizes_of_different_chunks_both_count(recorder, monkeypatch):
+    """received_chunks is read-modify-written, and the finalize copies the
+    chunk with the writer lock released — so the recording it holds is a
+    pre-copy snapshot. Without a refresh under the lock, two finalizes of
+    DIFFERENT sequences each add one to the same stale value and the second
+    clobbers the first: the recording undercounts and can never reach
+    total_chunks. Both threads are held inside the unlocked copy until both
+    have read the recording, so the interleaving is forced, not lucky."""
+    from pathlib import Path
+
+    from citizens.db.models import Recording
+    from citizens.db.session import session_scope
+    from citizens.services import multipart_audio
+
+    recording_id = _start(recorder)
+    blobs = [b"first sequence " * 64, b"second sequence " * 64]
+    for sequence, blob in enumerate(blobs):
+        assert _part(recorder, recording_id, blob, 0, sequence=sequence).status_code == 200
+
+    barrier = threading.Barrier(2, timeout=30)
+    original = Path.read_bytes
+
+    def held_read(path):
+        if "parts" in path.parts:
+            barrier.wait()  # both are mid-copy: both have the pre-copy snapshot
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", held_read)
+
+    def finalize(sequence):
+        with session_scope() as session:
+            recording = session.get(Recording, recording_id)
+            return multipart_audio.finalize_chunk(session, recording, sequence)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(finalize, sequence) for sequence in range(2)]
+        results = [future.result(timeout=60) for future in futures]
+    assert all(result["duplicate"] is False for result in results)
+    with session_scope() as session:
+        assert session.get(Recording, recording_id).received_chunks == 2, (
+            "the second finalize clobbered the first's increment"
+        )
+
+
+def test_a_nonsense_total_bytes_is_rejected_not_stored(recorder):
+    """A wrong X-Total-Bytes used to be written into the first part row:
+    finalize then computed a part count that could never arrive, and every
+    honest retry hit "metadata conflicts with stored parts" — the sequence
+    bricked, recoverable only by deleting the audio server-side."""
+    recording_id = _start(recorder)
+    client, headers = recorder["client"], recorder["headers"]
+    garbage = b"\x00" * (1024 * 1024)
+    response = client.post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0/parts/0",
+        content=garbage,
+        headers={**headers, "X-Total-Bytes": "9000000000",
+                 "X-Chunk-SHA256": "0" * 64,
+                 "X-Part-SHA256": hashlib.sha256(garbage).hexdigest()},
+    )
+    assert response.status_code == 422
+    # part numbers outside even the legitimate maximum are refused outright
+    response = client.post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/chunks/0/parts/999999",
+        content=garbage,
+        headers={**headers, "X-Total-Bytes": str(1024 * 1024),
+                 "X-Chunk-SHA256": "0" * 64,
+                 "X-Part-SHA256": hashlib.sha256(garbage).hexdigest()},
+    )
+    assert response.status_code == 422
+    # ...and the honest retry afterwards is a clean first upload
+    assert _part(recorder, recording_id, garbage, 0).status_code == 200
+
+
+def test_chunk_and_parts_cannot_disagree_about_a_sequence(recorder):
+    """Both upload routes store the same sequence; without the cross-check a
+    chunk and parts could describe different bytes for it — and part_status
+    would report the chunk's hash against the parts' content."""
+    recording_id = _start(recorder)
+    blob = b"plain chunk bytes"
+    assert _upload(recorder, recording_id, 0, blob).status_code == 200
+    assert _part(recorder, recording_id, b"conflicting part bytes", 0).status_code == 409
+    # and the mirror image (a fresh sequence stored as parts first)
+    assert _part(recorder, recording_id, b"first via parts", 0, sequence=1).status_code == 200
+    assert _upload(recorder, recording_id, 1, b"conflicting chunk").status_code == 409
+
+
+def test_concurrent_finalizes_of_the_same_chunk_are_idempotent(recorder):
+    """A replacement phone and the old one both finalize the same sequence.
+    The finalize used to check-then-insert across a released writer lock, so
+    a loser hit the unique constraint at commit and got a 500 instead of the
+    duplicate ACK."""
+    from citizens.db.models import Recording
+    from citizens.db.models.recording import AudioChunk
+    from citizens.db.session import session_scope
+    from citizens.services import multipart_audio
+
+    recording_id = _start(recorder)
+    blob = b"race-worthy bytes " * 64
+    assert _part(recorder, recording_id, blob, 0).status_code == 200
+    with session_scope() as session:
+        recording = session.get(Recording, recording_id)
+        first = multipart_audio.finalize_chunk(session, recording, 0)
+        assert first["duplicate"] is False
+    # A second session replays the loser's request against the already-stored
+    # parts, exactly as the concurrent request would have found them.
+    def losing_finalize():
+        with session_scope() as session:
+            return multipart_audio.finalize_chunk(session, session.get(Recording, recording_id), 0)
+
+    results = [None, None]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(losing_finalize) for _ in range(2)]
+        for index, future in enumerate(futures):
+            results[index] = future.result(timeout=60)
+    assert all(result["duplicate"] is True for result in results)
+    from sqlalchemy import select as sa_select
+    with session_scope() as session:
+        chunks = list(session.scalars(
+            sa_select(AudioChunk).where(AudioChunk.recording_id == recording_id)
+        ))
+        assert len(chunks) == 1
+        assert session.get(Recording, recording_id).received_chunks == 1

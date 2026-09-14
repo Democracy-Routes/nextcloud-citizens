@@ -229,19 +229,39 @@ async def upload_part(
 
     from citizens.services import multipart_audio
 
-    if not 0 <= sequence_number <= 100000 or part_number < 0 or not 0 < x_total_bytes <= 2**53 - 1:
+    max_parts = -(-multipart_audio.MAX_DECLARED_CHUNK_BYTES // multipart_audio.PART_BYTES)
+    if (not 0 <= sequence_number <= 100000 or not 0 <= part_number < max_parts
+            or not 0 < x_total_bytes <= multipart_audio.MAX_DECLARED_CHUNK_BYTES):
         raise HTTPException(422, "Invalid part metadata")
     if not all(re.fullmatch("[a-f0-9]{64}", value) for value in (x_chunk_sha256, x_part_sha256)):
         raise HTTPException(422, "Invalid checksum")
     body = await _read_capped_body(request, multipart_audio.PART_BYTES)
 
-    def persist():
+    def persist() -> tuple[dict, str, str]:
+        stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-        return multipart_audio.receive_part(session, recording, sequence_number, part_number,
-                                            x_total_bytes, x_chunk_sha256, x_part_sha256, body)
+        result = multipart_audio.receive_part(session, recording, sequence_number, part_number,
+                                              x_total_bytes, x_chunk_sha256, x_part_sha256, body)
+        assembly = session.get(Assembly, recording.assembly_id)
+        language = assembly.language if assembly else ""
+        return result, recording.assembly_id, language, stt
 
-    return await run_in_threadpool(persist)
+    result, assembly_id, language, stt = await run_in_threadpool(persist)
+    # Live captions feed on chunk order. The plain route feeds upload_chunk as
+    # the chunk arrives; a chunk big enough to go through parts never reached
+    # the caption session until finalize — so a phone whose chunks all exceed
+    # the plain cap produced NO live captions for the round, and with batch
+    # transcription off its transcript of record depended on a finalize burst
+    # racing /complete. Parts of one MediaRecorder chunk arrive in sequence
+    # order from the phone, so feeding each as it lands keeps captions
+    # real-time. Only a part not seen before: a retry (a lost ack, or the
+    # client's force-resend after a finalize conflict) stores idempotently on
+    # disk but would push the same audio into the caption stream a second
+    # time — mid-stream, which the decoder cannot tell from new speech.
+    if not result.get("duplicate"):
+        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id)
+    return result
 
 
 @router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/finalize")
@@ -249,23 +269,11 @@ def finalize_uploaded_chunk(
     recording_id: str, sequence_number: int, recorder_session: RecorderSess, session: DB
 ):
     from citizens.services.multipart_audio import finalize_chunk
-    from citizens.storage.paths import chunk_path, recording_dir
 
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-    result = finalize_chunk(session, recording, sequence_number)
-    if not result["duplicate"]:
-        session.commit()
-        stt = live_stt_snapshot()
-        assembly = session.get(Assembly, recording.assembly_id)
-        language = assembly.language if assembly else ""
-        session.commit()
-        root = get_settings().app_persistent_storage
-        path = chunk_path(recording_dir(root, recording.assembly_id, recording.round_id,
-                                        recording.table_id, recording.id), sequence_number)
-        with path.open("rb") as audio:
-            while body := audio.read(1024 * 1024):
-                LIVE_CAPTIONS.feed(recording.id, body, stt, language, recording.assembly_id)
-    return result
+    # Live captions were fed as each part landed (upload_part) — reading the
+    # assembled chunk back here would feed every byte a second time.
+    return finalize_chunk(session, recording, sequence_number)
 
 
 class CompleteIn(BaseModel):

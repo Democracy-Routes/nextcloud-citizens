@@ -439,6 +439,128 @@ async def _test_a_failed_sessions_replacement_does_not_leak_the_lease(settings_e
     stt_capacity.reset_for_tests()
 
 
+def test_finish_does_not_block_its_caller(settings_env, monkeypatch):
+    """Every caller of finish() holds SQLite's single writer slot — /complete,
+    /abandon-upload, device-replace, the silent-device release in /start. A
+    blocking wait here starved every other phone's chunk upload into
+    "database is locked" for as long as a caption dispose took. finish() must
+    return at once; the dispose happens on the loop, after the caller's
+    transaction is long committed."""
+    async def scenario():
+        manager = LiveCaptionManager()
+        manager.set_loop(asyncio.get_running_loop())
+        session = _BaseSession("rec-slow", "", "m", "en", assembly_id="asm-1")
+        manager._sessions["rec-slow"] = session
+        disposed = asyncio.Event()
+
+        async def slow_dispose(_session, keep_stream=False):
+            await asyncio.sleep(0.6)
+            disposed.set()
+
+        monkeypatch.setattr(manager, "_dispose", slow_dispose)
+        started = time.monotonic()
+        # from a threadpool worker, like FastAPI's own sync endpoints
+        await asyncio.to_thread(manager.finish, "rec-slow")
+        assert time.monotonic() - started < 0.3, "finish() blocked its caller"
+        await asyncio.wait_for(disposed.wait(), timeout=5)
+
+    asyncio.run(scenario())
+
+
+def test_finish_still_persists_the_transcript(settings_env):
+    """Non-blocking is not fire-and-forget-and-lose: the final file is still
+    written, just after the caller has gone on."""
+    manager_holder: list[LiveCaptionManager] = []
+
+    class _Recording(_BaseSession):
+        # parks until finish() ends the queue — as a real provider session does
+        async def run(self):
+            await self.queue.get()
+
+    async def scenario():
+        manager = LiveCaptionManager()
+        manager_holder.append(manager)
+        manager.set_loop(asyncio.get_running_loop())
+        session = _Recording("rec-burst", "", "m", "en", assembly_id="asm-1")
+        session.lines = [{"t": 0.0, "end": 2.0, "text": "the whole ending is here"}]
+        manager._sessions[session.recording_id] = session
+        session.task = asyncio.get_running_loop().create_task(
+            manager._run_and_persist(session)
+        )
+        await asyncio.to_thread(manager.finish, "rec-burst")
+        await asyncio.wait_for(session.task, timeout=5)
+        path = lc.live_caption_path(
+            settings_env.app_persistent_storage, "asm-1", "rec-burst"
+        )
+        assert path.exists()
+        payload = json.loads(path.read_text())
+        assert payload["final"] is True
+        assert payload["lines"][0]["text"] == "the whole ending is here"
+
+    asyncio.run(scenario())
+    assert "rec-burst" not in manager_holder[0]._sessions
+
+
+def test_feeds_queued_before_finish_land_before_the_sentinel(settings_env, monkeypatch):
+    """The fence. Parts of an oversized chunk are fed from the same threadpool
+    /complete runs on; /complete winning the race used to put the None
+    sentinel ahead of megabytes of still-queued audio — with batch
+    transcription off, the transcript of record silently lost its tail.
+    Every feed scheduled before finish() must land before the dispose."""
+    async def scenario():
+        manager = LiveCaptionManager()
+        manager.set_loop(asyncio.get_running_loop())
+        events: list[str] = []
+
+        async def slow_feed(recording_id, data, config, language, assembly_id=""):
+            await asyncio.sleep(0.05)
+            events.append("feed")
+
+        async def dispose(_session, keep_stream=False):
+            events.append("dispose")
+
+        monkeypatch.setattr(manager, "_feed_async", slow_feed)
+        monkeypatch.setattr(manager, "_dispose", dispose)
+        manager._sessions["rec-fence"] = _BaseSession("rec-fence", "", "m", "en", assembly_id="asm-1")
+        config = {"enabled": True, "provider": "deepgram", "api_key": "k"}
+        for index in range(3):
+            manager.feed("rec-fence", bytes([index]), config, "en", "asm-1")
+        manager.finish("rec-fence")
+        for _ in range(200):
+            if "dispose" in events:
+                break
+            await asyncio.sleep(0.02)
+        assert events == ["feed", "feed", "feed", "dispose"], events
+
+    asyncio.run(scenario())
+
+
+def test_a_stuck_feed_cannot_hold_the_recording_open_forever(settings_env, monkeypatch):
+    """The fence is bounded: a decoder that never finishes must not keep the
+    session — and its provider connection — alive past the timeout."""
+    async def scenario():
+        manager = LiveCaptionManager()
+        manager.set_loop(asyncio.get_running_loop())
+        monkeypatch.setattr(lc, "FINISH_TIMEOUT_SECONDS", 0.1)
+        disposed = asyncio.Event()
+
+        async def stuck_feed(recording_id, data, config, language, assembly_id=""):
+            await asyncio.sleep(30)
+
+        async def dispose(_session, keep_stream=False):
+            disposed.set()
+
+        monkeypatch.setattr(manager, "_feed_async", stuck_feed)
+        monkeypatch.setattr(manager, "_dispose", dispose)
+        manager._sessions["rec-stuck"] = _BaseSession("rec-stuck", "", "m", "en", assembly_id="asm-1")
+        manager.feed("rec-stuck", b"x", {"enabled": True, "provider": "deepgram", "api_key": "k"},
+                     "en", "asm-1")
+        manager.finish("rec-stuck")
+        await asyncio.wait_for(disposed.wait(), timeout=3)
+
+    asyncio.run(scenario())
+
+
 def test_status_names_the_cooldown_after_a_failure(settings_env):
     manager = LiveCaptionManager()
     session = _BaseSession("rec-err", "", "m", "en", assembly_id="asm-1")
