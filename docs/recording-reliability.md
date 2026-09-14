@@ -46,6 +46,9 @@ that evidence their local audio remains untouched.
 
 ## Before using this build for an assembly
 
+The same list, sequenced for a real day with hosted speech-to-text:
+[event-checklist.md](event-checklist.md).
+
 1. Back up the persistent database and audio volume before upgrading. Migration
    `0020` adds nullable verification fields and the part-receipt table; it does
    not rewrite existing audio. Deploy backend and rebuilt recorder assets together.

@@ -4,6 +4,79 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Bug-audit pass on the upload, caption and analysis path — 2026-09-11
+
+Six fixes from a deliberate audit of the audio pipeline. Two of them close
+silent-failure modes: cross-table clusters that never caught up with human
+review, and an automatic purge request that could stay standing over a
+reopened assembly.
+
+- **Round clustering re-runs once the inputs have moved on.** No review of
+  any kind re-triggered clustering, so a round whose last table finished
+  analysis before the organizer started reviewing kept its pre-review
+  clusters forever, its round summary never caught up, and an
+  independent-mode assembly never reached `assembly_complete()` (auto-publish
+  to the phones stayed off). Each round now carries two revision counters
+  (migration 0022): the inputs bump whenever a table is (re)analysed or
+  dropped from the round, or an organizer rejects, un-rejects or edits a
+  finding; a run records the revision it started from. Rejecting or editing
+  through the review API queues a run from the newest inputs — one follow-up
+  behind a run already in flight, later changes coalescing into it. Plain
+  approval does not re-run: the clustering reads every finding that is not
+  rejected, so approving changes nothing it would see. (A timestamp could not
+  express this — a job's `updated_at` is stamped after the model call, so a
+  review landing mid-run looked older than the run that never saw it.)
+- **Reopening withdraws the *automatic* purge, not whatever the toggle says
+  now.** `close_assembly` records who asked for the phones to be cleared
+  (`purge_requested_automatically`, migration 0021); `reopen_assembly`
+  withdraws the request only when the close made it. Flipping
+  `auto_purge_device_audio` off between close and reopen used to leave the
+  request standing, so every phone joining the reopened assembly deleted
+  each fresh recording the moment the server confirmed it — the destructive
+  mid-round purge the reopen guard exists to prevent, with the organizer
+  having explicitly disabled automatic purging.
+- **A recovered phone no longer wedges when `/complete` 409s mid-assembly.**
+  A reload during "Synchronizing" (or a replacement handover mid-upload)
+  re-posted `/complete`; the server's 409 while ASSEMBLING failed
+  verification because the manifest only exists at AUDIO_READY, and Try
+  again re-posted the same deterministic refusal forever. That 409 now means
+  "the server has it" — the phone polls until AUDIO_READY and verifies the
+  manifest then, or until AUDIO_INVALID, which is a real answer. Every
+  deterministic answer settles immediately instead of re-polling something
+  that cannot change: a prefix salvage, an equal-length manifest with a
+  different hash or byte count, or a revoked session. The audio stays on the
+  phone in every case — only a full manifest match ever marks it safe to
+  delete — and transient failures are retried for five minutes, then the
+  phone says "uploaded, not yet confirmed" rather than lying either way.
+- **Concurrent finalizes of the same chunk are idempotent.** The finalize
+  checked-then-inserted across a deliberately released writer lock: a
+  replacement phone finalizing the same chunk as the old one could pass the
+  duplicate check during the winner's unlocked copy and hit the unique
+  constraint at commit — a 500 instead of the duplicate ACK. The claim is
+  now an atomic insert; the loser gets `duplicate: true`, the file of the
+  identical bytes is never replaced, and `received_chunks` counts once.
+- **Live captions now see oversized chunks as they arrive, not at
+  finalize.** A chunk big enough to go through the parts routes (the plain
+  cap is 5 MiB; Chrome produces larger) never reached the caption session
+  until finalize — so that table had no live captions all round, and with
+  batch transcription off the transcript of record depended on a finalize
+  burst racing `/complete`. Each part feeds the session as it lands (parts
+  of one MediaRecorder chunk arrive in sequence order) — and only once: a
+  retried part is stored idempotently but not fed again, so a lost ack or
+  the client's force-resend after a finalize conflict cannot push the same
+  audio into the caption stream twice. Finishing a recording now fences, on
+  the event loop, behind the feeds still in flight, so the end-of-stream
+  sentinel never overtakes queued audio — without ever blocking the caller,
+  which holds SQLite's single writer slot for the whole request.
+- **A nonsensical `X-Total-Bytes` no longer bricks a sequence.** A wrong
+  declared total was stored with the first part; finalize computed a part
+  count that could never arrive, and honest retries then hit "metadata
+  conflicts with stored parts" — recoverable only by deleting the audio
+  server-side. The declaration is now bounded and validated at first touch
+  (before anything is stored), parts beyond it are refused, and the parts
+  and plain-chunk routes cross-check each other's content-hash on the same
+  sequence.
+
 ### Live captions survive a provider reconnect — 2026-09-09
 
 A 30-minute load test proved captions never recovered after a mid-recording

@@ -95,6 +95,7 @@ Full note: [docs/privacy.md](docs/privacy.md).
 
 * [Administration guide](docs/administration.md) — install, keys, data, troubleshooting
 * [Privacy & data handling](docs/privacy.md)
+* [Running one assembly, rehearsed](docs/event-checklist.md) — the day-of runbook
 * [Architecture](docs/architecture.md) — how the pipeline works
 * [Development environment](docs/development-environment.md) — run it locally
 * [Testing](docs/testing.md)
