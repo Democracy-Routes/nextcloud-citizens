@@ -68,6 +68,9 @@ export interface EngineState {
 	uploadFailure: '' | 'network' | 'server'
 	retryInMs: number
 	serverState: string
+	/** total_chunks the server last reported having assembled — null while it is
+	 * mid-assembly, so a mismatch against local length is only meaningful once set */
+	serverManifestChunks: number | null
 	error: string
 	/** 'gone' = the server definitively no longer knows this recording/session
 	 * (deleted assembly, reset instance) — retrying can never succeed */
@@ -92,6 +95,7 @@ export class RecorderEngine {
 		uploadFailure: '',
 		retryInMs: 0,
 		serverState: '',
+		serverManifestChunks: null,
 		error: '',
 		errorKind: '',
 		micLost: false,
@@ -250,6 +254,29 @@ export class RecorderEngine {
 			this.state.storageError = true
 			this.state.error = t('recorder.safety.storageUnavailable')
 			return
+		}
+		// Every chunk acked and a 409 already told us the server is past
+		// /complete: re-posting it cannot succeed (the 409 is deterministic
+		// once ASSEMBLING begins). Poll for the assembly instead of firing the
+		// same doomed request on every tap of "Try again".
+		const allAcked = (await idb.chunksFor(this.state.recordingId)).every((c) => c.acked)
+		if (allAcked && this.state.serverState === 'ASSEMBLING') {
+			this.state.error = ''
+			this.state.errorKind = ''
+			this.state.storageError = false
+			this.state.phase = 'syncing'
+			this.stopMonitors()
+			this.startMonitors()
+			clientLog('info', 'sync_retry_as_poll')
+			const pollDeadline = Date.now() + 5 * 60_000
+			for (;;) {
+				try {
+					await this.pollUntilProcessed()
+					return
+				} catch (pollError) {
+					if (await this.settlePollFailure(pollError, pollDeadline)) return
+				}
+			}
 		}
 		this.state.error = ''
 		this.state.storageError = false
@@ -592,34 +619,48 @@ export class RecorderEngine {
 					this.state.uploadOnline = true
 					await this.pollUntilProcessed()
 					return
-				} catch (error) {
-					if (await this.completedDespiteConflict(error)) {
-						clientLog('info', 'complete_conflict_already_finished', {
-							recordingId: this.state.recordingId, serverState: this.state.serverState,
-						})
-						this.state.uploadOnline = true
+			} catch (error) {
+				if (await this.completedDespiteConflict(error)) {
+					clientLog('info', 'complete_conflict_already_finished', {
+						recordingId: this.state.recordingId, serverState: this.state.serverState,
+					})
+					this.state.uploadOnline = true
+					this.state.error = ''
+					this.state.errorKind = ''
+					this.state.phase = 'syncing' // ASSEMBLING while the manifest is verified
+					// A 409 means the server HAS this recording: the deadline
+					// that bounds retrying lost uploads must not turn waiting
+					// into a failure. Keep polling until AUDIO_READY
+					// (markServerComplete verifies the manifest then) or
+					// AUDIO_INVALID (the real answer), surfacing "syncing" the
+					// whole time rather than stranding the phone on a dead-end
+					// failed screen that re-POSTs a deterministic 409 on every
+					// tap of Try again.
+					const pollDeadline = Date.now() + 5 * 60_000
+					for (;;) {
 						try {
 							await this.pollUntilProcessed()
 							return
-						} catch (verificationError) {
-							error = verificationError
+						} catch (pollError) {
+							if (await this.settlePollFailure(pollError, pollDeadline)) return
 						}
 					}
-					if (!isGoneError(error) && isTransientError(error) && Date.now() < deadline) {
-						this.state.uploadOnline = false
-						clientLog('warn', 'sync_retrying', {
-							error: String(error).slice(0, 160), delayMs: this.retryDelay,
-						})
-						await this.idleWait(this.retryDelay)
-						this.retryDelay = Math.min(this.retryDelay * 2, RETRY_MAX_MS)
-						continue
-					}
-					this.state.error = error instanceof Error ? error.message : String(error)
-					this.state.errorKind = isGoneError(error) ? 'gone' : isTransientError(error) ? 'transient' : 'rejected'
-					this.state.phase = 'failed'
-					clientLog('error', 'sync_failed', { error: this.state.error.slice(0, 200) })
-					return
 				}
+				if (!isGoneError(error) && isTransientError(error) && Date.now() < deadline) {
+					this.state.uploadOnline = false
+					clientLog('warn', 'sync_retrying', {
+						error: String(error).slice(0, 160), delayMs: this.retryDelay,
+					})
+					await this.idleWait(this.retryDelay)
+					this.retryDelay = Math.min(this.retryDelay * 2, RETRY_MAX_MS)
+					continue
+				}
+				this.state.error = error instanceof Error ? error.message : String(error)
+				this.state.errorKind = isGoneError(error) ? 'gone' : isTransientError(error) ? 'transient' : 'rejected'
+				this.state.phase = 'failed'
+				clientLog('error', 'sync_failed', { error: this.state.error.slice(0, 200) })
+				return
+			}
 			}
 		} finally {
 			this.stopMonitors()
@@ -647,6 +688,58 @@ export class RecorderEngine {
 		}
 	}
 
+	/** pollUntilProcessed threw while the server HAS this recording: keep
+	 * polling, or settle? Returns true once settled.
+	 *
+	 * Deterministic answers end it. A 409 out of markServerComplete means the
+	 * server's OWN manifest failed verification — a prefix salvage (fewer
+	 * chunks than this phone captured), or an equal-length manifest with a
+	 * different hash or byte count — and no amount of re-polling changes what
+	 * the server assembled. A gone session (401/403/404/410) cannot be polled
+	 * back into existence. Only transient failures earn another look, and only
+	 * until the deadline: past it the honest state is 'uploaded' — every chunk
+	 * was acknowledged, nothing confirmed the assembled audio — exactly what
+	 * pollUntilProcessed says when its own window closes.
+	 *
+	 * The first version of this loop exited only on the salvage case, so an
+	 * equal-length mismatch or a revoked session re-asked the same question
+	 * every three seconds forever, on a screen with no way to get the audio
+	 * off the phone. Local audio was never at risk — serverComplete is set
+	 * nowhere but after a full manifest match — but liveness was. */
+	private async settlePollFailure(pollError: unknown, deadline: number): Promise<boolean> {
+		if (this.abandoned || this.state.phase !== 'syncing') return true
+		const message = pollError instanceof Error ? pollError.message : String(pollError)
+		if (isGoneError(pollError)) {
+			this.state.error = message
+			this.state.errorKind = 'gone'
+			this.state.phase = 'failed'
+			clientLog('error', 'sync_failed', { error: message.slice(0, 200), kind: 'gone' })
+			return true
+		}
+		if (!isTransientError(pollError)) {
+			const serverChunks = this.state.serverManifestChunks
+			const salvaged = pollError instanceof RecorderApiError && pollError.status === 409
+				&& serverChunks !== null
+				&& serverChunks < (await idb.chunksFor(this.state.recordingId)).length
+			this.state.error = message
+			this.state.errorKind = 'rejected'
+			this.state.phase = 'failed'
+			clientLog('warn', salvaged ? 'sync_failed_salvage' : 'sync_failed_unverified', {
+				serverChunks,
+			})
+			return true
+		}
+		if (Date.now() >= deadline) {
+			this.state.phase = 'uploaded'
+			clientLog('warn', 'server_confirmation_timed_out', {
+				recordingId: this.state.recordingId, lastServerState: this.state.serverState,
+			})
+			return true
+		}
+		await this.idleWait(RETRY_BASE_MS)
+		return false
+	}
+
 	private async pollUntilProcessed(): Promise<void> {
 		const SUCCESS = COMPLETED_STATES
 		let failedSince = 0
@@ -656,6 +749,7 @@ export class RecorderEngine {
 				failedSince = 0
 				this.state.uploadOnline = true
 				this.state.serverState = status.state
+				this.state.serverManifestChunks = status.total_chunks
 				if (this.abandoned) return
 				if (SUCCESS.has(status.state) || status.state === 'AUDIO_INVALID') {
 					if (SUCCESS.has(status.state)) {
