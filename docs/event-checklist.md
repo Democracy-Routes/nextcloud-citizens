@@ -33,6 +33,11 @@ room.
   safe — reopening withdraws only the request the close itself made, whatever
   the toggle says by then — but decide it before the day so nobody has to
   reason about it in the room.
+- [ ] **Print the consent forms.** [consent-form.md](consent-form.md) is a
+  bilingual information notice and consent form written from what the
+  software actually does; fill in the bracketed fields (controller, contact,
+  hosting, the retention you set) and collect one per participant before the
+  first round. The phone's information screen stays as the second step.
 - [ ] **Take a snapshot, and rehearse the restore.** `scripts/backup-citizens-data.sh`
   (see [administration.md](administration.md) § Backups) — then restore it into
   a throwaway volume and count the assemblies. A backup nobody has restored is
