@@ -12,6 +12,7 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
+import { downloadBlob } from '../../download'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
@@ -101,6 +102,9 @@ let captionHistory: CaptionHistory = { sawLines: false, consecutiveInactive: 0 }
 const captionsBox = ref<HTMLElement | null>(null)
 const nextRound = ref<RoundInfo | null>(null)
 const reportAvailable = ref(false)
+// the organizer ended the assembly (possibly mid-round): stop advancing, and
+// offer the report rather than roll into a round that will never come
+const assemblyClosed = ref(false)
 const reportOpenCountdown = ref(0)
 const tableSummaries = ref<Array<{ position: number; title: string; summary: string }>>([])
 
@@ -122,6 +126,11 @@ function beginReportAutoOpen(): void {
 }
 const qbarOpen = ref(false)
 const techOpen = ref(false)
+async function downloadLocal(): Promise<void> {
+	const blob = await engine.localAudio()
+	const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+	downloadBlob(blob, `citizens-${state.recordingId}.${ext}`)
+}
 
 // consecutive caption fragments from the same speaker flow together as one
 // block; a new block starts when the speaker changes
@@ -146,6 +155,7 @@ function watchForNextRound(): void {
 		try {
 			const status = await recorderApi.status(props.session.session_token)
 			reportAvailable.value = status.report_available ?? false
+			assemblyClosed.value = status.assembly_closed ?? false
 			// the done screen auto-records the next round, so the table counts
 			// as armed on the organizer's readiness indicator
 			if (orchestrated && status.rounds.some((r) => !r.recorded_state)) {
@@ -170,12 +180,15 @@ function watchForNextRound(): void {
 				beginReportAutoOpen()
 			}
 			// orchestrated waits for the facilitator to activate the next round;
-			// independent tables advance to any round they haven't recorded yet
-			nextRound.value = orchestrated
-				? (status.rounds.find(
-						(r) => r.status === 'ACTIVE' && !r.recorded_state && r.id !== props.round.id,
-					) ?? null)
-				: (status.rounds.find((r) => !r.recorded_state && r.id !== props.round.id) ?? null)
+			// independent tables advance to any round they haven't recorded yet.
+			// A closed assembly is over: never advance, whatever round rows say.
+			nextRound.value = assemblyClosed.value
+				? null
+				: orchestrated
+					? (status.rounds.find(
+							(r) => r.status === 'ACTIVE' && !r.recorded_state && r.id !== props.round.id,
+						) ?? null)
+					: (status.rounds.find((r) => !r.recorded_state && r.id !== props.round.id) ?? null)
 			// this table's per-round AI summaries for the final screen
 			tableSummaries.value = status.rounds
 				.filter((r) => r.recorded_state)
@@ -507,6 +520,11 @@ async function clearSynced(): Promise<void> {
 			<div v-if="state.storageError" class="rc-alert">
 				<strong>{{ t('recorder.recording.storageErrorTitle') }}</strong><br />
 				{{ t('recorder.recording.storageErrorBody') }}
+				<p>{{ t('recorder.safety.storageUnavailable') }}</p>
+				<button class="rc-btn" @click="downloadLocal">{{ t('recorder.recovery.download') }}</button>
+			</div>
+			<div v-else-if="state.errorKind === 'gone' || state.errorKind === 'rejected'" class="rc-alert">
+				{{ t('recorder.safety.uploadBlocked') }}
 			</div>
 			<div v-else-if="!state.uploadOnline" class="rc-note">
 				<template v-if="state.uploadFailure === 'server'">
@@ -685,7 +703,7 @@ async function clearSynced(): Promise<void> {
 							</template>
 						</div>
 						<p class="rc-muted rc-center" style="margin-top: 14px; font-size: 0.845rem">
-							{{ t('recorder.recording.reportPending') }}
+							{{ assemblyClosed ? t('recorder.assembly.overBody') : t('recorder.recording.reportPending') }}
 						</p>
 					</template>
 				</div>
@@ -718,7 +736,7 @@ async function clearSynced(): Promise<void> {
 				<div class="rc-alert" style="margin-top: 30px">
 					<strong>{{ t('recorder.recording.syncFailed') }}</strong><br />{{ state.error }}
 					<br /><br />
-					{{ t('recorder.recording.syncFailedSafe') }}
+					{{ state.storageError ? t('recorder.safety.storageUnavailable') : t('recorder.recording.syncFailedSafe') }}
 					{{ t('recorder.recording.tryAgainLater') }}
 				</div>
 			</div>
@@ -726,7 +744,8 @@ async function clearSynced(): Promise<void> {
 				<button class="rc-btn rc-primary" style="margin-top: 0" @click="engine.retrySync()">
 					{{ t('recorder.common.tryAgain') }}
 				</button>
-				<button class="rc-btn rc-subtle" @click="emit('exit')">Back</button>
+				<button class="rc-btn" @click="downloadLocal">{{ t('recorder.recovery.download') }}</button>
+				<button v-if="!state.storageError" class="rc-btn rc-subtle" @click="emit('exit')">Back</button>
 			</div>
 		</template>
 	</div>

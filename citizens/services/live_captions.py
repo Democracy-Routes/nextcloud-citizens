@@ -47,6 +47,10 @@ SESSION_IDLE_TIMEOUT = 90.0
 REAP_INTERVAL_SECONDS = 15.0
 #: how long a session gets to finish writing its transcript before it is cancelled
 DISPOSE_TIMEOUT_SECONDS = 20.0
+#: how long _finish_async waits for a recording's still-pending feeds before
+#: disposing anyway — the fence that keeps the sentinel behind queued audio.
+#: Waited on the event loop, never by a caller holding the database.
+FINISH_TIMEOUT_SECONDS = 60.0
 FAILURE_COOLDOWN = 60.0
 KEEPALIVE_SECONDS = 5.0
 # how many lines the phone and the monitor are shown — a display window, not
@@ -593,11 +597,25 @@ PROVIDER_NAMES = {session: name for name, session in SESSION_TYPES.items()}
 class LiveCaptionManager:
     def __init__(self):
         self._sessions: dict[str, _BaseSession] = {}
+        # One ffmpeg decoder per recording, kept ALIVE across session
+        # reconnects. When a provider drops the websocket (Mistral does, at
+        # ~17 min), only the session is rebuilt; the decoder keeps the WebM
+        # container state, so the replacement is never fed an orphaned
+        # mid-stream chunk it cannot decode. Keyed by recording_id.
+        self._streams: dict[str, live_audio.PcmStream] = {}
         # recordings denied a session because the provider is at its
         # concurrency cap: recording_id -> when. Only for honest status() —
         # the phone keeps recording and re-asks with every chunk.
         self._over_capacity: dict[str, float] = {}
+        # feeds scheduled but not yet finished, per recording — what
+        # _finish_async fences behind so the sentinel never overtakes audio
+        self._pending_feeds: dict[str, set[asyncio.Task]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
+
+    async def _close_stream(self, recording_id: str) -> None:
+        stream = self._streams.pop(recording_id, None)
+        if stream is not None:
+            await stream.close()
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -632,17 +650,34 @@ class LiveCaptionManager:
             if provider in ("vosk", "whisper") and not config.get("endpoint"):
                 return
             asyncio.run_coroutine_threadsafe(
-                self._feed_async(recording_id, data, config, language, assembly_id), self._loop
+                self._tracked_feed(recording_id, data, config, language, assembly_id), self._loop
             )
         except Exception:
             log.warning("live_stt_feed_failed", recording_id=recording_id, exc_info=True)
 
     def finish(self, recording_id: str) -> None:
+        """End the recording's caption session. Fire-and-forget, deliberately.
+
+        Every caller holds SQLite's single writer slot — BEGIN IMMEDIATE is
+        taken at the request's first statement and released only when its
+        session commits, after the handler returns: /complete, /abandon-upload,
+        device-replace, and the silent-device release inside /start. A blocking
+        wait here, even a bounded one, kept that slot for the whole caption
+        dispose, and any hold past busy_timeout turned every other phone's
+        chunk upload into "database is locked". So this returns at once.
+
+        The ordering problem that once argued for waiting — parts of an
+        oversized chunk are fed from the same threadpool /complete runs on, and
+        /complete winning that race put the None sentinel ahead of still-queued
+        audio, truncating what is (with batch transcription off) the transcript
+        of record — is solved on the event loop instead: _finish_async waits
+        for this recording's pending feeds before it disposes anything.
+        """
         try:
             if self._loop is not None:
                 asyncio.run_coroutine_threadsafe(self._finish_async(recording_id), self._loop)
         except Exception:
-            pass
+            log.warning("live_stt_finish_failed", recording_id=recording_id, exc_info=True)
 
     def status(self, recording_id: str) -> dict:
         session = self._sessions.get(recording_id)
@@ -661,37 +696,72 @@ class LiveCaptionManager:
             result["reason"] = "error"  # failed, in cooldown before a retry
         return result
 
+    async def _tracked_feed(
+        self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
+    ) -> None:
+        """_feed_async, registered so finish() can fence behind it.
+
+        Tasks handed to the loop through run_coroutine_threadsafe start in the
+        order they were scheduled, and this registers itself before its first
+        await — so when a later-scheduled _finish_async runs, every feed that
+        preceded it is already in the set it waits on.
+        """
+        task = asyncio.current_task()
+        pending = self._pending_feeds.setdefault(recording_id, set())
+        if task is not None:
+            pending.add(task)
+        try:
+            await self._feed_async(recording_id, data, config, language, assembly_id)
+        finally:
+            if task is not None:
+                pending.discard(task)
+            if not pending:
+                self._pending_feeds.pop(recording_id, None)
+
     async def _feed_async(
         self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
     ) -> None:
+        provider = config["provider"]
+        wants_pcm = SESSION_TYPES[provider].wants_pcm
         session = self._sessions.get(recording_id)
+
         if session is not None and session.failed_at is not None:
             if time.monotonic() - session.failed_at < FAILURE_COOLDOWN:
-                return  # cooling down; don't reconnect-loop (brief §51)
-            # Tear the dead one down before building its replacement. Merely
-            # dropping it from the dict orphaned the ffmpeg process: _pump_pcm
-            # is a separate task, and it parks forever on a queue that nobody
-            # drains any more, so its finally — which closes the stream — never
-            # runs, and the reaper can no longer see the session either.
+                # Cooling down; don't reconnect-loop (brief §51). But KEEP the
+                # decoder fed: it survives the reconnect, and starving it for
+                # the 60 s cooldown would punch exactly the mid-stream hole this
+                # whole design exists to avoid. last_fed is bumped so the phone
+                # that is plainly still recording is not reaped as idle.
+                session.last_fed = time.monotonic()
+                stream = self._streams.get(recording_id)
+                if stream is not None:
+                    stream.feed(data)
+                return
+            # Cooldown over: tear down the dead session but LEAVE its decoder
+            # running, so the replacement inherits an ffmpeg that still holds
+            # the WebM container state.
             self._sessions.pop(recording_id, None)
-            await self._dispose(session)
+            await self._dispose(session, keep_stream=True)
             session = None
+
         if session is None:
-            provider = config["provider"]
             # The capacity gate. Each session is one connection to the
-            # provider (and one ffmpeg); past the per-provider cap a new
-            # phone's captions wait rather than pile onto a struggling
-            # backend and take everyone's captions down with it. Recording
-            # is untouched, and every chunk re-asks — a freed slot is picked
-            # up within one upload interval. A config with no concurrency
-            # key means no cap (a hand-built config, or a snapshot cached
-            # across an upgrade) — absence must never turn captions off.
+            # provider; past the per-provider cap a new phone's captions wait
+            # rather than pile onto a struggling backend and take everyone's
+            # captions down with it. Recording is untouched, and every chunk
+            # re-asks — a freed slot is picked up within one upload interval. A
+            # config with no concurrency key means no cap (a hand-built config,
+            # or a snapshot cached across an upgrade) — absence must never turn
+            # captions off.
             lease: str | None = None
             limit = config.get("concurrency")
             if limit is not None:
                 # live and batch are independent pools per provider
                 if not stt_capacity.try_acquire(f"{provider}:live", int(limit)):
                     self._over_capacity[recording_id] = time.monotonic()
+                    # no session means no consumer — don't keep a decoder
+                    # running for captions that are switched off here
+                    await self._close_stream(recording_id)
                     return
                 lease = f"{provider}:live"
             self._over_capacity.pop(recording_id, None)
@@ -715,18 +785,25 @@ class LiveCaptionManager:
             # first and storing the session last meant that a PcmStream which
             # refused to start returned with the task already running (holding
             # an open websocket) and failed_at set on an object nobody held —
-            # so the cooldown below could never see it, and every subsequent
+            # so the cooldown above could never see it, and every subsequent
             # ten-second chunk leaked another session, task and connection.
             self._sessions[recording_id] = session
-            if session.wants_pcm:
-                # the phone sends fragments of one WebM stream; these engines
-                # want PCM, so one ffmpeg decodes the stream for the session
-                stream = live_audio.PcmStream(recording_id)
-                if not await stream.start():
-                    session.failed_at = time.monotonic()
-                    session.active = False
-                    log.warning("live_stt_pcm_stream_failed", recording_id=recording_id)
-                    return
+            if wants_pcm:
+                stream = self._streams.get(recording_id)
+                if stream is None:
+                    # first session for this recording: build the decoder
+                    stream = live_audio.PcmStream(recording_id)
+                    if not await stream.start():
+                        session.failed_at = time.monotonic()
+                        session.active = False
+                        log.warning("live_stt_pcm_stream_failed", recording_id=recording_id)
+                        return
+                    self._streams[recording_id] = stream
+                else:
+                    # reusing the decoder that outlived a failed session: throw
+                    # away the PCM it buffered during the reconnect gap, so the
+                    # replacement opens on live audio, not a minute-old backlog
+                    stream.drain()
                 session.pcm_stream = stream
             loop = asyncio.get_running_loop()
             session.task = loop.create_task(self._run_and_persist(session))
@@ -735,9 +812,10 @@ class LiveCaptionManager:
                     self._pump_pcm(session, session.pcm_stream)
                 )
         session.last_fed = time.monotonic()
-        if session.wants_pcm:
-            if session.pcm_stream is not None:
-                session.pcm_stream.feed(data)
+        if wants_pcm:
+            stream = self._streams.get(recording_id)
+            if stream is not None:
+                stream.feed(data)
             return
         try:
             session.queue.put_nowait(data)
@@ -760,6 +838,12 @@ class LiveCaptionManager:
             log.warning("live_stt_pcm_pump_failed", recording_id=session.recording_id,
                         exc_info=True)
         finally:
+            # The decoder ended. If the session is still active, that was
+            # ffmpeg dying under us, not an orderly close (dispose sets active
+            # False first) — mark it failed so the session is rebuilt and
+            # status() honestly reports the cooldown instead of a silent stop.
+            if session.active and session.failed_at is None:
+                session.failed_at = time.monotonic()
             try:
                 session.queue.put_nowait(None)
             except asyncio.QueueFull:
@@ -829,16 +913,30 @@ class LiveCaptionManager:
         )
 
     async def _finish_async(self, recording_id: str) -> None:
+        # The fence: feeds already scheduled for this recording must land
+        # before the sentinel, or the tail of the audio is lost. Bounded, so a
+        # stuck decoder cannot hold the recording open forever — and waited
+        # here, on the loop, never by a caller holding the database.
+        pending = [task for task in self._pending_feeds.get(recording_id, ()) if not task.done()]
+        if pending:
+            _, unfinished = await asyncio.wait(pending, timeout=FINISH_TIMEOUT_SECONDS)
+            if unfinished:
+                log.warning(
+                    "live_stt_finish_fence_timeout",
+                    recording_id=recording_id, pending=len(unfinished),
+                )
         self._over_capacity.pop(recording_id, None)
         session = self._sessions.pop(recording_id, None)
-        if session is None:
-            return
-        # the recording is done: this dispose is terminal, so its persisted
-        # transcript is the complete one the job may adopt
-        session.final = True
-        await self._dispose(session)
+        if session is not None:
+            # the recording is done: this dispose is terminal, so its persisted
+            # transcript is the complete one the job may adopt
+            session.final = True
+            await self._dispose(session)
+        # close the decoder even when there was no live session (captions off,
+        # or over-capacity for the whole recording) so no ffmpeg is left behind
+        await self._close_stream(recording_id)
 
-    async def _dispose(self, session: "_BaseSession | None") -> None:
+    async def _dispose(self, session: "_BaseSession | None", keep_stream: bool = False) -> None:
         """End one caption session and wait for it to finish writing.
 
         Ending the queue (or closing the decoder, which ends it in turn) lets
@@ -846,6 +944,10 @@ class LiveCaptionManager:
         transcript is written. Cancelling outright can abort that mid-await and
         lose the lines — which, with final transcription off, is the table's
         only record. Cancellation is therefore the last resort, not the method.
+
+        keep_stream is set when a failed session is being REPLACED: the decoder
+        must outlive it (that is the whole reconnect fix), so its pump is
+        cancelled but ffmpeg is left running for the replacement to inherit.
         """
         if session is None:
             return
@@ -859,10 +961,18 @@ class LiveCaptionManager:
             lease, session.lease_provider = session.lease_provider, None
             stt_capacity.release(lease)
         try:
-            if session.pcm_stream is not None:
-                # closing ffmpeg's stdin flushes the tail; _pump_pcm then ends
-                # the queue on its way out
+            if session.pcm_stream is not None and not keep_stream:
+                # terminal: closing ffmpeg's stdin flushes the tail and ends the
+                # decoder, so _pump_pcm reads None and ends the queue on its way
+                # out. Drop it from the registry (same instance) and close it.
+                self._streams.pop(session.recording_id, None)
                 await session.pcm_stream.close()
+            elif session.pcm_stream is not None and keep_stream:
+                # rebuild: leave ffmpeg decoding, but detach THIS session's pump
+                # (it is parked on stream.read()); its finally ends the queue so
+                # run() returns and persists the first half of the transcript
+                if session.pump_task is not None and not session.pump_task.done():
+                    session.pump_task.cancel()
             else:
                 try:
                     session.queue.put_nowait(None)
@@ -925,6 +1035,12 @@ class LiveCaptionManager:
             )
             self._sessions.pop(recording_id, None)
             await self._dispose(session)
+        # decoders can now outlive their session; reap any left with no session
+        # and no recent audio (over-capacity, or a phone gone during cooldown)
+        for recording_id, stream in list(self._streams.items()):
+            if recording_id not in self._sessions and now - stream.last_fed > SESSION_IDLE_TIMEOUT:
+                log.info("live_stt_stream_reaped", recording_id=recording_id)
+                await self._close_stream(recording_id)
 
     async def reap_forever(self, stop_event: asyncio.Event) -> None:
         """Drive reap_idle on its own clock, not on other tables' traffic."""
@@ -946,6 +1062,8 @@ class LiveCaptionManager:
             self._sessions.pop(recording_id, None)
             await self._dispose(session)
         self._sessions.clear()
+        for recording_id in list(self._streams):
+            await self._close_stream(recording_id)
 
 
 LIVE_CAPTIONS = LiveCaptionManager()

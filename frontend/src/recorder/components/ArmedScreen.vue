@@ -32,6 +32,9 @@ const offline = ref(false)
 const plenary = props.session.assembly.recording_mode === 'plenary'
 const showAddDevice = ref(false)
 const reportAvailable = ref(false)
+// the organizer ended the assembly (perhaps mid-round): the phone must stop
+// advancing and offer the report rather than roll into the next round
+const assemblyClosed = ref(false)
 
 const { t } = useI18n()
 
@@ -60,10 +63,12 @@ async function poll(): Promise<void> {
 		const status = await recorderApi.status(props.session.session_token)
 		rounds.value = status.rounds
 		reportAvailable.value = status.report_available ?? false
+		assemblyClosed.value = status.assembly_closed ?? false
 		offline.value = false
 		const active = status.rounds.find((r) => r.status === 'ACTIVE' && !r.recorded_state)
 		blockedRound.value = active && active.id === props.blockedRoundId ? active : null
-		if (active && active.id !== props.blockedRoundId) emit('start', active)
+		// a closed assembly is over: never roll this table into another round
+		if (!assemblyClosed.value && active && active.id !== props.blockedRoundId) emit('start', active)
 	} catch {
 		offline.value = true
 	}
@@ -141,6 +146,19 @@ onBeforeUnmount(() => {
 					<p class="rc-muted" style="margin: 0">
 						{{ t('recorder.preflight.recordingElsewhere') }}
 					</p>
+				</div>
+			</template>
+
+			<!-- the organizer ended the assembly: stop here and offer the report
+			     (only-button, no auto-open) instead of waiting for a round that
+			     will never start -->
+			<template v-else-if="assemblyClosed">
+				<div class="rc-card rc-center">
+					<p class="rc-eyebrow">{{ t('recorder.assembly.overTitle') }}</p>
+					<p class="rc-muted" style="margin: 0">{{ t('recorder.assembly.overBody') }}</p>
+					<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
+						{{ t('recorder.armed.viewReport') }}
+					</button>
 				</div>
 			</template>
 

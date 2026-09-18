@@ -42,6 +42,7 @@ vi.mock('../../frontend/src/recorder/engine', () => ({
 			startedAt: 1,
 		}
 		resumeSync = vi.fn().mockResolvedValue(undefined)
+		stop = vi.fn()
 	},
 	pickMimeType: () => 'audio/webm',
 }))
@@ -85,11 +86,11 @@ beforeEach(() => downloadBlob.mockReset())
 
 describe('the recovered audio filename', () => {
 	it('names the table the audio was recorded at, not the one in use now', async () => {
-		expect(await save(recording({ tableNumber: 3 }))).toBe('citizens-table-3-recovered.webm')
+		expect(await save(recording({ tableNumber: 3 }))).toBe('citizens-table-3-rec-1-recovered.webm')
 	})
 
-	it('falls back to the session for audio stored before the field was written', async () => {
+	it('does not guess the table for audio stored before the field was written', async () => {
 		// records written by an older build all carry 0
-		expect(await save(recording({ tableNumber: 0 }))).toBe('citizens-table-7-recovered.webm')
+		expect(await save(recording({ tableNumber: 0 }))).toBe('citizens-table-—-rec-1-recovered.webm')
 	})
 })

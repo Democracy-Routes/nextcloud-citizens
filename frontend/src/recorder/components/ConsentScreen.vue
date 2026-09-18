@@ -62,7 +62,7 @@ const retention = computed(() => {
 		<div v-if="declined" class="rc-pad">
 			<h1>{{ t('recorder.consent.declinedTitle') }}</h1>
 			<p class="rc-lead">{{ t('recorder.consent.declinedBody') }}</p>
-			<button class="rc-btn rc-btn--block" @click="declined = false">
+			<button class="rc-btn" @click="declined = false">
 				{{ t('recorder.consent.declinedBack') }}
 			</button>
 		</div>
@@ -82,10 +82,10 @@ const retention = computed(() => {
 
 			<p class="rc-muted rc-consent__ask">{{ t('recorder.consent.ask') }}</p>
 
-			<button class="rc-btn rc-btn--primary rc-btn--block" @click="emit('accept')">
+			<button class="rc-btn rc-primary" @click="emit('accept')">
 				{{ t('recorder.consent.agree') }}
 			</button>
-			<button class="rc-btn rc-btn--block rc-subtle" @click="declined = true">
+			<button class="rc-btn rc-subtle" @click="declined = true">
 				{{ t('recorder.consent.decline') }}
 			</button>
 		</div>
@@ -93,6 +93,17 @@ const retention = computed(() => {
 </template>
 
 <style scoped>
+/* the two class names this screen has always referenced but that never
+   existed anywhere, so the consent copy rendered with no lead emphasis and no
+   breathing room */
+.rc-pad {
+	padding: 6px 2px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.rc-lead {
+	font-size: 1.02rem;
+	line-height: 1.5;
+	margin: 8px 0 0;
+}
 .rc-consent {
 	margin: 18px 0 0;
 	padding-left: 20px;

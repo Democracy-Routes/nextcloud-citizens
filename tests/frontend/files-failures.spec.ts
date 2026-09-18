@@ -163,7 +163,7 @@ describe('the device-audio purge line', () => {
 		const wrapper = mountWithI18n(FilesTab, { props: { assembly: CLOSED } })
 		await flushPromises()
 
-		expect(wrapper.text()).not.toContain('reported clearing their copy')
+		expect(wrapper.text()).not.toContain('last reported no local recordings')
 	})
 
 	it('shows coverage once a purge has been requested', async () => {
@@ -174,5 +174,9 @@ describe('the device-audio purge line', () => {
 		await flushPromises()
 
 		expect(wrapper.text()).toContain('6 of 8')
+		expect(wrapper.text()).toContain('recorder sessions last reported no local recordings')
+		expect(wrapper.text()).toContain('2 still hold audio')
+		expect(wrapper.text()).toContain('same phone more than once')
+		expect(wrapper.text()).toContain('expired or revoked sessions may need manual cleanup')
 	})
 })

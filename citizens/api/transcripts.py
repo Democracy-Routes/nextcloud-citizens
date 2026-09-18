@@ -76,5 +76,6 @@ def request_transcription(recording_id: str, user: CurrentUser, session: DB):
     # itself only knows how to start from there
     if recording.state in ("READY_FOR_REVIEW", "REVIEWED", "ANALYSIS_FAILED"):
         transition(recording, "AUDIO_READY")
+    recording.transcript_deleted_at = None
     enqueue_job(session, "TRANSCRIBE_FINAL", {"recording_id": recording.id, "force": True})
     return {"queued": True, "state": recording.state}

@@ -9,15 +9,19 @@ missing duration) without re-encoding.
 
 import hashlib
 import json
+import os
 import subprocess
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
 from citizens.db.models import Recording
+from citizens.db.models.recording import AudioPart
 from citizens.logging_setup import get_logger
 from citizens.services.recording import missing_sequences
 from citizens.services.recording_states import transition
+from citizens.storage.durable import sync_directory
 from citizens.storage.paths import assembled_dir, recording_dir, temp_dir
 from citizens.storage.space import has_room_for
 
@@ -102,7 +106,7 @@ def assemble_recording(session: Session, recording: Recording) -> list | None:
     with open(raw_path, "wb") as raw:
         for chunk in chunks:
             try:
-                data = (root / chunk.path).read_bytes()
+                source = open(root / chunk.path, "rb")
             except FileNotFoundError as exc:
                 # Not a transient fault: the bytes are gone, so retrying can
                 # only fail the same way five times and then strand the
@@ -112,13 +116,19 @@ def assemble_recording(session: Session, recording: Recording) -> list | None:
                     "CHUNKS_GONE",
                     f"Chunk {chunk.sequence_number} is missing from storage",
                 ) from exc
-            if hashlib.sha256(data).hexdigest() != chunk.sha256:
+            chunk_digest = hashlib.sha256()
+            with source:
+                while data := source.read(1024 * 1024):
+                    raw.write(data)
+                    digest.update(data)
+                    chunk_digest.update(data)
+            if chunk_digest.hexdigest() != chunk.sha256:
                 raw_path.unlink(missing_ok=True)
                 raise AudioAssemblyError(
                     "CHUNK_CORRUPTED", f"Chunk {chunk.sequence_number} failed checksum on disk"
                 )
-            raw.write(data)
-            digest.update(data)
+        raw.flush()
+        os.fsync(raw.fileno())
 
     try:
         probe = _ffprobe(raw_path)
@@ -131,7 +141,15 @@ def assemble_recording(session: Session, recording: Recording) -> list | None:
 
     recording.canonical_audio_path = str(canonical.relative_to(root))
     recording.duration_seconds = final_probe.get("duration") or probe.get("duration")
-    recording.sha256 = hashlib.sha256(canonical.read_bytes()).hexdigest()
+    with canonical.open("rb") as audio:
+        recording.sha256 = hashlib.file_digest(audio, "sha256").hexdigest()
+        os.fsync(audio.fileno())
+    sync_directory(canonical.parent)
+    manifest = hashlib.sha256()
+    for chunk in chunks:
+        manifest.update(f"{chunk.sequence_number}:{chunk.size_bytes}:{chunk.sha256}\n".encode())
+    recording.audio_manifest_sha256 = manifest.hexdigest()
+    recording.audio_manifest_bytes = sum(chunk.size_bytes for chunk in chunks)
     recording.error_code = ""
     transition(recording, "AUDIO_READY")
     log.info(
@@ -194,6 +212,11 @@ def _discard_chunks(session: Session, root, directory, recording: Recording, chu
         live = session.get(type(chunk), chunk.id)
         if live is not None:
             session.delete(live)
+        for part in session.scalars(select(AudioPart).where(
+            AudioPart.recording_id == recording.id, AudioPart.sequence_number == chunk.sequence_number
+        )):
+            (root / part.path).unlink(missing_ok=True)
+            session.delete(part)
     chunks_dir = directory / "chunks"
     if chunks_dir.is_dir():
         try:

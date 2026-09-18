@@ -21,9 +21,8 @@ Testing is part of implementation, not a final phase (brief §55).
 5. **Manual gates**: real-phone recording tests over HTTPS (Milestones 2–3,
    brief §66) and the physical multi-phone room test before release (§57).
 
-Roughly: 375 Python tests, 205 frontend tests, 5 browser tests. The first two
-gate every commit and take about thirteen minutes together; the browser suite
-is another seven and runs before a release.
+The Python and frontend suites gate changes; browser scenarios run before a
+release. Counts and timings change as coverage grows; use the runner summaries.
 
 ## Running
 
@@ -97,6 +96,21 @@ a fake microphone on this host — the Playwright config uses **Firefox** with
 `media.navigator.streams.fake`. The recorder accepts `?chunkms=2000` to speed
 up chunking in tests.
 
+Recording safety regression scenarios:
+
+```bash
+cd frontend
+npx playwright test offline.spec.ts recording-safety.spec.ts device-purge.spec.ts
+```
+
+Run these only against the throwaway instance above. `recording-safety.spec.ts`
+deliberately restarts `citizens-browser-test` to verify persisted upload receipts.
+It also verifies recovery after session revocation and simultaneous recordings
+at two tables. The API suite reconstructs a real WebM chunk larger than 5 MiB;
+frontend tests reject mismatched manifests, missing audio and unverified legacy
+completion flags. See [recording reliability](recording-reliability.md) for the
+remaining real-device and deployment checks.
+
 Test F (10 concurrent devices):
 
 ```bash
@@ -104,6 +118,37 @@ sh scripts/browser-test-env.sh start
 python3 tests/load/test_f_concurrent_devices.py   # prints PASS/FAIL
 sh scripts/browser-test-env.sh stop
 ```
+
+Test H (a real half-hour assembly — 10 devices, real speech, real Mistral):
+
+```bash
+docker update --memory 2g --memory-swap 2g nc_app_citizens   # see below
+python3 tests/load/load_h_realtime_assembly.py --smoke       # 1 device, ~1 min
+python3 tests/load/load_h_realtime_assembly.py --yes         # ~45 min
+```
+
+Unlike F and G this one runs against the **live** instance and spends real
+money: it replays half-hour recordings from `/data/assembled` (real speech, the
+phones' own WebM/Opus) at wall-clock speed, so a run bills Mistral for ~300
+minutes of live captions plus ~300 of batch transcription, plus the analysis
+calls. `--yes` is required; run `--smoke` first, which proves the key and the
+whole path for pennies. It leaves a `TEST Carico …` assembly behind on purpose
+and prints the command to delete it.
+
+Measured on the first full run (2026-09-08, 10 devices × 30 min):
+
+- 1803 chunks uploaded, **zero failures**; chunk ack median 1.8 s, p95 13 s —
+  an order of magnitude slower than test G, which uploads a tone with captions
+  off, so the cost is in the live-caption path competing for the event loop.
+- Peak container memory **368 MiB while recording, 465 MiB while transcribing**
+  (batch transcription reads the whole file into memory). **512 MB is not
+  enough for ten tables** — keep the live container at 1 GB or more.
+- Mistral returned **429 on 4 of 10** batch transcriptions; all succeeded on
+  retry. Live caption sessions failed and cooled down repeatedly under this
+  load: only ~62% of caption polls carried text, one device managed 11%.
+- Batch diarization reported 3-26 "voices" per table, which is more than any
+  table held — speaking balance is honest about being an estimate, but do not
+  read those counts as a headcount.
 
 Provider tests that hit real APIs are opt-in only, gated on
 `MISTRAL_API_KEY` / `DEEPGRAM_API_KEY` environment variables (Milestone 4+).

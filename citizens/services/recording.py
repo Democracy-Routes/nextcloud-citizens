@@ -3,6 +3,7 @@
 """Recorder sessions, recordings and chunk intake (brief §14, §17, §23)."""
 
 import hashlib
+import json
 from datetime import timedelta
 
 from fastapi import HTTPException
@@ -12,13 +13,14 @@ from sqlalchemy.orm import Session
 from citizens.config import get_settings
 from citizens.db.models import RecorderSession, Recording, Round, Table
 from citizens.db.models.base import utcnow
-from citizens.db.models.recording import AudioChunk
+from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
 from citizens.security.recorder_tokens import generate_token, hash_token
 from citizens.services import invites as invite_svc
 from citizens.services import provider_config
 from citizens.services.jobs import enqueue_job
 from citizens.services.recording_states import transition
+from citizens.storage.durable import write_audio
 from citizens.storage.paths import chunk_path, recording_dir
 from citizens.storage.space import require_room
 
@@ -347,6 +349,8 @@ def receive_chunk(
     data: bytes,
 ) -> dict:
     """Store one chunk. Idempotent on (recording, sequence, sha256)."""
+    if recording.audio_deleted_at is not None:
+        raise HTTPException(409, "Recording audio was deleted; keep the local copy")
     if recording.state == "UPLOAD_INCOMPLETE":
         # we had given up on this table, and the phone came back — the whole
         # point of giving up being reversible
@@ -374,6 +378,17 @@ def receive_chunk(
             # duplicate upload of the identical chunk: idempotent ACK
             return {"acknowledged": True, "duplicate": True, "sequence_number": sequence_number}
         raise HTTPException(status_code=409, detail="Sequence already stored with different content")
+    parts = session.execute(
+        select(AudioPart).where(
+            AudioPart.recording_id == recording.id,
+            AudioPart.sequence_number == sequence_number,
+        ).limit(1)
+    ).scalars().first()
+    if parts is not None and parts.chunk_sha256 != actual:
+        # the parts route and this one store the SAME sequence; a conflicting
+        # upload here would leave a chunk and parts describing different bytes
+        # (see multipart_audio.receive_part for the mirrored check)
+        raise HTTPException(status_code=409, detail="Sequence already stored with different content")
 
     root = get_settings().app_persistent_storage
     require_room(root, len(data), context="chunk_upload")
@@ -381,8 +396,7 @@ def receive_chunk(
         root, recording.assembly_id, recording.round_id, recording.table_id, recording.id
     )
     target = chunk_path(directory, sequence_number)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
+    write_audio(target, data)
 
     session.add(
         AudioChunk(
@@ -467,6 +481,26 @@ def complete_recording(session: Session, recording: Recording, total_chunks: int
 
 
 def recording_status(session: Session, recording: Recording) -> dict:
+    root = get_settings().app_persistent_storage
+    available = recording.audio_deleted_at is None and bool(recording.canonical_audio_path) \
+        and (root / recording.canonical_audio_path).is_file()
+    manifest_hash = recording.audio_manifest_sha256
+    manifest_bytes = recording.audio_manifest_bytes
+    if available and not manifest_hash:
+        # Older assembled recordings already have a checksummed source manifest.
+        path = recording_dir(root, recording.assembly_id, recording.round_id,
+                             recording.table_id, recording.id) / "manifest.json"
+        try:
+            chunks = json.loads(path.read_text())["chunks"]
+            if len(chunks) == recording.total_chunks and all(
+                c["sequence"] == i for i, c in enumerate(chunks)
+            ):
+                manifest_hash = hashlib.sha256("".join(
+                    f"{c['sequence']}:{c['size']}:{c['sha256']}\n" for c in chunks
+                ).encode()).hexdigest()
+                manifest_bytes = sum(c["size"] for c in chunks)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # missing verification is never interpreted as success
     return {
         "recording_id": recording.id,
         "state": recording.state,
@@ -477,4 +511,7 @@ def recording_status(session: Session, recording: Recording) -> dict:
         else [],
         "error_code": recording.error_code,
         "duration_seconds": recording.duration_seconds,
+        "audio_manifest_sha256": manifest_hash,
+        "audio_manifest_bytes": manifest_bytes,
+        "audio_available": available,
     }

@@ -31,16 +31,18 @@ vi.mock('../../frontend/src/recorder/api', () => ({
 const putRecording = vi.fn().mockResolvedValue(undefined)
 // a real stored recording, so markServerComplete has something to mark — with
 // an empty list the assertion below would pass no matter what the code does
-const storedRecording = { recordingId: 'rec-1', serverComplete: false }
+const storedRecording = { recordingId: 'rec-1', serverComplete: false, totalChunks: 1 }
+const proof = { total_chunks: 1, audio_available: true, audio_manifest_sha256: 'manifest', audio_manifest_bytes: 5 }
 vi.mock('../../frontend/src/recorder/idb', () => ({
 	idb: {
 		getRecordings: vi.fn(async () => [storedRecording]),
+		chunksFor: vi.fn(async () => [{ seq: 0, sizeBytes: 5, sha256: 'chunk' }]),
 		putRecording: (...args: unknown[]) => putRecording(...args),
 	},
 }))
 
 vi.mock('../../frontend/src/recorder/logger', () => ({ clientLog: vi.fn() }))
-vi.mock('../../frontend/src/recorder/sha', () => ({ sha256Hex: vi.fn() }))
+vi.mock('../../frontend/src/recorder/sha', () => ({ sha256Hex: vi.fn(async () => 'manifest') }))
 
 const { RecorderEngine } = await import('../../frontend/src/recorder/engine')
 
@@ -82,7 +84,7 @@ describe('when the server never confirms the assembled audio', () => {
 	})
 
 	it('still reports done when the server does confirm', async () => {
-		recordingStatus.mockResolvedValue({ state: 'AUDIO_READY', error_code: '' })
+		recordingStatus.mockResolvedValue({ state: 'AUDIO_READY', error_code: '', ...proof })
 		const engine = new RecorderEngine()
 		engine.state.recordingId = 'rec-1'
 
@@ -98,7 +100,7 @@ describe('when the server never confirms the assembled audio', () => {
 		await runPollLoop(engine)
 		expect(engine.state.phase).toBe('uploaded')
 
-		recordingStatus.mockResolvedValue({ state: 'TRANSCRIBED', error_code: '' })
+		recordingStatus.mockResolvedValue({ state: 'TRANSCRIBED', error_code: '', ...proof })
 		await engine.recheckServerState()
 
 		expect(engine.state.phase).toBe('done')

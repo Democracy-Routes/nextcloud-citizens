@@ -133,7 +133,7 @@ def start(data: StartIn, recorder_session: RecorderSess, session: DB):
     return {"recording_id": recording.id, "state": recording.state}
 
 
-async def _read_capped_body(request: Request) -> bytes:
+async def _read_capped_body(request: Request, limit: int = MAX_CHUNK_BYTES) -> bytes:
     """Read the request body, refusing anything over one chunk's worth.
 
     Content-Length is the normal path — the recorder always sets it, so an
@@ -142,12 +142,12 @@ async def _read_capped_body(request: Request) -> bytes:
     as the accumulated body passes the limit rather than at the end.
     """
     declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > MAX_CHUNK_BYTES:
+    if declared.isdigit() and int(declared) > limit:
         raise HTTPException(status_code=413, detail="Chunk too large")
     buffer = bytearray()
     async for part in request.stream():
         buffer.extend(part)
-        if len(buffer) > MAX_CHUNK_BYTES:
+        if len(buffer) > limit:
             raise HTTPException(status_code=413, detail="Chunk too large")
     return bytes(buffer)
 
@@ -198,6 +198,7 @@ async def upload_chunk(
         if not outcome.get("duplicate"):
             assembly = session.get(Assembly, recording.assembly_id)
             language = assembly.language if assembly else ""
+        session.commit()  # durable receipt before an acknowledgement can leave the server
         return outcome, recording.id, language, stt, recording.assembly_id
 
     result, recording_id_out, language, stt, assembly_id = await run_in_threadpool(_persist)
@@ -206,6 +207,73 @@ async def upload_chunk(
         # never affect the recording (brief §51)
         LIVE_CAPTIONS.feed(recording_id_out, body, stt, language, assembly_id)
     return result
+
+
+@router.get("/recorder/recordings/{recording_id}/chunks/{sequence_number}/parts")
+def uploaded_parts(recording_id: str, sequence_number: int, recorder_session: ReadingSess, session: ReadDB):
+    from citizens.services.multipart_audio import part_status
+
+    recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    return part_status(session, recording, sequence_number)
+
+
+@router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/parts/{part_number}")
+async def upload_part(
+    recording_id: str, sequence_number: int, part_number: int, request: Request, session: DB,
+    authorization: Annotated[str, Header()] = "",
+    x_chunk_sha256: Annotated[str, Header()] = "",
+    x_part_sha256: Annotated[str, Header()] = "",
+    x_total_bytes: Annotated[int, Header()] = 0,
+):
+    import re
+
+    from citizens.services import multipart_audio
+
+    max_parts = -(-multipart_audio.MAX_DECLARED_CHUNK_BYTES // multipart_audio.PART_BYTES)
+    if (not 0 <= sequence_number <= 100000 or not 0 <= part_number < max_parts
+            or not 0 < x_total_bytes <= multipart_audio.MAX_DECLARED_CHUNK_BYTES):
+        raise HTTPException(422, "Invalid part metadata")
+    if not all(re.fullmatch("[a-f0-9]{64}", value) for value in (x_chunk_sha256, x_part_sha256)):
+        raise HTTPException(422, "Invalid checksum")
+    body = await _read_capped_body(request, multipart_audio.PART_BYTES)
+
+    def persist() -> tuple[dict, str, str]:
+        stt = live_stt_snapshot()
+        recorder_session = _session_from_authorization(session, authorization)
+        recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+        result = multipart_audio.receive_part(session, recording, sequence_number, part_number,
+                                              x_total_bytes, x_chunk_sha256, x_part_sha256, body)
+        assembly = session.get(Assembly, recording.assembly_id)
+        language = assembly.language if assembly else ""
+        return result, recording.assembly_id, language, stt
+
+    result, assembly_id, language, stt = await run_in_threadpool(persist)
+    # Live captions feed on chunk order. The plain route feeds upload_chunk as
+    # the chunk arrives; a chunk big enough to go through parts never reached
+    # the caption session until finalize — so a phone whose chunks all exceed
+    # the plain cap produced NO live captions for the round, and with batch
+    # transcription off its transcript of record depended on a finalize burst
+    # racing /complete. Parts of one MediaRecorder chunk arrive in sequence
+    # order from the phone, so feeding each as it lands keeps captions
+    # real-time. Only a part not seen before: a retry (a lost ack, or the
+    # client's force-resend after a finalize conflict) stores idempotently on
+    # disk but would push the same audio into the caption stream a second
+    # time — mid-stream, which the decoder cannot tell from new speech.
+    if not result.get("duplicate"):
+        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id)
+    return result
+
+
+@router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/finalize")
+def finalize_uploaded_chunk(
+    recording_id: str, sequence_number: int, recorder_session: RecorderSess, session: DB
+):
+    from citizens.services.multipart_audio import finalize_chunk
+
+    recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    # Live captions were fed as each part landed (upload_part) — reading the
+    # assembled chunk back here would feed every byte a second time.
+    return finalize_chunk(session, recording, sequence_number)
 
 
 class CompleteIn(BaseModel):
@@ -397,6 +465,11 @@ def _assembly_state(
         },
         # phones learn about report availability through the status poll
         "report_available": _report_available(session, assembly, analysis_enabled),
+        # the assembly is over: the organizer closed it (possibly mid-round).
+        # Without this the phone reads only the round rows, where a NOT_STARTED
+        # round 2 is indistinguishable from "round 2 is coming", so it advanced
+        # into it instead of stopping. Rides the same poll as purge_local_audio.
+        "assembly_closed": assembly.closed_at is not None,
         # what the table is told before recording starts (brief §43): engine
         # name, whether it is a hosted service, and how long audio is kept
         "data_handling": {

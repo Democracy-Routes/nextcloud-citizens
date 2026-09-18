@@ -18,6 +18,11 @@ STALE_HEARTBEAT_SECONDS = 45
 
 
 def start_round(session: Session, round_: Round) -> Round:
+    # A closed assembly is over: starting another round on it is what let a
+    # facilitator who ended things early accidentally push every phone into
+    # round 2. Reopen first if the assembly is genuinely resuming.
+    if round_.assembly.closed_at is not None:
+        raise HTTPException(status_code=409, detail="This assembly has been closed")
     if round_.status not in ("NOT_STARTED", "ENDED"):
         raise HTTPException(status_code=409, detail=f"Round is {round_.status}")
     other_active = [

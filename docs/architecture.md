@@ -96,7 +96,12 @@ MediaRecorder (~10 s timeslices)
        └► uploader: sequential, exp.         X-Chunk-SHA256 verified,
           backoff, online-event kick,        idempotent on rec+seq+hash)
           manual retry                          └► AudioChunk row + file
+  └► oversized on 413 ──► POST parts/  (1 MiB slices, same sequence/cross-
+     checked against any plain chunk of it; each part feeds live captions
+     as it lands, a retried part never twice) ──► finalize assembles
 finish → complete(total)              ──►  gap check → resend missing → job
+       409 while ASSEMBLING = the server already has it: poll to AUDIO_READY
+       and verify the manifest, never re-POST a deterministic refusal
                                             ASSEMBLE_AUDIO: concat → ffprobe
                                             → ffmpeg remux → sha256 →
                                             AUDIO_READY (state machine §24)
@@ -235,12 +240,20 @@ assembly sets `device_audio_purge_requested_at` — automatically when
 audio from the table phones**. The server cannot push, so the flag rides the
 status poll every recorder already makes.
 
-**Reopening clears the flag.** The phone-facing value is a bare "has this been
-asked for" and is never re-checked against `closed_at`, so a request left
-standing through a reopen would tell every phone in the reopened assembly to
-delete — clearing each *new* recording the moment it reached `AUDIO_READY`,
-mid-round. That was survivable while purging was a button somebody pressed; it
-is not, now that closing asks by itself.
+**Reopening withdraws the automatic request.** The phone-facing value is a
+bare "has this been asked for" and is never re-checked against `closed_at`,
+so a request left standing through a reopen would tell every phone in the
+reopened assembly to delete — clearing each *new* recording the moment it
+reached `AUDIO_READY`, mid-round. `purge_requested_automatically`
+(migration 0021) records *who* asked: reopening withdraws the request only
+when the close made it, and it does so independently of the
+`auto_purge_device_audio` toggle's current value — flipping the toggle off
+between close and reopen must not leave a delete request standing over an
+assembly whose organizer just said to keep the local copies. A request the
+organizer sent by hand from the Files tab stands until the phones have
+answered it. Requests that predate the column are backfilled as automatic:
+the migration cannot know who asked, and a request that stands too long
+deletes audio, while one withdrawn too early is at worst re-sent.
 
 The guarantee is one-directional and deliberate: a phone deletes only audio the
 server has already confirmed. Anything unconfirmed is kept and the phone says

@@ -20,6 +20,10 @@ from citizens.services.assemblies import get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job
 from citizens.services.report import _cross_table_evidence
+from citizens.services.round_analysis import (
+    bump_round_inputs,
+    enqueue_round_analysis_if_stale,
+)
 from citizens.services.speaking import round_speaking_balance
 
 router = APIRouter()
@@ -139,6 +143,7 @@ def update_finding(finding_id: str, data: FindingUpdate, user: CurrentUser, sess
         raise HTTPException(status_code=404, detail="Finding not found")
     get_owned_round(session, finding.round_id, user)
 
+    was_rejected = finding.status == "REJECTED"
     edited = False
     if data.title is not None and data.title != finding.title:
         finding.title = data.title
@@ -160,6 +165,15 @@ def update_finding(finding_id: str, data: FindingUpdate, user: CurrentUser, sess
         session, "finding_reviewed", "finding", finding.id, actor=user,
         data={"status": finding.status, "edited": edited},
     )
+    # The cross-table clusters were built from the findings as they were.
+    # Rejecting (or un-rejecting) changes what the clustering reads, and an
+    # edit changes the text it reads — so it must run again from the newest
+    # inputs. Plain approval changes nothing it would see; see
+    # services/round_analysis. Before this, no review of any kind re-clustered:
+    # the report's cross-table section went stale silently.
+    if edited or (finding.status == "REJECTED") != was_rejected:
+        bump_round_inputs(session, finding.round_id)
+        enqueue_round_analysis_if_stale(session, finding.round_id)
     return _finding_payload(session, finding, {})
 
 

@@ -41,6 +41,9 @@ export interface StoredRecording {
 	finishedAt: number | null
 	totalChunks: number | null
 	serverComplete: boolean
+	/** Version 1 proves that every locally captured byte matched the server manifest. */
+	verificationVersion?: number
+	captureIncomplete?: boolean
 }
 
 export interface StoredChunk {
@@ -75,7 +78,10 @@ function openDb(): Promise<IDBDatabase> {
 				}
 			}
 			request.onsuccess = () => resolve(request.result)
-			request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'))
+			request.onerror = () => {
+				dbPromise = null // a transient open failure must not poison manual recovery
+				reject(request.error ?? new Error('IndexedDB open failed'))
+			}
 		})
 	}
 	return dbPromise
@@ -89,7 +95,7 @@ function tx<T>(
 	return openDb().then(
 		(db) =>
 			new Promise<T>((resolve, reject) => {
-				const transaction = db.transaction(storeName, mode)
+				const transaction = db.transaction(storeName, mode, { durability: 'strict' })
 				const request = run(transaction.objectStore(storeName))
 				request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'))
 				if (mode === 'readwrite') {
@@ -169,14 +175,14 @@ export const idb = {
 	 * reads storage — putting it there would make engine and purge import each
 	 * other.
 	 */
-	async countFor(assemblyId?: string): Promise<number> {
+	async countFor(assemblyId?: string): Promise<number | undefined> {
 		try {
 			const all = await this.getRecordings()
 			return all.filter(
 				(r) => r.recordingId !== '__selftest__' && belongsTo(r, assemblyId),
 			).length
 		} catch {
-			return 0
+			return undefined // unreadable is not an empty phone
 		}
 	},
 
@@ -196,7 +202,9 @@ export const idb = {
 		const all = await this.getRecordings()
 		return all.filter(
 			(r) =>
-				r.recordingId !== '__selftest__' && !r.serverComplete && belongsTo(r, assemblyId),
+				r.recordingId !== '__selftest__'
+				&& (!r.serverComplete || r.verificationVersion !== 1 || r.captureIncomplete)
+				&& belongsTo(r, assemblyId),
 		)
 	},
 }

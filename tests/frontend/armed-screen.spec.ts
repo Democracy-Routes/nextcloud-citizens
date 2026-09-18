@@ -86,3 +86,35 @@ describe('ArmedScreen auto-start', () => {
 		expect(wrapper.emitted('start')?.[0]).toEqual([other])
 	})
 })
+
+describe('ArmedScreen when the assembly is closed', () => {
+	it('does not auto-start a round once the assembly is over', async () => {
+		// the early-end bug: an ACTIVE round arrives, but the assembly is closed,
+		// so the phone must stop rather than roll into it
+		status.mockResolvedValue({
+			rounds: [ACTIVE_ROUND],
+			report_available: false,
+			assembly_closed: true,
+		})
+		const wrapper = mountWithI18n(ArmedScreen, { props: { session: SESSION } })
+		await flushPromises()
+
+		expect(wrapper.emitted('start')).toBeFalsy()
+		expect(wrapper.text()).toContain('assembly has ended')
+	})
+
+	it('offers the report button when one is published', async () => {
+		status.mockResolvedValue({
+			rounds: [ACTIVE_ROUND],
+			report_available: true,
+			assembly_closed: true,
+		})
+		const wrapper = mountWithI18n(ArmedScreen, { props: { session: SESSION } })
+		await flushPromises()
+
+		const report = wrapper.findAll('button').find((b) => b.text().includes('report'))
+		expect(report).toBeTruthy()
+		await report!.trigger('click')
+		expect(wrapper.emitted('report')).toBeTruthy()
+	})
+})

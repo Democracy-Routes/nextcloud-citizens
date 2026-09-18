@@ -214,6 +214,10 @@
 	flex: 1 1 auto;
 	min-width: 0;
 	overflow-y: auto;
+	/* with overflow-y auto the x axis computes to auto too, so any wide widget
+	   used to scroll the ENTIRE page sideways — heading and mobile bar included.
+	   Pin x; the wide widgets (tables, countbar) scroll inside their own box. */
+	overflow-x: hidden;
 	padding: 24px clamp(16px, 3.5vw, 40px) 60px;
 }
 
@@ -472,6 +476,7 @@
 	color: var(--cz-text);
 	font-size: 14px;
 	max-width: 100%;
+	min-width: 0;
 	font-family: inherit;
 }
 
@@ -495,7 +500,7 @@
 
 #citizens-app .cz-fieldgrid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 	gap: 0 18px;
 }
 
@@ -596,6 +601,11 @@
 	padding: 22px 24px;
 	max-width: 420px;
 	width: calc(100% - 40px);
+	/* the app shell is overflow:hidden, so a tall confirm body (or a phone in
+	   landscape, or with the keyboard up) used to push the confirm button off
+	   both ends of the screen with no way to reach it */
+	max-height: calc(100dvh - 32px);
+	overflow-y: auto;
 }
 
 #citizens-app .cz-modal__head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -804,6 +814,7 @@
 #citizens-app .cz-countbar {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 16px;
 	border: 1px solid var(--cz-border);
 	border-radius: var(--cz-radius-lg);
@@ -864,6 +875,27 @@
 
 	#citizens-app .cz-content { padding: 14px 14px 50px; }
 	#citizens-app h2 { font-size: 20px; }
+	/* the "Assemblies" drawer button lives inside the scrolling content; pin it
+	   so it does not scroll out of reach on a long page */
+	#citizens-app .cz-mobilebar {
+		position: sticky;
+		top: 0;
+		z-index: 3;
+		background: var(--cz-bg);
+		padding-bottom: 8px;
+	}
+	/* dense tables scroll sideways in their own box instead of stretching the page */
+	#citizens-app table.cz-table {
+		display: block;
+		max-width: 100%;
+		overflow-x: auto;
+		white-space: nowrap;
+	}
+	/* on one column, an inline "grid-column: span 2" forges a second implicit
+	   column that widens the grid past its container — pin such items to the
+	   single full-width track instead */
+	#citizens-app .cz-fieldgrid { grid-template-columns: 1fr; }
+	#citizens-app .cz-fieldgrid > [style*="grid-column"] { grid-column: 1 / -1 !important; }
 	#citizens-app .cz-scrim {
 		position: absolute;
 		inset: 0;

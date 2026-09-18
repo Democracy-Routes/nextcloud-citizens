@@ -247,6 +247,9 @@ const liveRounds = computed(() => monitor.value?.rounds ?? props.assembly.rounds
 
 const nextUp = computed(() => {
 	if (!monitor.value) return null
+	// a closed assembly is over: offering "Start Round N" here is what pushed
+	// every phone into the next round after the organizer ended things early
+	if (props.assembly.closed_at) return null
 	if (!['ENDED', 'PROCESSING', 'READY_FOR_REVIEW'].includes(monitor.value.status)) return null
 	const rounds = liveRounds.value
 	const index = rounds.findIndex((r) => r.id === roundId.value)

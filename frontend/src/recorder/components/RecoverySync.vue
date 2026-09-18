@@ -1,20 +1,24 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JoinResult } from '../api'
 import { RecorderEngine } from '../engine'
 import { downloadBlob } from '../../download'
 import { idb, type StoredRecording } from '../idb'
 
-const props = defineProps<{ session: JoinResult; recording: StoredRecording }>()
+const props = defineProps<{ session: JoinResult | null; recording: StoredRecording }>()
 const emit = defineEmits<{ done: [] }>()
 
 const { t } = useI18n()
 
 const engine = new RecorderEngine()
 const state = engine.state
+const canSync = computed(() => !!props.session
+	&& props.recording.assemblyId === props.session.assembly.id
+	&& props.recording.tableNumber === props.session.table_number)
+const table = computed(() => props.recording.tableNumber || '—')
 
 const pending = computed(() => state.localChunks - state.ackedChunks)
 const rechecking = ref(false)
@@ -32,7 +36,14 @@ const downloadNote = ref('')
 
 onMounted(async () => {
 	try {
-		await engine.resumeSync(props.session.session_token, props.recording)
+		if (canSync.value && props.session) {
+			await engine.resumeSync(props.session.session_token, props.recording)
+		} else {
+			const chunks = await idb.chunksFor(props.recording.recordingId)
+			state.localChunks = chunks.length
+			state.ackedChunks = chunks.filter((c) => c.acked).length
+			state.phase = 'failed'
+		}
 	} catch (error) {
 		// an un-awaited rejection here left the phase at 'idle', which the
 		// template had no branch for: a header, a chunk count, and no buttons
@@ -41,6 +52,7 @@ onMounted(async () => {
 		state.error = error instanceof Error ? error.message : String(error)
 	}
 })
+onBeforeUnmount(() => engine.stop())
 
 // the server definitively lost this recording (deleted assembly / reset):
 // the audio still exists locally — let people save it to the phone…
@@ -50,17 +62,15 @@ async function downloadAudio(): Promise<void> {
 	const mime = props.recording.mimeType || 'audio/webm'
 	const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
 	const blob = new Blob(chunks.map((c) => c.blob), { type: mime.split(';')[0] })
-	// the recording's own table, falling back to the current session for audio
-	// stored before that was written. A phone handed to another table would
-	// otherwise name this after the table it is sitting at now, not the one it
-	// recorded — which is exactly the situation device replacement creates.
-	const table = props.recording.tableNumber || props.session.table_number
-	downloadBlob(blob, `citizens-table-${table}-recovered.${ext}`)
-	downloadNote.value = 'Audio file saved to this phone’s downloads.'
+	// Never guess ownership from the current session. Include the recording id
+	// so downloading two rounds does not give them indistinguishable names.
+	downloadBlob(blob, `citizens-table-${table.value}-${props.recording.recordingId}-recovered.${ext}`)
+	downloadNote.value = t('recorder.recovery.downloadStarted')
 }
 
 // …and delete the local copy only behind an explicit confirmation
 async function deleteLocal(): Promise<void> {
+	engine.stop()
 	await idb.deleteChunksFor(props.recording.recordingId)
 	await idb.deleteRecording(props.recording.recordingId)
 	emit('done')
@@ -70,7 +80,7 @@ async function deleteLocal(): Promise<void> {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">TABLE {{ session.table_number }}</span>
+			<span class="rc-table-badge">TABLE {{ table }}</span>
 		</div>
 
 		<div class="rc-scroll">
@@ -116,9 +126,9 @@ async function deleteLocal(): Promise<void> {
 		</template>
 
 		<template v-else-if="state.phase === 'failed'">
-			<template v-if="state.errorKind === 'gone'">
+			<template v-if="!canSync || state.errorKind === 'gone'">
 				<div class="rc-alert">
-					{{ t('recorder.recovery.gone') }}
+					{{ t('recorder.recovery.sessionNeeded') }}
 				</div>
 				<p v-if="downloadNote" class="rc-note">{{ downloadNote }}</p>
 				<button class="rc-btn rc-primary" @click="downloadAudio">{{ t('recorder.recovery.download') }}</button>
@@ -137,9 +147,16 @@ async function deleteLocal(): Promise<void> {
 					{{ t('recorder.recovery.failed') }} {{ state.error }}<br />
 					{{ t('recorder.recovery.failedHint') }}
 				</div>
-				<button class="rc-btn" @click="engine.retryNow()">{{ t('recorder.common.tryAgain') }}</button>
+				<button class="rc-btn" @click="engine.retrySync()">{{ t('recorder.common.tryAgain') }}</button>
+				<button class="rc-btn" @click="downloadAudio">{{ t('recorder.recovery.download') }}</button>
+				<p v-if="downloadNote" class="rc-note">{{ downloadNote }}</p>
 				<button class="rc-btn rc-subtle" @click="emit('done')">{{ t('recorder.recovery.skip') }}</button>
 			</template>
+		</template>
+		<template v-if="state.phase === 'syncing' || state.phase === 'uploaded'">
+			<button class="rc-btn" @click="downloadAudio">{{ t('recorder.recovery.download') }}</button>
+			<p v-if="downloadNote" class="rc-note">{{ downloadNote }}</p>
+			<button v-if="state.phase === 'syncing'" class="rc-btn rc-subtle" @click="emit('done')">{{ t('recorder.recovery.skip') }}</button>
 		</template>
 		</div>
 	</div>

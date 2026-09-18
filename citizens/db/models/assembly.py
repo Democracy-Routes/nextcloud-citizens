@@ -48,6 +48,14 @@ class Assembly(Base):
     # recorder already makes every few seconds. Set once and left set: a phone
     # that reopens days later should still honour it.
     device_audio_purge_requested_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # Whether the standing purge request came from close_assembly (True) or an
+    # organizer pressing the button (False). Reopening withdraws only the
+    # automatic kind — keying that off the toggle's CURRENT value meant turning
+    # auto-purge off between close and reopen left the request standing: the
+    # first status poll after the reopen told every phone to delete each new
+    # recording the moment it reached AUDIO_READY. NULL for rows written
+    # before this column existed.
+    purge_requested_automatically: Mapped[bool | None] = mapped_column(Boolean)
     # Ask the phones automatically when the session is closed. On by default:
     # the case this exists for is participants recording on their own devices,
     # where leaving the audio behind is the surprising outcome. An organizer
@@ -85,6 +93,18 @@ class Round(Base):
     duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
     status: Mapped[str] = mapped_column(String(20), default="NOT_STARTED")
     analysis_summary: Mapped[str] = mapped_column(Text, default="")
+    # Is the cross-table clustering current? input bumps whenever the findings
+    # it reads change (a table re-analysed, an organizer rejecting or editing);
+    # applied is set from the input revision a run STARTED from. Stale ⇔
+    # input > applied. A timestamp cannot express this: a job's updated_at is
+    # stamped when the runner marks it done — after the model call — so a
+    # review landing mid-run looked older than the run that never saw it.
+    analysis_input_revision: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
+    analysis_applied_revision: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
     started_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     ended_at: Mapped[datetime | None] = mapped_column(TZDateTime())
 

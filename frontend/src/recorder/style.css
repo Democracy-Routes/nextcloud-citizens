@@ -41,6 +41,12 @@ body {
 	height: 100vh;
 	height: 100dvh;
 	box-sizing: border-box;
+	/* keep the header out from under the notch / status bar when the recorder
+	   is added to the Home Screen (it declares itself standalone-capable), and
+	   clear of the rounded corners in landscape */
+	padding-top: env(safe-area-inset-top, 0px);
+	padding-left: env(safe-area-inset-left, 0px);
+	padding-right: env(safe-area-inset-right, 0px);
 	background: var(--rc-bg);
 	color: var(--rc-text);
 	display: flex;
@@ -68,7 +74,10 @@ body {
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
 	scrollbar-width: none;
-	padding-bottom: 10px;
+	/* the home-indicator inset, for the screens whose buttons live inside the
+	   scroll zone rather than in a pinned .rc-actions bar (consent, recovery,
+	   the join/error screens) */
+	padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
 }
 
 .rc-scroll::-webkit-scrollbar { display: none; }
@@ -197,7 +206,7 @@ body {
 }
 
 .rc-timer-label {
-	font-size: 11.5px;
+	font-size: 0.72rem;
 	letter-spacing: 0.14em;
 	color: var(--rc-muted);
 	margin-top: 6px;
@@ -262,7 +271,7 @@ body {
 .rc-btn:disabled { opacity: 0.45; }
 .rc-btn.rc-primary { background: var(--rc-blue); color: #fff; }
 .rc-btn.rc-record { background: var(--rc-red); color: #fff; }
-.rc-btn.rc-subtle { background: transparent; color: var(--rc-muted); font-size: 14.5px; padding: 10px; }
+.rc-btn.rc-subtle { background: transparent; color: var(--rc-muted); font-size: 0.9rem; min-height: 44px; padding: 10px; }
 
 /* ---------- level meter ---------- */
 
@@ -362,7 +371,7 @@ body {
 }
 
 .rc-eyebrow {
-	font-size: 11px;
+	font-size: 0.6875rem;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
 	color: var(--rc-muted);
@@ -413,7 +422,8 @@ body {
 	align-items: center;
 	justify-content: center;
 	gap: 12px;
-	font-size: 12.5px;
+	min-height: 44px;
+	font-size: 0.78rem;
 	color: var(--rc-muted);
 	padding: 7px 10px;
 	margin: 2px 0 8px;
@@ -435,7 +445,7 @@ body {
 
 .rc-caption__speaker {
 	display: block;
-	font-size: 10.5px;
+	font-size: 0.66rem;
 	font-weight: 800;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -464,6 +474,17 @@ body {
 	.rc-timer-ring { width: 130px; height: 130px; }
 	.rc-timer { font-size: 32px; }
 	.rc-hero { padding-top: 10px; }
+	/* landscape phones: reclaim the vertical space the chrome eats so the
+	   ring, level meter and buttons still fit the ~120px scroll zone */
+	.rc-screen { padding-top: 8px; }
+	.rc-header { margin-bottom: 8px; min-height: 0; }
+	.rc-qbar { padding: 7px 12px; margin-bottom: 6px; }
+	.rc-timer-wrap { margin: 8px 0 8px; }
+	.rc-hero__icon { width: 64px; height: 64px; }
+	.rc-hero__table { font-size: 38px; }
+	.rc-captions { max-height: 130px; }
+	.rc-card { padding: 12px 14px; }
+	.rc-btn { padding: 11px; font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -487,6 +508,8 @@ body {
 }
 .rc-qr {
 	display: block;
-	width: min(78vw, 300px);
+	/* min of both axes so a landscape phone sizes it off the SHORT side and
+	   the code is never clipped below the fold */
+	width: min(78vw, 78vh, 300px);
 	height: auto;
 }

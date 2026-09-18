@@ -329,14 +329,15 @@ async function deleteAll(): Promise<void> {
 						was closed.
 					</template>
 					<strong>{{ coverage.cleared }} of {{ coverage.devices }}</strong>
-					table phones have reported clearing their copy.
+					recorder sessions last reported no local recordings.
 					<template v-if="coverage.still_holding">
 						{{ coverage.still_holding }} still hold audio.
 					</template>
 					<template v-if="coverage.unknown">
-						{{ coverage.unknown }} have not reported since — they will clear
-						themselves if the recorder is opened again.
+						{{ coverage.unknown }} have not reported a local recording count.
 					</template>
+					These counts include older sessions. Joining again can count the same
+					phone more than once; expired or revoked sessions may need manual cleanup.
 				</p>
 
 				<p

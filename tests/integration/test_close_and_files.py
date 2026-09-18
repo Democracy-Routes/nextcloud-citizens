@@ -333,3 +333,44 @@ def test_audio_retention_purges_only_after_the_window(client, tmp_path, monkeypa
         assert session.get(Assembly, assembly["id"]).audio_purged_at is not None
         assert session.get(Recording, recording_id).audio_deleted_at is not None
     assert sweep_expired_audio() == 0  # and never twice
+
+
+def test_closing_mid_assembly_stops_phones_and_refuses_more_rounds(client):
+    """The early-end bug: an orchestrated assembly ended during round 1, with
+    later rounds still NOT_STARTED. Phones must learn it is over (they read only
+    the round rows otherwise, and advanced into round 2), and the server must
+    refuse to start another round on a closed assembly."""
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST early end", "recording_mode": "orchestrated",
+            "default_table_count": 1,
+            "rounds": [
+                {"title": "R1", "question": "Q1", "duration_minutes": 10},
+                {"title": "R2", "question": "Q2", "duration_minutes": 10},
+            ],
+        },
+    ).json()
+    r1, r2 = assembly["rounds"][0]["id"], assembly["rounds"][1]["id"]
+    client.post(f"/api/v1/rounds/{r1}/start")
+    headers, _ = _join(client, assembly, 0, "203.0.113.1")
+
+    # while open, the phone is told nothing has ended
+    status = client.get("/api/v1/public/recorder/status", headers=headers).json()
+    assert status["assembly_closed"] is False
+
+    # the organizer ends the assembly early, round 2 still NOT_STARTED
+    assert client.post(f"/api/v1/assemblies/{assembly['id']}/close").status_code == 200
+
+    # the phone now learns the assembly is over — the signal it was missing
+    status = client.get("/api/v1/public/recorder/status", headers=headers).json()
+    assert status["assembly_closed"] is True
+
+    # and round 2 can no longer be started onto the closed assembly
+    blocked = client.post(f"/api/v1/rounds/{r2}/start")
+    assert blocked.status_code == 409
+    assert "closed" in blocked.json()["detail"].lower()
+
+    # reopening lifts the guard, so a genuine resume still works
+    client.delete(f"/api/v1/assemblies/{assembly['id']}/close")
+    assert client.post(f"/api/v1/rounds/{r2}/start").status_code == 200

@@ -11,6 +11,7 @@ import json
 import zipfile
 from pathlib import Path
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,13 +25,14 @@ from citizens.db.models import (
 )
 from citizens.db.models.base import utcnow
 from citizens.db.models.findings import Finding, FindingEvidence
-from citizens.db.models.recording import AudioChunk
+from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
+from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
 from citizens.services.transcription import transcript_payload
+from citizens.storage.exports import build_target
 from citizens.storage.paths import (
-    exports_dir,
     live_caption_path,
     purge_assembly_exports,
     recording_dir,
@@ -53,18 +55,11 @@ def canonical_path(recording: Recording) -> Path | None:
 
 
 def audio_filename(assembly: Assembly, recording: Recording, position: int) -> str:
-    """A name that is unique within an export.
-
-    A table whose phone was replaced mid-round has two recordings for one
-    round and table, which produced two identical names: the zip got duplicate
-    entries and the manifest pointed two records at one path. The earlier
-    recording is marked, so the file names say which half is which rather than
-    one silently standing in for both.
-    """
+    """Keep plenary devices and repeated replacements distinct within an export."""
     stem = "".join(c if c.isalnum() or c in "-_" else "-" for c in assembly.name)[:40].strip("-")
     suffix = Path(recording.canonical_audio_path or "audio.webm").suffix or ".webm"
     part = "-part1" if recording.superseded_at is not None else ""
-    return f"{stem or 'assembly'}-round{position}-table{recording.table_number}{part}{suffix}"
+    return f"{stem or 'assembly'}-round{position}-table{recording.table_number}{part}-{recording.id}{suffix}"
 
 
 def list_files(session: Session, assembly: Assembly) -> dict:
@@ -210,6 +205,12 @@ def delete_recording_audio(session: Session, recording: Recording) -> int:
         except OSError:
             pass
     recording.received_chunks = 0
+    for part in session.scalars(select(AudioPart).where(AudioPart.recording_id == recording.id)):
+        part_path = root / part.path
+        if part_path.is_file():
+            freed += part.size_bytes
+            part_path.unlink(missing_ok=True)
+        session.delete(part)
     recording.audio_deleted_at = utcnow()
     # Any export archive of this assembly still contains this audio in full.
     # Leaving them is the difference between the retention sweep reporting the
@@ -246,15 +247,29 @@ def mark_evidence_removed(session: Session, transcript: Transcript) -> int:
     return len(findings)
 
 
+def _refuse_transcription_in_progress(session: Session, recording: Recording) -> None:
+    if any(
+        has_live_job(session, kind, "recording_id", recording.id)
+        for kind in ("TRANSCRIBE_FINAL", "TRANSCRIBE_FROM_LIVE")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=("Transcription is queued or in progress. "
+                    "Wait for it to finish before deleting transcripts."),
+        )
+
+
 def delete_recording_transcript(session: Session, recording: Recording) -> bool:
     """Erase the verbatim text of one recording: transcript rows, the raw
     provider JSON, and the quotes inside findings. The findings and the AI
     summaries survive; the audio (if still present) can be transcribed again."""
+    _refuse_transcription_in_progress(session, recording)
     transcript = session.execute(
         select(Transcript).where(Transcript.recording_id == recording.id)
     ).scalar_one_or_none()
     if transcript is None:
         return False
+    recording.transcript_deleted_at = utcnow()
     marked = mark_evidence_removed(session, transcript)
     if transcript.raw_response_path:
         (_storage_root() / transcript.raw_response_path).unlink(missing_ok=True)
@@ -280,8 +295,12 @@ def delete_recording_transcript(session: Session, recording: Recording) -> bool:
 
 
 def delete_assembly_transcripts(session: Session, assembly: Assembly) -> int:
+    recordings = _recordings(session, assembly)
+    # Filesystem erasure cannot be rolled back, so check every conflict first.
+    for recording in recordings:
+        _refuse_transcription_in_progress(session, recording)
     count = 0
-    for recording in _recordings(session, assembly):
+    for recording in recordings:
         if delete_recording_transcript(session, recording):
             count += 1
     return count
@@ -298,7 +317,7 @@ def refresh_frozen_report(session: Session, assembly: Assembly) -> None:
 
 
 def device_audio_coverage(session: Session, assembly: Assembly) -> dict:
-    """How many of this assembly's phones still hold audio locally.
+    """Count recorder sessions, including replaced, revoked and expired ones.
 
     Reported so the organizer sees coverage rather than a claim of success:
     a purge reaches phones whose recorder is still open, and one that was
@@ -312,35 +331,27 @@ def device_audio_coverage(session: Session, assembly: Assembly) -> dict:
         session.execute(
             select(RecorderSession).where(
                 RecorderSession.assembly_id == assembly.id,
-                RecorderSession.revoked_at.is_(None),
             )
         ).scalars()
     )
-    # one phone per table: the newest session for each table number is the
-    # device actually in use, and older ones are replaced phones
-    newest: dict[int, RecorderSession] = {}
-    for recorder_session in sessions:
-        current = newest.get(recorder_session.table_number)
-        if current is None or recorder_session.created_at > current.created_at:
-            newest[recorder_session.table_number] = recorder_session
-
     cleared = 0
     holding = 0
     unknown = 0
-    for recorder_session in newest.values():
+    for recorder_session in sessions:
         try:
             status = json.loads(recorder_session.last_status_json or "{}")
         except ValueError:
             status = {}
-        remaining = status.get("local_recordings")
-        if not isinstance(remaining, int):
+        remaining = status.get("local_recordings") if isinstance(status, dict) else None
+        if type(remaining) is not int or remaining < 0:
             unknown += 1
         elif remaining > 0:
             holding += 1
         else:
             cleared += 1
     return {
-        "devices": len(newest),
+        # Keep the API key for compatibility; there is no physical-device ID.
+        "devices": len(sessions),
         "cleared": cleared,
         "still_holding": holding,
         "unknown": unknown,
@@ -395,9 +406,13 @@ def delete_assembly_audio(
     return count, freed, kept
 
 
-def build_audio_zip(session: Session, assembly: Assembly) -> Path:
+def build_audio_zip(session: Session, assembly: Assembly, *, retain: bool = False) -> Path:
     """Every table's canonical audio in one archive."""
-    target = _export_target(assembly, "audio")
+    with build_target(_storage_root(), assembly.id, "audio", retain) as target:
+        return _build_audio_zip(session, assembly, target)
+
+
+def _build_audio_zip(session: Session, assembly: Assembly, target: Path) -> Path:
     positions = {round_.id: round_.position for round_ in assembly.rounds}
     with zipfile.ZipFile(target, "w", zipfile.ZIP_STORED) as archive:
         for recording in _recordings(session, assembly):
@@ -408,13 +423,17 @@ def build_audio_zip(session: Session, assembly: Assembly) -> Path:
     return target
 
 
-def build_session_export(session: Session, assembly: Assembly) -> Path:
+def build_session_export(session: Session, assembly: Assembly, *, retain: bool = False) -> Path:
     """Portable archive of the whole session: metadata, audio, transcripts,
     findings and the report — enough to move it to another server."""
+    with build_target(_storage_root(), assembly.id, "session", retain) as target:
+        return _build_session_export(session, assembly, target)
+
+
+def _build_session_export(session: Session, assembly: Assembly, target: Path) -> Path:
     from citizens.services.branding import logo_path, organization_name
     from citizens.services.report_pdf import render_pdf
 
-    target = _export_target(assembly, "session")
     positions = {round_.id: round_.position for round_ in assembly.rounds}
     recordings = _recordings(session, assembly)
     report = build_report(session, assembly, include_drafts=True)
@@ -519,19 +538,6 @@ def _recordings(session: Session, assembly: Assembly) -> list[Recording]:
             .order_by(Recording.table_number, Recording.created_at)
         ).scalars()
     )
-
-
-def _export_target(assembly: Assembly, kind: str) -> Path:
-    directory = exports_dir(_storage_root(), assembly.id)
-    directory.mkdir(parents=True, exist_ok=True)
-    # Drop any earlier archive of the same kind. Each is a throwaway build
-    # artifact meant to be streamed and unlinked, but the unlink runs in a
-    # background task that never fires if the client disconnects mid-download —
-    # so on a venue connection they accumulated, each one a full copy.
-    for stale in directory.glob(f"{kind}-*.zip"):
-        stale.unlink(missing_ok=True)
-    stamp = utcnow().strftime("%Y%m%d-%H%M%S")
-    return directory / f"{kind}-{stamp}.zip"
 
 
 _README = """Nextcloud Citizens — session export

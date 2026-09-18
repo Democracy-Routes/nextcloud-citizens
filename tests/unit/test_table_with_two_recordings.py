@@ -251,7 +251,7 @@ def test_the_two_recordings_get_different_file_names(swapped_table):
 
 
 def test_an_ordinary_recording_keeps_its_plain_name(client):
-    """No churn in the normal case: existing exports should look the same."""
+    """A single recording also gets a stable unique name for later replacements."""
     assembly = client.post(
         "/api/v1/assemblies",
         json={
@@ -278,7 +278,9 @@ def test_an_ordinary_recording_keeps_its_plain_name(client):
         session.add(recording)
         session.flush()
 
-        assert files_svc.audio_filename(db_assembly, recording, 2) == "Bologna-round2-table3.webm"
+        assert files_svc.audio_filename(db_assembly, recording, 2) == (
+            f"Bologna-round2-table3-{recording.id}.webm"
+        )
 
 
 # ------------------------------------------------------------- the report
