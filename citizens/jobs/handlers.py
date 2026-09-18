@@ -29,6 +29,12 @@ from citizens.storage.paths import live_caption_path
 log = get_logger(__name__)
 
 
+#: Hosted STT answers 429 under ten tables (4 of 10 on 2026-09-08). The default
+#: five attempts span about eight minutes; eight span an hour, which is what
+#: waiting out a provider's busy spell actually takes.
+TRANSCRIPTION_ATTEMPTS = 8
+
+
 class PermanentJobError(Exception):
     """Raised when retrying cannot help; the job goes straight to FAILED."""
 
@@ -40,6 +46,17 @@ class CapacityBusyError(Exception):
     live event the caption sessions can hold every slot for an hour or more,
     and a busy hour must not march a perfectly good job to FAILED.
     """
+
+
+def _fail_recording(session: Session, recording: Recording, state: str, exc=None) -> None:
+    """Show the failure: the pill, and a code the Files tab can explain.
+
+    RATE_LIMITED is the one provider failure worth its own code — the right
+    response is to wait for the retry, not to press the button again.
+    """
+    recording.error_code = "RATE_LIMITED" if getattr(exc, "status", None) == 429 else state
+    transition(recording, state)
+    _commit_failure_state(session)
 
 
 def _commit_failure_state(session: Session) -> None:
@@ -127,7 +144,10 @@ def _maybe_enqueue_transcription(session: Session, recording: Recording) -> None
     if recording is None or recording.transcript_deleted_at is not None:
         return
     if batch and not has_live_job(session, "TRANSCRIBE_FINAL", "recording_id", recording_id):
-        enqueue_job(session, "TRANSCRIBE_FINAL", {"recording_id": recording_id})
+        enqueue_job(
+            session, "TRANSCRIBE_FINAL", {"recording_id": recording_id},
+            max_attempts=TRANSCRIPTION_ATTEMPTS,
+        )
         log.info("transcription_enqueued", recording_id=recording_id)
     elif live and not has_live_job(session, "TRANSCRIBE_FROM_LIVE", "recording_id", recording_id):
         # captions are the only transcript this assembly will get, so they
@@ -173,13 +193,19 @@ def handle_transcribe_final(session: Session, payload: dict) -> None:
     try:
         transcription_svc.transcribe_recording(session, store, recording)
     except TranscriptionError as exc:
-        recording.error_code = "TRANSCRIPTION_FAILED"
-        transition(recording, "TRANSCRIPTION_FAILED")
-        _commit_failure_state(session)
+        _fail_recording(session, recording, "TRANSCRIPTION_FAILED", exc)
         log.error("stt_failed", recording_id=recording.id, permanent=exc.permanent)
         if exc.permanent:
             raise PermanentJobError(str(exc)) from exc
         raise  # temporary (429/5xx/network) → job retry with backoff
+    except Exception:
+        # A reply the adapter could not classify — a string where a timestamp
+        # should be, a body the normalizer did not expect. Left uncaught, the
+        # job went FAILED while the recording stayed TRANSCRIBING forever: no
+        # pill, no note, no Re-transcribe button on the Files tab.
+        _fail_recording(session, recording, "TRANSCRIPTION_FAILED")
+        log.error("stt_failed_unexpected", recording_id=recording.id, exc_info=True)
+        raise
     finally:
         if lease is not None:
             stt_capacity.release(lease)
@@ -339,12 +365,16 @@ def handle_analyze_table(session: Session, payload: dict) -> None:
     try:
         analysis_svc.analyze_table(session, store, recording)
     except AnalysisError as exc:
-        recording.error_code = "ANALYSIS_FAILED"
-        transition(recording, "ANALYSIS_FAILED")
-        _commit_failure_state(session)
+        _fail_recording(session, recording, "ANALYSIS_FAILED", exc)
         log.error("analysis_failed", recording_id=recording.id, permanent=exc.permanent)
         if exc.permanent:
             raise PermanentJobError(str(exc)) from exc
+        raise
+    except Exception:
+        # same as transcription: an unclassified error must not leave the
+        # recording ANALYZING with nothing on screen
+        _fail_recording(session, recording, "ANALYSIS_FAILED")
+        log.error("analysis_failed_unexpected", recording_id=recording.id, exc_info=True)
         raise
     recording.error_code = ""
     transition(recording, "READY_FOR_REVIEW")

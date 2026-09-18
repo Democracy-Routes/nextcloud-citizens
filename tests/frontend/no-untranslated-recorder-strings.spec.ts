@@ -41,20 +41,30 @@ function template(source: string): string {
  * strings survived on the citizens' recorder until a browser test walked into
  * one of them.
  *
- * Two words, not three. Three was chosen to keep "OK" and "ARMED" out of the
- * results, but it also let "Finish recording" and "Keep talking" through — and
- * those are buttons a citizen has to understand.
+ * One word, not two. Two was chosen to keep "OK" and "ARMED" out of the
+ * results, and it did — along with "TABLE" on every screen's badge, "READY",
+ * "Back" and "Continue" on the buttons, and "Synchronizing" as a heading. A
+ * single English word on a button is no easier for a citizen than a sentence.
+ * So a word is enough, and what is not prose is excluded by its shape rather
+ * than by its length: i18n keys, lowercase code tokens compared against or used
+ * as class names, comparison operands, and bare units after a number.
  */
 function untranslatedPhrases(markup: string): string[] {
 	const withoutComments = markup.replace(/<!--[\s\S]*?-->/g, ' ')
 
 	const found: string[] = []
 	for (const moustache of withoutComments.match(/\{\{[\s\S]*?\}\}/g) ?? []) {
-		// a literal inside an expression is still text a person reads
-		for (const literal of moustache.match(/'[^']{2,}'|"[^"]{2,}"/g) ?? []) {
+		// `state.phase === 'recording'` matches against the literal; nobody reads it
+		const displayed = moustache
+			.replace(/(?:===|!==|==|!=)\s*(?:'[^']*'|"[^"]*")/g, ' ')
+			.replace(/(?:'[^']*'|"[^"]*")\s*(?:===|!==|==|!=)/g, ' ')
+		// a literal inside an expression is still text a person reads. Every
+		// literal is consumed, even '✓' or '': skipping short ones re-paired the
+		// quotes around them and hid the 'OFFLINE' that followed.
+		for (const literal of displayed.match(/'[^']*'|"[^"]*"/g) ?? []) {
 			const text = literal.slice(1, -1)
-			if (/^[a-z0-9_.]+$/i.test(text)) continue // an i18n key, not prose
-			if (countWords(text) >= 2) found.push(text)
+			if (I18N_KEY.test(text) || CODE_TOKEN.test(text)) continue
+			if (isProse(text)) found.push(text)
 		}
 	}
 
@@ -63,17 +73,32 @@ function untranslatedPhrases(markup: string): string[] {
 		// quoted attributes may themselves contain '>' (a Vue expression with a
 		// cast or a comparison), so tags cannot be matched with [^>]+
 		.replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, '\n')
+		// &nbsp; and friends are layout, not words
+		.replace(/&[a-z]+;/gi, ' ')
 	found.push(
 		...withoutTags
 			.split('\n')
 			.map((line) => line.trim())
-			.filter((line) => countWords(line) >= 2),
+			.filter(isProse),
 	)
 	return found
 }
 
-function countWords(text: string): number {
-	return text.split(/\s+/).filter((word) => /[a-zA-Z]{2,}/.test(word)).length
+/** `recorder.mic.back` — dotted, no spaces; camelCase segments are still a key. */
+const I18N_KEY = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/i
+
+/** `done`, `rc-warn`: a state name or a class, only ever lowercase. Prose has
+ * a capital somewhere ("Back"), a space, or punctuation ("stopping…"). */
+const CODE_TOKEN = /^[a-z0-9_-]+$/
+
+/** `{{ free }} MB` is a number with its unit, not a sentence. */
+const UNITS = new Set(['MB', 'kB', 'GB', 'ms', 'min', 'px', 'dB', 'Hz', 'kHz'])
+
+function isProse(text: string): boolean {
+	const words = text.split(/\s+/).filter((word) => /[a-zA-Z]{2,}/.test(word))
+	if (words.length === 0) return false
+	if (words.length === 1 && UNITS.has(words[0].replace(/[^a-zA-Z]/g, ''))) return false
+	return true
 }
 
 describe('the recorder bundle', () => {

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from citizens.db.models import Recording, Transcript
 from citizens.db.session import get_db
+from citizens.jobs.handlers import TRANSCRIPTION_ATTEMPTS
 from citizens.security.identity import CurrentUser
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.files import canonical_path
@@ -77,5 +78,8 @@ def request_transcription(recording_id: str, user: CurrentUser, session: DB):
     if recording.state in ("READY_FOR_REVIEW", "REVIEWED", "ANALYSIS_FAILED"):
         transition(recording, "AUDIO_READY")
     recording.transcript_deleted_at = None
-    enqueue_job(session, "TRANSCRIBE_FINAL", {"recording_id": recording.id, "force": True})
+    enqueue_job(
+        session, "TRANSCRIBE_FINAL", {"recording_id": recording.id, "force": True},
+        max_attempts=TRANSCRIPTION_ATTEMPTS,
+    )
     return {"queued": True, "state": recording.state}

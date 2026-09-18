@@ -539,7 +539,8 @@ function pendingChunks(table: MonitorTable): number {
 							<CzFailureNote
 								v-if="table.recording"
 								:state="table.recording.state"
-								:error-code="table.recording.error_code" />
+								:error-code="table.recording.error_code"
+								:job="table.recording.job" />
 							<span v-else class="cz-muted">—</span>
 							<!-- the half a replaced phone left behind: still finishing
 							     its transcript, and it used to vanish from here the
@@ -550,7 +551,7 @@ function pendingChunks(table: MonitorTable): number {
 								class="cz-muted"
 								style="font-size: 0.78rem; margin-top: 4px">
 								<CzStatusPill :status="prior.state" />
-								<CzFailureNote :state="prior.state" :error-code="prior.error_code" />
+								<CzFailureNote :state="prior.state" :error-code="prior.error_code" :job="prior.job" />
 								<span>(replaced device)</span>
 							</div>
 						</td>

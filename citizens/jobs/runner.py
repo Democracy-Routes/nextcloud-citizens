@@ -170,6 +170,11 @@ def _run_job_inner(job_id: str) -> None:
             else:
                 job.state = "RETRY"
                 delay = min(BACKOFF_BASE_SECONDS * (2 ** (job.attempts - 1)), BACKOFF_MAX_SECONDS)
+                # a provider that says how long to wait (429 Retry-After)
+                # knows better than the exponential guess — still bounded
+                retry_after = getattr(exc, "retry_after", None)
+                if retry_after:
+                    delay = min(max(delay, retry_after), BACKOFF_MAX_SECONDS)
                 job.next_attempt_at = utcnow() + timedelta(seconds=delay)
                 log.warning(
                     "job_retry_scheduled", job_id=job.id, job_type=job.type, delay_seconds=delay,

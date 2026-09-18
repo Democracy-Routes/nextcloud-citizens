@@ -27,6 +27,7 @@ from citizens.db.models.base import utcnow
 from citizens.db.models.findings import Finding, FindingEvidence
 from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
+from citizens.services import job_failures
 from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
@@ -85,6 +86,7 @@ def list_files(session: Session, assembly: Assembly) -> dict:
     total_bytes = 0
     deleted_count = 0
     kept_past_retention = 0
+    jobs = job_failures.jobs_for_recordings(session, recordings)
     for recording in recordings:
         path = canonical_path(recording)
         size = path.stat().st_size if path else 0
@@ -132,6 +134,8 @@ def list_files(session: Session, assembly: Assembly) -> dict:
                 # freeing and a retry, invalid audio needs the table to record
                 # again.
                 "error_code": recording.error_code or "",
+                # the job's own words: why it failed, or how long it is waiting
+                "job": jobs.get(recording.id),
                 "updated_at": recording.updated_at.isoformat() if recording.updated_at else None,
                 "can_retry_assembly": recording.state in (
                     "ASSEMBLING", "AUDIO_INVALID", "UPLOAD_INCOMPLETE"

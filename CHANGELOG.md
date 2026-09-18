@@ -4,6 +4,89 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Hardening before the first real assembly — 2026-09-18
+
+A rehearsal three days before a fifty-person assembly showed the shape of
+the failures that matter on the day: not lost audio, but a server that could
+not say what was wrong. Every analysis call was refused with 403 and the
+organizer re-ran it five times seeing only "did not complete"; a switch of
+provider then hit 429 and the tab said "already running" for eight minutes
+with nothing to see or stop. Meanwhile the production container was the
+development one — the checkout bind-mounted with auto-reload — and the data
+volume had never been backed up.
+
+- **Failures now say why.** The job runner always kept the provider's reason
+  in the job row; nothing read it. Both adapters keep the provider's own
+  message (the JSON `message`, `error.message` or `detail`, or the first line
+  of an HTML page) in the error, the newest job per recording travels with
+  the Files listing, the Live tab and the round findings — state, attempts,
+  next attempt, a classified reason and the recorded detail — and the note
+  under a failed pill explains it: "The provider rejected the API key or this
+  model (HTTP 401/403)…", "rate-limiting… do not start another run",
+  "Retrying automatically — attempt 3 of 8, next in 90 s". The Analysis tab
+  shows failed tables and the queue above any empty state.
+- **Pending analysis can be cancelled, and clustering re-run alone.**
+  `POST /rounds/{id}/analysis/cancel` fails queued and retrying jobs as
+  "cancelled by organizer" (a job mid-request finishes within its HTTP
+  timeout and is reported) and stops an ANALYZING recording pretending;
+  `POST /rounds/{id}/recluster` re-runs only the cross-table clustering,
+  which had no state of its own — a failed one left every table "ready" and
+  nothing else. The re-run confirmation no longer claims reviewed findings
+  are lost; the server keeps them and regenerates drafts.
+- **Rate limits are waited out, not retried into.** A 429's `Retry-After`
+  outranks the runner's exponential guess; the recording is marked
+  RATE_LIMITED so the organizer waits rather than presses Retry;
+  transcription jobs get eight attempts (an hour) instead of five (eight
+  minutes), since hosted STT answered 429 on four of ten tables under load.
+- **A recording can no longer be stranded.** An error the adapter did not
+  classify — a string where a timestamp should be, a non-JSON body — left the
+  job FAILED while the recording sat in TRANSCRIBING or ANALYZING forever
+  with no note and no button. Any exception now marks it failed first.
+- **The batch transcription timeout fits a 40-minute round.** 600 s left no
+  margin over the 313 s a 30-minute table already took, and a timeout is the
+  worst failure because every retry re-uploads the file; 1500 s, still under
+  the runner's lease. Mistral also gets `response_format: json_object`.
+- **The analysis Test is a real completion.** Listing `/models` said
+  "Connected" for a workspace whose every chat call was refused; the Test now
+  sends one five-token completion to the configured model and repeats the
+  provider's reason when it says no.
+- **Operations.** `scripts/event-up.sh` freezes the app for an event
+  (immutable image, no bind mount, no reload, 2 GiB, INFO — the AppAPI
+  registration untouched); `scripts/event-status.sh` is the job runner's
+  missing page, read-only; `scripts/backup-citizens-data.sh` snapshots the
+  volume consistently with a rehearsed restore procedure in
+  `docs/administration.md`; the log keeps 50 MiB × 10 with the HTTP
+  libraries at INFO (98% of the old bytes); `dev-up.sh` runs at 2 GiB, which
+  ten tables were measured to need. The event checklist says when to do each.
+
+- **The phone speaks to "l'organizzatore", and speaks Italian everywhere.**
+  Fourteen messages that told a table to ask "il facilitatore" now name the
+  organizer, the role actually in the room. The last English on the phone —
+  "TABLE" on every badge, "READY", "Back", "Continue", "Synchronizing", the
+  Preflight check rows and notes, "✓ SAFE"/"OFFLINE", "PDF saved…", and the
+  recorder engine's own error messages — moved into the catalogue with plural
+  forms, and the untranslated-strings guard now catches a single English word
+  (excluding code tokens, i18n keys and units by shape, not length). The
+  phone's report screen renders the finding-type labels and round headings
+  the server now localises, so a citizen's copy of the report is Italian
+  through and through.
+- **The report's frame follows the assembly's language.** The model already
+  wrote findings and summaries in the assembly's language, but every heading,
+  label and note around them was English: an Italian assembly's report opened
+  "Assembly Report — INTERIM REPORT", grouped its proposte under "Proposals"
+  and closed with an English methodology note. `services/report_text.py` now
+  holds that wording per language — cover lines, "Method", "AI summary",
+  "Speaking balance", round and table headings, the finding-type labels
+  (plural and singular), the draft and "Mentioned at N tables" markers, the
+  methodology, live-caption and replaced-device notes, month names — with
+  English and Italian complete and any missing key falling back to English
+  (de/fr/es print English wording with a native date until translated).
+  `build_report()` writes the method sentence and methodology note in the
+  assembly's language and gives each finding a `type_label`; the PDF's
+  generated-on date is no longer `strftime`'s English; an untouched
+  "Round N" pre-fill prints as "Turno N". English output is byte-for-byte
+  unchanged.
+
 ### Bug-audit pass on the upload, caption and analysis path — 2026-09-11
 
 Six fixes from a deliberate audit of the audio pipeline. Two of them close

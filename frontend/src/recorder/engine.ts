@@ -136,7 +136,7 @@ export class RecorderEngine {
 		this.assemblyId = assemblyId
 		this.token = token
 		const mimeType = pickMimeType()
-		if (!mimeType) throw new Error('This browser cannot record audio (no supported format)')
+		if (!mimeType) throw new Error(t('recorder.engine.noFormat'))
 
 		try {
 			this.stream = await navigator.mediaDevices.getUserMedia({
@@ -241,7 +241,7 @@ export class RecorderEngine {
 				this.state.localChunks++
 			}
 			const meta = (await idb.getRecordings()).find((r) => r.recordingId === this.state.recordingId)
-			if (!meta) throw new Error('Recording metadata missing')
+			if (!meta) throw new Error(t('recorder.engine.metadataMissing'))
 			meta.totalChunks = this.totalChunks
 			meta.finishedAt = meta.finishedAt ?? Date.now()
 			meta.captureIncomplete = await this.persistedPrefixLength() !== this.totalChunks
@@ -372,7 +372,7 @@ export class RecorderEngine {
 			.catch((error) => {
 				// Local persistence failure is the HIGHEST severity problem (brief §22)
 				this.state.storageError = true
-				this.state.error = `Local storage error: ${error}`
+				this.state.error = t('recorder.engine.storageError', { error: String(error) })
 				clientLog('error', 'chunk_save_failed', { seq, error: String(error).slice(0, 200) })
 			})
 	}
@@ -535,7 +535,7 @@ export class RecorderEngine {
 		try {
 			const recordings = await idb.getRecordings()
 			const meta = recordings.find((r) => r.recordingId === this.state.recordingId)
-			if (!meta) throw new Error('Recording metadata missing')
+			if (!meta) throw new Error(t('recorder.engine.metadataMissing'))
 			meta.finishedAt = Date.now()
 			meta.totalChunks = this.totalChunks
 			meta.captureIncomplete = prefix !== this.seq || this.unsavedChunks.size > 0
@@ -584,7 +584,7 @@ export class RecorderEngine {
 	private async sendComplete(): Promise<void> {
 		if (this.totalChunks === null || this.totalChunks === 0) {
 			this.state.phase = 'failed'
-			this.state.error = 'No audio was captured'
+			this.state.error = t('recorder.engine.noAudio')
 			return
 		}
 		// a busy server (transcription running, restart, rate limit) must never
@@ -758,7 +758,7 @@ export class RecorderEngine {
 						this.state.phase = 'done'
 					} else {
 						this.state.phase = 'failed'
-						this.state.error = `Server could not validate the audio (${status.error_code})`
+						this.state.error = t('recorder.engine.invalidAudio', { code: status.error_code })
 						clientLog('error', 'audio_invalid', { errorCode: status.error_code })
 					}
 					return
@@ -807,7 +807,7 @@ export class RecorderEngine {
 				this.state.phase = 'done'
 			} else if (status.state === 'AUDIO_INVALID') {
 				this.state.phase = 'failed'
-				this.state.error = `Server could not validate the audio (${status.error_code})`
+				this.state.error = t('recorder.engine.invalidAudio', { code: status.error_code })
 			}
 		} catch (error) {
 			this.state.uploadOnline = false

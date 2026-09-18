@@ -388,7 +388,7 @@ async function deleteAll(): Promise<void> {
 								</td>
 								<td>
 									<CzStatusPill :status="entry.state" />
-									<CzFailureNote :state="entry.state" :error-code="entry.error_code" />
+									<CzFailureNote :state="entry.state" :error-code="entry.error_code" :job="entry.job" />
 								</td>
 								<td>
 									<span :class="entry.has_transcript ? 'cz-ok' : 'cz-muted'">

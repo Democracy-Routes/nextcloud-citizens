@@ -10,11 +10,13 @@ accepted.
 
 import json
 from typing import TypeVar
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
 from citizens.logging_setup import get_logger
+from citizens.providers.http_detail import error_detail, retry_after_seconds
 
 log = get_logger(__name__)
 
@@ -22,9 +24,25 @@ MAX_CORRECTION_RETRIES = 2
 
 
 class AnalysisError(Exception):
-    def __init__(self, message: str, permanent: bool = False):
+    def __init__(
+        self,
+        message: str,
+        permanent: bool = False,
+        status: int | None = None,
+        retry_after: float | None = None,
+    ):
         super().__init__(message)
         self.permanent = permanent
+        self.status = status
+        self.retry_after = retry_after
+
+
+def _wants_json_mode(base_url: str) -> bool:
+    # Mistral supports response_format json_object and refuses far fewer
+    # replies with it (the prompts already contain the word "JSON", which it
+    # requires). Not sent elsewhere: Ollama and vLLM builds differ in support,
+    # and an unknown field is a 400 on some of them.
+    return (urlparse(base_url).hostname or "").lower() == "api.mistral.ai"
 
 
 def _extract_json(content: str) -> dict:
@@ -43,28 +61,46 @@ def _extract_json(content: str) -> dict:
 
 
 def _chat(base_url: str, api_key: str, model: str, messages: list[dict]) -> str:
+    body: dict = {"model": model, "messages": messages, "temperature": 0.2}
+    if _wants_json_mode(base_url):
+        body["response_format"] = {"type": "json_object"}
     try:
         response = httpx.post(
             f"{base_url.rstrip('/')}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model, "messages": messages, "temperature": 0.2},
+            json=body,
             timeout=httpx.Timeout(300, connect=30),
         )
     except httpx.HTTPError as exc:
         raise AnalysisError(f"Analysis request failed: {type(exc).__name__}") from exc
-    if response.status_code in (401, 403):
-        raise AnalysisError(f"Analysis authentication failed ({response.status_code})", permanent=True)
-    if response.status_code == 422 or response.status_code == 404:
+    status = response.status_code
+    if status == 200:
+        try:
+            return response.json()["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, ValueError) as exc:
+            raise AnalysisError(
+                "Analysis endpoint returned an unexpected payload", permanent=True, status=status
+            ) from exc
+    # The provider's own words reach the job row and, from there, the
+    # organizer: "Inactive subscription" is actionable, "HTTP 403" is not. At
+    # the 2026-09-18 rehearsal a 403 was re-run five times blind.
+    detail = error_detail(response)
+    log.warning("analysis_provider_refused", status=status, detail=detail)
+    if status in (401, 403):
         raise AnalysisError(
-            f"Analysis endpoint rejected the request ({response.status_code}): {response.text[:200]}",
-            permanent=True,
+            f"Analysis authentication failed ({status}): {detail}", permanent=True, status=status
         )
-    if response.status_code != 200:
-        raise AnalysisError(f"Analysis endpoint returned HTTP {response.status_code}")
-    try:
-        return response.json()["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, ValueError) as exc:
-        raise AnalysisError("Analysis endpoint returned an unexpected payload", permanent=True) from exc
+    if status in (404, 422):
+        raise AnalysisError(
+            f"Analysis endpoint rejected the request ({status}): {detail}",
+            permanent=True, status=status,
+        )
+    if status == 429:
+        raise AnalysisError(
+            f"Analysis endpoint returned HTTP 429 (rate limited): {detail}",
+            status=status, retry_after=retry_after_seconds(response.headers),
+        )
+    raise AnalysisError(f"Analysis endpoint returned HTTP {status}: {detail}", status=status)
 
 
 T = TypeVar("T", bound=BaseModel)

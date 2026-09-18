@@ -413,15 +413,15 @@ async function recheck(): Promise<void> {
 
 async function clearSynced(): Promise<void> {
 	const cleared = await clearSynchronizedRecordings(props.session.assembly.id)
-	clearedNote.value = `${cleared} synchronized recording(s) removed from this phone.`
+	clearedNote.value = t('recorder.recording.clearedNote', { count: cleared }, cleared)
 }
 </script>
 
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">TABLE {{ session.table_number }}</span>
-			<span v-if="state.phase === 'recording'" class="rc-live">RECORDING</span>
+			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
+			<span v-if="state.phase === 'recording'" class="rc-live">{{ t('recorder.recording.badge') }}</span>
 		</div>
 
 		<div v-if="startError" class="rc-scroll">
@@ -464,7 +464,9 @@ async function clearSynced(): Promise<void> {
 			<div class="rc-timer-wrap">
 				<div class="rc-timer-ring" :class="{ 'rc-timer-ring--live': state.phase === 'recording' }">
 					<span class="rc-timer">{{ elapsed }}</span>
-					<span class="rc-timer-label">{{ state.phase === 'recording' ? 'recording' : 'stopping…' }}</span>
+					<span class="rc-timer-label">
+						{{ state.phase === 'recording' ? t('recorder.recording.timerRecording') : t('recorder.recording.timerStopping') }}
+					</span>
 				</div>
 			</div>
 
@@ -481,11 +483,11 @@ async function clearSynced(): Promise<void> {
 				</span>
 				<span class="rc-techbar__item">
 					<span class="rc-dot" :class="{ 'rc-dot--warn': !state.uploadOnline }"></span>
-					{{ state.uploadOnline ? 'Uploading' : 'Offline' }}
+					{{ state.uploadOnline ? t('recorder.recording.uploading') : t('recorder.recording.offlineBadge') }}
 				</span>
 				<span class="rc-techbar__item">
 					<span class="rc-dot" :class="{ 'rc-dot--warn': pendingChunks > 3 }"></span>
-					{{ pendingChunks }} pending
+					{{ t('recorder.recording.pendingCount', { count: pendingChunks }) }}
 				</span>
 			</button>
 
@@ -496,7 +498,7 @@ async function clearSynced(): Promise<void> {
 						{{ t('recorder.recording.localAudio') }}
 					</span>
 					<span :class="state.storageError ? 'rc-bad' : 'rc-ok'">
-						{{ state.storageError ? t('recorder.recording.storageErrorBanner') : '✓ SAFE' }}
+						{{ state.storageError ? t('recorder.recording.storageErrorBanner') : t('recorder.recording.safeBanner') }}
 					</span>
 				</div>
 				<div class="rc-status-row">
@@ -505,7 +507,7 @@ async function clearSynced(): Promise<void> {
 						{{ t('recorder.recording.serverUpload') }}
 					</span>
 					<span :class="state.uploadOnline ? 'rc-ok' : 'rc-warn'">
-						{{ state.uploadOnline ? '✓' : 'OFFLINE' }}
+						{{ state.uploadOnline ? '✓' : t('recorder.recording.offlineBanner') }}
 					</span>
 				</div>
 				<div class="rc-status-row">
@@ -513,7 +515,9 @@ async function clearSynced(): Promise<void> {
 						<SvgIcon :path="mdiTrayFull" :size="19" style="color: var(--rc-muted)" />
 						{{ t('recorder.recording.pendingUpload') }}
 					</span>
-					<span :class="pendingChunks > 3 ? 'rc-warn' : ''">{{ pendingChunks }} chunks</span>
+					<span :class="pendingChunks > 3 ? 'rc-warn' : ''">
+						{{ t('recorder.recording.chunksCount', { count: pendingChunks }, pendingChunks) }}
+					</span>
 				</div>
 			</div>
 
@@ -581,7 +585,7 @@ async function clearSynced(): Promise<void> {
 					<div v-else ref="captionsBox" class="rc-captions">
 						<div v-for="(block, index) in captionBlocks" :key="index" class="rc-caption">
 							<span v-if="block.speaker !== null" class="rc-caption__speaker">
-								Speaker {{ block.speaker + 1 }}
+								{{ t('recorder.recording.speaker', { number: block.speaker + 1 }) }}
 							</span>
 							{{ block.text }}
 						</div>
@@ -626,11 +630,13 @@ async function clearSynced(): Promise<void> {
 				</div>
 				<div class="rc-hero">
 					<div class="rc-hero__icon"><SvgIcon :path="mdiCloudUploadOutline" :size="44" style="color: var(--rc-blue)" /></div>
-					<h1>Synchronizing</h1>
+					<h1>{{ t('recorder.recording.synchronizing') }}</h1>
 					<p class="rc-muted" style="margin-top: 10px; font-size: 1rem">
 						<span style="font-variant-numeric: tabular-nums">{{ state.ackedChunks }} / {{ state.localChunks }}</span>
 						{{ t('recorder.recording.chunksUploaded') }}
-						<template v-if="state.serverState"><br />Server: {{ state.serverState }}</template>
+						<template v-if="state.serverState">
+							<br />{{ t('recorder.recording.serverState', { state: state.serverState }) }}
+						</template>
 					</p>
 					<div v-if="!state.uploadOnline" class="rc-note" style="text-align: left">
 						{{ t('recorder.recording.retrying') }}
@@ -745,7 +751,9 @@ async function clearSynced(): Promise<void> {
 					{{ t('recorder.common.tryAgain') }}
 				</button>
 				<button class="rc-btn" @click="downloadLocal">{{ t('recorder.recovery.download') }}</button>
-				<button v-if="!state.storageError" class="rc-btn rc-subtle" @click="emit('exit')">Back</button>
+				<button v-if="!state.storageError" class="rc-btn rc-subtle" @click="emit('exit')">
+					{{ t('recorder.common.back') }}
+				</button>
 			</div>
 		</template>
 	</div>

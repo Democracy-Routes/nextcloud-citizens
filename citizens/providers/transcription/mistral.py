@@ -13,6 +13,7 @@ from pathlib import Path
 import httpx
 
 from citizens.logging_setup import get_logger
+from citizens.providers.http_detail import error_detail, retry_after_seconds
 from citizens.providers.transcription.base import (
     NormalizedSegment,
     NormalizedTranscript,
@@ -25,6 +26,13 @@ log = get_logger(__name__)
 
 BASE_URL = "https://api.mistral.ai/v1/audio/transcriptions"
 DEFAULT_MODEL = "voxtral-mini-latest"
+
+#: A 30-minute table took 107-313 s on 2026-09-08; a 40-minute round scales to
+#: ~140-420 s, and a slow day sits on top. 600 s left no margin, and a timeout
+#: is the worst failure: every retry re-uploads the whole file to time out
+#: again. Must stay below the job runner's lease (RUNNING_LEASE_SECONDS,
+#: 1800) or the runner reclaims a job that is still uploading.
+REQUEST_TIMEOUT_SECONDS = 1500
 
 
 def transcribe_file(
@@ -42,19 +50,35 @@ def transcribe_file(
             headers={"Authorization": f"Bearer {api_key}"},
             data=data,
             files={"file": (path.name, path.read_bytes(), mime_type.split(";")[0] or "audio/webm")},
-            timeout=httpx.Timeout(600, connect=30),
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=30),
         )
     except httpx.HTTPError as exc:
         raise TranscriptionError(f"Mistral request failed: {type(exc).__name__}") from exc
 
-    if response.status_code in (401, 403):
-        raise TranscriptionError(f"Mistral authentication failed ({response.status_code})", permanent=True)
-    if response.status_code == 422:
-        raise TranscriptionError(f"Mistral rejected the request: {response.text[:300]}", permanent=True)
-    if response.status_code != 200:
-        raise TranscriptionError(f"Mistral returned HTTP {response.status_code}")
+    status = response.status_code
+    if status != 200:
+        detail = error_detail(response)
+        log.warning("stt_provider_refused", provider="mistral", status=status, detail=detail)
+        if status in (401, 403):
+            raise TranscriptionError(
+                f"Mistral authentication failed ({status}): {detail}", permanent=True, status=status
+            )
+        if status == 422:
+            raise TranscriptionError(
+                f"Mistral rejected the request: {detail}", permanent=True, status=status
+            )
+        if status == 429:
+            raise TranscriptionError(
+                f"Mistral returned HTTP 429 (rate limited): {detail}",
+                status=status, retry_after=retry_after_seconds(response.headers),
+            )
+        raise TranscriptionError(f"Mistral returned HTTP {status}: {detail}", status=status)
 
-    raw = response.json()
+    try:
+        raw = response.json()
+    except ValueError as exc:
+        # an HTML error page where JSON was expected: not our audio's fault
+        raise TranscriptionError("Mistral returned a non-JSON response", status=status) from exc
     return normalize(raw, model=model or DEFAULT_MODEL, requested_language=language)
 
 

@@ -13,6 +13,7 @@ from typing import Protocol
 import httpx
 
 from citizens.logging_setup import get_logger
+from citizens.providers.http_detail import error_detail
 
 log = get_logger(__name__)
 
@@ -515,9 +516,33 @@ def test_connection(
             if not key:
                 return {"ok": False, "message": "No analysis API key — paste one or save it first"}
             base = (override_base_url or get_setting(store, "analysis_base_url")).rstrip("/")
-            response = httpx.get(
-                f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=15
+            model = get_setting(store, "analysis_model")
+            # One real, tiny completion. Listing /models only proves the key
+            # exists: it said "Connected" for a workspace whose every chat call
+            # was refused with 403 at the 2026-09-18 rehearsal.
+            response = httpx.post(
+                f"{base}/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Reply with the single word OK."}],
+                    "max_tokens": 5,
+                    "temperature": 0,
+                },
+                timeout=30,
             )
+            status = response.status_code
+            log.info("provider_test", target=target, status=status, ok=status == 200)
+            if status == 200:
+                return {"ok": True, "message": f"Connected — {model} answered"}
+            detail = error_detail(response)
+            if status in (401, 403):
+                return {"ok": False,
+                        "message": f"The provider rejected the key (HTTP {status}): {detail}"}
+            if status == 404:
+                return {"ok": False,
+                        "message": f"Model or endpoint not found (HTTP 404): {detail}"}
+            return {"ok": False, "message": f"Provider returned HTTP {status}: {detail}"}
         else:
             return {"ok": False, "message": f"Unknown target {target}"}
     except httpx.HTTPError as exc:

@@ -182,6 +182,70 @@ def test_temporary_failure_is_still_visible_to_the_organizer(recorded, monkeypat
     ).status_code == 202
 
 
+def test_an_unclassified_provider_error_still_shows_as_failed(recorded, monkeypatch):
+    """Only TranscriptionError used to be caught. A ValueError from the
+    normalizer (a string where a timestamp should be) or from a non-JSON body
+    left the job FAILED and the recording TRANSCRIBING forever — an
+    in-progress pill for work nothing was doing, and no Re-transcribe button."""
+    _wait_state(recorded, ("TRANSCRIBED",))
+
+    def broken(*args, **kwargs):
+        raise ValueError("could not convert string to float: '00:12.5'")
+
+    monkeypatch.setattr(
+        "citizens.services.transcription.deepgram_provider.transcribe_file", broken
+    )
+    recorded["client"].post(f"/api/v1/recordings/{recorded['recording_id']}/transcribe")
+    status = _wait_state(recorded, ("TRANSCRIPTION_FAILED",))
+    assert status["state"] == "TRANSCRIPTION_FAILED", status
+    assert recorded["client"].post(
+        f"/api/v1/recordings/{recorded['recording_id']}/transcribe"
+    ).status_code == 202
+
+
+def test_a_rate_limited_provider_is_shown_as_rate_limited(recorded, monkeypatch):
+    """429 is the one provider failure where pressing Retry is wrong — the job
+    is already waiting the provider out. The recording says so."""
+    from citizens.db.models import Recording
+    from citizens.db.session import session_scope
+
+    _wait_state(recorded, ("TRANSCRIBED",))
+
+    def throttled(*args, **kwargs):
+        raise TranscriptionError("Mistral returned HTTP 429 (rate limited): slow down",
+                                 status=429, retry_after=5)
+
+    monkeypatch.setattr(
+        "citizens.services.transcription.deepgram_provider.transcribe_file", throttled
+    )
+    recorded["client"].post(f"/api/v1/recordings/{recorded['recording_id']}/transcribe")
+    status = _wait_state(recorded, ("TRANSCRIPTION_FAILED",))
+    assert status["state"] == "TRANSCRIPTION_FAILED", status
+    with session_scope() as session:
+        assert session.get(Recording, recorded["recording_id"]).error_code == "RATE_LIMITED"
+
+
+def test_transcription_jobs_get_enough_attempts_to_wait_out_a_busy_provider(recorded):
+    """Hosted STT answered 429 on 4 of 10 tables in the 2026-09-08 load test;
+    five attempts span eight minutes, which a provider's busy spell can
+    outlast. Both enqueue sites — after assembly and the manual retry —
+    give the job an hour."""
+    from sqlalchemy import select
+
+    from citizens.db.models import AppJob
+    from citizens.db.session import session_scope
+
+    _wait_state(recorded, ("TRANSCRIBED",))
+    recorded["client"].post(f"/api/v1/recordings/{recorded['recording_id']}/transcribe")
+    with session_scope() as session:
+        jobs = [
+            job for job in session.scalars(select(AppJob).where(AppJob.type == "TRANSCRIBE_FINAL"))
+            if recorded["recording_id"] in job.payload_json
+        ]
+    assert len(jobs) >= 2, "expected the automatic job and the manual retry"
+    assert all(job.max_attempts == 8 for job in jobs), [job.max_attempts for job in jobs]
+
+
 def test_no_transcription_when_disabled(client, recorded):
     recorded["store"].values["stt_batch_enabled"] = "0"
     # (auto-enqueue check happens at assembly time; covered by unit of readiness)

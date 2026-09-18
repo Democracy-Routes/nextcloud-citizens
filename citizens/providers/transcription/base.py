@@ -36,9 +36,21 @@ class NormalizedTranscript:
 
 
 class TranscriptionError(Exception):
-    def __init__(self, message: str, permanent: bool = False):
+    def __init__(
+        self,
+        message: str,
+        permanent: bool = False,
+        status: int | None = None,
+        retry_after: float | None = None,
+    ):
         super().__init__(message)
         self.permanent = permanent
+        #: the provider's HTTP status, when there was one — 429 earns the
+        #: recording a RATE_LIMITED code so the organizer waits instead of retrying
+        self.status = status
+        #: seconds the provider asked us to wait (429 Retry-After); the job
+        #: runner honours it over its own exponential guess
+        self.retry_after = retry_after
 
 
 class SpeakerLabeler:

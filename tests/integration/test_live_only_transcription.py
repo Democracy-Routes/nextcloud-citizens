@@ -18,6 +18,7 @@ import pytest
 
 from citizens.config import get_settings
 from citizens.providers.transcription.base import NormalizedSegment, NormalizedTranscript
+from citizens.services.report_text import text
 from citizens.storage.paths import live_caption_path
 
 
@@ -149,7 +150,11 @@ def test_the_report_says_where_its_text_came_from(live_only):
     client, assembly = live_only["client"], live_only["assembly"]
     client.post(f"/api/v1/assemblies/{assembly['id']}/close")
     report = client.get(f"/api/v1/assemblies/{assembly['id']}/report").json()
-    assert "live captions" in report["methodology_note"]
+    # the fixture's assembly is Italian, so the note is worded in Italian
+    note = report["methodology_note"]
+    assert text("it", "live_transcript_note") in note
+    assert "sottotitoli in tempo reale" in note
+    assert "live captions" not in note
 
 
 def test_captions_that_produced_nothing_are_reported_as_a_failure(live_only):

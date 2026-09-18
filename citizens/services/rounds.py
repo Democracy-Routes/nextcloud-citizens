@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from citizens.db.models import RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.logging_setup import get_logger
+from citizens.services import job_failures
 
 log = get_logger(__name__)
 
@@ -73,6 +74,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
             ).scalars()
         )
         recording = recordings[0] if recordings else None
+        jobs = job_failures.jobs_for_recordings(session, recordings)
         # A table whose phone was replaced has an earlier recording still on
         # its way to a transcript. Showing only the newest made the half we had
         # just salvaged vanish from the Live tab the moment the replacement
@@ -119,6 +121,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
                     "received_chunks": recording.received_chunks,
                     "total_chunks": recording.total_chunks,
                     "error_code": recording.error_code,
+                    "job": jobs.get(recording.id),
                 },
                 "superseded_recordings": [
                     {
@@ -126,6 +129,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
                         "state": other.state,
                         "error_code": other.error_code,
                         "received_chunks": other.received_chunks,
+                        "job": jobs.get(other.id),
                     }
                     for other in superseded
                 ],

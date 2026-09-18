@@ -16,54 +16,40 @@ from citizens.db.models import (
     TranscriptSegment,
 )
 from citizens.services.recording import assembly_progress as progress
+from citizens.services.report_text import (
+    TYPE_ORDER,
+    finding_type_label,
+    text,
+    type_labels,
+    type_labels_singular,
+)
 from citizens.services.speaking import round_speaking_balance
 
-METHODOLOGY_NOTE = (
-    "AI was used to assist transcription and analysis. "
-    "Findings were reviewed by a human organizer; discussion summaries are "
-    "AI-generated neutral descriptions. "
-    "“Mentioned at N tables” describes how many discussion tables raised a topic; "
-    "it is not a measure of participant support."
-)
+# The wording lives in report_text.py, per language. These module names are
+# the English values, kept for callers that want a language-neutral constant
+# (tests, the findings API); the renderers look up the report's own language.
+METHODOLOGY_NOTE = text("en", "methodology_note")
 
 # deliberation-report vocabulary; the fixed order groups cross-table findings
 # in reports (institutional reading order, divergence highlighted)
-TYPE_ORDER = (
-    "proposal", "agreement", "disagreement", "concern",
-    "question", "minority_position", "new_idea",
-)
+TYPE_LABELS = type_labels("en")
 
-TYPE_LABELS = {
-    "proposal": "Proposals",
-    "agreement": "Points of consensus",
-    "disagreement": "Points of divergence",
-    "concern": "Concerns raised",
-    "question": "Open questions",
-    "minority_position": "Minority positions",
-    "new_idea": "Emerging ideas",
-}
-
-TYPE_LABELS_SINGULAR = {
-    "proposal": "Proposal",
-    "agreement": "Point of consensus",
-    "disagreement": "Point of divergence",
-    "concern": "Concern",
-    "question": "Open question",
-    "minority_position": "Minority position",
-    "new_idea": "Emerging idea",
-}
+TYPE_LABELS_SINGULAR = type_labels_singular("en")
 
 
-def group_findings_by_type(findings: list[dict]) -> list[tuple[str, str, list[dict]]]:
+def group_findings_by_type(
+    findings: list[dict], language: str | None = "en"
+) -> list[tuple[str, str, list[dict]]]:
     """(type, plural label, findings) groups in the institutional order."""
+    labels = type_labels(language)
     groups = []
     for type_ in TYPE_ORDER:
         matching = [f for f in findings if f["type"] == type_]
         if matching:
-            groups.append((type_, TYPE_LABELS[type_], matching))
+            groups.append((type_, labels[type_], matching))
     leftover = [f for f in findings if f["type"] not in TYPE_ORDER]
     if leftover:
-        groups.append(("other", "Other findings", leftover))
+        groups.append(("other", text(language, "type_plural.other"), leftover))
     return groups
 
 APPROVED = ("APPROVED", "EDITED_AND_APPROVED")
@@ -87,26 +73,14 @@ def _has_speaker_labels(session: Session, assembly: Assembly) -> bool:
     )
 
 
-LIVE_TRANSCRIPT_NOTE = (
-    " This assembly's transcripts come from the live captions produced while "
-    "the tables were speaking, not from a separate transcription of the "
-    "complete recordings. Captions are made under time pressure and can miss "
-    "speech the engine could not keep up with, so passages may be absent or "
-    "less accurate than the audio itself."
-)
+# English, with the leading space the methodology note joins them by; the
+# per-language wording is in report_text.py
+LIVE_TRANSCRIPT_NOTE = " " + text("en", "live_transcript_note")
+
+DEVICE_REPLACED_NOTE = " " + text("en", "device_replaced_note")
 
 
-DEVICE_REPLACED_NOTE = (
-    " At least one table's phone stopped working during a round and the "
-    "discussion continued on another device. Both parts were transcribed and "
-    "analysed together as one conversation; a short stretch between them was "
-    "not recorded."
-)
-
-
-#: Quotes printed under a finding. Five is what fits without the citation
-#: swamping the finding it supports.
-def round_heading(position: int, title: str) -> str:
+def round_heading(position: int, title: str, language: str | None = "en") -> str:
     """How a round is named wherever it is shown.
 
     The app manufactures its own redundancy here: both round-creation paths
@@ -114,14 +88,24 @@ def round_heading(position: int, title: str) -> str:
     "Round 1 - design" gets "Round 1 — Round 1 - design" on every screen and in
     every export. When the title already opens with this round's number, it is
     the whole heading.
+
+    The pre-filled default is English whatever the assembly's language, so an
+    untouched "Round 2" in an Italian assembly is rendered as "Turno 2"; a
+    title the organizer wrote is theirs and is printed as written.
     """
     name = (title or "").strip()
-    if not name:
-        return f"Round {position}"
+    default = text(language, "round", position=position)
+    if not name or name == f"Round {position}":
+        return default
     first = name.split()[0].rstrip(".:-–—") if name.split() else ""
-    if name.lower().startswith(f"round {position}") or first == str(position):
+    lowered = name.lower()
+    if (
+        lowered.startswith(f"round {position}")
+        or lowered.startswith(default.lower())
+        or first == str(position)
+    ):
         return name
-    return f"Round {position} — {name}"
+    return text(language, "round_titled", position=position, title=name)
 
 
 #: Quotes printed under a finding. Five is what fits without the citation
@@ -245,12 +229,13 @@ def _quotes(cited: list[TranscriptSegment]) -> list[dict]:
 
 def _methodology_note(session: Session, assembly: Assembly) -> str:
     """The standing note, plus whatever was unusual about THIS assembly."""
-    note = METHODOLOGY_NOTE
+    language = assembly.language
+    parts = [text(language, "methodology_note")]
     if _has_live_transcript(session, assembly):
-        note += LIVE_TRANSCRIPT_NOTE
+        parts.append(text(language, "live_transcript_note"))
     if _has_replaced_device(session, assembly):
-        note += DEVICE_REPLACED_NOTE
-    return note
+        parts.append(text(language, "device_replaced_note"))
+    return " ".join(parts)
 
 
 def _has_replaced_device(session: Session, assembly: Assembly) -> bool:
@@ -323,10 +308,15 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
         if recording.analysis_summary:
             table_summaries[(recording.round_id, recording.table_number)] = recording.analysis_summary
 
+    language = assembly.language
+
     def finding_payload(finding: Finding, table_numbers: dict[str, int]) -> dict:
         return {
             "id": finding.id,
             "type": finding.type,
+            # the type as the report names it, in the assembly's language, so
+            # a client can show it without a dictionary of its own
+            "type_label": finding_type_label(language, finding.type),
             "title": finding.title,
             "summary": finding.summary,
             "support": finding.support,
@@ -373,6 +363,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             {
                 "position": round_.position,
                 "title": round_.title,
+                # the phone's report screen shows this as-is, so it follows the
+                # assembly's language without a dictionary of its own
+                "heading": round_heading(round_.position, round_.title, assembly.language),
                 "question": round_.question,
                 "status": round_.status,
                 "summary": round_.analysis_summary,
@@ -405,11 +398,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
         },
         # only claim diarization when the transcripts actually carry speakers:
         # Whisper and Vosk return text without speaker separation
-        "method": (
-            "In-person citizens' assembly: participants discussed in small tables; "
-            "a phone at each table recorded the conversation, which was transcribed "
-            + ("with speaker diarization " if _has_speaker_labels(session, assembly) else "")
-            + "and analyzed per table, then aggregated across tables."
+        "method": text(
+            language,
+            "method_diarized" if _has_speaker_labels(session, assembly) else "method",
         ),
         # built by accumulation rather than a ternary: there are three notes
         # now, and "(A + B) if cond else A" does not extend to a third
@@ -430,112 +421,146 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
     }
 
 
+def report_language(report: dict) -> str | None:
+    """The language a report's fixed wording is printed in: the assembly's.
+
+    Read with .get(): a frozen final report predates nothing here, but the
+    renderers also take hand-built dicts in tests.
+    """
+    return (report.get("assembly") or {}).get("language")
+
+
+def mentioned_at_tables(language: str | None, count: int) -> str:
+    """"Mentioned at N table(s)" — languages that cannot hedge the plural the
+    way English does carry a separate wording for one table."""
+    key = "mentioned_at_one_table" if count == 1 else "mentioned_at_tables"
+    return text(language, key, count=count)
+
+
 def render_markdown(report: dict) -> str:
     assembly = report["assembly"]
+    language = report_language(report)
     coverage = report.get("progress") or {}
     state_line = (
-        f"**FINAL REPORT** — closed {(report.get('closed_at') or '')[:10]}"
+        f"**{text(language, 'final_report')}** — "
+        + text(language, "closed_on", date=(report.get("closed_at") or "")[:10])
         if report.get("is_final")
-        else f"**INTERIM REPORT** — {coverage.get('tables_complete', 0)} of "
-        f"{coverage.get('tables_expected', 0)} tables have completed all rounds"
+        else f"**{text(language, 'interim_report')}** — "
+        + text(
+            language, "tables_completed_all_rounds",
+            complete=coverage.get("tables_complete", 0),
+            expected=coverage.get("tables_expected", 0),
+        )
     )
     lines = [
-        f"# {assembly['name']} — Assembly Report",
+        f"# {assembly['name']} — {text(language, 'assembly_report')}",
         "",
         state_line,
         "",
         assembly["description"] or "",
         "",
-        f"- Tables contributing: {coverage.get('tables_contributed', 0)} of "
-        f"{coverage.get('tables_expected', 0)}",
+        "- " + text(
+            language, "tables_contributing",
+            contributed=coverage.get("tables_contributed", 0),
+            expected=coverage.get("tables_expected", 0),
+        ),
         # only when a roster was imported: "0 participants (expected 50)" on a
         # report of a real discussion reads as a failure, and it is not one —
         # recording a table creates no Participant row
         *(
-            [f"- Participants: {assembly['participants']} "
-             f"(expected {assembly['expected_participants']})"]
+            ["- " + text(
+                language, "participants",
+                count=assembly["participants"], expected=assembly["expected_participants"],
+            )]
             if assembly["participants"]
             else []
         ),
-        f"- Tables: {assembly['tables']}",
-        f"- Language: {assembly['language'].upper()}",
+        "- " + text(language, "tables", count=assembly["tables"]),
+        "- " + text(language, "language", code=assembly["language"].upper()),
         "",
-        "## Method",
+        f"## {text(language, 'method_heading')}",
         "",
         report["method"],
         "",
     ]
+    ai_summary = text(language, "ai_summary")
+    no_findings = f"_{text(language, 'no_findings_yet')}_"
     plenary = assembly.get("recording_mode") == "plenary"
     for round_ in report["rounds"]:
-        lines += [f"## {round_heading(round_['position'], round_['title'])}", ""]
+        lines += [f"## {round_heading(round_['position'], round_['title'], language)}", ""]
         if round_["question"]:
             lines += [f"> {round_['question']}", ""]
         if round_["summary"]:
-            lines += [f"*AI summary:* {round_['summary']}", ""]
+            lines += [f"*{ai_summary}:* {round_['summary']}", ""]
         balance = round_.get("speaking_balance")
         if balance and len(balance["voices"]) >= 2:
-            lines += ["**Speaking balance**", ""]
+            lines += [f"**{text(language, 'speaking_balance')}**", ""]
             lines += [
-                f"- Voice {v['label']} — {v['percent']}% ({_timestamp(v['seconds'])})"
-                if v["label"] != "Others"
-                else f"- Others — {v['percent']}% ({_timestamp(v['seconds'])})"
+                f"- {voice_name(language, v['label'])} — {v['percent']}% "
+                f"({_timestamp(v['seconds'])})"
                 for v in balance["voices"]
             ]
-            lines += [
-                "",
-                "*Detected voices, not identified by name — from the clearest "
-                "single recording. Talk-time, not influence.*",
-                "",
-            ]
+            lines += ["", f"*{text(language, 'voices_caveat')}*", ""]
         if plenary:
             # One group = one table: render its findings once, grouped by type,
             # with no "Across all tables" section and no "Table N" heading.
             table = round_["tables"][0] if round_["tables"] else None
             findings = table["findings"] if table else []
-            for _type, label, group in group_findings_by_type(findings):
+            for _type, label, group in group_findings_by_type(findings, language):
                 lines += [f"### {label}", ""]
                 for finding in group:
-                    lines += _markdown_finding(finding, cross=False)
+                    lines += _markdown_finding(finding, cross=False, language=language)
             if not findings:
-                lines += ["_No findings for this round yet._", ""]
+                lines += [no_findings, ""]
             continue
         if round_["cross_table"]:
-            lines += ["### Across all tables", ""]
-            for _type, label, group in group_findings_by_type(round_["cross_table"]):
+            lines += [f"### {text(language, 'across_all_tables')}", ""]
+            for _type, label, group in group_findings_by_type(round_["cross_table"], language):
                 lines += [f"#### {label}", ""]
                 for finding in group:
-                    lines += _markdown_finding(finding, cross=True)
+                    lines += _markdown_finding(finding, cross=True, language=language)
         for table in round_["tables"]:
             if not table["findings"] and not table["summary"]:
                 continue
-            lines += [f"### Table {table['table_number']}", ""]
+            lines += [f"### {text(language, 'table', number=table['table_number'])}", ""]
             if table["summary"]:
-                lines += [f"*AI summary:* {table['summary']}", ""]
+                lines += [f"*{ai_summary}:* {table['summary']}", ""]
             for finding in table["findings"]:
-                lines += _markdown_finding(finding, cross=False)
+                lines += _markdown_finding(finding, cross=False, language=language)
         if (
             not round_["summary"]
             and not round_["cross_table"]
             and not any(t["findings"] or t["summary"] for t in round_["tables"])
         ):
-            lines += ["_No findings for this round yet._", ""]
+            lines += [no_findings, ""]
     lines += ["---", "", f"_{report['methodology_note']}_", ""]
     return "\n".join(lines)
 
 
-def _markdown_finding(finding: dict, cross: bool) -> list[str]:
-    draft = " *(DRAFT — not yet reviewed)*" if finding["is_draft"] else ""
-    label = TYPE_LABELS_SINGULAR.get(finding["type"], finding["type"])
+def voice_name(language: str | None, label: str) -> str:
+    """"Voice A" / "Others" — the balance's labels are data; the words are not."""
+    if label == "Others":
+        return text(language, "others")
+    return text(language, "voice", label=label)
+
+
+def _markdown_finding(finding: dict, cross: bool, language: str | None = "en") -> list[str]:
+    draft = f" *({text(language, 'draft_not_reviewed')})*" if finding["is_draft"] else ""
+    label = finding_type_label(language, finding["type"])
     header = f"**{label}: {finding['title']}**{draft}"
     lines = [header, "", finding["summary"], ""]
     if cross and finding["mentioned_table_count"]:
-        lines.insert(2, f"Mentioned at {finding['mentioned_table_count']} table(s).")
+        lines.insert(2, mentioned_at_tables(language, finding["mentioned_table_count"]) + ".")
         lines.insert(3, "")
     for evidence in finding["evidence"]:
-        speaker = evidence["speaker"] or "Speaker"
+        speaker = evidence["speaker"] or text(language, "speaker")
         # cross-table quotes are labelled with the table they came from
-        where = f"Table {evidence['table_number']} · " if evidence.get("table_number") else ""
+        where = (
+            f"{text(language, 'table', number=evidence['table_number'])} · "
+            if evidence.get("table_number")
+            else ""
+        )
         lines += [f"> {where}[{evidence['timestamp']}] {speaker}: “{evidence['text']}”", ""]
     if not finding["evidence"] and finding.get("evidence_removed"):
-        lines += ["_Evidence removed with the transcript._", ""]
+        lines += [f"_{text(language, 'evidence_removed')}_", ""]
     return lines

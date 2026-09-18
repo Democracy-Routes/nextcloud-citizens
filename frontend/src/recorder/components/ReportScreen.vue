@@ -41,7 +41,7 @@ async function downloadPdf(): Promise<void> {
 			blob,
 			`${props.session.assembly.name.slice(0, 40).replace(/ /g, '-')}-report.pdf`,
 		)
-		downloadNote.value = 'PDF saved to this phone’s downloads.'
+		downloadNote.value = t('recorder.report.pdfSaved')
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	} finally {
@@ -53,7 +53,7 @@ async function downloadPdf(): Promise<void> {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">TABLE {{ session.table_number }}</span>
+			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
 		</div>
 
 		<div class="rc-scroll">
@@ -66,14 +66,14 @@ async function downloadPdf(): Promise<void> {
 					</p>
 					<h1 style="font-size: 1.25rem">{{ report.assembly.name }}</h1>
 					<p class="rc-muted" style="margin: 6px 0 0; font-size: 0.8125rem">
-						{{ report.assembly.participants }} participants ·
-						{{ report.assembly.tables }} tables
+						{{ t('recorder.report.participants', { count: report.assembly.participants }, report.assembly.participants) }} ·
+						{{ t('recorder.report.tables', { count: report.assembly.tables }, report.assembly.tables) }}
 					</p>
 				</div>
 
 				<div v-for="round in report.rounds" :key="round.position" class="rc-card">
 					<p class="rc-eyebrow" style="margin-bottom: 4px">
-						{{ roundHeading(round.position, round.title) }}
+						{{ round.heading ?? roundHeading(round.position, round.title) }}
 					</p>
 					<p v-if="round.question" class="rc-question" style="margin: 0 0 10px">
 						{{ round.question }}
@@ -101,11 +101,13 @@ async function downloadPdf(): Promise<void> {
 
 					<template v-for="table in round.tables" :key="table.table_number">
 						<template v-if="table.summary || table.findings.length">
-							<p class="rc-eyebrow" style="margin: 10px 0 2px">Table {{ table.table_number }}</p>
+							<p class="rc-eyebrow" style="margin: 10px 0 2px">
+								{{ t('recorder.common.tableNumber', { number: table.table_number }) }}
+							</p>
 							<p v-if="table.summary" style="font-size: 0.875rem; margin: 0 0 8px">{{ table.summary }}</p>
 							<div v-for="finding in table.findings" :key="finding.id" style="margin: 0 0 10px">
 								<p style="font-weight: 700; font-size: 0.875rem; margin: 0">
-									{{ TYPE_LABELS[finding.type] ?? finding.type }}: {{ finding.title }}
+									{{ finding.type_label ?? TYPE_LABELS[finding.type] ?? finding.type }}: {{ finding.title }}
 								</p>
 								<p style="font-size: 0.845rem; margin: 3px 0 0">{{ finding.summary }}</p>
 							</div>
@@ -129,7 +131,7 @@ async function downloadPdf(): Promise<void> {
 				<SvgIcon :path="mdiDownloadOutline" :size="20" />
 				{{ downloading ? t('recorder.report.preparingPdf') : t('recorder.report.downloadPdf') }}
 			</button>
-			<button class="rc-btn rc-subtle" @click="emit('back')">Back</button>
+			<button class="rc-btn rc-subtle" @click="emit('back')">{{ t('recorder.common.back') }}</button>
 		</div>
 	</div>
 </template>

@@ -132,7 +132,7 @@ def _captured_text(pdf_bytes_fn, monkeypatch) -> list[str]:
     from citizens.services import report_pdf as mod
 
     seen: list[str] = []
-    for name in ("text_block", "eyebrow", "group_heading", "section_banner"):
+    for name in ("text_block", "eyebrow", "group_heading", "section_banner", "badge"):
         original = getattr(mod._ReportPDF, name)
 
         def wrapper(self, text, *a, __orig=original, **k):
@@ -190,3 +190,72 @@ def test_no_strip_without_diarized_voices(monkeypatch):
         monkeypatch,
     )
     assert "Speaking balance" not in seen
+
+
+def _italian_report() -> dict:
+    report = _report("Una citazione abbastanza lunga da contare.", findings=2)
+    report["assembly"]["language"] = "it"
+    report["rounds"][0]["title"] = "Round 1"  # the untouched English pre-fill
+    report["rounds"][0]["cross_table"] = [
+        {
+            "type": "proposal", "title": "Autobus serali", "summary": "Più corse la sera.",
+            "support": "", "is_draft": True, "mentioned_table_count": 3,
+            "evidence_removed": False,
+            "evidence": [
+                {"table_number": 2, "speaker": "", "timestamp": "02:14",
+                 "text": "L'ultimo autobus parte troppo presto."},
+            ],
+        }
+    ]
+    report["rounds"][0]["speaking_balance"] = {
+        "voices": [
+            {"label": "A", "seconds": 300, "percent": 70},
+            {"label": "Others", "seconds": 129, "percent": 30},
+        ],
+        "total_seconds": 429, "from_recording_id": "rec-1",
+    }
+    return report
+
+
+def test_an_italian_report_is_drawn_in_italian(monkeypatch):
+    """Every heading, badge and note around the model's Italian text is
+    Italian too; the generated-on date is written the Italian way."""
+    rendered: list[bytes] = []
+    seen = _captured_text(lambda: rendered.append(render_pdf(_italian_report())), monkeypatch)
+    assert rendered[0].startswith(b"%PDF")
+
+    assert "RAPPORTO FINALE · chiuso il 2026-09-04" in seen
+    assert "4 tavoli su 10 hanno contribuito a questo rapporto" in seen
+    assert any(
+        re.fullmatch(r"\d{1,2} [a-zà]+ \d{4} · 48 partecipanti \(previsti 50\) · 10 tavoli · IT", t)
+        for t in seen
+    ), "the cover meta line should carry an Italian date"
+    assert "Metodo" in seen
+    assert "Sintesi esecutiva" in seen
+    assert "Turno 1" in seen  # section banner and executive summary heading
+    assert "Equilibrio degli interventi" in seen
+    assert any(t.startswith("Voce A — 70%") for t in seen)
+    assert any(t.startswith("Altri — 30%") for t in seen)
+    assert "Proposte" in seen  # group heading
+    assert "Proposta" in seen  # badge
+    assert "bozza — non revisionata" in seen
+    assert "Menzionato in 3 tavoli" in seen
+    assert any(t.startswith("Tavolo 2 · [02:14] Partecipante:") for t in seen)
+    assert "Dettaglio per tavolo" in seen
+    assert "Tavolo 1" in seen
+
+    for english in (
+        "Assembly Report", "FINAL REPORT", "Method", "Executive summary", "Round 1",
+        "Speaking balance", "Proposals", "Proposal", "draft — not reviewed", "Table detail",
+        "Table 1", "Others — 30%",
+    ):
+        assert english not in seen, english
+    assert not any(t.startswith("Table ") or t.startswith("Voice ") for t in seen)
+
+
+def test_an_italian_report_lays_out_like_an_english_one():
+    """Longer Italian labels must not break the page-keeping arithmetic."""
+    pdf = render_pdf(_italian_report())
+    for number, page in enumerate(_pages(pdf), start=1):
+        for height in _vertical_bars(page):
+            assert height < A4_HEIGHT_PT * 0.6, f"page {number}: {height:.0f}pt bar"

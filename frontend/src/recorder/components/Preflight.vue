@@ -125,41 +125,45 @@ async function runChecks(): Promise<void> {
 			level.value = Math.min(100, Math.round((peak / 128) * 160))
 		}, 90)
 	} catch {
-		set('microphone', 'fail', 'Microphone access denied or unavailable')
+		set('microphone', 'fail', t('recorder.preflight.notes.micDenied'))
 	}
 
 	const mime = pickMimeType()
 	if (mime) set('recorder', 'ok', mime.split(';')[0])
-	else set('recorder', 'fail', 'No supported recording format')
+	else set('recorder', 'fail', t('recorder.preflight.notes.noFormat'))
 
 	try {
 		await idb.selfTest()
 		let note = ''
 		if (navigator.storage?.estimate) {
 			const { quota, usage } = await navigator.storage.estimate()
-			if (quota) note = `${Math.round(((quota - (usage ?? 0)) / 1024 / 1024) * 10) / 10} MB free`
+			if (quota) {
+				note = t('recorder.preflight.notes.mbFree', {
+					mb: Math.round(((quota - (usage ?? 0)) / 1024 / 1024) * 10) / 10,
+				})
+			}
 		}
 		set('storage', 'ok', note)
 	} catch {
-		set('storage', 'fail', 'Cannot write to local storage')
+		set('storage', 'fail', t('recorder.preflight.notes.storageWriteFailed'))
 	}
 
 	try {
 		if (navigator.storage?.persist) {
 			const persisted = await navigator.storage.persist()
-			set('persistent', persisted ? 'ok' : 'warn', persisted ? '' : 'Browser may evict data under pressure')
+			set('persistent', persisted ? 'ok' : 'warn', persisted ? '' : t('recorder.preflight.notes.mayEvict'))
 		} else {
-			set('persistent', 'warn', 'Not supported by this browser')
+			set('persistent', 'warn', t('recorder.preflight.notes.persistUnsupported'))
 		}
 	} catch {
-		set('persistent', 'warn', 'Could not request persistence')
+		set('persistent', 'warn', t('recorder.preflight.notes.persistFailed'))
 	}
 
 	try {
 		await recorderApi.status(props.session.session_token)
 		set('server', 'ok')
 	} catch {
-		set('server', 'warn', 'Server unreachable — recording still works locally')
+		set('server', 'warn', t('recorder.preflight.notes.serverUnreachable'))
 	}
 
 	// Independent tables poll throughout, not only once every round is done:
@@ -220,12 +224,12 @@ function canProceed(): boolean {
 		checks.value.storage.state === 'ok'
 }
 
-const ROWS: Array<{ key: string; label: string; icon: string }> = [
-	{ key: 'microphone', label: 'Microphone', icon: mdiMicrophoneOutline },
-	{ key: 'recorder', label: 'Audio recording', icon: mdiRecordCircleOutline },
-	{ key: 'storage', label: 'Local storage', icon: mdiDatabaseOutline },
-	{ key: 'persistent', label: 'Persistent storage', icon: mdiHarddisk },
-	{ key: 'server', label: 'Server connection', icon: mdiServerNetwork },
+const ROWS: Array<{ key: string; labelKey: string; icon: string }> = [
+	{ key: 'microphone', labelKey: 'recorder.preflight.checks.microphone', icon: mdiMicrophoneOutline },
+	{ key: 'recorder', labelKey: 'recorder.preflight.checks.recorder', icon: mdiRecordCircleOutline },
+	{ key: 'storage', labelKey: 'recorder.preflight.checks.storage', icon: mdiDatabaseOutline },
+	{ key: 'persistent', labelKey: 'recorder.preflight.checks.persistent', icon: mdiHarddisk },
+	{ key: 'server', labelKey: 'recorder.preflight.checks.server', icon: mdiServerNetwork },
 ]
 
 const STATE_ICON: Record<CheckState, string> = {
@@ -239,7 +243,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">TABLE {{ session.table_number }}</span>
+			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
 		</div>
 
 		<div class="rc-scroll">
@@ -249,7 +253,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 				<span class="rc-status-row__label">
 					<SvgIcon :path="row.icon" :size="19" style="color: var(--rc-muted)" />
 					<span>
-						{{ row.label }}
+						{{ t(row.labelKey) }}
 						<span v-if="checks[row.key].note" class="rc-status-row__note">{{ checks[row.key].note }}</span>
 					</span>
 				</span>
@@ -300,7 +304,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 			<div v-if="selectedRound" class="rc-card">
 				<p class="rc-eyebrow" style="margin-bottom: 4px">
 					{{ t('recorder.common.roundOf', { position: selectedRound.position, total: session.rounds.length }) }} ·
-					{{ selectedRound.duration_minutes }} minutes
+					{{ t('recorder.common.minutes', { minutes: selectedRound.duration_minutes }, selectedRound.duration_minutes) }}
 				</p>
 				<p class="rc-question" style="margin: 0">{{ selectedRound.question || selectedRound.title }}</p>
 				<div v-if="openRounds.length > 1" style="margin-top: 14px">
@@ -314,7 +318,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 							:value="round.id"
 							:disabled="!!round.recorded_state">
 							{{ t('recorder.common.roundNumber', { position: round.position }) }} — {{ round.title || round.question || t('recorder.preflight.untitled') }}
-							{{ round.recorded_state ? ' ✓ recorded' : '' }}
+							{{ round.recorded_state ? t('recorder.preflight.recorded') : '' }}
 						</option>
 					</select>
 				</div>
@@ -353,7 +357,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 
 		<div class="rc-actions">
 			<button v-if="orchestrated" class="rc-btn rc-primary" :disabled="!canProceed()" @click="emit('ready')">
-				READY
+				{{ t('recorder.preflight.ready') }}
 			</button>
 			<button
 				v-else-if="selectedRound"
