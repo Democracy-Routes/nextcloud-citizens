@@ -66,7 +66,8 @@
 			"waiting": "Waiting for the facilitator to start",
 			"waitingHint": "Recording begins automatically. Keep this page open and the phone on the table.",
 			"offline": "Network unavailable — reconnecting… the phone stays armed.",
-			"backToTest": "Back to microphone test"
+			"backToTest": "Back to microphone test",
+			"badge": "ARMED"
 		},
 		"preflight": {
 			"level": "Audio level — speak at the table",
@@ -83,7 +84,26 @@
 			"recordTest": "Record 5-second test",
 			"recordingTest": "Recording 5 seconds…",
 			"startRecording": "Start recording",
-			"untitled": "Untitled"
+			"untitled": "Untitled",
+			"ready": "READY",
+			"recorded": "✓ recorded",
+			"checks": {
+				"microphone": "Microphone",
+				"recorder": "Audio recording",
+				"storage": "Local storage",
+				"persistent": "Persistent storage",
+				"server": "Server connection"
+			},
+			"notes": {
+				"micDenied": "Microphone access denied or unavailable",
+				"noFormat": "No supported recording format",
+				"storageWriteFailed": "Cannot write to local storage",
+				"mayEvict": "Browser may evict data under pressure",
+				"persistUnsupported": "Not supported by this browser",
+				"persistFailed": "Could not request persistence",
+				"serverUnreachable": "Server unreachable — recording still works locally",
+				"mbFree": "{mb} MB free"
+			}
 		},
 		"recording": {
 			"storageErrorTitle": "LOCAL STORAGE ERROR",
@@ -131,7 +151,20 @@
 			"pendingUpload": "Pending upload",
 			"chunksUploaded": "chunks uploaded",
 			"openingIn": "Opening in {seconds} s…",
-			"micLost": "The microphone was interrupted — a call or another app took it over. The recording so far was saved and is uploading. Tell the facilitator, then start again when the table is ready."
+			"micLost": "The microphone was interrupted — a call or another app took it over. The recording so far was saved and is uploading. Tell the facilitator, then start again when the table is ready.",
+			"badge": "RECORDING",
+			"timerRecording": "recording",
+			"timerStopping": "stopping…",
+			"uploading": "Uploading",
+			"offlineBadge": "Offline",
+			"pendingCount": "{count} pending",
+			"safeBanner": "✓ SAFE",
+			"offlineBanner": "OFFLINE",
+			"chunksCount": "{count} chunks | {count} chunk | {count} chunks",
+			"speaker": "Speaker {number}",
+			"synchronizing": "Synchronizing",
+			"serverState": "Server: {state}",
+			"clearedNote": "{count} synchronized recordings removed from this phone. | {count} synchronized recording removed from this phone. | {count} synchronized recordings removed from this phone."
 		},
 		"recovery": {
 			"sessionNeeded": "Saved audio is still on this phone. Scan a current QR code for the same assembly and table to resume uploading. You can download the local copy now. Do not clear browser storage.",
@@ -151,7 +184,10 @@
 			"failedHint": "Local audio remains stored on this phone. Notify the facilitator.",
 			"title": "Recovered recording",
 			"awaitingUpload": "Awaiting upload",
-			"uploaded": "Every part of the recording was uploaded and accepted, but the server has not confirmed the assembled audio yet. Keep this phone's copy until it has."
+			"uploaded": "Every part of the recording was uploaded and accepted, but the server has not confirmed the assembled audio yet. Keep this phone's copy until it has.",
+			"server": "Server",
+			"synchronizing": "Synchronizing…",
+			"continue": "Continue"
 		},
 		"safety": {
 			"storageUnavailable": "Some audio could not be saved locally. Keep this page open and download the audio. Notify the facilitator immediately.",
@@ -164,7 +200,10 @@
 			"title": "Assembly report",
 			"downloadPdf": "Download PDF",
 			"preparingPdf": "Preparing PDF…",
-			"aiSummary": "AI summary"
+			"aiSummary": "AI summary",
+			"participants": "{count} participants | {count} participant | {count} participants",
+			"tables": "{count} tables | {count} table | {count} tables",
+			"pdfSaved": "PDF saved to this phone’s downloads."
 		},
 		"purged": {
 			"title": "The recording was removed from this phone",
@@ -182,7 +221,11 @@
 			"roundOf": "Round {position} of {total}",
 			"roundAndDuration": "Round {position} · {minutes} minutes",
 			"tryAgain": "Try again",
-			"retryNow": "Retry now"
+			"retryNow": "Retry now",
+			"tableBadge": "TABLE {number}",
+			"tableNumber": "Table {number}",
+			"back": "Back",
+			"minutes": "{minutes} minutes | {minutes} minute | {minutes} minutes"
 		},
 		"addDevice": {
 			"button": "Add another device",
@@ -193,6 +236,13 @@
 		"assembly": {
 			"overTitle": "The assembly has ended",
 			"overBody": "Thank you for taking part."
+		},
+		"engine": {
+			"noFormat": "This browser cannot record audio (no supported format)",
+			"metadataMissing": "Recording metadata missing",
+			"storageError": "Local storage error: {error}",
+			"noAudio": "No audio was captured",
+			"invalidAudio": "Server could not validate the audio ({code})"
 		}
 	},
 	"error": {

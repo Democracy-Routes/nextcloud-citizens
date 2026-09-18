@@ -80,7 +80,7 @@ async function deleteLocal(): Promise<void> {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">TABLE {{ table }}</span>
+			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: table }) }}</span>
 		</div>
 
 		<div class="rc-scroll">
@@ -97,7 +97,7 @@ async function deleteLocal(): Promise<void> {
 				<span :class="pending > 0 ? 'rc-warn' : 'rc-ok'">{{ pending }}</span>
 			</div>
 			<div class="rc-status-row">
-				<span>Server</span><span>{{ state.serverState || '—' }}</span>
+				<span>{{ t('recorder.recovery.server') }}</span><span>{{ state.serverState || '—' }}</span>
 			</div>
 		</div>
 
@@ -106,7 +106,7 @@ async function deleteLocal(): Promise<void> {
 				{{ t('recorder.recovery.waiting') }}
 				<button class="rc-btn" style="margin-top: 10px" @click="engine.retryNow()">{{ t('recorder.common.retryNow') }}</button>
 			</div>
-			<p v-else class="rc-muted rc-center">Synchronizing…</p>
+			<p v-else class="rc-muted rc-center">{{ t('recorder.recovery.synchronizing') }}</p>
 		</template>
 
 		<!-- every chunk was acknowledged but the server never confirmed the
@@ -122,7 +122,7 @@ async function deleteLocal(): Promise<void> {
 
 		<template v-else-if="state.phase === 'done'">
 			<div class="rc-note">✅ {{ t('recorder.recovery.done') }}</div>
-			<button class="rc-btn rc-primary" @click="emit('done')">Continue</button>
+			<button class="rc-btn rc-primary" @click="emit('done')">{{ t('recorder.recovery.continue') }}</button>
 		</template>
 
 		<template v-else-if="state.phase === 'failed'">

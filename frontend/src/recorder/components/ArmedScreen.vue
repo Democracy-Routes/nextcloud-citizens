@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
 		<div class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 16px; padding-bottom: 8px">
 				<p class="rc-eyebrow">{{ session.assembly.name }}</p>
-				<div class="rc-hero__table">TABLE {{ session.table_number }}</div>
+				<div class="rc-hero__table">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</div>
 			</div>
 
 			<!-- the microphone failed for the round that is currently open: say so
@@ -175,7 +175,7 @@ onBeforeUnmount(() => {
 			<template v-else>
 				<div class="rc-card rc-center">
 					<p class="rc-eyebrow" style="color: var(--rc-green)">
-						<span class="rc-live" style="color: var(--rc-green); display: inline-flex">ARMED</span>
+						<span class="rc-live" style="color: var(--rc-green); display: inline-flex">{{ t('recorder.armed.badge') }}</span>
 					</p>
 					<p style="font-size: 1.06rem; font-weight: 600; margin: 8px 0 4px">
 						{{ t('recorder.armed.waiting') }}

@@ -18,7 +18,7 @@
 			"agree": "Tutti al tavolo sono d'accordo — continua",
 			"decline": "Qualcuno non è d'accordo",
 			"declinedTitle": "Questo tavolo non registrerà",
-			"declinedBody": "Avvisate il facilitatore. Non è stato registrato nulla e la discussione può comunque proseguire senza questo telefono.",
+			"declinedBody": "Avvisate l'organizzatore. Non è stato registrato nulla e la discussione può comunque proseguire senza questo telefono.",
 			"declinedBack": "Torna indietro",
 			"engineFallback": "un motore di trascrizione"
 		},
@@ -31,11 +31,11 @@
 		"noInvite": {
 			"title": "Registratore del tavolo",
 			"body": "Aprite questa pagina scansionando il codice QR del vostro tavolo.",
-			"askFacilitator": "Chiedete al facilitatore il foglio con i codici QR."
+			"askFacilitator": "Chiedete all'organizzatore il foglio con i codici QR."
 		},
 		"joinError": {
 			"title": "Impossibile accedere",
-			"hint": "Il codice QR potrebbe essere stato revocato. Chiedetene uno nuovo al facilitatore."
+			"hint": "Il codice QR potrebbe essere stato revocato. Chiedetene uno nuovo all'organizzatore."
 		},
 		"mic": {
 			"failedTitle": "Non è stato possibile avviare il microfono.",
@@ -47,7 +47,7 @@
 			"blockedBody": "Il turno {position} è aperto, ma questo telefono non è riuscito ad avviare il microfono. Verificate che nessun'altra app lo stia usando e che il browser sia autorizzato a registrare.",
 			"serverTitle": "Questo tavolo non può iniziare a registrare",
 			"serverRetry": "Riprova",
-			"serverHelp": "Chiedete al facilitatore: dalla scheda In diretta può assegnare questo tavolo a un altro telefono."
+			"serverHelp": "Chiedete all'organizzatore: dalla scheda In diretta può assegnare questo tavolo a un altro telefono."
 		},
 		"uploaded": {
 			"title": "Registrazione caricata",
@@ -63,10 +63,11 @@
 			"allRecordedTitle": "Tutti i turni registrati",
 			"allRecordedBody": "Questo tavolo ha completato tutti i turni. Grazie!",
 			"viewReport": "Vedi il report dell'assemblea",
-			"waiting": "In attesa che il facilitatore inizi",
+			"waiting": "In attesa che l'organizzatore inizi",
 			"waitingHint": "La registrazione parte automaticamente. Tenete aperta questa pagina e il telefono sul tavolo.",
 			"offline": "Rete non disponibile — riconnessione in corso… il telefono resta pronto.",
-			"backToTest": "Torna alla prova del microfono"
+			"backToTest": "Torna alla prova del microfono",
+			"badge": "PRONTO"
 		},
 		"preflight": {
 			"level": "Livello audio — parlate al tavolo",
@@ -78,21 +79,40 @@
 			"noRounds": "Questa assemblea non ha ancora turni.",
 			"roundSummary": "Turno {position} — la sintesi AI del vostro tavolo",
 			"analyzing": "Analisi della vostra discussione…",
-			"recordingElsewhere": "Questo tavolo sta già registrando su un altro telefono. Se quel telefono ha smesso di funzionare, chiedete al facilitatore di assegnare il tavolo a questo.",
+			"recordingElsewhere": "Questo tavolo sta già registrando su un altro telefono. Se quel telefono ha smesso di funzionare, chiedete all'organizzatore di assegnare il tavolo a questo.",
 			"title": "Prova del microfono",
 			"recordTest": "Registra una prova di 5 secondi",
 			"recordingTest": "Registrazione di 5 secondi…",
 			"startRecording": "Inizia a registrare",
-			"untitled": "Senza titolo"
+			"untitled": "Senza titolo",
+			"ready": "PRONTI",
+			"recorded": "✓ registrato",
+			"checks": {
+				"microphone": "Microfono",
+				"recorder": "Registrazione audio",
+				"storage": "Memoria locale",
+				"persistent": "Memoria persistente",
+				"server": "Connessione al server"
+			},
+			"notes": {
+				"micDenied": "Accesso al microfono negato o non disponibile",
+				"noFormat": "Nessun formato di registrazione supportato",
+				"storageWriteFailed": "Impossibile scrivere nella memoria locale",
+				"mayEvict": "Il browser potrebbe eliminare i dati se la memoria scarseggia",
+				"persistUnsupported": "Non supportato da questo browser",
+				"persistFailed": "Impossibile richiedere la conservazione dei dati",
+				"serverUnreachable": "Server non raggiungibile — la registrazione funziona comunque in locale",
+				"mbFree": "{mb} MB liberi"
+			}
 		},
 		"recording": {
 			"storageErrorTitle": "ERRORE DI MEMORIA LOCALE",
-			"storageErrorBody": "La registrazione non può più essere salvata in modo sicuro. Avvisate subito il facilitatore.",
+			"storageErrorBody": "La registrazione non può più essere salvata in modo sicuro. Avvisate subito l'organizzatore.",
 			"serverBusy": "Il server è occupato — la registrazione prosegue in sicurezza su questo telefono e verrà caricata da sola. Non si perde nulla. Tenete aperta questa pagina.",
 			"offline": "Rete non disponibile — la registrazione prosegue in sicurezza su questo telefono e verrà caricata al ritorno della connessione. Tenete aperta questa pagina.",
 			"retryUpload": "Riprova subito il caricamento",
 			"keepOpen": "Tenete aperta questa pagina mentre il tavolo registra.",
-			"lowStorage": "La memoria del telefono sta finendo. Avvisate il facilitatore dopo questo turno.",
+			"lowStorage": "La memoria del telefono sta finendo. Avvisate l'organizzatore dopo questo turno.",
 			"finish": "Termina e sincronizza",
 			"liveTranscript": "Trascrizione in diretta — provvisoria",
 			"confirmFinish": "Terminare e sincronizzare la registrazione di questo tavolo?",
@@ -131,7 +151,20 @@
 			"pendingUpload": "In attesa di caricamento",
 			"chunksUploaded": "frammenti caricati",
 			"openingIn": "Apertura tra {seconds} s…",
-			"micLost": "Il microfono è stato interrotto — una chiamata o un'altra app lo ha preso in uso. La registrazione fatta finora è salva ed è in caricamento. Avvisa chi facilita e poi ricominciate quando il tavolo è pronto."
+			"micLost": "Il microfono è stato interrotto — una chiamata o un'altra app lo ha preso in uso. La registrazione fatta finora è salva ed è in caricamento. Avvisate l'organizzatore e poi ricominciate quando il tavolo è pronto.",
+			"badge": "REGISTRAZIONE",
+			"timerRecording": "in registrazione",
+			"timerStopping": "in chiusura…",
+			"uploading": "In caricamento",
+			"offlineBadge": "Non in linea",
+			"pendingCount": "{count} in attesa",
+			"safeBanner": "✓ AL SICURO",
+			"offlineBanner": "NON IN LINEA",
+			"chunksCount": "{count} frammenti | {count} frammento | {count} frammenti",
+			"speaker": "Persona {number}",
+			"synchronizing": "Sincronizzazione in corso",
+			"serverState": "Server: {state}",
+			"clearedNote": "{count} registrazioni sincronizzate eliminate da questo telefono. | {count} registrazione sincronizzata eliminata da questo telefono. | {count} registrazioni sincronizzate eliminate da questo telefono."
 		},
 		"recovery": {
 			"sessionNeeded": "L'audio salvato è ancora su questo telefono. Scansionate un codice QR valido della stessa assemblea e dello stesso tavolo per riprendere il caricamento. Potete scaricare subito la copia locale. Non cancellate i dati del browser.",
@@ -148,28 +181,34 @@
 			"delete": "Elimina l'audio locale",
 			"skip": "Salta per ora",
 			"failed": "La sincronizzazione di recupero non è riuscita:",
-			"failedHint": "L'audio locale resta salvato su questo telefono. Avvisate il facilitatore.",
+			"failedHint": "L'audio locale resta salvato su questo telefono. Avvisate l'organizzatore.",
 			"title": "Registrazione recuperata",
 			"awaitingUpload": "In attesa di caricamento",
-			"uploaded": "Ogni parte della registrazione è stata caricata e accettata, ma il server non ha ancora confermato l'audio assemblato. Conserva la copia su questo telefono finché non lo avrà fatto."
+			"uploaded": "Ogni parte della registrazione è stata caricata e accettata, ma il server non ha ancora confermato l'audio assemblato. Conserva la copia su questo telefono finché non lo avrà fatto.",
+			"server": "Server",
+			"synchronizing": "Sincronizzazione in corso…",
+			"continue": "Continua"
 		},
 		"safety": {
-			"storageUnavailable": "Non è stato possibile salvare parte dell'audio in locale. Tenete aperta questa pagina e scaricate l'audio. Avvisate subito il facilitatore.",
+			"storageUnavailable": "Non è stato possibile salvare parte dell'audio in locale. Tenete aperta questa pagina e scaricate l'audio. Avvisate subito l'organizzatore.",
 			"incomplete": "Mancano frammenti audio. La registrazione è incompleta: conservate la copia locale.",
 			"unverified": "Il server non ha verificato questa registrazione completa. Conservate l'audio locale.",
-			"uploadBlocked": "Il server ha rifiutato il caricamento. La registrazione continua in locale. Avvisate il facilitatore e tenete aperta questa pagina. Al termine potrebbe servire un codice QR aggiornato."
+			"uploadBlocked": "Il server ha rifiutato il caricamento. La registrazione continua in locale. Avvisate l'organizzatore e tenete aperta questa pagina. Al termine potrebbe servire un codice QR aggiornato."
 		},
 		"report": {
 			"mentionedAt": "Citato a {count} tavolo | Citato a {count} tavolo | Citato a {count} tavoli",
 			"title": "Report dell'assemblea",
 			"downloadPdf": "Scarica il PDF",
 			"preparingPdf": "Preparazione del PDF…",
-			"aiSummary": "Sintesi AI"
+			"aiSummary": "Sintesi AI",
+			"participants": "{count} partecipanti | {count} partecipante | {count} partecipanti",
+			"tables": "{count} tavoli | {count} tavolo | {count} tavoli",
+			"pdfSaved": "PDF salvato nei download di questo telefono."
 		},
 		"purged": {
 			"title": "La registrazione è stata rimossa da questo telefono",
 			"body": "L'organizzatore ha concluso questa assemblea, quindi l'audio è stato eliminato da questo dispositivo. Il server conserva la registrazione: non è andato perso nulla.",
-			"kept": "Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono al facilitatore. | Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono al facilitatore. | {count} registrazioni NON sono state eliminate perché il server non le ha ancora confermate. Mostrate questo telefono al facilitatore.",
+			"kept": "Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono all'organizzatore. | Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono all'organizzatore. | {count} registrazioni NON sono state eliminate perché il server non le ha ancora confermate. Mostrate questo telefono all'organizzatore.",
 			"dismiss": "OK"
 		},
 		"joining": {
@@ -182,7 +221,11 @@
 			"roundOf": "Turno {position} di {total}",
 			"roundAndDuration": "Turno {position} · {minutes} minuti",
 			"tryAgain": "Riprova",
-			"retryNow": "Riprova ora"
+			"retryNow": "Riprova ora",
+			"tableBadge": "TAVOLO {number}",
+			"tableNumber": "Tavolo {number}",
+			"back": "Indietro",
+			"minutes": "{minutes} minuti | {minutes} minuto | {minutes} minuti"
 		},
 		"addDevice": {
 			"button": "Aggiungi un altro dispositivo",
@@ -193,6 +236,13 @@
 		"assembly": {
 			"overTitle": "L'assemblea è terminata",
 			"overBody": "Grazie per aver partecipato."
+		},
+		"engine": {
+			"noFormat": "Questo browser non può registrare l'audio (nessun formato supportato)",
+			"metadataMissing": "Dati della registrazione mancanti",
+			"storageError": "Errore di memoria locale: {error}",
+			"noAudio": "Non è stato registrato alcun audio",
+			"invalidAudio": "Il server non ha potuto convalidare l'audio ({code})"
 		}
 	},
 	"error": {
