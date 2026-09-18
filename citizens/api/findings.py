@@ -14,15 +14,17 @@ from citizens.db.models import AppJob, Finding, Recording, TranscriptSegment
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db
 from citizens.security.identity import CurrentUser
-from citizens.services import provider_config
+from citizens.services import job_failures, provider_config
 from citizens.services.analysis import analysis_ready
 from citizens.services.assemblies import get_owned_round
 from citizens.services.audit import record_audit_event
-from citizens.services.jobs import enqueue_job
+from citizens.services.jobs import LIVE_JOB_STATES, enqueue_job
+from citizens.services.recording_states import transition
 from citizens.services.report import _cross_table_evidence
 from citizens.services.round_analysis import (
     bump_round_inputs,
     enqueue_round_analysis_if_stale,
+    tables_pending,
 )
 from citizens.services.speaking import round_speaking_balance
 
@@ -97,8 +99,16 @@ def round_findings(round_id: str, user: CurrentUser, session: DB):
             select(Recording).where(Recording.round_id == round_.id).order_by(Recording.created_at)
         ).scalars()
     }
+    jobs = job_failures.jobs_for_recordings(session, list(recordings_full.values()))
+    # error_code and the job's reason were missing here — the one tab whose
+    # button offers a re-run could not say why the last run failed, or that
+    # a retry was already waiting (2026-09-18: five blind re-runs on a 403)
     recordings = {
-        number: {"id": rec.id, "state": rec.state} for number, rec in recordings_full.items()
+        number: {
+            "id": rec.id, "state": rec.state, "error_code": rec.error_code or "",
+            "job": jobs.get(rec.id),
+        }
+        for number, rec in recordings_full.items()
     }
     tables_payload = []
     for table in round_.tables:
@@ -127,7 +137,81 @@ def round_findings(round_id: str, user: CurrentUser, session: DB):
         ],
         "speaking_balance": round_speaking_balance(session, round_),
         "tables": tables_payload,
+        # the cross-table clustering has no state of its own on the round; a
+        # failed one used to leave every table "ready" and nothing else
+        "round_job": job_failures.latest_job_failure(session, "ANALYZE_ROUND", "round_id", round_.id),
     }
+
+
+@router.post("/rounds/{round_id}/analysis/cancel")
+def cancel_pending_analysis(round_id: str, user: CurrentUser, session: DB):
+    """Stop the analysis jobs that have not started: queued, or waiting out a
+    retry. A job already mid-request finishes within its HTTP timeout and
+    is reported, not interrupted.
+
+    Without this, "Analysis is already running for every table" was the
+    whole story for as long as the backoff lasted — eight minutes at the
+    2026-09-18 rehearsal, with the provider answering 429 every time.
+    """
+    round_ = get_owned_round(session, round_id, user)
+    recording_ids = set(
+        session.scalars(select(Recording.id).where(Recording.round_id == round_.id))
+    )
+    cancelled = running = 0
+    for job in session.scalars(
+        select(AppJob).where(
+            AppJob.type.in_(("ANALYZE_TABLE", "ANALYZE_ROUND")),
+            AppJob.state.in_(LIVE_JOB_STATES),
+        )
+    ):
+        try:
+            payload = json.loads(job.payload_json)
+        except ValueError:
+            continue
+        recording_id = payload.get("recording_id")
+        if payload.get("round_id") != round_.id and recording_id not in recording_ids:
+            continue
+        if job.state == "RUNNING":
+            running += 1
+            continue
+        job.state = "FAILED"
+        job.locked_at = None
+        job.last_error = "cancelled by organizer"
+        cancelled += 1
+        recording = session.get(Recording, recording_id) if recording_id else None
+        if recording is not None and recording.state == "ANALYZING":
+            # otherwise it stays "analyzing" with nothing working on it
+            recording.error_code = "ANALYSIS_FAILED"
+            transition(recording, "ANALYSIS_FAILED")
+    record_audit_event(
+        session, "analysis_cancelled", "round", round_.id, actor=user,
+        data={"cancelled": cancelled, "running": running},
+    )
+    return {"cancelled": cancelled, "running": running}
+
+
+@router.post("/rounds/{round_id}/recluster", status_code=202)
+def request_reclustering(round_id: str, user: CurrentUser, session: DB):
+    """Run only the cross-table clustering again, from the tables' current
+    findings — not the ten table analyses a full re-run costs."""
+    round_ = get_owned_round(session, round_id, user)
+    if not analysis_ready(provider_config.default_store()):
+        raise HTTPException(
+            status_code=409,
+            detail="AI analysis is not configured — add an analysis API key in Settings",
+        )
+    if tables_pending(session, round_.id):
+        raise HTTPException(
+            status_code=409,
+            detail="Tables are still being transcribed or analysed; "
+                   "the clustering runs by itself when they finish",
+        )
+    bump_round_inputs(session, round_.id)
+    queued = enqueue_round_analysis_if_stale(session, round_.id)
+    record_audit_event(
+        session, "reclustering_requested", "round", round_.id, actor=user, data={"queued": queued},
+    )
+    return {"queued": queued}
 
 
 class FindingUpdate(BaseModel):

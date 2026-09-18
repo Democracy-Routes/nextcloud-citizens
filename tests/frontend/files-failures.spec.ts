@@ -180,3 +180,65 @@ describe('the device-audio purge line', () => {
 		expect(wrapper.text()).toContain('expired or revoked sessions may need manual cleanup')
 	})
 })
+
+describe("the job's own reason on the Files tab", () => {
+	const job = (overrides: Record<string, unknown>) => ({
+		state: 'FAILED',
+		attempts: 1,
+		max_attempts: 8,
+		next_attempt_at: null,
+		failure_reason: null,
+		failure_detail: null,
+		...overrides,
+	})
+
+	it("repeats the provider's refusal for a failed transcription", async () => {
+		listFiles.mockResolvedValue(
+			listing({
+				state: 'TRANSCRIPTION_FAILED',
+				error_code: 'TRANSCRIPTION_FAILED',
+				job: job({
+					failure_reason: 'PROVIDER_AUTH',
+					failure_detail: 'Mistral authentication failed (403): Forbidden for this workspace',
+				}),
+			}),
+		)
+		const wrapper = mountWithI18n(FilesTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.text()).toContain('rejected the API key')
+		expect(wrapper.text()).toContain('Forbidden for this workspace')
+	})
+
+	it('says a rate-limited table is retrying by itself', async () => {
+		listFiles.mockResolvedValue(
+			listing({
+				state: 'TRANSCRIPTION_FAILED',
+				error_code: 'RATE_LIMITED',
+				job: job({
+					state: 'RETRY',
+					attempts: 3,
+					next_attempt_at: new Date(Date.now() + 60_000).toISOString(),
+					failure_reason: 'PROVIDER_RATE_LIMIT',
+					failure_detail: 'Mistral returned HTTP 429 (rate limited): Too many requests',
+				}),
+			}),
+		)
+		const wrapper = mountWithI18n(FilesTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.text()).toContain('Retrying automatically')
+		expect(wrapper.text()).toContain('attempt 4 of 8')
+		expect(wrapper.text()).toContain('do not start another run')
+	})
+
+	it('a specific code still wins over the classifier', () => {
+		const wrapper = mountWithI18n(CzFailureNote, {
+			props: {
+				state: 'AUDIO_INVALID',
+				errorCode: 'CHUNKS_GONE',
+				job: job({ failure_reason: 'UNKNOWN', failure_detail: 'x' }),
+			},
+		})
+		expect(wrapper.text()).toContain('Parts of the upload are missing')
+		expect(wrapper.text()).not.toContain('did not recognise')
+	})
+})

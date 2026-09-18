@@ -109,6 +109,32 @@ def latest_jobs(
     return found
 
 
+#: which job a recording's state is waiting on or failed in
+JOB_TYPE_FOR_STATE = {
+    "ASSEMBLING": "ASSEMBLE_AUDIO", "AUDIO_INVALID": "ASSEMBLE_AUDIO",
+    "TRANSCRIBING": "TRANSCRIBE_FINAL", "TRANSCRIPTION_FAILED": "TRANSCRIBE_FINAL",
+    "ANALYZING": "ANALYZE_TABLE", "ANALYSIS_FAILED": "ANALYZE_TABLE",
+}
+
+
+def jobs_for_recordings(session: Session, recordings) -> dict[str, dict | None]:
+    """{recording_id: describe(newest job)} for the job its state points at.
+
+    One scan per job type, not one query per row: the Files tab lists every
+    recording of the assembly and the Live tab polls every few seconds.
+    """
+    wanted: dict[str, set[str]] = {}
+    for recording in recordings:
+        job_type = JOB_TYPE_FOR_STATE.get(recording.state)
+        if job_type:
+            wanted.setdefault(job_type, set()).add(recording.id)
+    found: dict[str, dict] = {}
+    for job_type, ids in wanted.items():
+        for recording_id, job in latest_jobs(session, job_type, "recording_id", ids).items():
+            found[recording_id] = describe(job)
+    return {recording.id: found.get(recording.id) for recording in recordings}
+
+
 def latest_job_failure(session: Session, job_type: str, payload_key: str, value: str) -> dict | None:
     job = latest_jobs(session, job_type, payload_key, {value}).get(value)
     return describe(job) if job is not None else None

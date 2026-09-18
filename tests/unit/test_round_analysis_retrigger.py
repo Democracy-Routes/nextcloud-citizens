@@ -206,3 +206,139 @@ def test_a_review_landing_mid_run_is_not_lost(client):
     with session_scope() as session:
         queued = _round_jobs(session, ids["round"], states=("QUEUED", "RETRY"))
         assert len(queued) == 1
+
+
+# ------------------------------------ what the organizer sees, and can stop
+
+
+def _future(seconds):
+    from datetime import timedelta
+
+    from citizens.db.models.base import utcnow
+
+    return utcnow() + timedelta(seconds=seconds)
+
+
+@pytest.fixture
+def analysis_configured(monkeypatch):
+    """GET /rounds/{id}/findings reports whether analysis is configured, which
+    reads the Nextcloud config store; these tests are about the payload, not
+    the store."""
+    from citizens.api import findings as findings_api
+
+    monkeypatch.setattr(findings_api, "analysis_ready", lambda store: True)
+    monkeypatch.setattr(findings_api.provider_config, "default_store", lambda: object())
+
+
+def test_round_findings_carry_the_last_jobs_reason(client, analysis_configured):
+    """2026-09-18: a 403 was re-run five times because the tab said only
+    "did not complete". The payload now carries the job's classified reason
+    and the provider's words, per table and for the clustering."""
+    with session_scope() as session:
+        ids = _seed(session)
+        recording = session.get(Recording, ids["recording"])
+        recording.state = "ANALYSIS_FAILED"
+        recording.error_code = "ANALYSIS_FAILED"
+        job = enqueue_job(session, "ANALYZE_TABLE", {"recording_id": ids["recording"], "force": True})
+        job.state = "FAILED"
+        job.last_error = "Analysis authentication failed (403): Inactive subscription or usage limit"
+        round_job = enqueue_job(session, "ANALYZE_ROUND", {"round_id": ids["round"], "revision": 1})
+        round_job.state = "FAILED"
+        round_job.last_error = "Model output failed validation after retries: clusters.0.title"
+    body = client.get(f"/api/v1/rounds/{ids['round']}/findings").json()
+    table = body["tables"][0]
+    assert table["recording"]["error_code"] == "ANALYSIS_FAILED"
+    assert table["recording"]["job"]["state"] == "FAILED"
+    assert table["recording"]["job"]["failure_reason"] == "PROVIDER_AUTH"
+    assert "Inactive subscription" in table["recording"]["job"]["failure_detail"]
+    assert body["round_job"]["state"] == "FAILED"
+    assert body["round_job"]["failure_reason"] == "SCHEMA_INVALID"
+
+
+def test_a_table_waiting_for_its_retry_says_so(client, analysis_configured):
+    with session_scope() as session:
+        ids = _seed(session)
+        recording = session.get(Recording, ids["recording"])
+        recording.state = "ANALYZING"
+        job = enqueue_job(session, "ANALYZE_TABLE", {"recording_id": ids["recording"]})
+        job.state = "RETRY"
+        job.attempts = 2
+        job.next_attempt_at = _future(90)
+        job.last_error = "Analysis endpoint returned HTTP 429 (rate limited): slow down"
+    body = client.get(f"/api/v1/rounds/{ids['round']}/findings").json()
+    job_info = body["tables"][0]["recording"]["job"]
+    assert job_info["state"] == "RETRY" and job_info["attempts"] == 2
+    assert job_info["failure_reason"] == "PROVIDER_RATE_LIMIT"
+    assert job_info["next_attempt_at"] is not None
+
+
+def test_cancel_stops_queued_and_retrying_jobs_but_not_a_running_one(client, analysis_configured):
+    """The escape from "already running for every table": pending jobs are
+    failed as cancelled, the recording stops pretending to analyse, and a job
+    mid-request is left to finish (≤ its HTTP timeout) and reported."""
+    from citizens.services.jobs import has_live_job
+
+    with session_scope() as session:
+        ids = _seed(session)
+        recording = session.get(Recording, ids["recording"])
+        recording.state = "ANALYZING"
+        waiting = enqueue_job(session, "ANALYZE_TABLE", {"recording_id": ids["recording"]})
+        waiting.state = "RETRY"
+        waiting.next_attempt_at = _future(200)
+        running = enqueue_job(session, "ANALYZE_ROUND", {"round_id": ids["round"], "revision": 1})
+        running.state = "RUNNING"
+        waiting_id, running_id = waiting.id, running.id
+
+    response = client.post(f"/api/v1/rounds/{ids['round']}/analysis/cancel")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"cancelled": 1, "running": 1}
+
+    with session_scope() as session:
+        assert session.get(AppJob, waiting_id).state == "FAILED"
+        assert session.get(AppJob, waiting_id).last_error == "cancelled by organizer"
+        assert session.get(AppJob, running_id).state == "RUNNING"
+        recording = session.get(Recording, ids["recording"])
+        assert recording.state == "ANALYSIS_FAILED"
+        assert not has_live_job(session, "ANALYZE_TABLE", "recording_id", ids["recording"])
+    body = client.get(f"/api/v1/rounds/{ids['round']}/findings").json()
+    assert body["tables"][0]["recording"]["job"]["failure_reason"] == "CANCELLED"
+
+
+def test_recluster_waits_for_pending_tables_then_queues_exactly_once(client, analysis_configured):
+    with session_scope() as session:
+        ids = _seed(session)
+        session.get(Recording, ids["recording"]).state = "TRANSCRIBING"
+    blocked = client.post(f"/api/v1/rounds/{ids['round']}/recluster")
+    assert blocked.status_code == 409, blocked.text
+    with session_scope() as session:
+        session.get(Recording, ids["recording"]).state = "READY_FOR_REVIEW"
+    first = client.post(f"/api/v1/rounds/{ids['round']}/recluster")
+    assert first.status_code == 202 and first.json() == {"queued": True}
+    second = client.post(f"/api/v1/rounds/{ids['round']}/recluster")
+    assert second.status_code == 202 and second.json() == {"queued": False}
+    with session_scope() as session:
+        assert len(_live(session, ids["round"])) == 1
+
+
+def test_files_listing_and_live_tab_carry_the_job_behind_a_failed_table(client):
+    from citizens.services import rounds as rounds_svc
+
+    with session_scope() as session:
+        ids = _seed(session)
+        recording = session.get(Recording, ids["recording"])
+        recording.state = "TRANSCRIPTION_FAILED"
+        recording.error_code = "RATE_LIMITED"
+        job = enqueue_job(session, "TRANSCRIBE_FINAL", {"recording_id": ids["recording"]}, max_attempts=8)
+        job.state = "RETRY"
+        job.attempts = 3
+        job.next_attempt_at = _future(120)
+        job.last_error = "Mistral returned HTTP 429 (rate limited): Too many requests"
+    body = client.get(f"/api/v1/assemblies/{ids['assembly']}/files").json()
+    entries = [t for r in body["rounds"] for t in r["tables"]]
+    entry = next(e for e in entries if e["recording_id"] == ids["recording"])
+    assert entry["error_code"] == "RATE_LIMITED"
+    assert entry["job"]["state"] == "RETRY" and entry["job"]["max_attempts"] == 8
+    assert entry["job"]["failure_reason"] == "PROVIDER_RATE_LIMIT"
+    with session_scope() as session:
+        monitor = rounds_svc.round_monitor(session, session.get(Round, ids["round"]))
+    assert monitor["tables"][0]["recording"]["job"]["failure_reason"] == "PROVIDER_RATE_LIMIT"

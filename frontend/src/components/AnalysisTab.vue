@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { TYPE_LABELS, TYPE_ORDER, roundHeading } from '../labels'
-import { mdiBrain, mdiCheckAll, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiFilterOutline, mdiRefresh } from '@mdi/js'
+import { mdiBrain, mdiCancel, mdiCheckAll, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiFilterOutline, mdiRefresh } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
 import { BACKGROUND_MS } from '../composables/intervals'
@@ -14,6 +14,7 @@ import SpeakingBalanceCard from './SpeakingBalanceCard.vue'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzFailureNote from './ui/CzFailureNote.vue'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
@@ -184,6 +185,66 @@ const hasAnyFindings = () =>
 
 const anyAnalyzing = () =>
 	!!data.value && data.value.tables.some((t) => t.recording && ['ANALYZING', 'TRANSCRIBING'].includes(t.recording.state))
+/** What the jobs are doing, from the jobs themselves.
+ *
+ * "Analysis is already running for every table" was the whole story while a
+ * 429 backed off for eight minutes: nothing said which tables, how long, or
+ * why. The payload now carries the newest job per table. */
+const LIVE_JOB = new Set(['QUEUED', 'RUNNING', 'RETRY'])
+
+const pendingTables = computed(() =>
+	(data.value?.tables ?? []).filter((t) => t.recording?.job && LIVE_JOB.has(t.recording.job.state)),
+)
+
+const retryingTables = computed(() =>
+	pendingTables.value.filter((t) => t.recording?.job?.state === 'RETRY'),
+)
+
+const failedTables = computed(() =>
+	(data.value?.tables ?? []).filter((t) => t.recording?.state === 'ANALYSIS_FAILED'),
+)
+
+const roundJobFailed = computed(() => data.value?.round_job?.state === 'FAILED')
+
+const queueSummary = computed(() => {
+	const counts: Record<string, number> = { RUNNING: 0, QUEUED: 0, RETRY: 0 }
+	for (const table of pendingTables.value) counts[table.recording!.job!.state] += 1
+	const parts: string[] = []
+	if (counts.RUNNING) parts.push(`${counts.RUNNING} running`)
+	if (counts.QUEUED) parts.push(`${counts.QUEUED} queued`)
+	if (counts.RETRY) parts.push(`${counts.RETRY} waiting to retry`)
+	return parts.join(', ')
+})
+
+async function cancelPending(): Promise<void> {
+	busy.value = true
+	try {
+		const result = await api.cancelAnalysis(roundId.value)
+		toast(
+			result.running
+				? `${result.cancelled} pending job(s) cancelled; ${result.running} already running will finish`
+				: `${result.cancelled} pending job(s) cancelled`,
+		)
+		await polling.refresh()
+	} catch (err) {
+		toast(describeError(err).message, 'error')
+	} finally {
+		busy.value = false
+	}
+}
+
+async function recluster(): Promise<void> {
+	busy.value = true
+	try {
+		const result = await api.recluster(roundId.value)
+		toast(result.queued ? 'Cross-table clustering queued' : 'Clustering is already queued')
+		await polling.refresh()
+	} catch (err) {
+		toast(describeError(err).message, 'error')
+	} finally {
+		busy.value = false
+	}
+}
 </script>
 
 <template>
@@ -249,6 +310,39 @@ const anyAnalyzing = () =>
 		<CzSkeleton v-else-if="!data && !error" :rows="4" />
 
 		<template v-else-if="data && shown">
+			<!-- the jobs' own account, before any empty state: a failed or
+			     waiting analysis used to hide behind "No findings yet" -->
+			<div v-if="pendingTables.length" class="cz-card cz-analysis-jobs">
+				<div class="cz-row cz-row--spread">
+					<span><strong>Analysis in progress</strong> — {{ queueSummary }}</span>
+					<CzButton small :icon="mdiCancel" :disabled="busy" @click="cancelPending">
+						Cancel pending analysis
+					</CzButton>
+				</div>
+				<div v-for="table in retryingTables" :key="table.table_number" style="margin-top: 6px">
+					<span class="cz-muted" style="font-size: 0.8125rem">Table {{ table.table_number }}</span>
+					<CzFailureNote :state="table.recording!.state" :job="table.recording!.job" />
+				</div>
+			</div>
+			<div v-if="failedTables.length" class="cz-card cz-analysis-jobs">
+				<strong>Analysis failed</strong> for {{ failedTables.length }} table(s):
+				<div v-for="table in failedTables" :key="table.table_number" style="margin-top: 6px">
+					<span class="cz-muted" style="font-size: 0.8125rem">Table {{ table.table_number }}</span>
+					<CzFailureNote
+						:state="table.recording!.state"
+						:error-code="table.recording!.error_code"
+						:job="table.recording!.job" />
+				</div>
+			</div>
+			<div v-if="roundJobFailed" class="cz-card cz-analysis-jobs">
+				<div class="cz-row cz-row--spread">
+					<strong>Cross-table clustering failed</strong>
+					<CzButton small :icon="mdiRefresh" :disabled="busy" @click="recluster">
+						Re-run clustering only
+					</CzButton>
+				</div>
+				<CzFailureNote state="ANALYSIS_FAILED" :job="data.round_job" />
+			</div>
 			<CzEmptyState
 				v-if="!data.analysis_configured"
 				:icon="mdiCogOutline"
@@ -334,7 +428,7 @@ const anyAnalyzing = () =>
 			title="Run the analysis again?"
 			:message="
 				reviewedCount > 0
-					? `Every finding for this round is replaced with freshly generated ones — including the ${reviewedCount} you have already approved or edited. Their wording and your review are lost.`
+					? `Draft findings are regenerated; the ${reviewedCount} you have already approved or edited are kept unchanged, and the new drafts may duplicate them.`
 					: 'Every draft finding for this round is replaced with freshly generated ones.'
 			"
 			confirm-label="Run analysis again"
@@ -344,3 +438,9 @@ const anyAnalyzing = () =>
 			@cancel="confirmRerun = false" />
 	</div>
 </template>
+
+<style scoped>
+.cz-analysis-jobs {
+	margin-bottom: 16px;
+}
+</style>

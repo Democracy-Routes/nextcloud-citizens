@@ -81,7 +81,9 @@ describe('re-running the analysis', () => {
 		await button.trigger('click')
 
 		expect(requestAnalysis).not.toHaveBeenCalled()
+		// the server keeps reviewed findings; the old copy said they were lost
 		expect(wrapper.text()).toContain('1 you have already approved')
+		expect(wrapper.text()).toContain('are kept unchanged')
 	})
 
 	it('warns more mildly when only drafts would be replaced', async () => {

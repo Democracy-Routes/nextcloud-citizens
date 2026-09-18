@@ -44,12 +44,24 @@ export interface AssemblyProgress {
 	complete: boolean
 }
 
+/** The newest job behind a recording's state: why it failed, or how long it
+ * is waiting. The runner always recorded this; nothing showed it. */
+export interface JobInfo {
+	state: string
+	attempts: number
+	max_attempts: number
+	next_attempt_at: string | null
+	failure_reason: string | null
+	failure_detail: string | null
+}
+
 export interface FileEntry {
 	recording_id: string
 	table_number: number
 	state: string
 	/** Why it failed, when it did — a bare failed pill said nothing actionable. */
 	error_code?: string
+	job?: JobInfo | null
 	updated_at?: string | null
 	can_retry_assembly?: boolean
 	mime_type: string
@@ -171,6 +183,7 @@ export interface MonitorTable {
 		received_chunks: number
 		total_chunks: number | null
 		error_code: string
+		job?: JobInfo | null
 	} | null
 	/** Recordings from a phone this table has since replaced. The server ships
 	 * these so the salvaged half of a round stays visible while it finishes
@@ -181,6 +194,7 @@ export interface MonitorTable {
 		state: string
 		error_code: string
 		received_chunks: number
+		job?: JobInfo | null
 	}>
 }
 
@@ -296,11 +310,13 @@ export interface RoundFindings {
 	speaking_balance: SpeakingBalance | null
 	tables: Array<{
 		table_number: number
-		recording: { id: string; state: string } | null
+		recording: { id: string; state: string; error_code?: string; job?: JobInfo | null } | null
 		summary: string
 		analyzed: boolean
 		findings: FindingData[]
 	}>
+	/** The newest cross-table clustering job, whatever its state. */
+	round_job?: JobInfo | null
 }
 
 export interface ReportData {

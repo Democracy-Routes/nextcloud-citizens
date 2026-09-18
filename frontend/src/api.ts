@@ -136,6 +136,13 @@ export const api = {
 		}),
 	requestAnalysis: (roundId: string, force = false) =>
 		request<{ queued: number }>('POST', `/api/v1/rounds/${roundId}/analyze`, { force }),
+	cancelAnalysis: (roundId: string) =>
+		request<{ cancelled: number; running: number }>(
+			'POST',
+			`/api/v1/rounds/${roundId}/analysis/cancel`,
+		),
+	recluster: (roundId: string) =>
+		request<{ queued: boolean }>('POST', `/api/v1/rounds/${roundId}/recluster`),
 	assemblyReport: (assemblyId: string, includeDrafts: boolean) =>
 		request<ReportData>(
 			'GET',
