@@ -46,7 +46,8 @@ echo
 echo "== log: starts today, last warnings/errors =="
 if [ -r "$LOG" ]; then
   today="$(date -u +%Y-%m-%d)"
-  printf 'app starts today: %s\n' "$(grep -c "\"event\": \"app_started\".*$today\|$today.*\"event\": \"app_started\"" "$LOG" 2>/dev/null || echo 0)"
+  starts="$(grep "$today" "$LOG" | grep -c '"event": "app_started"')"
+  printf 'app starts today: %s  (more than one means the server restarted mid-day)\n' "${starts:-0}"
   grep -E '"level": "(warning|error)"' "$LOG" | tail -20 | sed -E 's/.*"event": "([^"]+)".*"timestamp": "([^"]+)".*/\2  \1/; s/.*"timestamp": "([^"]+)".*"event": "([^"]+)".*/\1  \2/' | tail -20
 else
   echo "log not readable at $LOG"
