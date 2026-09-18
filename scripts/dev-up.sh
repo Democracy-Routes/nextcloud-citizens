@@ -2,7 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Build the dev image and (re)start the Citizens dev container with the
-# source bind-mounted and uvicorn auto-reload. Nextcloud reaches it as
+# source bind-mounted and uvicorn auto-reload. Development only: every file
+# saved in the checkout restarts the server. For an event use event-up.sh.
+# 2g, not 512m: ten tables peaked at 465 MiB while transcribing (docs/testing.md). Nextcloud reaches it as
 # http://nc_app_citizens:23000 on the shared docker network.
 set -eu
 . "$(dirname "$0")/dev-env.sh"
@@ -14,7 +16,7 @@ docker run -d \
     --name "$CONTAINER" \
     --network "$NETWORK" \
     --restart unless-stopped \
-    --memory 512m --memory-swap 512m \
+    --memory 2g --memory-swap 2g \
     -v "$REPO_DIR":/app \
     -v "$DATA_VOLUME":/data \
     -e APP_ID="$APP_ID" \

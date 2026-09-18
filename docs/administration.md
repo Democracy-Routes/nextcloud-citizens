@@ -177,9 +177,37 @@ Deleting those is still manual, from the Files tab.
 ## 6. Backups
 
 The app keeps everything in the persistent volume AppAPI mounts at `/data`:
-SQLite database, audio, transcripts and logs. Back that volume up together with
-Nextcloud itself. The database is safe to copy while running (WAL mode), but a
-snapshot taken while a recording is uploading may miss its most recent chunks.
+SQLite database, audio, transcripts, live captions and logs. Back that volume
+up together with Nextcloud itself.
+
+`scripts/backup-citizens-data.sh` takes a consistent snapshot while the app
+runs: `VACUUM INTO` copies the database as one transaction (WAL mode makes
+this safe), the rest of the volume is tarred, and both are checksummed into
+`/root/backups/citizens-data-<timestamp>/`. Set `CITIZENS_BACKUP_REMOTE` to an
+rsync target to copy it off the host — a snapshot on the same disk as the data
+protects against mistakes, not against the disk. Install it nightly:
+
+```
+install -m 755 scripts/backup-citizens-data.sh /usr/local/sbin/citizens-backup
+( crontab -l 2>/dev/null; echo '30 2 * * * /usr/local/sbin/citizens-backup >> /var/log/citizens-backup.log 2>&1' ) | crontab -
+```
+
+A snapshot taken while a recording is uploading may miss its most recent
+chunks; the phone still holds them and re-sends on reconnect.
+
+**Restore** (rehearse it once on a throwaway volume before you need it):
+
+```
+docker volume create citizens_restore
+docker run --rm -v citizens_restore:/data -v /root/backups/citizens-data-<stamp>:/in:ro alpine sh -c \
+  'tar xzf /in/citizens_data-files.tar.gz -C /data && cp /in/citizens.db /data/citizens.db && chown -R 10001:10001 /data'
+sqlite3 "file:$(docker volume inspect citizens_restore --format '{{.Mountpoint}}')/citizens.db?mode=ro" \
+  'select count(*) from assemblies; select count(*) from recordings; select version_num from alembic_version'
+```
+
+To restore for real, stop the container, repeat the same into `citizens_data`
+(or point the container at the restored volume), and start it: migrations run
+at startup, so a snapshot from an older version upgrades itself.
 
 ## 7. Troubleshooting
 

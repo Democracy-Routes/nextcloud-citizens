@@ -33,9 +33,27 @@ room.
   safe — reopening withdraws only the request the close itself made, whatever
   the toggle says by then — but decide it before the day so nobody has to
   reason about it in the room.
-- [ ] **Check disk headroom.** Server health reports free space; a half-hour
-  round of ten tables is on the order of a few hundred MB, and unfinished
-  parts are not auto-expired. Leave comfortable headroom, not "enough."
+- [ ] **Take a snapshot, and rehearse the restore.** `scripts/backup-citizens-data.sh`
+  (see [administration.md](administration.md) § Backups) — then restore it into
+  a throwaway volume and count the assemblies. A backup nobody has restored is
+  a hope.
+- [ ] **Check disk headroom.** `scripts/event-status.sh` prints free space on
+  the data volume; a 40-minute round of ten tables is roughly 400 MB, and
+  unfinished parts are not auto-expired. Leave comfortable headroom, not
+  "enough."
+- [ ] **Freeze the server.** A development container runs the checkout with
+  auto-reload: any file saved on the host restarts the server mid-round and
+  kills every live-caption session. The day before: stop every editor and
+  agent on the host, run `sh scripts/event-up.sh` from the commit you tested
+  (immutable image, no bind mount, no reload, 2 GiB, INFO logs), confirm
+  `occ app_api:app:list` still shows the app enabled, then
+  `python3 tests/load/load_h_realtime_assembly.py --smoke`. After this, nobody
+  opens the repository until the event is over. Never run `make up` or
+  `scripts/dev-up.sh` on the day.
+- [ ] **Prove the analysis provider, not just its key.** Settings → Test for
+  the analysis endpoint now sends one real completion to the configured model
+  and repeats the provider's reason if it refuses; "Connected" from the old
+  models listing hid a workspace whose every chat call was refused with 403.
 - [ ] **Charge the phones, and know which ones they are.** Every table phone
   should start the day above 80%, plugged in where the venue allows, and be a
   device you have already rehearsed with — not one somebody brought that
@@ -64,6 +82,16 @@ you *watch* the failure modes recover:
 
 ## During the assembly
 
+- [ ] `sh scripts/event-status.sh` every half hour, on a second screen: the
+  job runner has no page of its own, and this is the only view of what is
+  queued, retrying (and why), or failed — plus memory, disk and whether the
+  frozen container is still the one running.
+- [ ] When a table shows a failure, **read the note under the pill** on the
+  Files, Live or Analysis tab before pressing anything. "Retrying
+  automatically — next in 90 s" means wait; "rejected the API key" means
+  Settings; a cancelled or failed run means Re-run. The Analysis tab's
+  "Cancel pending analysis" stops jobs that are queued or waiting for a retry;
+  one already mid-request finishes within five minutes.
 - [ ] The facilitator keeps the **Live tab open the entire time.** Battery
   levels report there per table; a phone heading below ~20% is a handover
   *now* (Live tab → replace device with any other phone's QR), not a dead
