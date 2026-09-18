@@ -175,16 +175,22 @@ def test_saved_key_is_never_sent_to_a_typed_in_endpoint(admin_client, monkeypatc
 
     reached = {}
 
-    def fake_get(url, headers=None, timeout=None):
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"choices": [{"message": {"content": "OK"}}]}
+
+    def fake_request(url, headers=None, timeout=None, json=None):
         reached["url"] = url
         reached["auth"] = (headers or {}).get("Authorization", "")
-
-        class FakeResponse:
-            status_code = 200
-
         return FakeResponse()
 
-    monkeypatch.setattr(provider_config.httpx, "get", fake_get)
+    # the analysis test is a real chat completion (a POST); GET stays patched
+    # so a regression back to /models would still be caught here
+    monkeypatch.setattr(provider_config.httpx, "get", fake_request)
+    monkeypatch.setattr(provider_config.httpx, "post", fake_request)
     result = client.post(
         "/api/v1/admin/providers/test",
         json={"target": "analysis", "base_url": "https://attacker.example"},
@@ -197,8 +203,41 @@ def test_saved_key_is_never_sent_to_a_typed_in_endpoint(admin_client, monkeypatc
         "/api/v1/admin/providers/test",
         json={"target": "analysis", "base_url": "https://ollama.example/v1", "api_key": "sk-typed"},
     ).json()
-    assert allowed == {"ok": True, "message": "Connected"}
+    assert allowed["ok"] is True and "answered" in allowed["message"]
+    assert reached["url"] == "https://ollama.example/v1/chat/completions"
     assert reached["auth"] == "Bearer sk-typed"
+
+
+def test_the_analysis_test_makes_a_real_completion_and_shows_the_refusal(admin_client, monkeypatch):
+    """Listing /models said "Connected" for a key that every chat call refused
+    with 403 (2026-09-18). The test now asks the configured model for one word
+    and repeats the provider's own reason when it says no."""
+    client, store = admin_client
+    store.set_value("analysis_api_key", "sk-x", sensitive=True)
+    store.set_value("analysis_model", "mistral-large-latest")
+    captured = {}
+
+    class Refused:
+        status_code = 403
+        text = '{"message": "Inactive subscription or usage limit reached"}'
+
+        @staticmethod
+        def json():
+            return {"message": "Inactive subscription or usage limit reached"}
+
+    def fake_post(url, headers=None, timeout=None, json=None):
+        captured["url"] = url
+        captured["body"] = json
+        return Refused()
+
+    monkeypatch.setattr(provider_config.httpx, "post", fake_post)
+    result = client.post("/api/v1/admin/providers/test", json={"target": "analysis"}).json()
+
+    assert captured["url"].endswith("/chat/completions")
+    assert captured["body"]["model"] == "mistral-large-latest"
+    assert captured["body"]["max_tokens"] <= 10, "the test must stay a pennies-sized call"
+    assert result["ok"] is False
+    assert "403" in result["message"] and "Inactive subscription" in result["message"]
 
 
 def test_update_is_audited_without_values(admin_client):
