@@ -50,6 +50,16 @@ volume had never been backed up.
   "Connected" for a workspace whose every chat call was refused; the Test now
   sends one five-token completion to the configured model and repeats the
   provider's reason when it says no.
+- **Jobs run side by side.** Ten tables end a round together, and one
+  worker processed their assembly, transcription and analysis strictly in
+  sequence — the report was 35–85 minutes past the end of a 40-minute
+  round. The runner now claims up to `CITIZENS_JOB_WORKERS` jobs at once
+  (default 10; `1` restores the old behaviour), each in its own thread; a
+  claim is still exclusive, a failing job takes nobody else down, and
+  stopping lets the jobs in flight finish. Throttling towards the providers
+  did not move: the per-provider speech-to-text caps in Settings still hold
+  (a job over the cap waits a minute without losing an attempt), and a
+  rate-limited analysis waits out the provider's Retry-After.
 - **Operations.** `scripts/event-up.sh` freezes the app for an event
   (immutable image, no bind mount, no reload, 2 GiB, INFO — the AppAPI
   registration untouched); `scripts/event-status.sh` is the job runner's

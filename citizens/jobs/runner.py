@@ -1,11 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Durable single-worker job runner (brief §49).
+"""Durable job runner (brief §49).
 
-Jobs live in SQLite; the runner polls for due work, executes handlers in a
-worker thread (they use sync SQLAlchemy + subprocesses), and applies
-exponential backoff on failure. On startup, stale RUNNING jobs (from a crash
-or restart) are recovered to RETRY.
+Jobs live in SQLite; the runner polls for due work, executes handlers in
+worker threads (they use sync SQLAlchemy + subprocesses) — up to
+`citizens_job_workers` at once — and applies exponential backoff on failure.
+On startup, stale RUNNING jobs (from a crash or restart) are recovered to
+RETRY. Claiming marks a job RUNNING inside its own write transaction, so two
+workers of the same process can never take the same job.
 
 CONTRACT: handlers run inside ONE session whose transaction takes SQLite's
 single write lock (BEGIN IMMEDIATE). Handlers MUST session.commit() right
@@ -20,6 +22,7 @@ from datetime import timedelta
 
 from sqlalchemy import and_, or_, select
 
+from citizens.config import get_settings
 from citizens.db.models import AppJob
 from citizens.db.models.base import utcnow
 from citizens.db.session import session_scope
@@ -38,8 +41,9 @@ BACKOFF_MAX_SECONDS = 3600
 CAPACITY_RETRY_SECONDS = 60
 # How long a RUNNING job may hold its lease before another pass reclaims it.
 # Generous, because a long transcription legitimately takes many minutes.
-# Safe because exactly one worker runs (a single container, one run_forever
-# task); reclaiming would double-run jobs if that ever stopped being true.
+# Safe because one run_forever loop (one container) does all the claiming,
+# each claim in its own write transaction; reclaiming would double-run jobs
+# only if a second process ever ran the loop against the same database.
 RUNNING_LEASE_SECONDS = 1800
 
 
@@ -186,24 +190,56 @@ def _run_job_inner(job_id: str) -> None:
             log.info("job_succeeded", job_id=job.id, job_type=job.type)
 
 
-async def run_forever(stop_event: asyncio.Event) -> None:
+def _worker_count(workers: int | None) -> int:
+    if workers is None:
+        workers = get_settings().citizens_job_workers
+    return max(1, int(workers))
+
+
+async def run_forever(stop_event: asyncio.Event, workers: int | None = None) -> None:
+    """Claim due jobs and run each in its own thread, up to `workers` at once.
+
+    Ten tables end a round together. One worker handled their assembly,
+    transcription and analysis strictly in sequence, which put the report
+    35-85 minutes past the end of a 40-minute round; with a pool the wait is
+    about one table's worth. Throttling towards the providers is not done
+    here: the transcription handler already honours the per-provider caps in
+    Settings (a job that finds every slot taken steps back for a minute
+    without losing an attempt), and a rate-limited analysis waits out the
+    provider's Retry-After.
+    """
     recover_stale_jobs()
+    pool_size = _worker_count(workers)
+    log.info("job_runner_started", workers=pool_size)
+    running: set[asyncio.Task] = set()
+    stopping = asyncio.create_task(stop_event.wait())
     last_sweep = 0.0
-    while not stop_event.is_set():
-        # before claiming work, not after: a steady stream of jobs would
-        # otherwise `continue` past the sweep forever
-        now = time.monotonic()
-        if now - last_sweep >= SWEEP_INTERVAL_SECONDS:
-            last_sweep = now
-            await asyncio.to_thread(run_sweeps)
-        try:
-            job_id = await asyncio.to_thread(_claim_next_job)
-            if job_id is not None:
-                await asyncio.to_thread(_run_job, job_id)
-                continue  # look for more work immediately
-        except Exception:
-            log.error("job_runner_iteration_failed", exc_info=True)
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=POLL_INTERVAL_SECONDS)
-        except TimeoutError:
-            pass
+    try:
+        while not stop_event.is_set():
+            # before claiming work, not after: a steady stream of jobs would
+            # otherwise `continue` past the sweep forever
+            now = time.monotonic()
+            if now - last_sweep >= SWEEP_INTERVAL_SECONDS:
+                last_sweep = now
+                await asyncio.to_thread(run_sweeps)
+            running = {task for task in running if not task.done()}
+            try:
+                while len(running) < pool_size:
+                    job_id = await asyncio.to_thread(_claim_next_job)
+                    if job_id is None:
+                        break
+                    running.add(asyncio.create_task(asyncio.to_thread(_run_job, job_id)))
+            except Exception:
+                log.error("job_runner_iteration_failed", exc_info=True)
+            # Wake when a job finishes (its follow-up may already be due),
+            # when told to stop, or after the poll interval — whichever first.
+            await asyncio.wait(
+                {stopping, *running}, timeout=POLL_INTERVAL_SECONDS,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+    finally:
+        stopping.cancel()
+        # let the jobs in flight record their result; each is bounded by its
+        # own HTTP timeout, and a job cut off anyway is reclaimed by the lease
+        if running:
+            await asyncio.wait(running)

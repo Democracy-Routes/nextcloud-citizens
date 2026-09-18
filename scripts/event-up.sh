@@ -8,6 +8,7 @@
 # near 500 MiB while transcribing) and INFO logs (a day fits in the files).
 #
 #   sh scripts/event-up.sh            # from the checkout to freeze
+#   CITIZENS_JOB_WORKERS=1 sh scripts/event-up.sh   # strictly sequential jobs, as before
 #
 # The AppAPI registration is untouched: Nextcloud still reaches the container
 # by name. Undo with scripts/dev-up.sh after the event.
@@ -38,6 +39,7 @@ docker run -d \
     -e APP_SECRET="$APP_SECRET" \
     -e NEXTCLOUD_URL="$NEXTCLOUD_URL" \
     -e APP_PERSISTENT_STORAGE=/data \
+    -e CITIZENS_JOB_WORKERS="${CITIZENS_JOB_WORKERS:-10}" \
     -e CITIZENS_LOG_LEVEL=INFO \
     "$EVENT_IMAGE" \
     >/dev/null

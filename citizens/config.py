@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     # Citizens-specific
     citizens_log_level: str = "INFO"
     citizens_dev: bool = False
+    # How many jobs run at once. Ten tables end a round together; one worker
+    # processed their transcriptions and analyses one after another, so the
+    # report was 35-85 minutes away. Speech-to-text concurrency per provider
+    # is still governed by the Settings caps (a job over the cap waits, it
+    # does not fail); 1 restores the strictly sequential runner.
+    citizens_job_workers: int = 10
     # ONLY for local browser tests: disables AppAPI signature auth entirely.
     # Honored solely against a local Nextcloud (see auth_disabled()), so a
     # stray environment variable cannot open up a real deployment.

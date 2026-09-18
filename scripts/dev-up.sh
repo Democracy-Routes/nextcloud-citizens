@@ -26,6 +26,7 @@ docker run -d \
     -e APP_SECRET="$APP_SECRET" \
     -e NEXTCLOUD_URL="$NEXTCLOUD_URL" \
     -e APP_PERSISTENT_STORAGE=/data \
+    -e CITIZENS_JOB_WORKERS="${CITIZENS_JOB_WORKERS:-10}" \
     -e CITIZENS_DEV=1 \
     -e CITIZENS_LOG_LEVEL=DEBUG \
     --entrypoint sh \
