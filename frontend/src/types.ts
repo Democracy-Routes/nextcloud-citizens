@@ -339,6 +339,8 @@ export interface ReportData {
 	rounds: Array<{
 		position: number
 		title: string
+		/** "Round 1 — …" in the assembly's language; rendered as-is. */
+		heading?: string
 		question: string
 		status: string
 		summary: string
@@ -351,6 +353,8 @@ export interface ReportData {
 export interface ReportFinding {
 	id: string
 	type: string
+	/** The type's label in the assembly's language ("Proposta"), from the server. */
+	type_label?: string
 	title: string
 	summary: string
 	support: string

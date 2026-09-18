@@ -73,7 +73,7 @@ async function downloadPdf(): Promise<void> {
 
 				<div v-for="round in report.rounds" :key="round.position" class="rc-card">
 					<p class="rc-eyebrow" style="margin-bottom: 4px">
-						{{ roundHeading(round.position, round.title) }}
+						{{ round.heading ?? roundHeading(round.position, round.title) }}
 					</p>
 					<p v-if="round.question" class="rc-question" style="margin: 0 0 10px">
 						{{ round.question }}
@@ -107,7 +107,7 @@ async function downloadPdf(): Promise<void> {
 							<p v-if="table.summary" style="font-size: 0.875rem; margin: 0 0 8px">{{ table.summary }}</p>
 							<div v-for="finding in table.findings" :key="finding.id" style="margin: 0 0 10px">
 								<p style="font-weight: 700; font-size: 0.875rem; margin: 0">
-									{{ TYPE_LABELS[finding.type] ?? finding.type }}: {{ finding.title }}
+									{{ finding.type_label ?? TYPE_LABELS[finding.type] ?? finding.type }}: {{ finding.title }}
 								</p>
 								<p style="font-size: 0.845rem; margin: 3px 0 0">{{ finding.summary }}</p>
 							</div>

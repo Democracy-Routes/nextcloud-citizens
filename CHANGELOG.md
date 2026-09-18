@@ -59,6 +59,34 @@ volume had never been backed up.
   libraries at INFO (98% of the old bytes); `dev-up.sh` runs at 2 GiB, which
   ten tables were measured to need. The event checklist says when to do each.
 
+- **The phone speaks to "l'organizzatore", and speaks Italian everywhere.**
+  Fourteen messages that told a table to ask "il facilitatore" now name the
+  organizer, the role actually in the room. The last English on the phone —
+  "TABLE" on every badge, "READY", "Back", "Continue", "Synchronizing", the
+  Preflight check rows and notes, "✓ SAFE"/"OFFLINE", "PDF saved…", and the
+  recorder engine's own error messages — moved into the catalogue with plural
+  forms, and the untranslated-strings guard now catches a single English word
+  (excluding code tokens, i18n keys and units by shape, not length). The
+  phone's report screen renders the finding-type labels and round headings
+  the server now localises, so a citizen's copy of the report is Italian
+  through and through.
+- **The report's frame follows the assembly's language.** The model already
+  wrote findings and summaries in the assembly's language, but every heading,
+  label and note around them was English: an Italian assembly's report opened
+  "Assembly Report — INTERIM REPORT", grouped its proposte under "Proposals"
+  and closed with an English methodology note. `services/report_text.py` now
+  holds that wording per language — cover lines, "Method", "AI summary",
+  "Speaking balance", round and table headings, the finding-type labels
+  (plural and singular), the draft and "Mentioned at N tables" markers, the
+  methodology, live-caption and replaced-device notes, month names — with
+  English and Italian complete and any missing key falling back to English
+  (de/fr/es print English wording with a native date until translated).
+  `build_report()` writes the method sentence and methodology note in the
+  assembly's language and gives each finding a `type_label`; the PDF's
+  generated-on date is no longer `strftime`'s English; an untouched
+  "Round N" pre-fill prints as "Turno N". English output is byte-for-byte
+  unchanged.
+
 ### Bug-audit pass on the upload, caption and analysis path — 2026-09-11
 
 Six fixes from a deliberate audit of the audio pipeline. Two of them close

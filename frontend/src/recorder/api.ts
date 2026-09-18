@@ -79,6 +79,8 @@ export interface PublishedReport {
 	rounds: Array<{
 		position: number
 		title: string
+		/** "Turno 1 — …": the server already localised it. */
+		heading?: string
 		question: string
 		summary: string
 		cross_table: PublishedFinding[]
@@ -91,6 +93,8 @@ export interface PublishedFinding {
 	type: string
 	title: string
 	summary: string
+	/** The finding type in the assembly's language ("Proposta"). */
+	type_label?: string
 	mentioned_table_count: number | null
 	evidence: Array<{ speaker: string; timestamp: string; text: string }>
 }

@@ -20,7 +20,14 @@ from pathlib import Path
 
 from fpdf import FPDF
 
-from citizens.services.report import TYPE_LABELS_SINGULAR, group_findings_by_type, round_heading
+from citizens.services.report import (
+    group_findings_by_type,
+    mentioned_at_tables,
+    report_language,
+    round_heading,
+    voice_name,
+)
+from citizens.services.report_text import finding_type_label, format_date, text
 
 _FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 
@@ -158,7 +165,7 @@ def _balance_color(index: int, label: str) -> tuple:
     return BALANCE_OTHERS if label == "Others" else BALANCE_PALETTE[index % len(BALANCE_PALETTE)]
 
 
-def _speaking_balance(pdf: _ReportPDF, balance: dict) -> None:
+def _speaking_balance(pdf: _ReportPDF, balance: dict, language: str | None) -> None:
     """Talk-time per detected voice: a 100%-stacked bar and a legend.
 
     A bar prints better than a donut and fpdf2 draws it with plain rects. Kept
@@ -166,14 +173,11 @@ def _speaking_balance(pdf: _ReportPDF, balance: dict) -> None:
     """
     voices = balance["voices"]
     legend_h = 4.6 * len(voices)
-    caption = (
-        "Detected voices, not identified by name — from the clearest single "
-        "recording. Talk-time, not influence."
-    )
+    caption = text(language, "voices_caveat")
     caption_h = pdf.block_height(caption, size=8, height=4.2)
     pdf.keep_together(6 + 5 + 2 + legend_h + caption_h + 4)
 
-    pdf.eyebrow("Speaking balance")
+    pdf.eyebrow(text(language, "speaking_balance"))
     width = pdf.w - pdf.l_margin - pdf.r_margin
     x = pdf.l_margin
     y = pdf.get_y()
@@ -187,7 +191,7 @@ def _speaking_balance(pdf: _ReportPDF, balance: dict) -> None:
         swatch_y = pdf.get_y() + 0.7
         pdf.set_fill_color(*_balance_color(index, voice["label"]))
         pdf.rect(pdf.l_margin, swatch_y, 3, 3, style="F")
-        name = "Others" if voice["label"] == "Others" else f"Voice {voice['label']}"
+        name = voice_name(language, voice["label"])
         minutes, seconds = divmod(int(voice["seconds"]), 60)
         pdf.text_block(
             f"{name} — {voice['percent']}%  ({minutes}:{seconds:02d})",
@@ -198,33 +202,38 @@ def _speaking_balance(pdf: _ReportPDF, balance: dict) -> None:
     pdf.ln(2.5)
 
 
-def _finding(pdf: _ReportPDF, finding: dict, cross: bool) -> None:
+def _finding(pdf: _ReportPDF, finding: dict, cross: bool, language: str | None) -> None:
     # enough for the badge, the title and the first line of the summary; the
     # evidence block below measures itself
     if pdf.will_page_break(6 + 5.4 + 5):
         pdf.add_page()
-    label = TYPE_LABELS_SINGULAR.get(finding["type"], finding["type"])
+    label = finding_type_label(language, finding["type"])
     color = BADGE_COLORS.get(finding["type"], MUTED)
     pdf.badge(label, color)
     if finding["is_draft"]:
-        pdf.badge("draft — not reviewed", (150, 150, 150))
+        pdf.badge(text(language, "draft_badge"), (150, 150, 150))
     pdf.ln(6)
     pdf.text_block(finding["title"], size=11, style="B", height=5.4)
     if cross and finding["mentioned_table_count"]:
         pdf.text_block(
-            f"Mentioned at {finding['mentioned_table_count']} table(s)",
+            mentioned_at_tables(language, finding["mentioned_table_count"]),
             size=8.5, style="B", color=color, height=4.4,
         )
     pdf.text_block(finding["summary"], height=5)
     # already chosen and capped by report._quotes(); do not re-truncate here
     quotes = finding["evidence"]
     if not quotes and finding.get("evidence_removed"):
-        pdf.text_block("Evidence removed with the transcript.", size=9, color=MUTED, height=4.6,
+        pdf.text_block(text(language, "evidence_removed"), size=9, color=MUTED, height=4.6,
                        indent=5)
     if quotes:
+        anonymous = text(language, "speaker")
         lines = [
-            (f"Table {evidence['table_number']} · " if evidence.get("table_number") else "")
-            + f"[{evidence['timestamp']}] {evidence['speaker'] or 'Speaker'}: “{evidence['text']}”"
+            (
+                f"{text(language, 'table', number=evidence['table_number'])} · "
+                if evidence.get("table_number")
+                else ""
+            )
+            + f"[{evidence['timestamp']}] {evidence['speaker'] or anonymous}: “{evidence['text']}”"
             for evidence in quotes
         ]
         # The accent bar is one line() from where the quotes began to where they
@@ -258,6 +267,7 @@ def _finding(pdf: _ReportPDF, finding: dict, cross: bool) -> None:
 def render_pdf(report: dict, logo_path: Path | None = None,
                organization_name: str = "") -> bytes:
     assembly = report["assembly"]
+    language = report_language(report)
     footer_text = " · ".join(part for part in (organization_name, assembly["name"]) if part)
     pdf = _ReportPDF(footer_text or assembly["name"])
     pdf.add_page()
@@ -281,7 +291,7 @@ def render_pdf(report: dict, logo_path: Path | None = None,
     pdf.multi_cell(title_w, 9, assembly["name"], new_x="LMARGIN", new_y="NEXT")
     pdf.set_font(pdf.family, "B", 11)
     pdf.set_text_color(*ACCENT)
-    pdf.cell(title_w, 7, "Assembly Report", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(title_w, 7, text(language, "assembly_report"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_draw_color(*ACCENT)
     pdf.set_line_width(0.8)
     pdf.line(pdf.l_margin, pdf.get_y() + 1.5, pdf.l_margin + 42, pdf.get_y() + 1.5)
@@ -290,64 +300,74 @@ def render_pdf(report: dict, logo_path: Path | None = None,
     # the document states plainly whether it is the final artifact
     progress = report.get("progress") or {}
     if report.get("is_final"):
-        closed = (report.get("closed_at") or "")[:10]
-        pdf.text_block(f"FINAL REPORT · closed {closed}", size=9, style="B", color=ACCENT,
-                       height=4.6)
+        closed = text(language, "closed_on", date=(report.get("closed_at") or "")[:10])
+        pdf.text_block(f"{text(language, 'final_report')} · {closed}", size=9, style="B",
+                       color=ACCENT, height=4.6)
     else:
+        completed = text(
+            language, "tables_completed_all_rounds",
+            complete=progress.get("tables_complete", 0),
+            expected=progress.get("tables_expected", 0),
+        )
         pdf.text_block(
-            f"INTERIM REPORT · {progress.get('tables_complete', 0)} of "
-            f"{progress.get('tables_expected', 0)} tables have completed all rounds",
+            f"{text(language, 'interim_report')} · {completed}",
             size=9, style="B", color=AMBER, height=4.6,
         )
-    generated = datetime.now(UTC).strftime("%-d %B %Y")
+    generated = format_date(language, datetime.now(UTC))
     # The participant count is a live count of the organizer's roster, and
     # recording a table creates no roster entry — so an assembly that ran
     # perfectly well without one announced "0 participants (expected 50)" on
     # the cover of its final report. Say nothing rather than say zero.
     meta = [generated]
     if assembly["participants"]:
-        meta.append(
-            f"{assembly['participants']} participants "
-            f"(expected {assembly['expected_participants']})"
-        )
-    meta += [f"{assembly['tables']} tables", assembly["language"].upper()]
+        meta.append(text(
+            language, "participants_expected",
+            count=assembly["participants"], expected=assembly["expected_participants"],
+        ))
+    meta += [
+        text(language, "tables_count", count=assembly["tables"]),
+        assembly["language"].upper(),
+    ]
     pdf.text_block(" · ".join(meta), size=9.5, color=MUTED)
     if progress.get("tables_expected"):
         pdf.text_block(
-            f"{progress.get('tables_contributed', 0)} of "
-            f"{progress['tables_expected']} tables contributed to this report",
+            text(
+                language, "tables_contributed_to_report",
+                contributed=progress.get("tables_contributed", 0),
+                expected=progress["tables_expected"],
+            ),
             size=9, color=MUTED, height=4.4,
         )
     pdf.ln(2)
     if assembly["description"]:
         pdf.text_block(assembly["description"])
         pdf.ln(2)
-    pdf.eyebrow("Method")
+    pdf.eyebrow(text(language, "method_heading"))
     pdf.text_block(report["method"], size=9.5, color=MUTED, height=4.8)
 
     # ---- executive summary (aggregated round summaries) ----
     summaries = [r for r in report["rounds"] if r["summary"]]
     if summaries:
-        pdf.section_banner("Executive summary")
+        pdf.section_banner(text(language, "executive_summary"))
         pdf.text_block(
-            "AI-generated overview of each round across all tables; details and "
-            "human-reviewed findings follow.",
+            text(language, "executive_summary_note"),
             size=8.5, color=MUTED, height=4.4,
         )
         pdf.ln(1.5)
         for round_ in summaries:
             pdf.text_block(
-                round_heading(round_["position"], round_["title"]),
+                round_heading(round_["position"], round_["title"], language),
                 size=10.5, style="B", height=5,
             )
             pdf.text_block(round_["summary"], height=5)
             pdf.ln(1.5)
 
     plenary = report["assembly"].get("recording_mode") == "plenary"
+    no_findings = text(language, "no_findings_yet")
 
     # ---- rounds ----
     for round_ in report["rounds"]:
-        pdf.section_banner(round_heading(round_["position"], round_["title"]))
+        pdf.section_banner(round_heading(round_["position"], round_["title"], language))
         if round_["question"]:
             pdf.text_block(f"“{round_['question']}”", size=11.5, style="B", color=ACCENT)
             pdf.ln(1.5)
@@ -358,7 +378,7 @@ def render_pdf(report: dict, logo_path: Path | None = None,
         balance = round_.get("speaking_balance")
         if balance and len(balance["voices"]) >= 2:
             # one voice means no diarization — nothing worth printing
-            _speaking_balance(pdf, balance)
+            _speaking_balance(pdf, balance, language)
 
         if plenary:
             # One group = one table. Its findings ARE the round's findings, so
@@ -366,31 +386,31 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             # "Table detail / Table N" framing that a single group makes noise.
             table = round_["tables"][0] if round_["tables"] else None
             findings = table["findings"] if table else []
-            for type_, label, group in group_findings_by_type(findings):
+            for type_, label, group in group_findings_by_type(findings, language):
                 pdf.group_heading(label, AMBER if type_ == "disagreement" else ACCENT)
                 for finding in group:
-                    _finding(pdf, finding, cross=False)
+                    _finding(pdf, finding, cross=False, language=language)
             if not findings:
-                pdf.text_block("No findings for this round yet.", color=MUTED)
+                pdf.text_block(no_findings, color=MUTED)
             continue
 
-        for type_, label, group in group_findings_by_type(round_["cross_table"]):
+        for type_, label, group in group_findings_by_type(round_["cross_table"], language):
             pdf.group_heading(label, AMBER if type_ == "disagreement" else ACCENT)
             for finding in group:
-                _finding(pdf, finding, cross=True)
+                _finding(pdf, finding, cross=True, language=language)
 
         tables_with_content = [
             t for t in round_["tables"] if t["findings"] or t["summary"]
         ]
         if tables_with_content:
-            pdf.group_heading("Table detail", MUTED)
+            pdf.group_heading(text(language, "table_detail"), MUTED)
             for table in tables_with_content:
-                pdf.eyebrow(f"Table {table['table_number']}", ACCENT)
+                pdf.eyebrow(text(language, "table", number=table["table_number"]), ACCENT)
                 if table["summary"]:
                     pdf.text_block(table["summary"], size=9.5, color=MUTED, height=4.8)
                     pdf.ln(1)
                 for finding in table["findings"]:
-                    _finding(pdf, finding, cross=False)
+                    _finding(pdf, finding, cross=False, language=language)
                 pdf.ln(1)
 
         if (
@@ -398,7 +418,7 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             and not round_["cross_table"]
             and not tables_with_content
         ):
-            pdf.text_block("No findings for this round yet.", color=MUTED)
+            pdf.text_block(no_findings, color=MUTED)
 
     # The rule and the note are one thing. Drawn without measuring, the rule
     # landed near the foot of the page and the note overflowed, leaving two
