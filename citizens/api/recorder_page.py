@@ -94,11 +94,28 @@ RECORDER_CSP = (
 )
 
 
+# Nextcloud stamps its default `Feature-Policy` — `microphone 'none'` — on
+# every proxied ExApp response (its own pages get 'self' from Talk's
+# listener), and Chromium honours that header: Chrome and Samsung Internet
+# refused getUserMedia before any prompt at the 2026-09-21 rehearsal, while
+# Firefox, which never implemented the header, recorded fine. The app cannot
+# change Feature-Policy (the middleware overwrites it), but Nextcloud never
+# sets Permissions-Policy, the proxy forwards it, and Chromium gives it
+# precedence when both are present.
+RECORDER_PERMISSIONS_POLICY = "microphone=(self), camera=()"
+
+
 @router.get("/recorder.html")
 def recorder_page() -> HTMLResponse:
     # version query busts the proxy/browser asset cache after app updates
     html = RECORDER_HTML.replace("__APP_VERSION__", get_settings().app_version)
-    return HTMLResponse(html, headers={"Content-Security-Policy": RECORDER_CSP})
+    return HTMLResponse(
+        html,
+        headers={
+            "Content-Security-Policy": RECORDER_CSP,
+            "Permissions-Policy": RECORDER_PERMISSIONS_POLICY,
+        },
+    )
 
 
 @router.get("/recorder")

@@ -45,3 +45,17 @@ def test_the_bundle_failure_message_survives():
     """The one string that cannot be translated: if the bundle did not load,
     neither did the translations. It must still say something."""
     assert "Failed to load the recorder application" in RECORDER_HTML
+
+
+def test_the_page_allows_the_microphone_where_the_proxy_forbids_it(client):
+    """Nextcloud stamps `Feature-Policy: microphone 'none'` on every proxied
+    ExApp page. Chrome and Samsung Internet obey it and refuse the microphone
+    before any prompt; Firefox never implemented the header — which is why,
+    at the 2026-09-21 rehearsal, every Firefox recording worked and no Chrome
+    phone got past the preflight. Permissions-Policy is the header Chromium
+    prefers, Nextcloud never sets it, and the proxy forwards it."""
+    response = client.get("/recorder.html")
+    assert response.status_code == 200
+    policy = response.headers.get("permissions-policy", "")
+    assert "microphone=(self)" in policy, policy
+    assert "camera=()" in policy

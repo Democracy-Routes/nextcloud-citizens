@@ -40,6 +40,7 @@
 		"mic": {
 			"failedTitle": "Non è stato possibile avviare il microfono.",
 			"guidance": "Se il browser ha chiesto il permesso di usare il microfono ed è stato negato, autorizzatelo nelle impostazioni del sito — toccate l'icona a sinistra dell'indirizzo web, poi Autorizzazioni, poi Microfono — e riprovate. Non serve ricaricare la pagina.",
+			"otherTabs": "Chiudete le altre schede del browser aperte su questa pagina — il microfono del telefono può essere usato da una scheda alla volta — poi riprovate.",
 			"retry": "Riprova con il microfono",
 			"retrying": "Tentativo in corso…",
 			"back": "Indietro",

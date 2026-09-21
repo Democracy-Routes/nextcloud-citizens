@@ -18,6 +18,7 @@ import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory }
 import AddDeviceQr from './AddDeviceQr.vue'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
+import { clientLog, ship } from '../logger'
 import { useWakeLock } from '../useWakeLock'
 import { clearSynchronizedRecordings, RecorderEngine } from '../engine'
 
@@ -366,6 +367,7 @@ async function finishRecording(): Promise<void> {
 
 const startBusy = ref(false)
 const startErrorIsMicrophone = ref(true)
+const startErrorReason = ref('')
 
 /** Open the microphone. On failure, tell the parent which round failed.
  *
@@ -390,6 +392,14 @@ async function beginRecording(): Promise<void> {
 		// and telling them to check their permissions sends them after a
 		// microphone that is working.
 		startErrorIsMicrophone.value = error instanceof MicrophoneError
+		startErrorReason.value = error instanceof MicrophoneError ? error.reason : ''
+		clientLog('error', 'recording_start_failed', {
+			name: error instanceof Error ? error.name : 'unknown',
+			reason: startErrorReason.value,
+			message: startError.value.slice(0, 200),
+			microphone: startErrorIsMicrophone.value,
+		})
+		void ship()
 		emit('startFailed', props.round.id)
 	} finally {
 		startBusy.value = false
@@ -429,9 +439,14 @@ async function clearSynced(): Promise<void> {
 				<strong>
 					{{ startErrorIsMicrophone ? t('recorder.mic.failedTitle') : t('recorder.mic.serverTitle') }}
 				</strong>
-				<p style="margin: 8px 0 0">{{ startError }}</p>
+				<p style="margin: 8px 0 0">
+					{{ startError }}<span v-if="startErrorReason" class="rc-muted"> ({{ startErrorReason }})</span>
+				</p>
 				<p class="rc-muted" style="margin: 10px 0 0; font-size: 0.875rem">
 					{{ startErrorIsMicrophone ? t('recorder.mic.guidance') : t('recorder.mic.serverHelp') }}
+				</p>
+				<p v-if="startErrorIsMicrophone" class="rc-muted" style="margin: 8px 0 0; font-size: 0.875rem">
+					{{ t('recorder.mic.otherTabs') }}
 				</p>
 				<button
 					class="rc-btn rc-primary"

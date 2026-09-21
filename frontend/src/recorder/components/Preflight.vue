@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { heldByAnotherDevice } from '../holding'
+import { clientLog, ship } from '../logger'
 import { useWakeLock } from '../useWakeLock'
 import { pickMimeType } from '../engine'
 import { idb } from '../idb'
@@ -124,8 +125,17 @@ async function runChecks(): Promise<void> {
 			for (const value of samples) peak = Math.max(peak, Math.abs(value - 128))
 			level.value = Math.min(100, Math.round((peak / 128) * 160))
 		}, 90)
-	} catch {
-		set('microphone', 'fail', t('recorder.preflight.notes.micDenied'))
+	} catch (error) {
+		// the browser's error name is the diagnosis: NotAllowedError is a
+		// refused permission, NotReadableError a microphone another tab or app
+		// holds. Shown, logged and shipped at once — a table that fails here
+		// usually re-scans, and a new session would otherwise take the story
+		// with it.
+		const name = error instanceof Error ? error.name : ''
+		const message = error instanceof Error ? error.message : String(error)
+		set('microphone', 'fail', t('recorder.preflight.notes.micDenied') + (name ? ` (${name})` : ''))
+		clientLog('error', 'microphone_check_failed', { name, message: message.slice(0, 200) })
+		void ship()
 	}
 
 	const mime = pickMimeType()

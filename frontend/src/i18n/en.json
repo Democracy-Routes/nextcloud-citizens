@@ -40,6 +40,7 @@
 		"mic": {
 			"failedTitle": "The microphone could not be started.",
 			"guidance": "If the browser asked for microphone permission and it was refused, allow it in the site settings — tap the icon to the left of the web address, then Permissions, then Microphone — and try again. You do not need to reload this page.",
+			"otherTabs": "Close any other browser tabs open on this page — a phone's microphone can be used by one tab at a time — then try again.",
 			"retry": "Try the microphone again",
 			"retrying": "Trying…",
 			"back": "Back",

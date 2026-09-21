@@ -19,9 +19,17 @@ import { RecorderApiError } from './api'
  * microphone that is working perfectly.
  */
 export class MicrophoneError extends Error {
-	constructor(message: string) {
+	/** The browser's own error name — NotAllowedError, NotReadableError,
+	 * SecurityError — which tells three different problems apart: a refused
+	 * permission, a microphone held by another tab or app, an insecure page.
+	 * Shown on screen and shipped in the device log; at the 2026-09-21
+	 * rehearsal a room full of failures left no record of which it was. */
+	readonly reason: string
+
+	constructor(message: string, reason = '') {
 		super(message)
 		this.name = 'MicrophoneError'
+		this.reason = reason
 	}
 }
 

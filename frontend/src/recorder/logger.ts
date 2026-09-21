@@ -42,7 +42,11 @@ export function clientLog(
 ): void {
 	const entry: ClientLogEntry = { ts: Date.now() / 1000, level, event }
 	if (data) entry.data = data
-	logsDb.append(entry).catch(() => undefined)
+	try {
+		logsDb.append(entry).catch(() => undefined)
+	} catch {
+		// a log line must never take the recorder down with it
+	}
 }
 
 export async function ship(): Promise<void> {

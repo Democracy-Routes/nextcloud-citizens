@@ -145,7 +145,10 @@ export class RecorderEngine {
 		} catch (error) {
 			// only THIS is a microphone problem; the call below can fail for
 			// reasons the phone's owner can do nothing about
-			throw new MicrophoneError(error instanceof Error ? error.message : String(error))
+			throw new MicrophoneError(
+				error instanceof Error ? error.message : String(error),
+				error instanceof Error ? error.name : '',
+			)
 		}
 		const started = await recorderApi.start(token, roundId, mimeType)
 		this.state.recordingId = started.recording_id

@@ -4,6 +4,25 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Rehearsal fixes — 2026-09-21
+
+- **The recorder page now allows the microphone on Chrome and Samsung
+  Internet.** Nextcloud stamps its default `Feature-Policy: microphone
+  'none'` on every proxied ExApp page; Chromium obeys it and refuses
+  `getUserMedia` before any permission prompt, while Firefox never
+  implemented the header. At the 21 September rehearsal every Firefox
+  recording worked and not one Chrome or Samsung phone got past the
+  preflight check. The page now sends `Permissions-Policy: microphone=(self)`,
+  which Chromium prefers and the proxy forwards.
+- **A microphone failure now says which one.** The browser's error name
+  (`NotAllowedError` — permission refused; `NotReadableError` — held by
+  another tab or app) is shown beside the message on the preflight and on
+  the start-failure screen, written to the device log and shipped at once;
+  before, a room full of failures left no record of the cause. The failure
+  screen also says to close other tabs open on the page — one tab at a time
+  may use the microphone on Chromium and WebKit, and repeated QR scans open
+  several.
+
 ### Hardening before the first real assembly — 2026-09-18
 
 A rehearsal three days before a fifty-person assembly showed the shape of
