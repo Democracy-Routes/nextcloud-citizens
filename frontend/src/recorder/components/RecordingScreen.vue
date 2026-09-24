@@ -12,8 +12,8 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
-import { downloadBlob } from '../../download'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
 import { MicrophoneError } from '../errors'
@@ -127,10 +127,40 @@ function beginReportAutoOpen(): void {
 }
 const qbarOpen = ref(false)
 const techOpen = ref(false)
+const saveNote = ref('')
+// Assembled when the failed screen appears rather than on the tap: on iPhone
+// the share sheet needs the tap's own activation. The storage-error banner
+// shows mid-recording, while chunks are still being added, so that path
+// builds the file fresh.
+let preparedAudio: Promise<LocalAudio> | null = null
+
+function prepareLocalAudio(): Promise<LocalAudio> {
+	preparedAudio = engine.localAudio().then((blob) => ({
+		blob,
+		filename: `citizens-${state.recordingId}.${audioExtension(blob.type)}`,
+		chunks: state.localChunks,
+	}))
+	preparedAudio.catch(() => undefined)
+	return preparedAudio
+}
+
+watch(
+	() => state.phase,
+	(phase) => {
+		if (phase === 'failed') void prepareLocalAudio()
+	},
+)
+
 async function downloadLocal(): Promise<void> {
-	const blob = await engine.localAudio()
-	const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
-	downloadBlob(blob, `citizens-${state.recordingId}.${ext}`)
+	let audio: LocalAudio
+	try {
+		audio = await (state.phase === 'failed' && preparedAudio ? preparedAudio : prepareLocalAudio())
+	} catch {
+		saveNote.value = t('recorder.recovery.saveFailed')
+		return
+	}
+	const key = saveNoteKey(await saveLocalAudio(audio))
+	saveNote.value = key ? t(key) : ''
 }
 
 // consecutive caption fragments from the same speaker flow together as one
@@ -541,6 +571,7 @@ async function clearSynced(): Promise<void> {
 				{{ t('recorder.recording.storageErrorBody') }}
 				<p>{{ t('recorder.safety.storageUnavailable') }}</p>
 				<button class="rc-btn" @click="downloadLocal">{{ t('recorder.recovery.download') }}</button>
+				<p v-if="saveNote" class="rc-note">{{ saveNote }}</p>
 			</div>
 			<div v-else-if="state.errorKind === 'gone' || state.errorKind === 'rejected'" class="rc-alert">
 				{{ t('recorder.safety.uploadBlocked') }}
@@ -766,6 +797,7 @@ async function clearSynced(): Promise<void> {
 					{{ t('recorder.common.tryAgain') }}
 				</button>
 				<button class="rc-btn" @click="downloadLocal">{{ t('recorder.recovery.download') }}</button>
+				<p v-if="saveNote" class="rc-note">{{ saveNote }}</p>
 				<button v-if="!state.storageError" class="rc-btn rc-subtle" @click="emit('exit')">
 					{{ t('recorder.common.back') }}
 				</button>

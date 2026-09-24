@@ -116,6 +116,10 @@ you *watch* the failure modes recover:
 
 1. [ ] Close the assembly. Wait for processing; read the analysis and approve
    or reject findings — this is the human-review step, not a formality.
+   Review the cross-table findings only once the last table is in: they are
+   regenerated every time a table finishes. Do not press "Re-run analysis"
+   afterwards unless a transcript changed — it replaces every finding of the
+   round, reviews included.
 2. [ ] **Export the reports and the audio, download them, and open one.** Only
    after you are holding a copy you have *opened* do you touch the next step.
 3. [ ] **Only now** "Clear audio from the table phones" — and only if that was

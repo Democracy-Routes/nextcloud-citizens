@@ -5,8 +5,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { JoinResult } from '../api'
 import { RecorderEngine } from '../engine'
-import { downloadBlob } from '../../download'
 import { idb, type StoredRecording } from '../idb'
+import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 
 const props = defineProps<{ session: JoinResult | null; recording: StoredRecording }>()
 const emit = defineEmits<{ done: [] }>()
@@ -34,7 +34,30 @@ async function recheck(): Promise<void> {
 const confirmDelete = ref(false)
 const downloadNote = ref('')
 
+// The file is assembled when the screen appears, not when the button is
+// tapped: on iPhone the share sheet needs the tap's own activation, and
+// reading a whole round back out of IndexedDB is not instant.
+let preparedAudio: Promise<LocalAudio> | null = null
+
+function prepareAudio(): Promise<LocalAudio> {
+	preparedAudio = (async () => {
+		const chunks = await idb.chunksFor(props.recording.recordingId)
+		chunks.sort((a, b) => a.seq - b.seq)
+		const mime = props.recording.mimeType || 'audio/webm'
+		// Never guess ownership from the current session. Include the recording
+		// id so downloading two rounds does not give them indistinguishable names.
+		return {
+			blob: new Blob(chunks.map((c) => c.blob), { type: mime.split(';')[0] }),
+			filename: `citizens-table-${table.value}-${props.recording.recordingId}-recovered.${audioExtension(mime)}`,
+			chunks: chunks.length,
+		}
+	})()
+	preparedAudio.catch(() => undefined)
+	return preparedAudio
+}
+
 onMounted(async () => {
+	void prepareAudio()
 	try {
 		if (canSync.value && props.session) {
 			await engine.resumeSync(props.session.session_token, props.recording)
@@ -57,15 +80,15 @@ onBeforeUnmount(() => engine.stop())
 // the server definitively lost this recording (deleted assembly / reset):
 // the audio still exists locally — let people save it to the phone…
 async function downloadAudio(): Promise<void> {
-	const chunks = await idb.chunksFor(props.recording.recordingId)
-	chunks.sort((a, b) => a.seq - b.seq)
-	const mime = props.recording.mimeType || 'audio/webm'
-	const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp4') ? 'm4a' : 'webm'
-	const blob = new Blob(chunks.map((c) => c.blob), { type: mime.split(';')[0] })
-	// Never guess ownership from the current session. Include the recording id
-	// so downloading two rounds does not give them indistinguishable names.
-	downloadBlob(blob, `citizens-table-${table.value}-${props.recording.recordingId}-recovered.${ext}`)
-	downloadNote.value = t('recorder.recovery.downloadStarted')
+	let audio: LocalAudio
+	try {
+		audio = await (preparedAudio ?? prepareAudio())
+	} catch {
+		downloadNote.value = t('recorder.recovery.saveFailed')
+		return
+	}
+	const key = saveNoteKey(await saveLocalAudio(audio))
+	downloadNote.value = key ? t(key) : ''
 }
 
 // …and delete the local copy only behind an explicit confirmation

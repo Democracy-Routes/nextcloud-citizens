@@ -26,7 +26,7 @@ from citizens.db.models import AppJob
 FAILURE_REASONS = (
     "PROVIDER_AUTH", "PROVIDER_RATE_LIMIT", "PROVIDER_TIMEOUT", "PROVIDER_HTTP",
     "SCHEMA_INVALID", "NOT_CONFIGURED", "NO_TRANSCRIPT", "AUDIO_MISSING",
-    "CANCELLED", "UNKNOWN",
+    "RERUN_EMPTY", "CANCELLED", "UNKNOWN",
 )
 
 #: "No Mistral API key configured", "No Whisper endpoint configured",
@@ -44,6 +44,8 @@ def classify(last_error: str) -> str:
         return "UNKNOWN"
     if "cancelled by organizer" in text:
         return "CANCELLED"
+    if "returned no findings" in text:
+        return "RERUN_EMPTY"
     if "authentication failed" in text or "(401)" in text or "(403)" in text:
         return "PROVIDER_AUTH"
     if "429" in text or "rate limit" in text:

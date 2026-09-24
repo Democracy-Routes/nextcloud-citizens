@@ -34,6 +34,12 @@ that evidence their local audio remains untouched.
   a download, keeping the copy, or explicitly confirming its deletion. A fresh
   QR for the same assembly and table resumes the original recording. Unknown
   legacy ownership is not guessed, and server authorization is unchanged.
+- On phones that can share files (iPhone, Android Chrome) "Download audio
+  file" opens the system share sheet — "Save to Files", AirDrop — instead of
+  an anchor download: Safari on iPhone navigates to a blob URL rather than
+  downloading it, which unloads the recorder page and loses whatever it was
+  still uploading. The screen reports the outcome; a dismissed sheet is not a
+  saved file, and every attempt is in the device log.
 - Failed local writes retain their blobs in memory for retry or download while
   the page remains alive. A storage warning needs immediate attention: that
   memory is **not** crash-safe. Missing audio is never concealed by declaring a

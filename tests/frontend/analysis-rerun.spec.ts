@@ -81,9 +81,12 @@ describe('re-running the analysis', () => {
 		await button.trigger('click')
 
 		expect(requestAnalysis).not.toHaveBeenCalled()
-		// the server keeps reviewed findings; the old copy said they were lost
-		expect(wrapper.text()).toContain('1 you have already approved')
-		expect(wrapper.text()).toContain('are kept unchanged')
+		// since 2026-09-24 the server replaces reviewed findings too — the
+		// copy that said they were "kept unchanged" described a rule that
+		// printed both generations in the report
+		expect(wrapper.text()).toContain('including the 1 you have already approved')
+		expect(wrapper.text()).toContain('Reviews done so far will have to be redone')
+		expect(wrapper.text()).not.toContain('kept unchanged')
 	})
 
 	it('warns more mildly when only drafts would be replaced', async () => {

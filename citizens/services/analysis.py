@@ -102,6 +102,8 @@ Rules:
   in the top-level summary.
 - If the discussion contains nothing substantive for the round question,
   return {{"summary": "...", "findings": []}}.
+- Never mention speaker labels such as SPEAKER_03 in titles or summaries;
+  write "a participant" or "some participants" instead.
 - Write everything in {language}."""
 
 ROUND_SYSTEM = """You are an analyst supporting an in-person citizens' assembly.
@@ -124,6 +126,8 @@ Rules:
   another opposes) as well as disagreements reported within tables. Report
   each as a "disagreement" cluster whose summary names both sides, and mention
   the most significant conflicts in the top-level summary.
+- Never mention speaker labels such as SPEAKER_03 in titles or summaries;
+  write "a participant" or "some participants" instead.
 - Write everything in {language}."""
 
 
@@ -339,6 +343,30 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     )
     result = chat_json(base_url, key, model, system_prompt, user_prompt, TableAnalysis)
 
+    usable: list[tuple] = []
+    dropped = 0
+    for item in result.findings:
+        evidence_ids = {
+            eid for raw in item.evidence_segment_ids for eid in raw.split("|") if eid in valid_ids
+        }
+        if not evidence_ids:
+            dropped += 1
+            continue  # a finding without real evidence is INVALID (brief §38)
+        usable.append((item, evidence_ids))
+
+    if not usable and _table_has_findings(session, siblings):
+        # The same transcript gave findings last time and none now. At the
+        # 2026-09-24 rehearsal a forced re-run of a 22-minute table came back
+        # empty where the first run had found five; that is the model's
+        # inconsistency, not new information, and replacing five findings with
+        # nothing would destroy the only good analysis of the table. Keep the
+        # previous generation and say so — the organizer can retry.
+        log.warning(
+            "analysis_rerun_empty_kept_previous", recording_id=primary.id,
+            dropped_without_evidence=dropped,
+        )
+        raise AnalysisError(RERUN_EMPTY_MESSAGE, permanent=True)
+
     # Only now that the model has answered. Deleting before the call meant a
     # permanent failure — a rotated key answering 401, or output that fails
     # validation three times — destroyed the existing findings and regenerated
@@ -349,14 +377,7 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     _set_table_summary(siblings, primary, result.summary)
 
     stored = 0
-    dropped = 0
-    for item in result.findings:
-        evidence_ids = {
-            eid for raw in item.evidence_segment_ids for eid in raw.split("|") if eid in valid_ids
-        }
-        if not evidence_ids:
-            dropped += 1
-            continue  # a finding without real evidence is INVALID (brief §38)
+    for item, evidence_ids in usable:
         finding = Finding(
             assembly_id=recording.assembly_id,
             round_id=recording.round_id,
@@ -392,7 +413,7 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
         # ACROSS tables — the table findings ARE the round's findings. Producing
         # round-scope clusters here just echoed every finding a second time in
         # the report. Skip the model call; set the round summary from the group.
-        _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
+        _delete_existing(session, round_id=round_.id, scope="round")
         summary = session.execute(
             select(Recording.analysis_summary).where(
                 Recording.round_id == round_.id, Recording.analysis_summary != ""
@@ -416,7 +437,7 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
     )
     if not table_findings:
         # nothing can fail after this point, so replacing here is safe
-        _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
+        _delete_existing(session, round_id=round_.id, scope="round")
         summaries = [
             f"Table {rec.table_number}: {rec.analysis_summary}"
             for rec in session.execute(
@@ -466,7 +487,7 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
     result = chat_json(base_url, key, model, system_prompt, user_prompt, RoundAnalysis)
 
     # after the model answers, for the reason given in analyze_table
-    _delete_existing(session, round_id=round_.id, scope="round", only_drafts=True)
+    _delete_existing(session, round_id=round_.id, scope="round")
     round_.analysis_summary = result.summary
 
     stored = 0
@@ -500,15 +521,28 @@ def _table_numbers(session: Session, round_: Round) -> dict[str, int]:
     return {table.id: table.number for table in round_.tables}
 
 
+def _table_has_findings(session: Session, siblings: list[Recording]) -> bool:
+    """Does an earlier generation of findings exist for this table?"""
+    return session.execute(
+        select(Finding.id)
+        .where(
+            Finding.recording_id.in_([sibling.id for sibling in siblings]),
+            Finding.scope == "table",
+            Finding.status != "REJECTED",
+        )
+        .limit(1)
+    ).first() is not None
+
+
 def _delete_table_findings(session: Session, siblings: list[Recording]) -> None:
-    """Clear this table's draft findings across every recording it has.
+    """Clear this table's findings across every recording it has.
 
     A replaced phone leaves findings attributed to the earlier recording; a
     re-analysis that only cleared the current one would leave those behind as
     duplicates nobody could account for.
     """
     for sibling in siblings:
-        _delete_existing(session, recording_id=sibling.id, scope="table", only_drafts=True)
+        _delete_existing(session, recording_id=sibling.id, scope="table")
 
 
 def _set_table_summary(siblings: list[Recording], primary: Recording, summary: str) -> None:
@@ -528,15 +562,31 @@ def _delete_existing(
     scope: str,
     recording_id: str | None = None,
     round_id: str | None = None,
-    only_drafts: bool = True,
 ) -> None:
+    """Remove the previous generation of findings in this scope, whatever
+    their review status.
+
+    Until 2026-09-24 this spared approved and edited findings, so that a
+    review survived the next run. What it produced instead was two
+    generations side by side: at the rehearsal that day an organizer
+    approved everything, pressed "Re-run analysis", and the report printed
+    every theme twice under slightly different titles. A table's findings
+    are a function of its transcript and the round's clusters a function of
+    the table findings; a new run replaces the old one, reviews included,
+    and the organizer is told so before confirming (AnalysisTab).
+    """
     query = select(Finding).where(Finding.scope == scope)
     if recording_id:
         query = query.where(Finding.recording_id == recording_id)
     if round_id:
         query = query.where(Finding.round_id == round_id)
-    if only_drafts:
-        query = query.where(Finding.status == "DRAFT")
     for finding in session.execute(query).scalars():
         session.delete(finding)
     session.flush()
+
+
+#: What the organizer reads when a re-run is refused for coming back empty;
+#: services/job_failures.classify maps it to RERUN_EMPTY.
+RERUN_EMPTY_MESSAGE = (
+    "The new analysis returned no findings; the previous ones were kept"
+)

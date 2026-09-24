@@ -172,6 +172,7 @@ def test_the_batch_timeout_fits_a_forty_minute_round_and_the_job_lease():
     ("No transcript for this table", "NO_TRANSCRIPT"),
     ("The caption session never wrote a transcript", "NO_TRANSCRIPT"),
     ("Canonical audio file is missing", "AUDIO_MISSING"),
+    ("The new analysis returned no findings; the previous ones were kept", "RERUN_EMPTY"),
     ("cancelled by organizer", "CANCELLED"),
     ("", "UNKNOWN"),
     ("something nobody anticipated", "UNKNOWN"),

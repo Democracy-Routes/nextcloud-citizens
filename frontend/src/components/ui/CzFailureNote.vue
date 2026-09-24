@@ -34,6 +34,8 @@ const REASONS: Record<string, string> = {
 	NOT_CONFIGURED: 'No provider is configured for this step — add the key or endpoint in Settings.',
 	NO_TRANSCRIPT: 'There is no transcript to analyse. Transcribe the recording first.',
 	AUDIO_MISSING: 'The audio file is missing on the server, so it cannot be transcribed again.',
+	RERUN_EMPTY:
+		'The new analysis came back with no findings for a table that already had some, so the previous findings were kept. Nothing was lost; run the analysis again if you wanted them replaced.',
 	CANCELLED: 'Cancelled by an organizer. Run it again when ready.',
 	UNKNOWN: 'It failed for a reason the app did not recognise; the detail below is what the server recorded.',
 }

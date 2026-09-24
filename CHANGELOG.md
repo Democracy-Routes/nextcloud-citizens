@@ -4,6 +4,41 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Rehearsal fixes — 2026-09-24
+
+- **Re-running the analysis replaces the previous findings, approved ones
+  included.** Until now an approved or hand-edited finding survived the
+  next run and the new generation was added beside it. At the 24 September
+  rehearsal the organizer approved everything, pressed "Re-run analysis",
+  and the report printed every theme twice under slightly different titles
+  (6 + 6 findings for one table, 10 + 11 cross-table clusters). A table's
+  findings are a function of its transcript and the round's clusters a
+  function of the table findings, so a run now replaces the generation it
+  supersedes; the confirmation dialog says so, "Re-run clustering only"
+  asks the same way when cross-table findings were reviewed, and the
+  Analysis tab notes that cross-table findings are regenerated every time a
+  table finishes — review them after the last table.
+- **A re-run that comes back empty keeps the previous findings.** The same
+  rehearsal's re-run returned no findings for a 22-minute table whose first
+  run had found five, on an unchanged transcript. Such a run is now refused
+  as a failed job that says "the previous ones were kept" instead of
+  replacing five findings with nothing.
+- **Saving local audio on an iPhone goes through the share sheet.** The
+  recorder's "Download audio file" clicked an `<a download>` on a blob URL;
+  Safari on iPhone navigates the tab to that URL instead, which unloads the
+  page that owns it and lands on "Safari cannot open the page
+  (WebKitBlobResource error 1)". At the rehearsal that killed a recorder
+  page mid-upload, and the table's last chunk never arrived. Where the
+  browser can share files the audio is now handed to the share sheet
+  ("Save to Files", AirDrop…), the file is assembled before the tap so the
+  sheet keeps the tap's activation, the screen reports what actually
+  happened (saved, download started, dismissed, or failed — "keep this page
+  open, the upload resumes by itself"), and every attempt is written to the
+  device log. Desktop browsers keep the anchor, whose object URL now lives
+  ten minutes instead of thirty seconds.
+- The analysis prompts no longer let the model cite speaker labels
+  ("SPEAKER_18") in finding titles and summaries.
+
 ### Rehearsal fixes — 2026-09-21
 
 - **The recorder page now allows the microphone on Chrome and Samsung

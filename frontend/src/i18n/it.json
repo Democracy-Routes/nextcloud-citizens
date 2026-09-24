@@ -170,6 +170,8 @@
 		"recovery": {
 			"sessionNeeded": "L'audio salvato è ancora su questo telefono. Scansionate un codice QR valido della stessa assemblea e dello stesso tavolo per riprendere il caricamento. Potete scaricare subito la copia locale. Non cancellate i dati del browser.",
 			"downloadStarted": "Download avviato. Verificate che il file si apra prima di eliminare qualsiasi copia locale.",
+			"saved": "File salvato. Verificate che si apra prima di eliminare qualsiasi copia locale.",
+			"saveFailed": "Il telefono non è riuscito a salvare il file. Lasciate aperta questa pagina: il caricamento riprende da solo.",
 			"intro": "Questo telefono ha una registrazione non completamente sincronizzata — per esempio dopo il ricaricamento della pagina o la chiusura del browser. Tutto l'audio salvato in locale è integro.",
 			"chunks": "Frammenti salvati in locale",
 			"waiting": "In attesa della rete… l'audio è al sicuro su questo telefono. Tenete aperta questa pagina.",

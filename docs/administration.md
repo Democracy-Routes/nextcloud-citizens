@@ -288,9 +288,16 @@ late or whose phone was replaced.
 review status and finding type, and **Approve N draft(s)** approves everything
 still waiting in the round. Rejected findings are left alone, and anything
 approved can still be edited or rejected afterwards. There is deliberately no
-way to skip review: the report states that a person approved its findings, and
-approving is also what stops a finding being replaced the next time the analysis
-runs.
+way to skip review: the report states that a person approved its findings.
+
+**I re-ran the analysis and my reviews are gone.** A run replaces the whole
+generation of findings it supersedes, approved and edited ones included — the
+alternative, keeping them next to the new set, printed every theme twice in
+the report. The dialog says so before you confirm. Cross-table findings are
+regenerated automatically every time another table finishes its analysis, so
+review those after the last table has come in, not while tables are still
+arriving. A re-run that comes back with no findings for a table that had some
+is refused and the previous findings are kept; the table's failure note says so.
 
 **A table shows "low battery".** Only Chromium reports this, so a table showing
 nothing is unknown rather than fine. Swap the phone between rounds; a phone

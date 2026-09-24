@@ -16,9 +16,10 @@ import RecoverySync from '../../frontend/src/recorder/components/RecoverySync.vu
 import type { StoredRecording } from '../../frontend/src/recorder/idb'
 import { mountWithI18n } from './support/mount'
 
-const downloadBlob = vi.fn()
+const saveBlob = vi.fn()
 vi.mock('../../frontend/src/download', () => ({
-	downloadBlob: (...a: unknown[]) => downloadBlob(...a),
+	saveBlob: (...a: unknown[]) => saveBlob(...a),
+	canShareFiles: () => false,
 }))
 
 vi.mock('../../frontend/src/recorder/idb', () => ({
@@ -79,10 +80,10 @@ async function save(stored: StoredRecording) {
 	expect(button, 'the recovery screen should offer to save the audio').toBeTruthy()
 	await button!.trigger('click')
 	await flushPromises()
-	return downloadBlob.mock.calls.at(-1)?.[1] as string
+	return saveBlob.mock.calls.at(-1)?.[1] as string
 }
 
-beforeEach(() => downloadBlob.mockReset())
+beforeEach(() => saveBlob.mockReset().mockResolvedValue('downloaded'))
 
 describe('the recovered audio filename', () => {
 	it('names the table the audio was recorded at, not the one in use now', async () => {

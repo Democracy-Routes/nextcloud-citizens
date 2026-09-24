@@ -9,12 +9,14 @@
  * immediately cancels it — the button did nothing at all, with no error.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { downloadBlob, downloadFromApi } from '../../frontend/src/download'
+import { REVOKE_DELAY_MS, downloadBlob, downloadFromApi, saveBlob } from '../../frontend/src/download'
 
 afterEach(() => {
 	vi.restoreAllMocks()
 	vi.unstubAllGlobals()
 	vi.useRealTimers()
+	delete (navigator as { share?: unknown }).share
+	delete (navigator as { canShare?: unknown }).canShare
 })
 
 describe('downloadBlob', () => {
@@ -41,7 +43,11 @@ describe('downloadBlob', () => {
 		downloadBlob(new Blob(['hello']), 'notes.txt')
 
 		expect(revoke).not.toHaveBeenCalled()
+		// iOS asks "Download this file?" first; 30 s was not enough for a
+		// person to read the question, and a revoked URL fails the download
 		vi.advanceTimersByTime(30_000)
+		expect(revoke).not.toHaveBeenCalled()
+		vi.advanceTimersByTime(REVOKE_DELAY_MS)
 		expect(revoke).toHaveBeenCalledWith('blob:x')
 	})
 
@@ -65,6 +71,81 @@ describe('downloadBlob', () => {
 		downloadBlob(new Blob(['x']), 'a.txt')
 
 		expect(document.body.querySelectorAll('a').length).toBe(before)
+	})
+})
+
+/**
+ * On an iPhone the anchor is not a download: Safari navigates the tab to the
+ * blob URL, which unloads the page that owns it, which revokes it — "Safari
+ * cannot open the page (WebKitBlobResource error 1)". At the 24 September
+ * 2026 rehearsal that killed a recorder page mid-upload. Where the browser can
+ * share files, the share sheet saves the file and never leaves the page.
+ */
+describe('saveBlob', () => {
+	function shareSheet(share: (data: ShareData) => Promise<void>, can = true) {
+		Object.defineProperty(navigator, 'share', { value: vi.fn(share), configurable: true, writable: true })
+		Object.defineProperty(navigator, 'canShare', {
+			value: vi.fn(() => can),
+			configurable: true,
+			writable: true,
+		})
+	}
+
+	it('hands the file to the share sheet where the browser can share files', async () => {
+		shareSheet(async () => undefined)
+		const createUrl = vi.spyOn(URL, 'createObjectURL')
+
+		const outcome = await saveBlob(new Blob(['audio'], { type: 'audio/mp4' }), 'table-3.m4a')
+
+		expect(outcome).toBe('shared')
+		const shared = (navigator.share as ReturnType<typeof vi.fn>).mock.calls[0][0] as ShareData
+		expect(shared.files?.[0]).toBeInstanceOf(File)
+		expect(shared.files?.[0].name).toBe('table-3.m4a')
+		expect(shared.files?.[0].type).toBe('audio/mp4')
+		expect(createUrl, 'no blob URL, so nothing for Safari to navigate to').not.toHaveBeenCalled()
+	})
+
+	it('reports a dismissed share sheet as cancelled, not as saved', async () => {
+		shareSheet(async () => {
+			throw new DOMException('The user cancelled', 'AbortError')
+		})
+
+		expect(await saveBlob(new Blob(['audio']), 'a.webm')).toBe('cancelled')
+	})
+
+	it('does not fall back to the anchor on a phone that can share but refused', async () => {
+		// the fallback would be the navigation this function exists to avoid
+		shareSheet(async () => {
+			throw new DOMException('No activation', 'NotAllowedError')
+		})
+		const createUrl = vi.spyOn(URL, 'createObjectURL')
+
+		await expect(saveBlob(new Blob(['audio']), 'a.webm')).rejects.toThrow('No activation')
+		expect(createUrl).not.toHaveBeenCalled()
+	})
+
+	it('uses the anchor where files cannot be shared', async () => {
+		shareSheet(async () => undefined, false)
+		const created = document.createElement('a')
+		vi.spyOn(document, 'createElement').mockReturnValue(created)
+		const click = vi.spyOn(created, 'click').mockImplementation(() => undefined)
+		vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x')
+		vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+
+		expect(await saveBlob(new Blob(['audio']), 'a.webm')).toBe('downloaded')
+		expect(click).toHaveBeenCalled()
+		expect(navigator.share).not.toHaveBeenCalled()
+	})
+
+	it('uses the anchor where there is no share sheet at all', async () => {
+		const created = document.createElement('a')
+		vi.spyOn(document, 'createElement').mockReturnValue(created)
+		const click = vi.spyOn(created, 'click').mockImplementation(() => undefined)
+		vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x')
+		vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+
+		expect(await saveBlob(new Blob(['audio']), 'a.webm')).toBe('downloaded')
+		expect(click).toHaveBeenCalled()
 	})
 })
 

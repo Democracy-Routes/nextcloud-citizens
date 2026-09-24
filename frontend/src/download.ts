@@ -13,8 +13,10 @@
  */
 
 /** How long the object URL is kept alive after the click. Long enough for a
- * slow browser to start reading, short enough not to pin a large blob. */
-const REVOKE_DELAY_MS = 30_000
+ * browser that asks "Download this file?" first and a person who reads the
+ * question — iOS does, and 30 s was not — short enough not to pin a large
+ * blob forever. */
+export const REVOKE_DELAY_MS = 600_000
 
 export function downloadBlob(blob: Blob, filename: string): void {
 	const url = URL.createObjectURL(blob)
@@ -25,6 +27,51 @@ export function downloadBlob(blob: Blob, filename: string): void {
 	anchor.click()
 	anchor.remove()
 	window.setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS)
+}
+
+export type SaveOutcome = 'shared' | 'downloaded' | 'cancelled'
+
+/** Can this browser hand a file to the operating system's share sheet? */
+export function canShareFiles(file: File): boolean {
+	return (
+		typeof navigator.share === 'function' &&
+		typeof navigator.canShare === 'function' &&
+		navigator.canShare({ files: [file] })
+	)
+}
+
+/** Save a file the way this device actually can.
+ *
+ * On an iPhone the anchor above is not a download. Safari NAVIGATES the tab
+ * to the blob: URL; navigating away unloads the page that created the URL,
+ * which revokes it, and the tab lands on "Safari cannot open the page
+ * (WebKitBlobResource error 1)". At the 24 September 2026 rehearsal that
+ * killed a recorder page that was still uploading, and the table's last
+ * chunk never arrived. Where the browser can share files (iOS 15+, Android
+ * Chrome) the share sheet — "Save to Files", AirDrop… — is how a phone
+ * saves a file, and it never leaves the page. The anchor stays for
+ * desktops, which have no share sheet.
+ *
+ * Must be called from a user gesture: the share sheet needs transient
+ * activation, so a caller with data to fetch first should fetch it before
+ * the tap, not after. Resolves 'cancelled' when the person dismissed the
+ * sheet. Throws when a device that CAN share refused to — falling back to
+ * the anchor there would be the navigation this exists to avoid.
+ */
+export async function saveBlob(blob: Blob, filename: string): Promise<SaveOutcome> {
+	const file = new File([blob], filename, { type: blob.type })
+	if (canShareFiles(file)) {
+		try {
+			await navigator.share({ files: [file], title: filename })
+			return 'shared'
+		} catch (error) {
+			// a DOMException is not an Error in every runtime; the name is what matters
+			if ((error as { name?: string } | null)?.name === 'AbortError') return 'cancelled'
+			throw error
+		}
+	}
+	downloadBlob(blob, filename)
+	return 'downloaded'
 }
 
 /** The name the server asked us to save the file under.

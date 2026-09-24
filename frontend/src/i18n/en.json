@@ -170,6 +170,8 @@
 		"recovery": {
 			"sessionNeeded": "Saved audio is still on this phone. Scan a current QR code for the same assembly and table to resume uploading. You can download the local copy now. Do not clear browser storage.",
 			"downloadStarted": "Download started. Check that the file opens before deleting any local audio.",
+			"saved": "File saved. Check that it opens before deleting any local audio.",
+			"saveFailed": "This phone could not save the file. Keep this page open: the upload resumes by itself.",
 			"intro": "This phone has a recording that was not fully synchronized — for example after the page was reloaded or the browser closed. All locally saved audio is intact.",
 			"chunks": "Chunks stored locally",
 			"waiting": "Waiting for network… the audio is safe on this phone. Keep this page open.",

@@ -233,7 +233,19 @@ async function cancelPending(): Promise<void> {
 	}
 }
 
+/** Cross-table findings a person has reviewed; re-clustering replaces them. */
+const reviewedCrossTableCount = computed(
+	() => (data.value?.cross_table ?? []).filter((finding) => finding.status !== 'DRAFT').length,
+)
+const confirmRecluster = ref(false)
+
+function requestRecluster(): void {
+	if (reviewedCrossTableCount.value > 0) confirmRecluster.value = true
+	else void recluster()
+}
+
 async function recluster(): Promise<void> {
+	confirmRecluster.value = false
 	busy.value = true
 	try {
 		const result = await api.recluster(roundId.value)
@@ -337,7 +349,7 @@ async function recluster(): Promise<void> {
 			<div v-if="roundJobFailed" class="cz-card cz-analysis-jobs">
 				<div class="cz-row cz-row--spread">
 					<strong>Cross-table clustering failed</strong>
-					<CzButton small :icon="mdiRefresh" :disabled="busy" @click="recluster">
+					<CzButton small :icon="mdiRefresh" :disabled="busy" @click="requestRecluster">
 						Re-run clustering only
 					</CzButton>
 				</div>
@@ -378,6 +390,10 @@ async function recluster(): Promise<void> {
 							— aggregated from {{ data.tables_with_findings }} table(s)
 						</span>
 					</h3>
+					<p class="cz-muted" style="font-size: 0.8125rem; margin: 0 0 8px">
+						Cross-table findings are regenerated every time a table finishes its analysis, reviews
+						included — review them after the last table.
+					</p>
 					<p v-if="data.round_summary" class="cz-card" style="font-size: 0.905rem; font-style: italic">
 						<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">AI SUMMARY</span>
 						{{ data.round_summary }}
@@ -428,7 +444,7 @@ async function recluster(): Promise<void> {
 			title="Run the analysis again?"
 			:message="
 				reviewedCount > 0
-					? `Draft findings are regenerated; the ${reviewedCount} you have already approved or edited are kept unchanged, and the new drafts may duplicate them.`
+					? `Every finding of this round — including the ${reviewedCount} you have already approved or edited — is replaced by a freshly generated set. Reviews done so far will have to be redone.`
 					: 'Every draft finding for this round is replaced with freshly generated ones.'
 			"
 			confirm-label="Run analysis again"
@@ -436,6 +452,15 @@ async function recluster(): Promise<void> {
 			:confirm-word="reviewedCount > 0 ? 'replace' : undefined"
 			@confirm="analyze(true)"
 			@cancel="confirmRerun = false" />
+		<CzConfirm
+			v-if="confirmRecluster"
+			title="Run the cross-table clustering again?"
+			:message="`The ${reviewedCrossTableCount} cross-table finding(s) you have already approved or edited are replaced by a freshly generated set, along with the drafts. Table findings are not touched.`"
+			confirm-label="Run clustering again"
+			tone="destructive"
+			confirm-word="replace"
+			@confirm="recluster"
+			@cancel="confirmRecluster = false" />
 	</div>
 </template>
 

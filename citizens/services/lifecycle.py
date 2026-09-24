@@ -62,9 +62,9 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
         # a round whose tables recorded but which never got aggregated (e.g.
         # tables that never showed up kept it waiting) gets a final pass.
         # Deduped: the last table's analysis may have queued the same job in
-        # the same minute, and running both meant two model calls — and, if
-        # the first run's clusters were approved in between, a report showing
-        # both generations side by side.
+        # the same minute, and running both meant two model calls for one
+        # result (and, before re-clustering replaced approved clusters too,
+        # a report showing both generations side by side).
         if (
             not round_.analysis_summary
             and _round_has_content(session, round_.id)
