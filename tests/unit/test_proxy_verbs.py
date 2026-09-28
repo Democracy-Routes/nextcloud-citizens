@@ -73,18 +73,31 @@ def test_info_xml_declares_every_verb_the_api_uses(routes):
     for path, method in routes:
         if method not in PROXYABLE:
             continue  # reported by the test above
-        proxy_path = path.lstrip("/")
-        matches = [
-            url
-            for url, verbs in declared
-            if re.search(url, proxy_path, re.IGNORECASE) and method in verbs
-        ]
-        if not matches:
-            undeclared.append(f"{method} {proxy_path}")
-        elif proxy_path.startswith("api/v1/admin/") and "admin" not in matches[0]:
-            downgraded.append(f"{method} {proxy_path} would be served by {matches[0]}")
+        # AppAPI's PHP proxy matched the path without its leading slash up
+        # to 33; 34+ and HaRP match it with one. A route must catch both.
+        for proxy_path in (path.lstrip("/"), "/" + path.lstrip("/")):
+            matches = [
+                url
+                for url, verbs in declared
+                if re.search(url, proxy_path, re.IGNORECASE) and method in verbs
+            ]
+            if not matches:
+                undeclared.append(f"{method} {proxy_path}")
+            elif proxy_path.lstrip("/").startswith("api/v1/admin/") and "admin" not in matches[0]:
+                downgraded.append(f"{method} {proxy_path} would be served by {matches[0]}")
     assert not undeclared, f"no <route> declares these: {undeclared}"
     assert not downgraded, f"admin routes escaping the ADMIN entry: {downgraded}"
+
+
+def test_register_script_carries_the_same_routes():
+    """scripts/register.sh registers the hand-run container with a JSON copy
+    of the route table; it must not drift from info.xml."""
+    script = (ROOT / "scripts" / "register.sh").read_text()
+    json_urls = re.findall(r'\{"url":"([^"]+)"', script)
+    # the shell heredoc doubles the backslashes twice: \\\\/ in the file is \/ on the wire
+    json_urls = [url.replace("\\\\\\\\", "\\") for url in json_urls]
+    xml_urls = [url for url, _ in _declared_routes()]
+    assert json_urls == xml_urls
 
 
 def test_frontend_clients_never_send_an_unproxyable_verb():

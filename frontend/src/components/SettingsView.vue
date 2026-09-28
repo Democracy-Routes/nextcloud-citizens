@@ -317,9 +317,12 @@ async function test(target: SttProvider | 'analysis'): Promise<void> {
 			vosk: voskUrl.value.trim(),
 		}
 		const baseUrl = baseUrls[target]
+		// the analysis test makes one real completion: with the model in the
+		// form, not the saved one, or a typed replacement can never be tested
+		const model = target === 'analysis' ? analysisModel.value.trim() || undefined : undefined
 		testResults.value = {
 			...testResults.value,
-			[target]: await api.testProvider(target, typed.trim() || undefined, baseUrl),
+			[target]: await api.testProvider(target, typed.trim() || undefined, baseUrl, model),
 		}
 	} catch (err) {
 		testResults.value = {

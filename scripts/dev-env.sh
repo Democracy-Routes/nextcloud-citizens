@@ -6,7 +6,7 @@ set -eu
 
 APP_ID="citizens"
 APP_NAME="Citizens"
-APP_VERSION="0.6.0"
+APP_VERSION="0.6.1"
 APP_PORT="23000"
 CONTAINER="nc_app_citizens"
 IMAGE="citizens-dev"

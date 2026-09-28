@@ -450,10 +450,13 @@ def test_connection(
     target: str,
     override_key: str | None = None,
     override_base_url: str | None = None,
+    override_model: str | None = None,
 ) -> dict:
     """Verify credentials against the provider. `override_key` lets the admin
-    test a key typed into the form BEFORE saving it. Never logs or returns
-    key material."""
+    test a key typed into the form BEFORE saving it; `override_model` the
+    analysis model typed there (the test asked the SAVED model, so once a
+    provider retired it, nothing typed in could ever pass). Never logs or
+    returns key material."""
     # A typed-in URL must come with a typed-in key. Otherwise the saved key is
     # sent as a Bearer token to whatever host was named in the request, which
     # would turn this endpoint into a way to read back a key that no API is
@@ -516,7 +519,7 @@ def test_connection(
             if not key:
                 return {"ok": False, "message": "No analysis API key — paste one or save it first"}
             base = (override_base_url or get_setting(store, "analysis_base_url")).rstrip("/")
-            model = get_setting(store, "analysis_model")
+            model = override_model or get_setting(store, "analysis_model")
             # One real, tiny completion. Listing /models only proves the key
             # exists: it said "Connected" for a workspace whose every chat call
             # was refused with 403 at the 2026-09-18 rehearsal.

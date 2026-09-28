@@ -2,6 +2,27 @@
 
 All notable changes to Nextcloud Citizens.
 
+## 0.6.1 — 2026-09-28
+
+Three fixes from the first install on a second Nextcloud (33.0.6, HaRP):
+
+- **`CITIZENS_PUBLIC_URL` no longer reaches the container as "Array".**
+  AppAPI turns an empty `<default/>` in info.xml into an empty PHP array
+  and prints it as the string "Array", so the QR codes pointed at
+  `Array/index.php/…`. The variable has no `<default>` now, and the app
+  ignores any override that is not an http(s) URL, saying so in the log.
+  (Registering with `--env CITIZENS_PUBLIC_URL=https://…` was the
+  workaround and still works.)
+- **Route patterns match with or without a leading slash.** HaRP matches
+  `/recorder.html` against the route table, so `/exapps/citizens/recorder.html`
+  answered "No defined route"; AppAPI's PHP proxy matches without the slash
+  up to 33 and with it from 34. Every route is now `^\/?…`, in info.xml and
+  in `scripts/register.sh`, and the unit test checks both forms.
+- **Settings → AI analysis → Test asks the model typed into the form.** It
+  asked the saved model, so after Ollama retired `deepseek-v4-flash` every
+  Test failed with the same 410 whatever was typed; saving first was the
+  only way through.
+
 ## 0.6.0 — 2026-09-28
 
 ### Installable from the image, by any AppAPI deploy daemon

@@ -51,7 +51,7 @@ Nextcloud container (`docker exec -u www-data <nextcloud> php occ …`).
 
    ```
    occ app_api:app:register citizens docker_local --wait-finish \
-       --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.0/appinfo/info.xml
+       --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.1/appinfo/info.xml
    ```
 
    AppAPI pulls `ghcr.io/democracy-routes/citizens:<version>` (the `<image-tag>`

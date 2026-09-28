@@ -191,6 +191,8 @@ class TestIn(BaseModel):
     # lets the admin test what's typed in the form before saving it
     api_key: str | None = Field(default=None, max_length=500)
     base_url: str | None = Field(default=None, max_length=500)
+    # the analysis model typed into the form — the test asked the saved one
+    model: str | None = Field(default=None, max_length=200)
 
 
 @router.post("/providers/test")
@@ -200,6 +202,7 @@ def test_provider(data: TestIn, store: Store, user: AdminUser):
         data.target,
         override_key=(data.api_key or "").strip() or None,
         override_base_url=(data.base_url or "").strip() or None,
+        override_model=(data.model or "").strip() or None,
     )
 
 

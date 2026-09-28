@@ -240,6 +240,39 @@ def test_the_analysis_test_makes_a_real_completion_and_shows_the_refusal(admin_c
     assert "403" in result["message"] and "Inactive subscription" in result["message"]
 
 
+def test_the_analysis_test_asks_the_model_typed_into_the_form(admin_client, monkeypatch):
+    """Ollama retired deepseek-v4-flash on 2026-09-25. The admin typed a new
+    model and pressed Test — which asked the SAVED model and failed with the
+    same 410 whatever was typed, on two servers."""
+    client, store = admin_client
+    store.set_value("analysis_api_key", "sk-x", sensitive=True)
+    store.set_value("analysis_model", "deepseek-v4-flash")
+    captured = {}
+
+    class Ok:
+        status_code = 200
+        text = "{}"
+
+        @staticmethod
+        def json():
+            return {"choices": [{"message": {"content": "OK"}}]}
+
+    def fake_post(url, headers=None, timeout=None, json=None):
+        captured["body"] = json
+        return Ok()
+
+    monkeypatch.setattr(provider_config.httpx, "post", fake_post)
+    result = client.post(
+        "/api/v1/admin/providers/test", json={"target": "analysis", "model": "glm-5.3-flash"}
+    ).json()
+
+    assert captured["body"]["model"] == "glm-5.3-flash"
+    assert result["ok"] is True and "glm-5.3-flash" in result["message"]
+    # nothing typed: the saved model, as before
+    client.post("/api/v1/admin/providers/test", json={"target": "analysis"})
+    assert captured["body"]["model"] == "deepseek-v4-flash"
+
+
 def test_update_is_audited_without_values(admin_client):
     client, _ = admin_client
     client.put("/api/v1/admin/providers", json={"mistral_api_key": "mk-super-secret-999"})

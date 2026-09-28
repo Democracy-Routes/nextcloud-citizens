@@ -42,6 +42,22 @@ def test_the_override_wins_over_everything(monkeypatch):
     assert recorder_join_url("tok") == "https://cloud.example.org/nextcloud" + PAGE + "#/join/tok"
 
 
+def test_an_override_that_is_not_an_address_is_ignored(monkeypatch):
+    """AppAPI 33 delivered an empty <default/> as the literal string "Array",
+    and the QR codes pointed at Array/index.php/…"""
+    _settings(
+        monkeypatch,
+        CITIZENS_PUBLIC_URL="Array",
+        NEXTCLOUD_URL="https://cloud.example.org",
+        APP_SECRET="s",
+    )
+    monkeypatch.setattr(public_url, "_lookup", lambda: "https://public.example.org" + PAGE)
+
+    assert public_url.recorder_page_url() == "https://cloud.example.org" + PAGE
+    public_url.refresh()
+    assert public_url.recorder_page_url() == "https://public.example.org" + PAGE
+
+
 def test_nextcloud_s_public_address_is_used_once_known(monkeypatch):
     _settings(monkeypatch, NEXTCLOUD_URL="http://nextcloud:80", APP_SECRET="s")
     monkeypatch.setattr(public_url, "_lookup", lambda: "https://cloud.example.org" + PAGE)

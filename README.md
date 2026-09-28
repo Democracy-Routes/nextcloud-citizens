@@ -79,7 +79,7 @@ or HaRP). Without the store, register the same image from the command line:
 
 ```
 occ app_api:app:register citizens <daemon> --wait-finish \
-    --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.0/appinfo/info.xml
+    --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.1/appinfo/info.xml
 ```
 
 Then open **Citizens → Settings** to add a speech-to-text key and an analysis

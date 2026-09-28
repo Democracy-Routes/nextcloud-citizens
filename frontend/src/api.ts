@@ -116,11 +116,14 @@ export const api = {
 	getProviders: () => request<ProvidersSummary>('GET', '/api/v1/admin/providers'),
 	updateProviders: (payload: Record<string, unknown>) =>
 		request<ProvidersSummary>('PUT', '/api/v1/admin/providers', payload),
-	testProvider: (target: SttProvider | 'analysis', apiKey?: string, baseUrl?: string) =>
+	testProvider: (target: SttProvider | 'analysis', apiKey?: string, baseUrl?: string, model?: string) =>
 		request<{ ok: boolean; message: string }>('POST', '/api/v1/admin/providers/test', {
 			target,
 			api_key: apiKey,
 			base_url: baseUrl,
+			// the model typed into the form: the test used to ask the SAVED
+			// one, so a retired model kept failing whatever was typed
+			model,
 		}),
 
 	startRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/start`),

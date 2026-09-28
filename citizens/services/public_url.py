@@ -41,17 +41,34 @@ _resolved: str | None = None
 _announced: tuple[str, str] | None = None
 
 
+def _override() -> str:
+    """CITIZENS_PUBLIC_URL, if it is an address at all.
+
+    AppAPI turns an empty <default/> in info.xml into the string "Array"
+    (its XML-to-array conversion), and that install printed QR codes for
+    "Array/index.php/…". Anything that is not an http(s) URL is ignored, and
+    said so once in the log.
+    """
+    raw = get_settings().citizens_public_url.strip().rstrip("/")
+    if not raw:
+        return ""
+    parsed = urlparse(raw)
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return raw
+    _announce("override_ignored", raw[:120])
+    return ""
+
+
 def recorder_page_url() -> str:
     """The recorder page's public URL. Pure read: safe inside a transaction."""
-    settings = get_settings()
-    override = settings.citizens_public_url.strip().rstrip("/")
+    override = _override()
     if override:
         return override + RECORDER_PATH
     with _lock:
         resolved = _resolved
     if resolved:
         return resolved
-    return settings.nextcloud_url.rstrip("/") + RECORDER_PATH
+    return get_settings().nextcloud_url.rstrip("/") + RECORDER_PATH
 
 
 def _lookup() -> str:
@@ -73,7 +90,7 @@ def refresh() -> str:
     """
     global _resolved
     settings = get_settings()
-    if settings.citizens_public_url.strip():
+    if _override():
         _announce("CITIZENS_PUBLIC_URL", recorder_page_url())
         return recorder_page_url()
     if settings.missing_required() or settings.auth_disabled():
@@ -113,5 +130,7 @@ def _announce(source: str, value: str) -> None:
     _announced = (source, value)
     if source == "lookup_failed":
         log.warning("public_url_lookup_failed", error=value, using=recorder_page_url())
+    elif source == "override_ignored":
+        log.warning("public_url_override_ignored", value=value, reason="not an http(s) URL")
     else:
         log.info("public_url_resolved", source=source, url=value)

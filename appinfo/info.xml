@@ -91,7 +91,7 @@ per-individual consent record — Citizens does not store who agreed. Organisati
 whose lawful basis requires individual consent should collect it separately, and
 should run a rehearsal before a high-stakes assembly.
 	]]></description>
-	<version>0.6.0</version>
+	<version>0.6.1</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<!-- Maintainer first, then contributors. The mail attribute is optional in
 	     the store schema, so no address is invented for anyone. -->
@@ -122,7 +122,7 @@ should run a rehearsal before a high-stakes assembly.
 		<docker-install>
 			<registry>ghcr.io</registry>
 			<image>democracy-routes/citizens</image>
-			<image-tag>0.6.0</image-tag>
+			<image-tag>0.6.1</image-tag>
 		</docker-install>
 		<!-- Settable at install time through the env option of
 		     `occ app_api:app:register`: AppAPI only passes variables declared here. -->
@@ -131,7 +131,9 @@ should run a rehearsal before a high-stakes assembly.
 				<name>CITIZENS_PUBLIC_URL</name>
 				<display-name>Public address of Nextcloud for the table phones</display-name>
 				<description>Leave empty: the app asks Nextcloud for overwrite.cli.url and builds the QR codes on it. Set it only when that address is wrong or unset, e.g. https://cloud.example.org</description>
-				<default></default>
+				<!-- no <default>: an empty element reaches the container as the
+				     string "Array" (AppAPI's XML-to-array conversion), and the
+				     QR codes then pointed at "Array/index.php/…". -->
 			</variable>
 			<variable>
 				<name>CITIZENS_JOB_WORKERS</name>
@@ -147,8 +149,10 @@ should run a rehearsal before a high-stakes assembly.
 			</variable>
 		</environment-variables>
 		<!-- Route regexes are matched against the request path WITHOUT a
-		     leading slash on AppAPI <= 33 and WITH one on 34+; the escaped
-		     bare-path form below is the only one that works on both.
+		     leading slash by AppAPI's PHP proxy up to 33, WITH one on 34+ and
+		     by HaRP (/exapps/citizens/recorder.html answered "No defined route
+		     for handling /recorder.html" with the bare form). The optional
+		     leading slash below matches all three.
 		     Order matters on AppAPI 34+: the first route matching path+verb
 		     wins outright, so narrow routes MUST precede catch-alls.
 		     Only GET, POST, PUT and DELETE are listed because AppAPI's proxy
@@ -157,40 +161,40 @@ should run a rehearsal before a high-stakes assembly.
 		     is ever consulted. -->
 		<routes>
 			<route>
-				<url>^js\/.*</url>
+				<url>^\/?js\/.*</url>
 				<verb>GET</verb>
 				<access_level>USER</access_level>
 			</route>
 			<route>
-				<url>^css\/.*</url>
+				<url>^\/?css\/.*</url>
 				<verb>GET</verb>
 				<access_level>USER</access_level>
 			</route>
 			<route>
-				<url>^img\/.*</url>
+				<url>^\/?img\/.*</url>
 				<verb>GET</verb>
 				<access_level>USER</access_level>
 			</route>
 			<route>
-				<url>^api\/v1\/admin\/.*</url>
+				<url>^\/?api\/v1\/admin\/.*</url>
 				<verb>GET,POST,PUT,DELETE</verb>
 				<access_level>ADMIN</access_level>
 			</route>
 			<!-- table phones: join, chunk upload, status, published report -->
 			<route>
-				<url>^api\/v1\/public\/.*</url>
+				<url>^\/?api\/v1\/public\/.*</url>
 				<verb>GET,POST</verb>
 				<access_level>PUBLIC</access_level>
 				<bruteforce_protection>[401, 403, 429]</bruteforce_protection>
 			</route>
 			<route>
-				<url>^api\/v1\/.*</url>
+				<url>^\/?api\/v1\/.*</url>
 				<verb>GET,POST,PUT,DELETE</verb>
 				<access_level>USER</access_level>
 			</route>
 			<!-- the recorder page itself and its bundled assets -->
 			<route>
-				<url>^recorder.*</url>
+				<url>^\/?recorder.*</url>
 				<verb>GET</verb>
 				<access_level>PUBLIC</access_level>
 			</route>
