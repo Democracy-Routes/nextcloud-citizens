@@ -188,6 +188,20 @@ def retry_assembly(recording_id: str, user: CurrentUser, session: DB):
         raise HTTPException(
             status_code=409, detail="Assembly is already queued for this recording"
         )
+    salvaged: int | None = None
+    if recording.state == "UPLOAD_INCOMPLETE":
+        # The phone is gone: what the server holds is all there will be. Same
+        # salvage as Replace device — declare the contiguous prefix the whole
+        # recording. Without it a recording whose /complete had declared more
+        # chunks than arrived bounced straight back to WAITING_FOR_CHUNKS, the
+        # sweep timed it out again twenty minutes later, and Retry looped.
+        salvaged = salvage_total_chunks(session, recording)
+        if salvaged == 0:
+            raise HTTPException(
+                status_code=409,
+                detail="No audio reached the server for this recording; there is nothing to assemble",
+            )
+        recording.total_chunks = salvaged
     if recording.state != "ASSEMBLING":
         transition(recording, "ASSEMBLING")
     recording.error_code = ""
@@ -195,9 +209,9 @@ def retry_assembly(recording_id: str, user: CurrentUser, session: DB):
     enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": recording.id})
     record_audit_event(
         session, "assembly_retried", "recording", recording.id, actor=user,
-        data={"table_number": recording.table_number},
+        data={"table_number": recording.table_number, "salvaged_chunks": salvaged},
     )
-    return {"state": recording.state}
+    return {"state": recording.state, "salvaged_chunks": salvaged}
 
 @router.get(
     "/assemblies/{assembly_id}/invites/links",

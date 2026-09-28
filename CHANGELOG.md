@@ -4,6 +4,69 @@ All notable changes to Nextcloud Citizens.
 
 ## [Unreleased]
 
+### Readiness fixes — 2026-09-28
+
+An audit of the recording and recovery path before the first real assembly:
+three passes over the recorder, the server and the two rehearsals' data,
+then the fixes below. The upload protocol itself came out clean (every chunk
+fsynced and checksummed, resumable, verified against a manifest before the
+phone deletes anything; 102 of 102 assemblies in production succeeded first
+time). The gaps were around it.
+
+- **A table can record the rest of a round it finished early.** A reload
+  mid-round sends the phone to the recovery screen, which uploads what was
+  captured and declares the recording complete; a phone call that takes the
+  microphone does the same through "finish". The server then told the table
+  it had "already recorded" a round the facilitator still had open, the
+  armed screen waited for the next one, and Replace device did not apply —
+  the rest of the discussion was lost. While the round is ACTIVE a finished
+  recording is now a first part: the phone offers "Record the rest of round
+  N" (armed screen and finished screen, never automatic), the earlier
+  recording is kept and superseded (export `-part1`, "first part" on the
+  Live tab), and the analysis waits for both halves as it already did after
+  a device replacement.
+- **Audio a dead phone left behind is assembled by itself.** The salvage
+  sweep only looked at recordings a takeover had superseded. A phone that
+  died with nobody rescanning the table went through the twenty-minute
+  timeout instead, and its audio sat in UPLOAD_INCOMPLETE — on disk, no
+  transcript, absent from the report; at the 24 September rehearsal one
+  table's five minutes waited four days for somebody to find the Files tab's
+  Retry. Every UPLOAD_INCOMPLETE recording with audio is now assembled after
+  half an hour of silence, whatever released it. Retry itself salvages the
+  contiguous prefix the way Replace device does, instead of re-declaring a
+  total that never arrived and bouncing back into the same timeout.
+- **The operator's status screen lists what needs a decision.**
+  `scripts/event-status.sh` excluded exactly the two states an organizer has
+  to act on; it now has a section for them. The Live tab has a Retry button
+  next to Replace device for the same case, and labels an earlier recording
+  by what happened to it ("first part", "phone went silent") rather than
+  always "(replaced device)".
+- **The recovery screen keeps the screen awake.** It was the only recorder
+  screen without the wake lock, and it is the one that may be re-uploading a
+  whole round unattended; an iPhone left on it locked and suspended the
+  upload until somebody tapped it.
+- **A phone in use never loses its session mid-round.** The 16-hour lifetime
+  ran from the QR scan. Now it runs from the last contact, so a QR scanned
+  the evening before does not expire in the middle of the next afternoon's
+  round with a 401 that stopped uploads while the phone kept recording.
+- **The device log says what the phone did to the page, and what the phone
+  was.** New lines for the page going to the background, being frozen, torn
+  down or restored, plus a `device_info` line with the user agent — after
+  the rehearsals the browser family of a failing phone had to be inferred
+  from the wording of its error messages. The heartbeat carries whether the
+  page is visible, and the Live tab shows "in background" instead of a
+  healthy pill for a phone whose page is not on screen. The global error
+  listeners are registered once per page instead of once per join.
+- An assembly that bounced back to WAITING_FOR_CHUNKS no longer queues a
+  transcription that fails at once — the only red job the status screen
+  showed for a recording that was simply not ready.
+- The iPhone container path (`audio/mp4` → `.m4a`) is covered by an
+  integration test with fragmented MP4 cut at arbitrary offsets; no
+  production recording had ever exercised it (iOS 18.4+ records WebM/Opus).
+- `tests/load/load_h_realtime_assembly.py` runs from the checkout it lives
+  in (`CITIZENS_REPO` overrides) instead of a hard-coded path to the
+  development checkout.
+
 ### Rehearsal fixes — 2026-09-24
 
 - **Re-running the analysis replaces the previous findings, approved ones

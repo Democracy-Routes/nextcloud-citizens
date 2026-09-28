@@ -39,6 +39,7 @@ import base64
 import concurrent.futures
 import hashlib
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -49,7 +50,10 @@ import urllib.error
 import urllib.request
 
 CONTAINER = "nc_app_citizens"
-REPO = pathlib.Path("/root/NextCloud-Citizen")
+# The checkout this script lives in — the frozen event image is built from the
+# /root/citizens-week worktree, and a hard-coded /root/NextCloud-Citizen pointed
+# the smoke run at the older checkout on another branch. CITIZENS_REPO overrides.
+REPO = pathlib.Path(os.environ.get("CITIZENS_REPO") or pathlib.Path(__file__).resolve().parents[2])
 SECRET_FILE = REPO / ".app_secret"
 #: the assemblies belong to this Nextcloud user, so the test one shows up in
 #: the same list as the real ones and its report can be opened in the UI

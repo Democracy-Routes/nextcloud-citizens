@@ -107,11 +107,17 @@ async function honourPurgeRequest(joined: {
 /** True only while audio is actually being captured. */
 const capturing = ref(false)
 
+/** Bumped on every start so the recording screen remounts even for the SAME
+ * round: recording the rest of a round the table finished early reuses the
+ * round id, and a key made of that alone left the finished screen in place. */
+const startNonce = ref(0)
+
 function startRound(round: RoundInfo): void {
 	capturing.value = true
 	// an explicit start (including "try again") clears the latch
 	if (startFailedRoundId.value === round.id) startFailedRoundId.value = null
 	selectedRound.value = round
+	startNonce.value += 1
 	screen.value = 'recording'
 }
 
@@ -446,7 +452,7 @@ function sessionStorageClear(): void {
 
 		<RecordingScreen
 			v-else-if="screen === 'recording' && session && selectedRound"
-			:key="selectedRound.id"
+			:key="`${selectedRound.id}:${startNonce}`"
 			:session="session"
 			:round="selectedRound"
 			@exit="screen = orchestrated ? 'armed' : 'preflight'"

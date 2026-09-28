@@ -97,11 +97,19 @@ def sweep_missed_enqueues() -> int:
 def sweep_superseded_partials() -> int:
     """Assemble the audio a dead phone left behind.
 
-    The automatic takeover deliberately leaves the old recording open in
-    UPLOAD_INCOMPLETE so a merely-offline phone can still upload its backlog.
-    But nothing ever gave up waiting: if the phone truly died, the chunks it
-    DID upload sat there with no transcript — invisible in the report, and
-    eventually deleted by retention as if they were redundant.
+    Every path that gives up on a phone deliberately leaves the recording open
+    in UPLOAD_INCOMPLETE so a merely-offline phone can still upload its
+    backlog. But nothing ever gave up waiting: if the phone truly died, the
+    chunks it DID upload sat there with no transcript — invisible in the
+    report (retention keeps untranscribed audio, so it was at least not
+    deleted, but nobody knew it was there).
+
+    This used to cover only recordings a takeover had superseded. A phone that
+    died with nobody rescanning the table — the twenty-minute timeout's
+    UPLOAD_TIMED_OUT — was left out, and at the 24 September 2026 rehearsal a
+    table's five minutes sat on disk for days, absent from the report, until
+    somebody found the manual Retry. Now every UPLOAD_INCOMPLETE recording
+    with audio and half an hour of silence is assembled, whatever released it.
     """
     from citizens.services.recording import salvage_total_chunks
 
@@ -113,8 +121,8 @@ def sweep_superseded_partials() -> int:
             for recording in session.execute(
                 select(Recording).where(
                     Recording.state == "UPLOAD_INCOMPLETE",
-                    Recording.superseded_at.is_not(None),
                     Recording.received_chunks > 0,
+                    Recording.audio_deleted_at.is_(None),
                     Recording.updated_at < cutoff,
                 )
             ).scalars()
@@ -132,6 +140,8 @@ def sweep_superseded_partials() -> int:
                 "superseded_partial_salvaged",
                 recording_id=recording.id,
                 table_number=recording.table_number,
+                error_code=recording.error_code,
+                superseded=recording.superseded_at is not None,
                 salvaged_chunks=total,
             )
         if salvaged:

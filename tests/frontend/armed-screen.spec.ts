@@ -87,6 +87,62 @@ describe('ArmedScreen auto-start', () => {
 	})
 })
 
+describe('ArmedScreen when this table finished a round the facilitator still has open', () => {
+	// the reload-mid-round shape: the recovery screen uploaded what was
+	// captured and declared it complete, so the round reads as recorded — by
+	// this very phone — while the facilitator has not ended it
+	const FINISHED_EARLY = {
+		...ACTIVE_ROUND,
+		recorded_state: 'AUDIO_READY',
+		recorded_by_this_device: true,
+	}
+
+	it('does not restart the round by itself', async () => {
+		status.mockResolvedValue({ rounds: [FINISHED_EARLY], report_available: false })
+		const wrapper = mountWithI18n(ArmedScreen, { props: { session: SESSION } })
+		await flushPromises()
+
+		expect(wrapper.emitted('start')).toBeFalsy()
+		expect(wrapper.text()).toContain('Round 1 is still open')
+	})
+
+	it('records the rest only when the table taps the button', async () => {
+		status.mockResolvedValue({ rounds: [FINISHED_EARLY], report_available: false })
+		const wrapper = mountWithI18n(ArmedScreen, { props: { session: SESSION } })
+		await flushPromises()
+
+		const button = wrapper.findAll('button').find((b) => b.text().includes('Record the rest'))
+		expect(button).toBeTruthy()
+		await button!.trigger('click')
+
+		expect(wrapper.emitted('start')?.[0]).toEqual([FINISHED_EARLY])
+	})
+
+	it('offers nothing once the facilitator has ended the round', async () => {
+		status.mockResolvedValue({
+			rounds: [{ ...FINISHED_EARLY, status: 'ENDED' }],
+			report_available: false,
+		})
+		const wrapper = mountWithI18n(ArmedScreen, { props: { session: SESSION } })
+		await flushPromises()
+
+		expect(wrapper.text()).not.toContain('still open')
+		expect(wrapper.text()).toContain('All rounds recorded')
+	})
+
+	it('does not confuse a round still being uploaded with a finished one', async () => {
+		// WAITING_FOR_CHUNKS is a phone mid-upload, not a first part
+		status.mockResolvedValue({
+			rounds: [{ ...FINISHED_EARLY, recorded_state: 'WAITING_FOR_CHUNKS' }],
+			report_available: false,
+		})
+		const wrapper = mountWithI18n(ArmedScreen, { props: { session: SESSION } })
+		await flushPromises()
+
+		expect(wrapper.text()).not.toContain('still open')
+	})
+})
+
 describe('ArmedScreen when the assembly is closed', () => {
 	it('does not auto-start a round once the assembly is over', async () => {
 		// the early-end bug: an ACTIVE round arrives, but the assembly is closed,

@@ -8,6 +8,7 @@ import {
 	mdiConsoleLine,
 	mdiMonitorEye,
 	mdiPlay,
+	mdiRefresh,
 	mdiStop,
 	mdiTextBoxOutline,
 	mdiTextBoxPlusOutline,
@@ -329,6 +330,10 @@ function speakerClass(speaker: string): string {
 
 function deviceState(table: MonitorTable): { status: string; label: string } {
 	if (table.armed) return { status: 'CONNECTED', label: 'armed' }
+	// the page is alive but not on screen: iOS can stop the microphone in
+	// that state with no error the page can catch, so it is not "connected"
+	if (table.device.connected && table.device.status.visible === false)
+		return { status: 'STALE', label: 'in background' }
 	if (table.device.connected) return { status: 'CONNECTED', label: 'connected' }
 	if (table.device.seconds_since_contact !== null)
 		return { status: 'STALE', label: relativeAge(table.device.seconds_since_contact) }
@@ -359,6 +364,46 @@ const confirmReplace = ref<MonitorTable | null>(null)
 function canReplaceDevice(table: MonitorTable): boolean {
 	if (table.device.connected || !table.recording) return false
 	return LIVE_RECORDING_STATES.includes(table.recording.state)
+}
+
+/** Audio the server holds for a phone that is gone, not yet assembled.
+ *
+ * Once the sweep has given up on the phone the recording is UPLOAD_INCOMPLETE,
+ * where Replace device no longer applies — and the only way to turn the audio
+ * into a transcript was a Retry button on the Files tab that nothing on this
+ * screen pointed at. The sweep now assembles it by itself after half an hour;
+ * this is for the facilitator who does not want to wait.
+ */
+function canRetryAssembly(table: MonitorTable): boolean {
+	const recording = table.recording
+	if (!recording) return false
+	return (
+		(recording.state === 'UPLOAD_INCOMPLETE' && recording.received_chunks > 0) ||
+		recording.state === 'AUDIO_INVALID'
+	)
+}
+
+async function retryAssembly(table: MonitorTable): Promise<void> {
+	const recording = table.recording
+	if (!recording) return
+	await run(
+		() => api.retryAssembly(recording.id),
+		`Table ${table.number}: assembling the audio that reached the server`,
+	)
+}
+
+/** What the earlier recording of a table is, in a word. */
+function priorLabel(prior: { error_code: string }): string {
+	switch (prior.error_code) {
+		case 'ROUND_CONTINUED':
+			return 'first part'
+		case 'DEVICE_REJOINED':
+			return 'before the phone reconnected'
+		case 'DEVICE_SILENT':
+			return 'phone went silent'
+		default:
+			return 'replaced device'
+	}
 }
 
 async function replaceDevice(): Promise<void> {
@@ -552,7 +597,7 @@ function pendingChunks(table: MonitorTable): number {
 								style="font-size: 0.78rem; margin-top: 4px">
 								<CzStatusPill :status="prior.state" />
 								<CzFailureNote :state="prior.state" :error-code="prior.error_code" :job="prior.job" />
-								<span>(replaced device)</span>
+								<span>({{ priorLabel(prior) }})</span>
 							</div>
 						</td>
 						<td>
@@ -628,6 +673,16 @@ function pendingChunks(table: MonitorTable): number {
 									:disabled="busy"
 									@click="confirmReplace = table">
 									Replace device
+								</CzButton>
+								<CzButton
+									v-if="canRetryAssembly(table)"
+									small
+									variant="secondary"
+									:icon="mdiRefresh"
+									title="Assemble and transcribe the audio that reached the server before the phone stopped"
+									:disabled="busy"
+									@click="retryAssembly(table)">
+									Retry
 								</CzButton>
 								<CzButton
 									small

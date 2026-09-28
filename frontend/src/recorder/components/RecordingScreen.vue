@@ -102,6 +102,11 @@ const captionState = ref<CaptionFooter>('waiting')
 let captionHistory: CaptionHistory = { sawLines: false, consecutiveInactive: 0 }
 const captionsBox = ref<HTMLElement | null>(null)
 const nextRound = ref<RoundInfo | null>(null)
+// The facilitator still has THIS round open after the table finished it —
+// the microphone was lost to a phone call, or Finish was tapped early. The
+// rest of the discussion can be recorded as a second part; the button is the
+// only way in, a finished recording is never restarted by itself.
+const currentRoundOpen = ref(false)
 const reportAvailable = ref(false)
 // the organizer ended the assembly (possibly mid-round): stop advancing, and
 // offer the report rather than roll into a round that will never come
@@ -187,6 +192,9 @@ function watchForNextRound(): void {
 			const status = await recorderApi.status(props.session.session_token)
 			reportAvailable.value = status.report_available ?? false
 			assemblyClosed.value = status.assembly_closed ?? false
+			currentRoundOpen.value =
+				!assemblyClosed.value &&
+				status.rounds.find((r) => r.id === props.round.id)?.status === 'ACTIVE'
 			// the done screen auto-records the next round, so the table counts
 			// as armed on the organizer's readiness indicator
 			if (orchestrated && status.rounds.some((r) => !r.recorded_state)) {
@@ -202,6 +210,7 @@ function watchForNextRound(): void {
 						acked_chunks: 0,
 						storage_ok: true,
 						local_recordings: held,
+						visible: document.visibilityState === 'visible',
 					})
 					.catch(() => undefined)
 			}
@@ -718,6 +727,16 @@ async function clearSynced(): Promise<void> {
 					</div>
 					<p v-if="clearedNote" class="rc-muted">{{ clearedNote }}</p>
 
+					<div
+						v-if="currentRoundOpen && orchestrated && !nextRound"
+						class="rc-card"
+						style="text-align: left; margin-top: 20px">
+						<p class="rc-eyebrow" style="color: var(--rc-amber); margin-bottom: 4px">
+							{{ t('recorder.armed.continueTitle', { position: round.position }) }}
+						</p>
+						<p class="rc-muted" style="margin: 0; font-size: 0.875rem">{{ t('recorder.armed.continueBody') }}</p>
+					</div>
+
 					<div v-if="nextRound && orchestrated" class="rc-note" style="text-align: left; margin-top: 20px">
 						<strong>{{ t('recorder.recording.nextStarted', { position: nextRound.position }) }}</strong>
 						<template v-if="nextStartCountdown > 0">
@@ -768,6 +787,13 @@ async function clearSynced(): Promise<void> {
 					style="margin-top: 0"
 					@click="emit('nextRound', nextRound)">
 					{{ t('recorder.recording.startNext', { position: nextRound.position }) }}
+				</button>
+				<button
+					v-if="currentRoundOpen && orchestrated && !nextRound"
+					class="rc-btn rc-record"
+					style="margin-top: 0"
+					@click="emit('nextRound', round)">
+					{{ t('recorder.armed.continueButton', { position: round.position }) }}
 				</button>
 				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('viewReport')">
 					{{ t('recorder.armed.viewReport') }}

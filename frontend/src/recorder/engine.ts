@@ -328,6 +328,9 @@ export class RecorderEngine {
 				storage_free_mb: freeMb,
 				battery_level: await readBatteryLevel(),
 				local_recordings: this.assemblyId ? await idb.countFor(this.assemblyId) : undefined,
+				// a backgrounded page can stop capturing on iOS with no error:
+				// the Live tab says "in background" rather than a healthy pill
+				visible: document.visibilityState === 'visible',
 			})
 		} catch {
 			/* offline — heartbeats resume when the network does */

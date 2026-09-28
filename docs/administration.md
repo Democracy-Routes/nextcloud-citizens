@@ -249,6 +249,23 @@ phone is let in automatically after two minutes of silence; in that case the
 first recording is left open, so a phone that was merely offline rather than
 dead can still upload what it recorded while disconnected.
 
+**A table's phone died and nobody replaced it.** After twenty minutes of
+silence the recording shows UPLOAD_INCOMPLETE with "upload timed out"; the
+audio that reached the server is on disk. Thirty minutes later it is
+assembled and transcribed by itself. To not wait, press **Retry** on that
+table (Live tab, next to Replace device, or Files tab): it assembles the
+contiguous part that arrived. `scripts/event-status.sh` lists such
+recordings under "needs a decision".
+
+**A table reloaded the page (or a phone call took the microphone) and the
+round was still going.** The phone uploads what it captured, then shows
+"Record the rest of round N" — on the armed screen after the recovery, and on
+the finished screen. Tapping it starts a second recording for the same round;
+the first is kept as part 1 ("first part" on the Live tab, `-part1` in the
+export) and the table's analysis waits for both. It is never automatic: a
+table that pressed Finish on purpose simply does not tap it. Once you end the
+round the offer disappears.
+
 **Participants used their own phones.** Closing the session asks the phones to
 clear their copy automatically — that is on by default, and switchable per
 assembly under *Assembly details* on the Overview tab. Turn it off if you want

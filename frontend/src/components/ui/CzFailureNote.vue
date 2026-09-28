@@ -64,6 +64,8 @@ const EXPLANATIONS: Record<string, string> = {
 		'Final transcription is off and the captions contained no text. Re-transcribe from the stored audio.',
 	DEVICE_SILENT:
 		'The phone went silent mid-round and the table was released. Whatever reached the server is kept.',
+	ROUND_CONTINUED:
+		'The table finished early while the round was still open, then carried on: this is the first part of the round, the rest is in the recording below it.',
 }
 
 const STATE_EXPLANATIONS: Record<string, string> = {

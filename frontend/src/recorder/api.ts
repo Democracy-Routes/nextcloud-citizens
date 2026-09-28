@@ -130,7 +130,14 @@ export class RecorderApiError extends Error {
 async function request<T>(
 	method: string,
 	path: string,
-	options: { token?: string; json?: unknown; body?: BodyInit; headers?: Record<string, string> } = {},
+	options: {
+		token?: string
+		json?: unknown
+		body?: BodyInit
+		headers?: Record<string, string>
+		/** let the request outlive the page — for the last log lines on pagehide */
+		keepalive?: boolean
+	} = {},
 ): Promise<T> {
 	const headers: Record<string, string> = { ...options.headers }
 	if (options.token) headers.Authorization = `Bearer ${options.token}`
@@ -139,7 +146,9 @@ async function request<T>(
 		headers['Content-Type'] = 'application/json'
 		body = JSON.stringify(options.json)
 	}
-	const response = await fetch(appBase() + path, { method, headers, body })
+	const response = await fetch(appBase() + path, {
+		method, headers, body, ...(options.keepalive ? { keepalive: true } : {}),
+	})
 	if (!response.ok) {
 		let detail = `HTTP ${response.status}`
 		try {
@@ -235,6 +244,8 @@ export const recorderApi = {
 			battery_level?: number
 			/** how many recordings this phone still holds locally */
 			local_recordings?: number
+			/** whether the recorder page is in the foreground right now */
+			visible?: boolean
 		},
 	) => request<{ ok: boolean }>('POST', '/api/v1/public/recorder/heartbeat', { token, json: payload }),
 
@@ -242,6 +253,7 @@ export const recorderApi = {
 		request<{ accepted: number }>('POST', '/api/v1/public/recorder/logs', {
 			token,
 			json: { entries },
+			keepalive: true,
 		}),
 
 	report: (token: string) =>

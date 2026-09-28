@@ -68,7 +68,10 @@
 			"waitingHint": "La registrazione parte automaticamente. Tenete aperta questa pagina e il telefono sul tavolo.",
 			"offline": "Rete non disponibile — riconnessione in corso… il telefono resta pronto.",
 			"backToTest": "Torna alla prova del microfono",
-			"badge": "PRONTO"
+			"badge": "PRONTO",
+			"continueTitle": "Il turno {position} è ancora aperto",
+			"continueBody": "Questo tavolo ne ha già registrato una parte. Se la discussione continua, registrate il resto: si aggiunge a quanto registrato prima.",
+			"continueButton": "Registra il resto del turno {position}"
 		},
 		"preflight": {
 			"level": "Livello audio — parlate al tavolo",

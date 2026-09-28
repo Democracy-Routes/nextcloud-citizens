@@ -193,15 +193,17 @@ def test_full_analysis_chain_and_report(pipeline):
 def test_duplicate_recording_blocked(pipeline):
     client = pipeline["client"]
     _wait(client, pipeline["headers"], pipeline["recording_id"], ("READY_FOR_REVIEW",))
+    # While the facilitator still has the round open a finished recording is a
+    # first part the table may add to (test_device_replacement covers that).
+    # Once the round has ended, a second recording is refused.
+    client.post(f"/api/v1/rounds/{pipeline['round_id']}/end")
 
-    # second recording for the same table+round is refused
     blocked = client.post(
         "/api/v1/public/recorder/start",
         json={"round_id": pipeline["round_id"], "mime_type": "audio/webm"},
         headers=pipeline["headers"],
     )
     assert blocked.status_code == 409
-    assert "already recorded" in blocked.json()["detail"]
 
     # the public status exposes the recorded state for the phone UI
     status = client.get("/api/v1/public/recorder/status", headers=pipeline["headers"]).json()

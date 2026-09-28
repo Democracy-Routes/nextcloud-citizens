@@ -77,6 +77,12 @@ def get_session_by_bearer(
         or (now - recorder_session.last_seen_at).total_seconds() >= LAST_SEEN_RESOLUTION
     ):
         recorder_session.last_seen_at = now
+        # A phone in use keeps its session. The lifetime used to run from the
+        # scan, so a QR scanned the evening before expired in the middle of the
+        # next afternoon's round: uploads stopped with a 401 while the phone
+        # kept recording, and the Live tab only showed STALE. Measured from the
+        # last contact instead, an active phone never expires mid-round.
+        recorder_session.expires_at = now + timedelta(hours=SESSION_LIFETIME_HOURS)
     return recorder_session
 
 
@@ -88,6 +94,13 @@ COMPLETED_STATES = (
     "AUDIO_READY", "TRANSCRIBING", "TRANSCRIBED", "TRANSCRIPTION_FAILED",
     "ANALYZING", "READY_FOR_REVIEW", "REVIEWED", "ANALYSIS_FAILED",
 )
+
+# a recording the table has declared finished: /complete was sent and every
+# chunk arrived. While the round is still open, the table may record the rest
+# of it as a second recording (see _guard_one_recording_per_table). ASSEMBLING
+# is included because the phone lands here seconds after the recovery screen
+# finished uploading, before the job has run.
+CONTINUABLE_STATES = ("ASSEMBLING", *COMPLETED_STATES)
 
 
 def assembly_complete(session: Session, assembly, analysis_enabled: bool | None = None) -> bool:
@@ -200,8 +213,10 @@ def _guard_one_recording_per_table(
 
     Prevents accidental extra recordings after a table already finished (unless
     the earlier attempt failed), while letting a phone reclaim its OWN
-    interrupted recording and freeing a table whose device has gone silent.
-    Not applied in plenary mode, where concurrent devices are expected.
+    interrupted recording, letting a table carry on with a round it finished
+    while the facilitator still has it open, and freeing a table whose device
+    has gone silent. Not applied in plenary mode, where concurrent devices are
+    expected.
     """
     existing = session.execute(
         select(Recording).where(
@@ -247,6 +262,31 @@ def _guard_one_recording_per_table(
             existing.total_chunks = salvaged
             transition(existing, "ASSEMBLING")
             enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": existing.id})
+        existing = None
+    if (
+        existing is not None
+        and existing.state in CONTINUABLE_STATES
+        and round_.status == "ACTIVE"
+    ):
+        # The table finished this round while the facilitator still has it
+        # open: a reload mid-round (the recovery screen uploads what was
+        # captured and declares it complete), a phone call that ended the
+        # microphone, a Finish tapped too early. The audio already uploaded is
+        # real and stays — superseded, so the export names it part 1 and the
+        # analysis waits for both halves — and the rest of the discussion gets
+        # a second recording instead of a 409 that cost the table the
+        # remainder of the round. Never automatic: the phone offers "record
+        # the rest" as a button, and a table that pressed Finish on purpose
+        # simply does not tap it.
+        existing.superseded_at = utcnow()
+        existing.error_code = existing.error_code or "ROUND_CONTINUED"
+        session.flush()
+        log.info(
+            "round_continued_after_completion",
+            recording_id=existing.id,
+            table_number=existing.table_number,
+            state=existing.state,
+        )
         existing = None
     if existing is not None and device_has_gone_silent(existing):
         # A phone that has sent nothing for minutes is not "already recording",

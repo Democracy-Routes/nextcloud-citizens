@@ -362,10 +362,8 @@ def test_another_phone_still_waits_its_two_minutes(client, table_recording):
     assert "already recorded" in response.json()["detail"]
 
 
-def test_a_phone_cannot_re_record_a_round_it_finished(client, table_recording):
-    """The reclaim is scoped to a recording still in progress. Once the audio is
-    assembled the table HAS recorded the round, and starting again would throw
-    finished work away to record over it."""
+def _finish(client, table_recording, state="AUDIO_READY"):
+    """The table's recording is complete and assembled: it HAS recorded the round."""
     headers = table_recording["headers"]
     recording_id = table_recording["recording_id"]
     client.post(
@@ -375,12 +373,86 @@ def test_a_phone_cannot_re_record_a_round_it_finished(client, table_recording):
     )
     with session_scope() as session:
         recording = session.get(Recording, recording_id)
-        recording.state = "AUDIO_READY"
+        recording.state = state
 
-    response = _start(client, headers, table_recording["round_id"])
+
+def test_a_phone_cannot_re_record_a_round_that_has_ended(client, table_recording):
+    """Once the facilitator has ended the round, a finished recording is the
+    table's record of it: starting again would only add a stray second one."""
+    _finish(client, table_recording)
+    client.post(f"/api/v1/rounds/{table_recording['round_id']}/end")
+
+    response = _start(client, table_recording["headers"], table_recording["round_id"])
 
     assert response.status_code == 409
-    assert "already recorded" in response.json()["detail"]
+    with session_scope() as session:
+        rows = session.execute(
+            select(Recording).where(Recording.round_id == table_recording["round_id"])
+        ).scalars().all()
+    assert len(rows) == 1, "an ended round grew a second recording"
+    assert rows[0].superseded_at is None
+
+
+# ------------------------------ carrying on with a round that is still open
+
+
+def test_a_table_can_record_the_rest_of_a_round_it_finished_early(client, table_recording):
+    """The reload-mid-round case. The recovery screen uploads what was captured
+    and declares it complete, so the server assembles it — and the table was
+    then told it had "already recorded" a round the facilitator still had open.
+    The rest of the discussion was lost. While the round is ACTIVE, a finished
+    recording is a first part, not a lock."""
+    _finish(client, table_recording)
+
+    response = _start(client, table_recording["headers"], table_recording["round_id"])
+
+    assert response.status_code == 201, response.text
+    second = response.json()["recording_id"]
+    assert second != table_recording["recording_id"]
+    with session_scope() as session:
+        first = session.get(Recording, table_recording["recording_id"])
+        # kept, and marked so the export names it part 1 and the Live tab
+        # shows it under the continuation rather than hiding it
+        assert first.state == "AUDIO_READY"
+        assert first.superseded_at is not None
+        assert first.error_code == "ROUND_CONTINUED"
+        assert session.get(Recording, second).state == "RECORDING"
+
+
+def test_the_continuation_is_what_the_phone_now_sees_as_the_round(client, table_recording):
+    _finish(client, table_recording)
+    _start(client, table_recording["headers"], table_recording["round_id"])
+
+    seen = _status_round(client, table_recording["headers"], table_recording["round_id"])
+
+    assert seen["recorded_state"] == "RECORDING"
+    assert seen["recorded_by_this_device"] is True
+
+
+def test_a_replacement_phone_can_also_carry_on_an_open_round(client, table_recording):
+    """The phone that finished may be the one that died. Any phone holding the
+    table's QR code may record the rest, exactly as after Replace device."""
+    _finish(client, table_recording)
+    second = _rejoin(client, table_recording["assembly"])
+
+    assert _start(client, second, table_recording["round_id"]).status_code == 201
+
+
+def test_a_recording_still_being_assembled_counts_as_finished(client, table_recording):
+    """The phone lands on the armed screen seconds after the recovery upload,
+    before the assembly job has run: it must not have to wait for it."""
+    _finish(client, table_recording, state="ASSEMBLING")
+
+    assert _start(client, table_recording["headers"], table_recording["round_id"]).status_code == 201
+
+
+def test_a_recording_still_uploading_is_not_continued(client, table_recording):
+    """WAITING_FOR_CHUNKS means a phone is still sending: that is a resume, not
+    a finished first part, and another recording must not start under it."""
+    _finish(client, table_recording, state="WAITING_FOR_CHUNKS")
+    second = _rejoin(client, table_recording["assembly"])
+
+    assert _start(client, second, table_recording["round_id"]).status_code == 409
 
 
 # --------------------------------------- salvaging a gap-truncated recording

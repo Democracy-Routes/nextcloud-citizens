@@ -54,6 +54,26 @@ let heartbeatTimer = 0
 const nextRound = computed(() => rounds.value.find((r) => !r.recorded_state) ?? null)
 const allRecorded = computed(() => rounds.value.length > 0 && !nextRound.value)
 
+/** Recording states in which the table has declared the round finished. */
+const FINISHED_STATES = [
+	'ASSEMBLING', 'AUDIO_READY', 'TRANSCRIBING', 'TRANSCRIBED', 'TRANSCRIPTION_FAILED',
+	'ANALYZING', 'READY_FOR_REVIEW', 'REVIEWED', 'ANALYSIS_FAILED',
+]
+
+/** A round the facilitator still has open which this table already finished:
+ * a reload mid-round (the recovery screen uploads what was captured and
+ * declares it complete), a phone call that ended the microphone, a Finish
+ * tapped too early. The rest of the discussion can be recorded as a second
+ * part — but only on an explicit tap. The recording that exists is the
+ * table's deliberate record until somebody says otherwise, so this is never
+ * auto-started the way an unrecorded round is. */
+const continuableRound = computed(
+	() =>
+		rounds.value.find(
+			(r) => r.status === 'ACTIVE' && !!r.recorded_state && FINISHED_STATES.includes(r.recorded_state),
+		) ?? null,
+)
+
 /** A round this table is mid-way through on a device that is not this one —
  * the shape a replaced phone leaves behind until the table is released. */
 const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
@@ -87,6 +107,7 @@ async function heartbeat(): Promise<void> {
 			// which is most of them at the end of an assembly, exactly when the
 			// organizer is reading that number.
 			local_recordings: await idb.countFor(props.session.assembly.id),
+			visible: document.visibilityState === 'visible',
 		})
 	} catch {
 		/* offline — retried */
@@ -159,6 +180,23 @@ onBeforeUnmount(() => {
 					<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 						{{ t('recorder.armed.viewReport') }}
 					</button>
+				</div>
+			</template>
+
+			<!-- the round is still open and this table has already finished it:
+			     offer the rest, never take it -->
+			<template v-else-if="continuableRound">
+				<div class="rc-card rc-center">
+					<p class="rc-eyebrow" style="color: var(--rc-amber)">
+						{{ t('recorder.armed.continueTitle', { position: continuableRound.position }) }}
+					</p>
+					<p class="rc-muted" style="margin: 0">{{ t('recorder.armed.continueBody') }}</p>
+					<button class="rc-btn rc-record" @click="emit('start', continuableRound)">
+						{{ t('recorder.armed.continueButton', { position: continuableRound.position }) }}
+					</button>
+				</div>
+				<div v-if="offline" class="rc-note">
+					{{ t('recorder.armed.offline') }}
 				</div>
 			</template>
 

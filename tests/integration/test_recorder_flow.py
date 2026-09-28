@@ -16,6 +16,30 @@ import time
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import select
+
+from citizens.db.models import RecorderSession
+from citizens.db.models.base import utcnow
+from citizens.db.session import session_scope
+
+
+def _make_mp4_audio(tmp_path, seconds: float = 12.0) -> bytes:
+    """What iOS Safari's MediaRecorder produces before iOS 18.4: fragmented
+    MP4 (AAC) — `moov` up front, then one `moof`/`mdat` pair per fragment."""
+    path = tmp_path / "source.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}",
+            "-c:a", "aac", "-b:a", "48k",
+            "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+            "-frag_duration", "1000000",
+            "-f", "mp4", str(path),
+        ],
+        check=True,
+        timeout=120,
+    )
+    return path.read_bytes()
 
 
 def _make_webm_audio(tmp_path, seconds: float = 3.0) -> bytes:
@@ -76,10 +100,10 @@ def _upload(recorder, recording_id: str, sequence: int, blob: bytes, sha=None):
     )
 
 
-def _start(recorder) -> str:
+def _start(recorder, mime: str = "audio/webm;codecs=opus") -> str:
     response = recorder["client"].post(
         "/api/v1/public/recorder/start",
-        json={"round_id": recorder["round_id"], "mime_type": "audio/webm;codecs=opus"},
+        json={"round_id": recorder["round_id"], "mime_type": mime},
         headers=recorder["headers"],
     )
     assert response.status_code == 201, response.text
@@ -99,6 +123,63 @@ def _wait_for_state(recorder, recording_id: str, target: str, timeout: float = 3
             return status
         time.sleep(0.5)
     return status
+
+
+def test_an_iphone_mp4_recording_assembles_to_m4a(recorder, tmp_path, settings_env):
+    """No production recording has ever been audio/mp4 (iOS 18.4+ records
+    WebM/Opus), so the m4a path — raw concatenation of fragmented MP4 pieces
+    cut at arbitrary byte offsets, then `ffmpeg -c copy` — had never run
+    anywhere. An older iPhone at the event would have been its first run."""
+    audio = _make_mp4_audio(tmp_path)
+    chunks = _split(audio, 9)
+    recording_id = _start(recorder, mime="audio/mp4")
+
+    for sequence, blob in enumerate(chunks):
+        assert _upload(recorder, recording_id, sequence, blob).status_code == 200
+    done = recorder["client"].post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/complete",
+        json={"total_chunks": len(chunks)},
+        headers=recorder["headers"],
+    )
+    assert done.json()["state"] == "ASSEMBLING", done.text
+
+    status = _wait_for_state(recorder, recording_id, "AUDIO_READY", timeout=60)
+    assert status["state"] == "AUDIO_READY", status
+    assert status["duration_seconds"] == pytest.approx(12.0, abs=0.5)
+    assembled = list((settings_env.app_persistent_storage / "assembled").rglob("*.m4a"))
+    assert len(assembled) == 1, "the canonical file must carry the iPhone's own container"
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+         "stream=codec_name", "-of", "csv=p=0", str(assembled[0])],
+        capture_output=True, text=True, check=True, timeout=60,
+    )
+    assert probe.stdout.strip() == "aac"
+
+
+def test_a_phone_in_use_keeps_its_session_alive(recorder):
+    """The 16 h lifetime ran from the scan. A QR scanned the evening before
+    expired mid-afternoon: uploads 401ed while the phone kept recording, and
+    the Live tab only showed STALE. Any contact now pushes the expiry out."""
+    with session_scope() as session:
+        stored = session.execute(
+            select(RecorderSession).where(
+                RecorderSession.assembly_id == recorder["assembly"]["id"]
+            )
+        ).scalar_one()
+        stored.expires_at = utcnow() + timedelta(minutes=5)
+        stored.last_seen_at = None
+        session_id = stored.id
+
+    beat = recorder["client"].post(
+        "/api/v1/public/recorder/heartbeat",
+        json={"recording_active": False, "local_chunks": 0, "acked_chunks": 0, "storage_ok": True},
+        headers=recorder["headers"],
+    )
+    assert beat.status_code == 200, beat.text
+
+    with session_scope() as session:
+        refreshed = session.get(RecorderSession, session_id)
+        assert refreshed.expires_at > utcnow() + timedelta(hours=15)
 
 
 def test_full_recording_pipeline(recorder, tmp_path, settings_env):

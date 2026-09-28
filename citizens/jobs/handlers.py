@@ -101,6 +101,15 @@ def handle_assemble_audio(session: Session, payload: dict) -> None:
         log.error("audio_assembly_failed", recording_id=recording.id, error_code=exc.code)
         raise PermanentJobError(str(exc)) from exc
 
+    if redundant_chunks is None:
+        # Chunks are missing: assemble_recording moved it back to
+        # WAITING_FOR_CHUNKS for the phone to fill the gap. Queuing the
+        # transcription here produced a job that failed at once ("cannot
+        # transcribe") — a red line on the operator's status screen for a
+        # recording that simply is not ready yet.
+        session.commit()
+        return
+
     # Commit AUDIO_READY BEFORE reclaiming the chunk files. Reclaiming unlinks
     # the bytes and deletes the rows; if this commit failed afterwards, the
     # rollback would restore rows pointing at files that no longer exist and

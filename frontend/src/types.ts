@@ -168,6 +168,9 @@ export interface DeviceStatus {
 	/** 0–1. Absent means the browser would not say, NOT that the phone is fine:
 	 * only Chromium exposes this. */
 	battery_level?: number
+	/** whether the recorder page is in the foreground; absent from older
+	 * recorder builds */
+	visible?: boolean
 }
 
 export interface MonitorTable {

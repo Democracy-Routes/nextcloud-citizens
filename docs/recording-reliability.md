@@ -33,7 +33,24 @@ that evidence their local audio remains untouched.
 - Expired or revoked sessions do not hide local audio. The recovery screen offers
   a download, keeping the copy, or explicitly confirming its deletion. A fresh
   QR for the same assembly and table resumes the original recording. Unknown
-  legacy ownership is not guessed, and server authorization is unchanged.
+  legacy ownership is not guessed, and server authorization is unchanged. A
+  session's lifetime (16 h) runs from the phone's last contact, not from the
+  scan, so a phone in use does not expire mid-round.
+- A finished recording does not end the table's round. The recovery screen
+  declares what it recovered complete; a lost microphone finishes the
+  recording the same way. While the facilitator still has the round open, the
+  phone offers "Record the rest of round N" — on the armed screen and on the
+  finished screen, never automatically — and the server keeps the first
+  recording as part 1 of the table's round. The analysis waits for both parts.
+  Ended rounds, and independent-mode rounds, are not continued.
+- Audio the server received from a phone that never came back is assembled by
+  itself after thirty minutes of silence, whatever gave up on the phone (a
+  replacement, the automatic takeover, the twenty-minute timeout, an organizer
+  abandoning the upload). A phone that returns after that keeps its local copy
+  and is told the server would not take more; its screen offers the download.
+  The Files tab's Retry, and the Live tab's, do the same without waiting.
+- The recovery screen holds the screen wake lock like every other screen, so
+  a phone left re-uploading a round does not lock and suspend the upload.
 - On phones that can share files (iPhone, Android Chrome) "Download audio
   file" opens the system share sheet — "Save to Files", AirDrop — instead of
   an anchor download: Safari on iPhone navigates to a blob URL rather than
@@ -49,6 +66,12 @@ that evidence their local audio remains untouched.
   consume disk until then; monitor capacity.
 - Recovery heartbeats count the original assembly's local recordings only.
   Unreadable storage or unknown ownership is reported as unknown, not zero.
+- The device log records the page going to the background, being frozen,
+  torn down or restored, and the phone's user agent once per session; the
+  heartbeat says whether the page is on screen, and the Live tab shows "in
+  background" for a phone whose page is not. iOS may stop the microphone in
+  that state without any error the page can catch: the log can only show
+  that it happened, not prevent it.
 
 ## Before using this build for an assembly
 

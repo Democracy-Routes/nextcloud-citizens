@@ -40,6 +40,14 @@ echo
 echo "== recordings not yet ready for review, open assemblies =="
 q "select a.name as assembly, r.table_number as tbl, r.state, r.error_code, r.received_chunks || '/' || coalesce(r.total_chunks,'?') as chunks, cast((julianday('now') - julianday(r.updated_at)) * 1440 as int) as min_ago from recordings r join assemblies a on a.id = r.assembly_id where a.closed_at is null and r.state not in ('READY_FOR_REVIEW','REVIEWED','UPLOAD_INCOMPLETE','AUDIO_INVALID') order by a.created_at desc, r.table_number;"
 echo
+# The two states an operator has to act on. They were excluded from the list
+# above, so a table whose phone died and was never replaced — audio on disk,
+# no transcript, absent from the report — did not appear on this screen at
+# all. The sweep now assembles such audio by itself after half an hour of
+# silence; until then, and for AUDIO_INVALID, Files tab → Retry is the action.
+echo "== audio on the server that needs a decision (Files tab → Retry), last 7 days =="
+q "select a.name as assembly, r.table_number as tbl, r.state, r.error_code, r.received_chunks || '/' || coalesce(r.total_chunks,'?') as chunks, cast((julianday('now') - julianday(r.updated_at)) * 1440 as int) as min_ago from recordings r join assemblies a on a.id = r.assembly_id where a.created_at > datetime('now','-7 day') and r.audio_deleted_at is null and ((r.state = 'UPLOAD_INCOMPLETE' and r.received_chunks > 0 and r.canonical_audio_path is null) or r.state = 'AUDIO_INVALID') order by a.created_at desc, r.table_number;"
+echo
 echo "== rounds of open assemblies =="
 q "select a.name as assembly, ro.position as round, ro.status, case when length(ro.analysis_summary) > 0 then 'yes' else 'no' end as summarised, ro.analysis_input_revision || '/' || ro.analysis_applied_revision as rev from rounds ro join assemblies a on a.id = ro.assembly_id where a.closed_at is null order by a.created_at desc, ro.position limit 12;"
 echo

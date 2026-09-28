@@ -68,7 +68,10 @@
 			"waitingHint": "Recording begins automatically. Keep this page open and the phone on the table.",
 			"offline": "Network unavailable — reconnecting… the phone stays armed.",
 			"backToTest": "Back to microphone test",
-			"badge": "ARMED"
+			"badge": "ARMED",
+			"continueTitle": "Round {position} is still open",
+			"continueBody": "This table has already recorded part of it. If the discussion is still going on, record the rest — it is added to what was recorded before.",
+			"continueButton": "Record the rest of round {position}"
 		},
 		"preflight": {
 			"level": "Audio level — speak at the table",

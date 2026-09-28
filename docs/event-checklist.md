@@ -63,6 +63,14 @@ room.
   should start the day above 80%, plugged in where the venue allows, and be a
   device you have already rehearsed with — not one somebody brought that
   morning.
+- [ ] **Scan the QR codes on the day, not the evening before.** A session
+  lives 16 hours from the phone's last contact; a phone that scanned and was
+  then switched off overnight can still arrive at the first round expired,
+  and re-scans on the armed screen. Harmless, but do not build the morning
+  around it.
+- [ ] **Run the device rehearsal below once on the real phones**, on the
+  venue's Wi-Fi, before the dress round. It takes about ninety minutes and is
+  the only test that covers the browsers the event actually uses.
 
 ## Morning of — the dress round (do all of this)
 
@@ -77,8 +85,11 @@ you *watch* the failure modes recover:
   WiFi returns. You have now seen the offline-first design work; a venue
   dropout later in the day will not be a surprise.
 - [ ] **Reload a second phone's page, mid-recording.** It should land on the
-  recovery screen and resume. That reload is the single most common real-world
-  event; know what it looks like before a citizen sees it.
+  recovery screen, upload what it captured, and then — because the round is
+  still open — offer "Record the rest of round N". Tap it; the table now has
+  two recordings that the Files tab lists as part 1 and the rest. That reload
+  is the single most common real-world event; know what it looks like before
+  a citizen sees it.
 - [ ] End the round. Confirm every table reaches `AUDIO_READY` on the Live
   tab — not "synced" on the phone, the green state on the server.
 - [ ] **Download the export for one table and actually play the audio.** A
@@ -128,6 +139,79 @@ you *watch* the failure modes recover:
    it is still worth reading the coverage line ("N of M table phones reported")
    and treating it as a report, not a promise; a phone already carried out of
    the building will simply not have answered.
+
+## The device rehearsal (once, on the real phones, ~90 minutes)
+
+Automated tests run on Firefox with a fake microphone; the event runs on
+iPhones and Androids over venue Wi-Fi. Nothing but this covers the difference.
+Set up a throwaway assembly ("Prova", orchestrated, three tables, rounds of
+three minutes), keep the Live tab and the Files tab open on a laptop with
+`sh scripts/event-status.sh` in a terminal, and scan fresh QR codes on three
+phones: an iPhone (Safari), an Android (Chrome), and a third of whichever kind
+you have most of. Timers to keep in mind: STALE after 45 s, Replace device
+offered after 120 s, the upload timeout after 20 min, automatic assembly of
+stranded audio 30 min after that.
+
+0. [ ] **Microphone permission by way of arrival.** On each phone open the
+   same QR from the camera app, from a link pasted in WhatsApp, from a QR
+   reader app, and from the browser with the microphone denied for the site.
+   Note which of these fail the microphone check and with what text. The
+   rehearsals logged 53 refusals; a browser embedded in another app never
+   gets the microphone, and the fix there is "open this in Safari/Chrome",
+   which the screen does not yet say.
+1. [ ] **Happy path.** Three phones, one round. Pass: all three RECORDING on
+   the Live tab within a minute of each other; at End round every table
+   reaches AUDIO_READY then TRANSCRIBING within two minutes; the Files tab
+   shows durations near 3:00; every phone says "synchronized", not "uploaded";
+   no FAILED job on the status screen.
+2. [ ] **Wi-Fi gone for 90 s on the iPhone, mid-round** (airplane mode).
+   Pass: STALE then CONNECTED, the pending count rises then drains, Replace
+   device appears and is **not** pressed; at End round the duration is the
+   whole round; the device log shows `chunk_upload_failed`, `network_online`,
+   `chunk_acked`.
+3. [ ] **Screen off 60 s, then another app for 60 s, on the Android**, same
+   round. Pass: elapsed keeps climbing on the Live tab, pending stays at or
+   below 3, the device log has `chunk_saved_local` every 10 s with no gap
+   longer than 15 s. A gap, or "in background" on the Live tab with the
+   counter stopped, means that model must be kept on and awake by hand — or
+   not used.
+4. [ ] **Reload mid-round on the iPhone**, let the recovery screen sync.
+   Pass: "Record the rest of round N" appears; tap it; the Live tab shows the
+   first part under the new recording; after the round the Files tab lists
+   two files for the table. Then on the Android: reload, tap "Skip for now",
+   "Ready"; the same button must appear on the armed screen.
+5. [ ] **A phone that dies and nobody replaces.** Force-close the browser on
+   the third phone at 1:00 and leave it. Pass now: STALE at 45 s, Replace
+   device offered at 120 s (leave it); End round; the status screen lists the
+   RECORDING row. Pass after 20 min: UPLOAD_INCOMPLETE / UPLOAD_TIMED_OUT,
+   listed under "needs a decision" on the status screen, Retry offered on
+   the Live and Files tabs. Pass after 50 min: assembled and transcribed by
+   itself. (Press Retry if you cannot wait; that is what it is for.)
+6. [ ] **Replace device.** Kill Chrome on the Android at 1:00; when STALE
+   has lasted two minutes, press Replace device. Pass: the toast says the
+   recording so far is being transcribed; the old row shows ASSEMBLING then
+   AUDIO_READY under "(replaced device)"; reopen Chrome (or scan the same QR
+   with the iPhone) and a new RECORDING starts; after the round the Files tab
+   has two files for the table.
+7. [ ] **A long backlog with nobody touching the phone.** iPhone in airplane
+   mode for a whole round, Finish, reload to the recovery screen, Wi-Fi back
+   on, then leave the phone alone for two minutes. Pass: it reaches
+   "synchronized" untouched and the Files tab shows AUDIO_READY.
+8. [ ] **Session revoked mid-round.** Regenerate the invites at 1:00 on the
+   third phone's table. Pass: the phone shows the upload-blocked notice and
+   keeps recording; the Live tab goes STALE; Finish leaves it on the failed
+   screen; scanning a new QR opens the recovery screen and the backlog lands
+   in the same recording → AUDIO_READY. Do not press Replace device during
+   this one.
+9. [ ] **An iPhone older than iOS 18.4, if there is one.** One two-minute
+   round, then play the `.m4a` from the Files tab. Otherwise the integration
+   test covers the container.
+10. [ ] **"Download audio file" on the iPhone.** Airplane mode, Finish, tap
+    it: the share sheet must open, "Save to Files" must give a file that
+    plays, and the page must still be there and finish uploading when the
+    network returns.
+
+Delete the "Prova" assembly when done.
 
 ## What this deliberately does not cover
 

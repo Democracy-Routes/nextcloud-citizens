@@ -7,6 +7,7 @@ import type { JoinResult } from '../api'
 import { RecorderEngine } from '../engine'
 import { idb, type StoredRecording } from '../idb'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
+import { useWakeLock } from '../useWakeLock'
 
 const props = defineProps<{ session: JoinResult | null; recording: StoredRecording }>()
 const emit = defineEmits<{ done: [] }>()
@@ -15,6 +16,10 @@ const { t } = useI18n()
 
 const engine = new RecorderEngine()
 const state = engine.state
+// This screen may be re-uploading a whole round over venue Wi-Fi, unattended.
+// Every other screen held the wake lock; this one let the phone sleep, and a
+// sleeping iPhone suspends the upload until somebody taps the screen.
+useWakeLock()
 const canSync = computed(() => !!props.session
 	&& props.recording.assemblyId === props.session.assembly.id
 	&& props.recording.tableNumber === props.session.table_number)

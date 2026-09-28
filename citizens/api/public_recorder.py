@@ -358,6 +358,11 @@ class HeartbeatIn(BaseModel):
     # reporting nothing means "unknown", never "fine" — the monitor must not
     # imply otherwise.
     battery_level: float | None = Field(default=None, ge=0.0, le=1.0)
+    # Whether the recorder page is in the foreground. A phone whose page went
+    # to the background (screen locked, another app opened) can stop capturing
+    # on iOS without any error the page can catch; the Live tab says so
+    # instead of showing a healthy CONNECTED pill.
+    visible: bool | None = None
 
 
 @router.post("/recorder/heartbeat")
