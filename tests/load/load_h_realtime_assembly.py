@@ -57,7 +57,7 @@ REPO = pathlib.Path(os.environ.get("CITIZENS_REPO") or pathlib.Path(__file__).re
 SECRET_FILE = REPO / ".app_secret"
 #: the assemblies belong to this Nextcloud user, so the test one shows up in
 #: the same list as the real ones and its report can be opened in the UI
-ORGANIZER = "alex"
+ORGANIZER = os.environ.get("CITIZENS_ORGANIZER", "alex")
 
 DEVICES = 10
 CHUNK_SECONDS = 10  # frontend/src/recorder/engine.ts CHUNK_INTERVAL_MS
@@ -109,7 +109,18 @@ def appapi_headers(user: str = ORGANIZER) -> dict:
     through AppAPIAuthMiddleware first. The username in the third header is
     what organizer routes see as the current user.
     """
-    secret = SECRET_FILE.read_text().strip()
+    if SECRET_FILE.exists():
+        secret = SECRET_FILE.read_text().strip()
+    else:
+        # An AppAPI-deployed container has no .app_secret on disk: the secret
+        # AppAPI generated is in the container's environment.
+        env = sh("docker", "inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", CONTAINER)
+        secret = next(
+            (line.split("=", 1)[1] for line in env.splitlines() if line.startswith("APP_SECRET=")),
+            "",
+        )
+        if not secret:
+            sys.exit(f"no {SECRET_FILE} and no APP_SECRET in {CONTAINER}'s environment")
     return {
         "EX-APP-ID": "citizens",
         "EX-APP-VERSION": "1.0.0",

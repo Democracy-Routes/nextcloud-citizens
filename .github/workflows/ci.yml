@@ -27,6 +27,21 @@ jobs:
           docker run --rm --user root -v "$PWD":/app -w /app --entrypoint sh citizens-test \
             -c "pip install -q pytest && python -m pytest -q"
 
+  image:
+    name: Runtime image starts the way AppAPI starts it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The production image, not the test one: this is the artefact
+      # release.yml publishes, and the entrypoint/user/frpc/healthcheck
+      # contract is what AppAPI's docker-install and HaRP daemons rely on.
+      - name: Build the production image
+        run: docker build -t citizens-smoke .
+
+      - name: Fresh volume, root-owned volume, HaRP socket mode
+        run: sh scripts/image-smoke.sh citizens-smoke
+
   bundles:
     name: Committed bundles match the sources
     runs-on: ubuntu-latest

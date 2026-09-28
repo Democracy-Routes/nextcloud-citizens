@@ -1,13 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Tag-driven release: builds the multi-arch image AppAPI will pull, packages
-# the App Store metadata archive, signs it, attaches it to the GitHub release
-# and publishes it to apps.nextcloud.com.
+# Release in two steps.
 #
-# Required repository secrets:
+#   git tag v0.6.0 && git push origin v0.6.0
+#       builds the multi-arch image AppAPI pulls and pushes it to GHCR. That is
+#       all a tag does: it is enough to install the app on any Nextcloud with
+#       `occ app_api:app:register citizens <daemon> --info-xml …`.
+#
+#   Actions → Release → Run workflow, on the v* tag, "publish" ticked
+#       packages the App Store metadata archive, signs it, attaches it to the
+#       GitHub release and publishes it to apps.nextcloud.com. Needs the
+#       repository secrets below, which a plain tag push must not depend on.
+#
+# Required repository secrets (App Store step only):
 #   APP_PRIVATE_KEY  contents of citizens.key (the CSR key; NEVER committed)
-#   APP_PUBLIC_CRT   contents of citizens.crt (issued by Nextcloud)
 #   APPSTORE_TOKEN   API token from apps.nextcloud.com/account/token
 name: Release
 
@@ -63,17 +70,32 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE }}:latest
+          # links the GHCR package to this repository (README, visibility)
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   appstore:
     name: App Store release
     needs: image
+    # Only on demand: the signing key and store token are not required for
+    # the image, and a tag push must succeed without them.
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Refuse anything but a tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::run this on a v* tag: the download URL and the pre-release flag come from the tag name"
+            exit 1
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -102,7 +124,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
 
       - name: Publish to apps.nextcloud.com
-        if: github.event_name == 'push' || inputs.publish
         uses: nextcloud-releases/nextcloud-appstore-push-action@v1
         with:
           app_name: citizens

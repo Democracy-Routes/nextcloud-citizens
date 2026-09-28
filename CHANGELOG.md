@@ -2,7 +2,46 @@
 
 All notable changes to Nextcloud Citizens.
 
-## [Unreleased]
+## 0.6.0 — 2026-09-28
+
+### Installable from the image, by any AppAPI deploy daemon
+
+The app had only ever been registered through a hand-run container and a
+`manual-install` daemon. Installed the way AppAPI installs an ExApp from
+`ghcr.io/democracy-routes/citizens:<version>` — Docker Socket Proxy or HaRP,
+`occ app_api:app:register citizens <daemon> --info-xml …` or the App Store —
+it would not have come up. Read from the AppAPI source and fixed:
+
+- **The data volume is writable.** AppAPI mounts its volume at
+  `/nc_app_citizens_data` (not `/data`) and creates it root-owned, and the
+  container runs as the image's user (uid 10001): the first write failed
+  before logging was set up, a crash loop with an empty log. The image now
+  prepares that directory so a fresh named volume inherits the right owner,
+  and the entrypoint runs as root, repairs the owner of whatever
+  `APP_PERSISTENT_STORAGE` points at (a volume from an older install, a
+  restore done as root), then drops to uid 10001 with `setpriv`. The image
+  sets no `USER` any more — HaRP's certificate step and AppAPI's CA injection
+  `docker exec` as the image user and need root.
+- **HaRP works.** Under a HaRP daemon `nc_py_api` serves on a unix socket and
+  expects an `frpc` tunnel to HaRP; the image had no `frpc` and its health
+  check probed TCP, so the container reported *unhealthy* and AppAPI aborted
+  the install. `frpc` 0.61.1 is bundled (per-arch checksums, the same pin as
+  Nextcloud's skeleton), the entrypoint writes the reference configuration
+  and starts it, and the health check follows the socket in that mode.
+- **QR codes carry Nextcloud's public address.** They were built on
+  `NEXTCLOUD_URL`, which under AppAPI is the address the *container* uses to
+  reach Nextcloud — often an internal name no phone can open. The app now asks
+  Nextcloud for `overwrite.cli.url` (refreshed every minute outside any
+  request transaction) and falls back to `NEXTCLOUD_URL`; `CITIZENS_PUBLIC_URL`
+  overrides both, settable at registration with `--env`. `CITIZENS_JOB_WORKERS`
+  and `CITIZENS_LOG_LEVEL` are declared the same way.
+- **CI starts the production image the way AppAPI does** (`scripts/image-smoke.sh`):
+  fresh volume, root-owned volume, HaRP socket mode with HaRP unreachable.
+- A tag push now only builds and publishes the image; the App Store step runs
+  on demand from the Actions page and needs the signing secrets only then.
+- `scripts/event-status.sh` and `scripts/backup-citizens-data.sh` find the
+  AppAPI-created volume; the load test reads the app secret from the container
+  when there is no `.app_secret` on disk.
 
 ### Readiness fixes — 2026-09-28
 

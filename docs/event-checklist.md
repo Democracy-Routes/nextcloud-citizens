@@ -54,7 +54,11 @@ room.
   `occ app_api:app:list` still shows the app enabled, then
   `python3 tests/load/load_h_realtime_assembly.py --smoke`. After this, nobody
   opens the repository until the event is over. Never run `make up` or
-  `scripts/dev-up.sh` on the day.
+  `scripts/dev-up.sh` on the day. On an instance where AppAPI installed the
+  app from the image (docs/administration.md § 2) there is nothing to freeze:
+  the container already runs the tagged image with no bind mount — give it
+  `docker update --memory 2g --memory-swap 2g nc_app_citizens` and run the
+  same smoke test.
 - [ ] **Prove the analysis provider, not just its key.** Settings → Test for
   the analysis endpoint now sends one real completion to the configured model
   and repeats the provider's reason if it refuses; "Connected" from the old

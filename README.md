@@ -74,7 +74,13 @@ that a human organizer reviews before anything is published.
 ## Install
 
 Settings → Administration → **External Apps** → *Citizens* → Install.
-Requires Nextcloud 32+ with AppAPI and a deploy daemon.
+Requires Nextcloud 32+ with AppAPI and a deploy daemon (Docker Socket Proxy
+or HaRP). Without the store, register the same image from the command line:
+
+```
+occ app_api:app:register citizens <daemon> --wait-finish \
+    --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.0/appinfo/info.xml
+```
 
 Then open **Citizens → Settings** to add a speech-to-text key and an analysis
 endpoint. Until you do, the app records and stores audio but sends nothing

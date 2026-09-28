@@ -88,28 +88,47 @@ git push origin main --tags
 Pushing the tag runs `.github/workflows/release.yml`, which:
 
 1. checks the tag matches `<version>` in `info.xml`;
-2. builds and pushes `ghcr.io/democracy-routes/citizens` for **amd64 and arm64**;
+2. builds and pushes `ghcr.io/democracy-routes/citizens` for **amd64 and arm64**.
+
+That is all a tag does. After the **first** push, open the package on GitHub
+(Organization → Packages → citizens → Package settings) and set its
+visibility to **Public**: AppAPI pulls anonymously, and a new package is
+private by default. From then on the image can be installed on any Nextcloud
+with `occ app_api:app:register citizens <daemon> --info-xml …`
+(docs/administration.md § 2).
+
+The App Store step is separate and on demand — Actions → Release → *Run
+workflow* on the tag, with *publish* ticked. It:
+
 3. packages `build/citizens.tar.gz` (metadata only, one top-level `citizens/`
    folder, well under the store's 20 MB limit);
 4. signs it with `APP_PRIVATE_KEY`, attaches it to the GitHub release;
 5. publishes it to apps.nextcloud.com.
 
 A version containing `-beta` / `-alpha` is flagged as a **pre-release** on the
-store, which is what we want until retention and the participant consent notice
-ship. (A `nightly: true` release is a different mechanism — it replaces the
+store. (A `nightly: true` release is a different mechanism — it replaces the
 previous nightly each time; we do not use it.)
 
-## Before the first publication
+## What the image guarantees to AppAPI
 
-Install the published image on a real Nextcloud through a **docker-install**
-deploy daemon (not the `manual-install` daemon used in development) and run a
-full smoke test: create an assembly, print QR codes, record from a phone, get a
-transcript and a report. HaRP is the recommended daemon on Nextcloud 32+ and
-becomes the only one in 35; if the plain HTTP image does not deploy under HaRP,
-the image needs HaRP's `start.sh` entrypoint with `frpc` bundled.
+`scripts/image-smoke.sh` runs in CI against the production image and is the
+contract: started with the environment AppAPI passes, on a fresh named volume
+at `/nc_app_citizens_data`, the container goes *healthy*, `/heartbeat` and
+`/api/v1/health` answer, the app runs as uid 10001 and owns the volume; a
+volume left owned by root is repaired at start; and in HaRP mode
+(`HP_SHARED_KEY` set) the app listens on `/tmp/exapp.sock`, `frpc` runs as
+uid 10001 with a 0600 configuration and keeps retrying while HaRP is
+unreachable, without ever taking the app down. The entrypoint runs as root for
+exactly those repairs and drops privileges with `setpriv`; the image sets no
+`USER` because HaRP's certificate step and AppAPI's CA injection `docker exec`
+as the image user.
 
-Do this on a scratch instance, not on one holding real assembly data: installing
-the same app id through a different daemon replaces the existing registration.
+What the smoke test cannot replace: a real HaRP daemon (frps with TLS and the
+certificates it injects). Before relying on a HaRP install, register the image
+on a scratch instance with such a daemon, print a QR code, record from a phone,
+get a transcript and a report. Do this on a scratch instance, not on one
+holding real assembly data: installing the same app id through a different
+daemon replaces the existing registration.
 
 ## Checklist
 

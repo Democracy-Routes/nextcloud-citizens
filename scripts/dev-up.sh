@@ -17,6 +17,7 @@ docker run -d \
     --network "$NETWORK" \
     --restart unless-stopped \
     --memory 2g --memory-swap 2g \
+    --user 10001:10001 \
     -v "$REPO_DIR":/app \
     -v "$DATA_VOLUME":/data \
     -e APP_ID="$APP_ID" \

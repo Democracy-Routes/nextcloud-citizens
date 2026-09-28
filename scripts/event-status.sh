@@ -8,7 +8,14 @@
 #   sh scripts/event-status.sh
 set -u
 CONTAINER="${CONTAINER:-nc_app_citizens}"
-VOLUME_DIR="${VOLUME_DIR:-$(docker volume inspect citizens_data --format '{{.Mountpoint}}' 2>/dev/null || echo /var/lib/docker/volumes/citizens_data/_data)}"
+# nc_app_citizens_data is the volume AppAPI creates when it deploys the image
+# itself; citizens_data is the hand-run deployment's (scripts/event-up.sh).
+if [ -z "${VOLUME_DIR:-}" ]; then
+  for v in nc_app_citizens_data citizens_data; do
+    VOLUME_DIR="$(docker volume inspect "$v" --format '{{.Mountpoint}}' 2>/dev/null)" && break
+  done
+  VOLUME_DIR="${VOLUME_DIR:-/var/lib/docker/volumes/citizens_data/_data}"
+fi
 DB="$VOLUME_DIR/citizens.db"
 LOG="$VOLUME_DIR/logs/citizens.jsonl"
 q() { sqlite3 -header -column "file:$DB?mode=ro" "$1" 2>&1; }
@@ -21,7 +28,8 @@ image={{.Config.Image}} memory_cap={{.HostConfig.Memory}} mounts={{len .Mounts}}
 cmd="$(docker inspect "$CONTAINER" --format '{{join .Config.Cmd " "}}' 2>/dev/null)"
 case "$cmd" in *--reload*) echo "reload=YES  (dev container — a saved file restarts the server)";; *) echo "reload=no";; esac
 docker stats --no-stream --format 'usage={{.MemUsage}} cpu={{.CPUPerc}}' "$CONTAINER" 2>&1
-echo "(a mounts count above 1 or reload=YES means the DEV container is running, not the frozen one)"
+docker inspect "$CONTAINER" --format 'health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}  storage={{range .Config.Env}}{{if eq (index (split . "=") 0) "APP_PERSISTENT_STORAGE"}}{{index (split . "=") 1}}{{end}}{{end}}' 2>&1
+echo "(reload=YES means the DEV container is running, not the frozen one; a memory_cap of 0 means no limit — AppAPI-managed containers need 'docker update --memory 2g --memory-swap 2g $CONTAINER')"
 echo
 echo "== host =="
 free -m | awk 'NR==1||NR==2{print}'

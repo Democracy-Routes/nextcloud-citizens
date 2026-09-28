@@ -17,6 +17,7 @@ case "${1:-}" in
             --name "$TEST_CONTAINER" \
             -p "127.0.0.1:$TEST_PORT:23000" \
             --memory 512m --memory-swap 512m \
+            --user 10001:10001 \
             -v "$REPO_DIR":/app \
             -e APP_ID=citizens -e APP_VERSION=test -e APP_HOST=0.0.0.0 -e APP_PORT=23000 \
             -e APP_SECRET=browser-test -e NEXTCLOUD_URL=http://localhost \

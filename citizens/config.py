@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # Provided by AppAPI / the container environment
     app_id: str = "citizens"
-    app_version: str = "0.6.0-beta.11"
+    app_version: str = "0.6.0"
     app_host: str = "0.0.0.0"
     app_port: int = 23000
     app_secret: str = ""
@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Citizens-specific
     citizens_log_level: str = "INFO"
     citizens_dev: bool = False
+    # The Nextcloud address the table phones open (QR codes). Empty means
+    # "ask Nextcloud for overwrite.cli.url" — see services/public_url.py.
+    citizens_public_url: str = ""
     # How many jobs run at once. Ten tables end a round together; one worker
     # processed their transcriptions and analyses one after another, so the
     # report was 35-85 minutes away. Speech-to-text concurrency per provider

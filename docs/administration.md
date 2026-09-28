@@ -8,15 +8,97 @@ the API keys it needs, and understanding what leaves your server.
 
 * Nextcloud **32 or newer**
 * The **AppAPI** app enabled, with a deploy daemon configured
-  (Settings → Administration → External Apps → Deploy daemons)
+  (Settings → Administration → External Apps → Deploy daemons). Both daemon
+  kinds work: the classic *Docker Socket Proxy* and *HaRP* (the app ships
+  the `frpc` client HaRP needs and switches to it by itself).
 * Docker available to that daemon, with enough disk for audio:
   roughly **10 MB per table per hour** of recording, plus the assembled copy
+* `overwrite.cli.url` set to the public address of your Nextcloud
+  (`occ config:system:get overwrite.cli.url`). The QR codes the tables scan
+  are built on it; see *Public address* below if it cannot be set.
 
 ## 2. Install
+
+### From the App Store
 
 Settings → Administration → **External Apps** → find *Citizens* → **Install**.
 AppAPI pulls `ghcr.io/democracy-routes/citizens`, starts it, and enables it. The app
 then appears in the top menu for every user.
+
+### From the image, on the command line
+
+The same image, without the store — for an instance that installs apps by
+hand, or a version the store does not carry yet. `occ` runs inside your
+Nextcloud container (`docker exec -u www-data <nextcloud> php occ …`).
+
+1. A deploy daemon, if there is none yet (Settings → Administration → External
+   Apps → Deploy daemons shows the ones you have). For example, a Docker
+   Socket Proxy daemon on the same host:
+
+   ```
+   occ app_api:daemon:register docker_local "Docker (local)" docker-install \
+       http nextcloud-appapi-dsp:2375 https://cloud.example.org --net nextcloud
+   ```
+
+   The last URL is the address **the app container will use to reach
+   Nextcloud**; the app also reads `overwrite.cli.url` for the phones, so an
+   internal address here is fine. `--net` is the Docker network the Nextcloud
+   container is on. HaRP daemons take `--harp …` options; follow the AppAPI
+   documentation for the daemon itself.
+
+2. Register the app from its `info.xml` — a local path readable by the
+   Nextcloud container, or the raw file from the tag you are installing:
+
+   ```
+   occ app_api:app:register citizens docker_local --wait-finish \
+       --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.0/appinfo/info.xml
+   ```
+
+   AppAPI pulls `ghcr.io/democracy-routes/citizens:<version>` (the `<image-tag>`
+   in that file), creates the container `nc_app_citizens` and the volume
+   `nc_app_citizens_data`, starts it, waits for `/heartbeat`, and enables it.
+   `--wait-finish` returns when the app is enabled or prints why it is not.
+
+3. Give the container the memory a real assembly needs — AppAPI sets no limit
+   unless the daemon has resource limits configured in the UI:
+
+   ```
+   docker update --memory 2g --memory-swap 2g nc_app_citizens
+   ```
+
+4. Check: `occ app_api:app:list` shows `citizens <version> [enabled]`,
+   `docker inspect nc_app_citizens --format '{{.State.Health.Status}}'` says
+   `healthy`, and the *Citizens* entry is in the top menu. The container log
+   (`docker logs nc_app_citizens`) shows `app_started` and a
+   `public_url_resolved` line with the address the QR codes will carry.
+
+**Public address.** The phones open
+`<public address>/index.php/apps/app_api/proxy/citizens/recorder.html`. The app
+asks Nextcloud for `overwrite.cli.url` and uses that; when it is unset it falls
+back to the daemon's Nextcloud URL, which may be an internal name. To pin it,
+pass the address at registration:
+
+```
+occ app_api:app:register citizens docker_local --wait-finish --info-xml … \
+    --env CITIZENS_PUBLIC_URL=https://cloud.example.org
+```
+
+The same option accepts `CITIZENS_JOB_WORKERS` (default 10; `1` runs
+transcriptions and analyses one at a time) and `CITIZENS_LOG_LEVEL`.
+
+**The secret.** AppAPI generates the app secret and keeps it in its own
+database and in the container's environment (`docker inspect nc_app_citizens`);
+nothing on disk needs it. `scripts/event-status.sh` and
+`scripts/backup-citizens-data.sh` find the AppAPI-created volume by
+themselves.
+
+### Hand-run container (manual-install daemon)
+
+How the development and the first event instance run: the container is built
+and started by `scripts/event-up.sh` from a checkout, and registered with a
+*manual-install* daemon whose host is the container's name — see
+`scripts/register.sh` and `docs/development-environment.md`. The AppAPI
+daemon then pulls nothing and manages nothing; you do, with those scripts.
 
 Nothing else is required to start: without API keys the app records and stores
 audio, but performs no transcription and no analysis.
@@ -176,9 +258,11 @@ Deleting those is still manual, from the Files tab.
 
 ## 6. Backups
 
-The app keeps everything in the persistent volume AppAPI mounts at `/data`:
-SQLite database, audio, transcripts, live captions and logs. Back that volume
-up together with Nextcloud itself.
+The app keeps everything in its persistent volume: SQLite database, audio,
+transcripts, live captions and logs. An AppAPI-managed install has it in the
+volume `nc_app_citizens_data` (mounted at `/nc_app_citizens_data`); the
+hand-run container uses `citizens_data` at `/data`. Back that volume up
+together with Nextcloud itself. The scripts below pick whichever exists.
 
 `scripts/backup-citizens-data.sh` takes a consistent snapshot while the app
 runs: `VACUUM INTO` copies the database as one transaction (WAL mode makes
@@ -205,9 +289,12 @@ sqlite3 "file:$(docker volume inspect citizens_restore --format '{{.Mountpoint}}
   'select count(*) from assemblies; select count(*) from recordings; select version_num from alembic_version'
 ```
 
-To restore for real, stop the container, repeat the same into `citizens_data`
-(or point the container at the restored volume), and start it: migrations run
-at startup, so a snapshot from an older version upgrades itself.
+To restore for real, stop the container, repeat the same into the live volume
+(`nc_app_citizens_data` or `citizens_data`, or point the container at the
+restored volume), and start it: migrations run at startup, so a snapshot from
+an older version upgrades itself. Ownership is repaired at start as well — the
+entrypoint hands the volume to the service user (uid 10001) if a restore left
+it owned by root.
 
 ## 7. Troubleshooting
 

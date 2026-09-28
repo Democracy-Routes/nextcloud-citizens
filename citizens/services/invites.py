@@ -9,13 +9,13 @@ import segno
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from citizens.config import get_settings
 from citizens.db.models import Assembly, RecorderInvite, RecorderSession
 from citizens.db.models.base import utcnow
 from citizens.domain import schemas
 from citizens.logging_setup import get_logger
 from citizens.security.invite_vault import decrypt_token, encrypt_token
 from citizens.security.recorder_tokens import generate_token, hash_token
+from citizens.services.public_url import recorder_page_url
 
 log = get_logger(__name__)
 
@@ -29,10 +29,9 @@ INVITE_LIFETIME_DAYS = 30
 def recorder_join_url(token: str) -> str:
     """The URL a table phone opens. The token travels in the fragment so it
     never appears in server access logs; the recorder page exchanges it for a
-    short-lived session. The path MUST end in .html — that's what makes the
-    AppAPI proxy inject its CSP nonce into the page's scripts."""
-    base = get_settings().nextcloud_url.rstrip("/")
-    return f"{base}/index.php/apps/app_api/proxy/citizens/recorder.html#/join/{token}"
+    short-lived session. The page address comes from services/public_url —
+    Nextcloud's public URL, not the address this container reaches it at."""
+    return f"{recorder_page_url()}#/join/{token}"
 
 
 def _qr_svg(url: str) -> str:

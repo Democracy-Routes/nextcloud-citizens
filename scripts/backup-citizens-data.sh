@@ -12,7 +12,15 @@
 #
 # Restore: docs/administration.md § Backups.
 set -eu
-VOLUME="${VOLUME:-citizens_data}"
+# nc_app_citizens_data: the volume AppAPI creates when it deploys the image
+# itself; citizens_data: the hand-run deployment's (scripts/event-up.sh).
+if [ -z "${VOLUME:-}" ]; then
+    if docker volume inspect nc_app_citizens_data >/dev/null 2>&1; then
+        VOLUME=nc_app_citizens_data
+    else
+        VOLUME=citizens_data
+    fi
+fi
 BACKUP_ROOT="${BACKUP_ROOT:-/root/backups}"
 BACKUP_KEEP="${BACKUP_KEEP:-14}"
 REMOTE="${CITIZENS_BACKUP_REMOTE:-}"
