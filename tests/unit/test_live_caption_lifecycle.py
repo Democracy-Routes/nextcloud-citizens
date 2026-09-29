@@ -512,7 +512,7 @@ def test_feeds_queued_before_finish_land_before_the_sentinel(settings_env, monke
         manager.set_loop(asyncio.get_running_loop())
         events: list[str] = []
 
-        async def slow_feed(recording_id, data, config, language, assembly_id=""):
+        async def slow_feed(recording_id, data, config, language, assembly_id="", segment=0):
             await asyncio.sleep(0.05)
             events.append("feed")
 
@@ -544,7 +544,7 @@ def test_a_stuck_feed_cannot_hold_the_recording_open_forever(settings_env, monke
         monkeypatch.setattr(lc, "FINISH_TIMEOUT_SECONDS", 0.1)
         disposed = asyncio.Event()
 
-        async def stuck_feed(recording_id, data, config, language, assembly_id=""):
+        async def stuck_feed(recording_id, data, config, language, assembly_id="", segment=0):
             await asyncio.sleep(30)
 
         async def dispose(_session, keep_stream=False):

@@ -30,6 +30,13 @@ case "$cmd" in *--reload*) echo "reload=YES  (dev container — a saved file res
 docker stats --no-stream --format 'usage={{.MemUsage}} cpu={{.CPUPerc}}' "$CONTAINER" 2>&1
 docker inspect "$CONTAINER" --format 'health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}  storage={{range .Config.Env}}{{if eq (index (split . "=") 0) "APP_PERSISTENT_STORAGE"}}{{index (split . "=") 1}}{{end}}{{end}}' 2>&1
 echo "(reload=YES means the DEV container is running, not the frozen one; a memory_cap of 0 means no limit — AppAPI-managed containers need 'docker update --memory 2g --memory-swap 2g $CONTAINER')"
+# The database connection pool, from the app itself. "slow_waits" counts
+# checkouts that waited over a second for a connection — the number that was
+# invisible while five phones exhausted a 15-connection pool. Best effort: a
+# HaRP-managed container listens on a socket, not a port, and prints nothing.
+docker exec "$CONTAINER" sh -c 'curl -sf "http://127.0.0.1:${APP_PORT:-23000}/api/v1/health"' 2>/dev/null \
+  | python3 -c 'import json,sys; p=json.load(sys.stdin).get("pool") or {}; print("db pool: in_use=%s/%s  max_wait_ms=%s  slow_waits=%s" % (p.get("in_use"), p.get("capacity"), p.get("max_wait_ms"), p.get("slow_waits")))' 2>/dev/null \
+  || echo "db pool: (health endpoint not reachable from the host)"
 echo
 echo "== host =="
 free -m | awk 'NR==1||NR==2{print}'

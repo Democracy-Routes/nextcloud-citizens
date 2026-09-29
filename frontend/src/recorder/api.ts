@@ -168,15 +168,18 @@ export const recorderApi = {
 			total_bytes: number | null; parts: Array<{ number: number; sha256: string }> }>(
 			'GET', `/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/parts`, { token }),
 	uploadPart: (token: string, recordingId: string, seq: number, part: number,
-		totalBytes: number, chunkHash: string, partHash: string, blob: Blob) =>
+		totalBytes: number, chunkHash: string, partHash: string, blob: Blob, segment = 0) =>
 		request<{ acknowledged: boolean }>('POST',
 			`/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/parts/${part}`, {
 				token, body: blob, headers: { 'Content-Type': 'application/octet-stream',
-					'X-Total-Bytes': String(totalBytes), 'X-Chunk-SHA256': chunkHash, 'X-Part-SHA256': partHash },
+					'X-Total-Bytes': String(totalBytes), 'X-Chunk-SHA256': chunkHash, 'X-Part-SHA256': partHash,
+					'X-Chunk-Segment': String(segment) },
 			}),
-	finalizeChunk: (token: string, recordingId: string, seq: number) =>
+	finalizeChunk: (token: string, recordingId: string, seq: number, segment = 0) =>
 		request<{ acknowledged: boolean; sha256: string; size_bytes: number }>('POST',
-			`/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/finalize`, { token }),
+			`/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/finalize`, {
+				token, headers: { 'X-Chunk-Segment': String(segment) },
+			}),
 	join: (token: string) => request<JoinResult>('POST', '/api/v1/public/join', { json: { token } }),
 
 	status: (token: string) => request<RecorderStatus>('GET', '/api/v1/public/recorder/status', { token }),
@@ -187,14 +190,18 @@ export const recorderApi = {
 			json: { round_id: roundId, mime_type: mimeType },
 		}),
 
-	uploadChunk: (token: string, recordingId: string, seq: number, blob: Blob, sha256: string) =>
+	uploadChunk: (token: string, recordingId: string, seq: number, blob: Blob, sha256: string, segment = 0) =>
 		request<{ acknowledged: boolean; duplicate: boolean }>(
 			'POST',
 			`/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}`,
 			{
 				token,
 				body: blob,
-				headers: { 'Content-Type': 'application/octet-stream', 'X-Chunk-SHA256': sha256 },
+				headers: {
+					'Content-Type': 'application/octet-stream',
+					'X-Chunk-SHA256': sha256,
+					'X-Chunk-Segment': String(segment),
+				},
 			},
 		),
 
@@ -246,6 +253,12 @@ export const recorderApi = {
 			local_recordings?: number
 			/** whether the recorder page is in the foreground right now */
 			visible?: boolean
+			/** while recording: a chunk arrived recently and no interruption is
+			 * being bridged; absent when not recording */
+			capture_ok?: boolean
+			/** whether the screen wake lock is held (false: unsupported, refused,
+			 * or released — the phone may lock itself) */
+			screen_awake?: boolean
 		},
 	) => request<{ ok: boolean }>('POST', '/api/v1/public/recorder/heartbeat', { token, json: payload }),
 

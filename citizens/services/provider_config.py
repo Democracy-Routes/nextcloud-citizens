@@ -7,7 +7,9 @@ API keys are stored with the `sensitive` flag (encrypted by Nextcloud, brief
 """
 
 import json
+import threading
 import time
+from dataclasses import dataclass, field
 from typing import Protocol
 
 import httpx
@@ -17,86 +19,194 @@ from citizens.providers.http_detail import error_detail
 
 log = get_logger(__name__)
 
+# ---------------------------------------------------------------------------
+# The configuration snapshot.
+#
+# Reading provider config means OCS calls to Nextcloud — HTTPS round-trips
+# that go through the same Apache workers the phones' requests occupy. The
+# status poll used to make six of them whenever a 30-second cache expired,
+# with a database connection checked out for the duration, and every phone
+# that found the cache stale refreshed it on its own. With five phones
+# recording that was 85 OCS calls a minute; the app slowed, Apache filled,
+# the app's own calls queued behind the phones', and the connection pool ran
+# out. No request path reads Nextcloud any more: everything the request path
+# wants is read here, in one place, by one caller at a time, in the
+# background — at startup, on every sweep, right after Settings are saved,
+# and in a helper thread when a reader finds the snapshot older than the
+# TTL. A reader only ever looks at memory.
+# ---------------------------------------------------------------------------
+
 _LIVE_SNAPSHOT_TTL = 30.0
-_live_snapshot: tuple[float, dict] | None = None
+
+EMPTY_LIVE_STT = {
+    "enabled": False, "provider": "", "api_key": None, "model": "",
+    "endpoint": "", "vosk_models": {}, "concurrency": 0,
+}
 
 
-def live_stt_snapshot() -> dict:
-    """Cached view of the live-STT config — read on every chunk upload, so it
-    must not hit Nextcloud's AppConfig OCS API each time."""
-    global _live_snapshot
-    now = time.monotonic()
-    if _live_snapshot is not None and now - _live_snapshot[0] < _LIVE_SNAPSHOT_TTL:
-        return _live_snapshot[1]
-    try:
-        store = default_store()
-        provider = get_setting(store, "stt_provider")
-        snapshot = {
-            "enabled": get_setting(store, "stt_live_enabled") == "1",
-            "provider": provider,
-            # per-provider keys by name: a hardcoded pair silently handed any
-            # newly added provider the wrong credentials
-            "api_key": store.get_value(f"{provider}_api_key"),
-            "model": get_setting(store, f"{provider}_live_model"),
-            # the socket/endpoint each caption engine connects to
-            "endpoint": get_setting(store, LIVE_ENDPOINT_KEYS.get(provider, "")),
-            # Vosk only: language -> model path, carried here so the caption
-            # path never has to make an OCS call per chunk
-            "vosk_models": vosk_language_models(store) if provider == "vosk" else {},
-            # per-provider cap on concurrent LIVE caption sessions (DEFAULTS)
-            "concurrency": stt_concurrency_limit(store, provider, "live"),
-        }
-    except Exception:
-        log.warning("live_stt_snapshot_failed", exc_info=True)
-        snapshot = {"enabled": False, "provider": "", "api_key": None, "model": "",
-                    "endpoint": "", "vosk_models": {}, "concurrency": 0}
-    _live_snapshot = (now, snapshot)
+@dataclass(frozen=True)
+class ConfigSnapshot:
+    data_handling: dict = field(default_factory=dict)
+    # assume the stricter completion gate when unreachable
+    analysis_enabled: bool = True
+    analysis_ready: bool = False
+    live_stt: dict = field(default_factory=lambda: dict(EMPTY_LIVE_STT))
+    organization_name: str = ""
+    refreshed_at: float = 0.0
+    # False: the refresh failed and these are defaults (or the previous values)
+    ok: bool = False
+    # the store the values came from; a different one (a test swapping the
+    # store in) is read afresh rather than served from a stale snapshot
+    store_id: int = 0
+
+
+_snapshot: ConfigSnapshot | None = None
+_refresh_lock = threading.Lock()
+_spawn_lock = threading.Lock()
+_refresh_thread: threading.Thread | None = None
+_refresh_failed = False
+
+
+def _read_live_stt(store: "ConfigStore") -> dict:
+    """The live-STT config the chunk-upload path hands the caption engine."""
+    provider = get_setting(store, "stt_provider")
+    return {
+        "enabled": get_setting(store, "stt_live_enabled") == "1",
+        "provider": provider,
+        # per-provider keys by name: a hardcoded pair silently handed any
+        # newly added provider the wrong credentials
+        "api_key": store.get_value(f"{provider}_api_key"),
+        "model": get_setting(store, f"{provider}_live_model"),
+        # the socket/endpoint each caption engine connects to
+        "endpoint": get_setting(store, LIVE_ENDPOINT_KEYS.get(provider, "")),
+        # Vosk only: language -> model path, carried here so the caption
+        # path never has to make an OCS call per chunk
+        "vosk_models": vosk_language_models(store) if provider == "vosk" else {},
+        # per-provider cap on concurrent LIVE caption sessions (DEFAULTS)
+        "concurrency": stt_concurrency_limit(store, provider, "live"),
+    }
+
+
+def _read_data_handling(store: "ConfigStore") -> dict:
+    """What a participant is told before recording starts: which engine hears
+    the audio, whether that engine is somebody else's service, and how long the
+    recording is kept. Names and durations only — never keys or endpoints."""
+    provider = get_setting(store, "stt_provider")
+    analysis_on = get_setting(store, "analysis_enabled") == "1"
+    base_url = get_setting(store, "analysis_base_url")
+    return {
+        "stt_provider": provider,
+        "stt_configured": bool(store.get_value(f"{provider}_api_key"))
+        or provider in ("vosk", "whisper"),
+        "stt_hosted": stt_is_hosted(store, provider),
+        "analysis_enabled": analysis_on,
+        # a self-hosted analysis endpoint keeps transcripts on-premises
+        "analysis_hosted": analysis_on and not _is_local_endpoint(base_url),
+        "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
+    }
+
+
+def refresh_config_snapshot() -> ConfigSnapshot:
+    """Read Nextcloud's config once, for everybody. The ONLY OCS reader the
+    request path can ever reach, and it is never called from a request.
+
+    Single-flight: concurrent callers queue on the lock and all see the one
+    fresh result. A failure keeps the previous snapshot (or the defaults when
+    there is none) so the app keeps serving on stale values rather than
+    hammering a Nextcloud that is already struggling; the failure is logged
+    once per outage, and the recovery once.
+    """
+    global _snapshot, _refresh_failed
+    with _refresh_lock:
+        try:
+            store = default_store()
+            analysis_enabled = get_setting(store, "analysis_enabled") == "1"
+            fresh = ConfigSnapshot(
+                data_handling=_read_data_handling(store),
+                analysis_enabled=analysis_enabled,
+                analysis_ready=analysis_enabled and bool(store.get_value("analysis_api_key")),
+                live_stt=_read_live_stt(store),
+                organization_name=get_setting(store, "organization_name"),
+                refreshed_at=time.monotonic(),
+                ok=True,
+                store_id=id(store),
+            )
+        except Exception:
+            if not _refresh_failed:
+                log.warning("config_snapshot_refresh_failed", exc_info=True)
+            _refresh_failed = True
+            previous = _snapshot
+            _snapshot = ConfigSnapshot(
+                data_handling=previous.data_handling if previous else {},
+                analysis_enabled=previous.analysis_enabled if previous else True,
+                analysis_ready=previous.analysis_ready if previous else False,
+                live_stt=previous.live_stt if previous else dict(EMPTY_LIVE_STT),
+                organization_name=previous.organization_name if previous else "",
+                refreshed_at=time.monotonic(),
+                ok=False,
+                store_id=previous.store_id if previous else 0,
+            )
+            return _snapshot
+        if _refresh_failed:
+            log.info("config_snapshot_refresh_recovered")
+        _refresh_failed = False
+        _snapshot = fresh
+        return fresh
+
+
+def _refresh_in_background() -> None:
+    global _refresh_thread
+    with _spawn_lock:
+        if _refresh_thread is not None and _refresh_thread.is_alive():
+            return
+        _refresh_thread = threading.Thread(
+            target=refresh_config_snapshot, name="config-snapshot", daemon=True
+        )
+        _refresh_thread.start()
+
+
+def config_snapshot() -> ConfigSnapshot:
+    """The request path's view of the config. Memory only, except before the
+    very first refresh (the lifespan does that before serving) and when the
+    store itself was swapped out from under it (tests)."""
+    snapshot = _snapshot
+    if snapshot is None or (snapshot.store_id and snapshot.store_id != id(default_store())):
+        return refresh_config_snapshot()
+    if time.monotonic() - snapshot.refreshed_at > _LIVE_SNAPSHOT_TTL:
+        _refresh_in_background()
     return snapshot
 
 
+def live_stt_snapshot() -> dict:
+    """The live-STT config, read on every chunk upload — from memory."""
+    return config_snapshot().live_stt
+
+
 def invalidate_snapshot() -> None:
-    global _live_snapshot, _analysis_enabled_cache, _data_handling_cache
-    _live_snapshot = None
-    _analysis_enabled_cache = None
-    _data_handling_cache = None
+    """Settings changed: read them again now, before the caller answers, so
+    the next request already sees them. Called outside any transaction."""
+    refresh_config_snapshot()
+
+
+def organization_name_cached() -> str:
+    return config_snapshot().organization_name
+
+
+def analysis_ready_cached() -> bool:
+    """Analysis is switched on and has a key — from the snapshot, for request
+    handlers that hold a database transaction while they ask."""
+    return config_snapshot().analysis_ready
 
 
 # engines that send audio to somebody else's servers; the others are endpoints
 # the operator runs, so audio never leaves their infrastructure
 HOSTED_STT = {"deepgram", "mistral"}
 
-_data_handling_cache: tuple[float, dict] | None = None
-
 
 def data_handling_summary() -> dict:
-    """What a participant is told before recording starts: which engine hears
-    the audio, whether that engine is somebody else's service, and how long the
-    recording is kept. Names and durations only — never keys or endpoints."""
-    global _data_handling_cache
-    now = time.monotonic()
-    if _data_handling_cache is not None and now - _data_handling_cache[0] < _LIVE_SNAPSHOT_TTL:
-        return _data_handling_cache[1]
-    try:
-        store = default_store()
-        provider = get_setting(store, "stt_provider")
-        analysis_on = get_setting(store, "analysis_enabled") == "1"
-        base_url = get_setting(store, "analysis_base_url")
-        summary = {
-            "stt_provider": provider,
-            "stt_configured": bool(store.get_value(f"{provider}_api_key"))
-            or provider in ("vosk", "whisper"),
-            "stt_hosted": stt_is_hosted(store, provider),
-            "analysis_enabled": analysis_on,
-            # a self-hosted analysis endpoint keeps transcripts on-premises
-            "analysis_hosted": analysis_on and not _is_local_endpoint(base_url),
-            "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
-        }
-    except Exception:
-        log.warning("data_handling_summary_failed", exc_info=True)
-        # say nothing rather than something reassuring and wrong
-        summary = {}
-    _data_handling_cache = (now, summary)
-    return summary
+    """What a participant is told before recording starts — from memory; see
+    _read_data_handling for the values."""
+    return config_snapshot().data_handling
 
 
 # where scripts/vosk-up.sh mounts the model directory inside the server
@@ -208,22 +318,10 @@ def _is_local_endpoint(url: str) -> bool:
     return address.is_private or address.is_loopback or address.is_link_local
 
 
-_analysis_enabled_cache: tuple[float, bool] | None = None
-
-
 def analysis_enabled_cached() -> bool:
-    """Cached analysis-enabled flag for hot public endpoints (status polls
-    hit this; AppConfig OCS reads are too slow for every poll)."""
-    global _analysis_enabled_cache
-    now = time.monotonic()
-    if _analysis_enabled_cache is not None and now - _analysis_enabled_cache[0] < _LIVE_SNAPSHOT_TTL:
-        return _analysis_enabled_cache[1]
-    try:
-        enabled = get_setting(default_store(), "analysis_enabled") == "1"
-    except Exception:
-        enabled = True  # assume the stricter completion gate when unreachable
-    _analysis_enabled_cache = (now, enabled)
-    return enabled
+    """The analysis-enabled flag for hot public endpoints (status polls hit
+    this) — from the snapshot, never an OCS read."""
+    return config_snapshot().analysis_enabled
 
 KEY_FIELDS = ("mistral_api_key", "deepgram_api_key", "whisper_api_key", "analysis_api_key")
 

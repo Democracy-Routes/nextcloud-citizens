@@ -20,16 +20,34 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-# calls that reach Nextcloud over OCS, directly or via a helper that does
+# calls that reach Nextcloud over OCS, directly or via a helper that does.
+# The snapshot readers (data_handling_summary, live_stt_snapshot,
+# analysis_enabled_cached, analysis_ready_cached, organization_name_cached)
+# are deliberately absent: since 0.6.2 they read memory that
+# refresh_config_snapshot() fills in the background, which is the whole
+# point — the request path never waits on Nextcloud.
 CONFIG_CALLS = {
     "get_setting",
     "default_store",
     "providers_summary",
-    "data_handling_summary",
+    "refresh_config_snapshot",
+    "invalidate_snapshot",
+    "set_settings",
+    "analysis_ready",
     "_analysis_config",
     "build_system_prompt",
 }
 TRANSACTION_SCOPES = {"session_scope", "read_only_scope"}
+
+# every module of the app: the first version of this file listed the eight
+# files somebody thought of, and the defect that froze the server under five
+# phones lived in one of them, in a function the with-block scan could not
+# see (public_recorder._assembly_state, whose session is injected)
+ALL_SOURCES = sorted(
+    str(path.relative_to(ROOT))
+    for path in (ROOT / "citizens").rglob("*.py")
+    if "migrations" not in path.parts
+)
 
 
 def _call_name(node: ast.AST) -> str:
@@ -63,18 +81,25 @@ def _offending_session_functions(path: pathlib.Path) -> list[str]:
     The check above was vacuous for citizens/jobs/handlers.py: the runner
     injects the session, so the file never contains `with session_scope()` and
     the walk scanned zero nodes — which is exactly where the regression came
-    back. Any statement on an injected session opens BEGIN IMMEDIATE, so a
-    function that takes a `session` parameter is in-transaction from its first
-    line unless a `session.commit()` appears before the config call.
+    back. Any statement on an injected session opens a transaction (BEGIN
+    IMMEDIATE on a write session, a checked-out pool connection on a read
+    one), so from the first use of `session` a function is in-transaction
+    until a `session.commit()`. A config read BEFORE the session is first
+    used is fine — that is how join() and update_providers() are written.
     """
     tree = ast.parse(path.read_text())
     found = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        args = [a.arg for a in node.args.args]
+        args = [a.arg for a in node.args.args + node.args.kwonlyargs]
         if "session" not in args:
             continue
+        first_use = None
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Name) and inner.id == "session":
+                if first_use is None or inner.lineno < first_use:
+                    first_use = inner.lineno
         committed_line = None
         for inner in ast.walk(node):
             if not isinstance(inner, ast.Call):
@@ -84,24 +109,14 @@ def _offending_session_functions(path: pathlib.Path) -> list[str]:
                 if committed_line is None or inner.lineno < committed_line:
                     committed_line = inner.lineno
             elif name in CONFIG_CALLS:
+                if first_use is None or inner.lineno <= first_use:
+                    continue  # read before the session is touched
                 if committed_line is None or inner.lineno < committed_line:
                     found.append(f"{path.name}:{inner.lineno} {name}() in {node.name}()")
     return found
 
 
-@pytest.mark.parametrize(
-    "relative_path",
-    [
-        "citizens/jobs/sweep.py",
-        "citizens/jobs/runner.py",
-        "citizens/jobs/handlers.py",
-        "citizens/api/public_recorder.py",
-        "citizens/api/files.py",
-        "citizens/api/reports.py",
-        "citizens/api/recorders.py",
-        "citizens/api/admin.py",
-    ],
-)
+@pytest.mark.parametrize("relative_path", ALL_SOURCES)
 def test_background_work_never_reads_config_inside_a_transaction(relative_path):
     """The regression that 500'd a live recording: the retention sweep opened a
     session, found candidates, and only then asked Nextcloud for the retention
@@ -113,17 +128,15 @@ def test_background_work_never_reads_config_inside_a_transaction(relative_path):
     )
 
 
-@pytest.mark.parametrize(
-    "relative_path",
-    [
-        "citizens/jobs/handlers.py",
-        "citizens/jobs/sweep.py",
-    ],
-)
+@pytest.mark.parametrize("relative_path", ALL_SOURCES)
 def test_injected_session_functions_commit_before_reading_config(relative_path):
     """The vacuous-guard fix: handlers receive their session from the runner,
     so the with-block scan above never saw them — and the OCS-under-writer-slot
-    regression returned through exactly that gap."""
+    regression returned through exactly that gap. Then it returned once more
+    through the same gap in citizens/api/public_recorder.py, which this
+    parametrization used to leave out: the status poll read six settings
+    over OCS with a pool connection checked out, and five phones were enough
+    to exhaust the pool."""
     offenders = _offending_session_functions(ROOT / relative_path)
     assert not offenders, (
         "config read on an injected session with no commit released first: "

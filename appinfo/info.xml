@@ -91,7 +91,7 @@ per-individual consent record — Citizens does not store who agreed. Organisati
 whose lawful basis requires individual consent should collect it separately, and
 should run a rehearsal before a high-stakes assembly.
 	]]></description>
-	<version>0.6.1</version>
+	<version>0.6.2</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<!-- Maintainer first, then contributors. The mail attribute is optional in
 	     the store schema, so no address is invented for anyone. -->
@@ -122,7 +122,7 @@ should run a rehearsal before a high-stakes assembly.
 		<docker-install>
 			<registry>ghcr.io</registry>
 			<image>democracy-routes/citizens</image>
-			<image-tag>0.6.1</image-tag>
+			<image-tag>0.6.2</image-tag>
 		</docker-install>
 		<!-- Settable at install time through the env option of
 		     `occ app_api:app:register`: AppAPI only passes variables declared here. -->

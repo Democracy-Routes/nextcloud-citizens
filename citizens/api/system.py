@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from citizens.config import get_settings
-from citizens.db.session import get_engine
+from citizens.db.session import get_engine, pool_status
 from citizens.storage.paths import temp_dir
 
 router = APIRouter()
@@ -54,4 +54,7 @@ def health() -> dict:
         "storage": "ok" if storage_ok else "error",
         "disk_free_gb": disk_free_gb,
         "missing_environment": missing_env,
+        # connections in use and the worst wait for one: the number that was
+        # invisible while the pool ran out under five phones
+        "pool": pool_status(),
     }

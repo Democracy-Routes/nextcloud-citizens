@@ -160,11 +160,16 @@ async def upload_chunk(
     session: DB,
     authorization: Annotated[str, Header()] = "",
     x_chunk_sha256: Annotated[str, Header()] = "",
+    # which MediaRecorder session of the recording this chunk belongs to;
+    # absent from recorder builds before 0.6.2, which never resumed capture
+    x_chunk_segment: Annotated[int, Header()] = 0,
 ):
     if not x_chunk_sha256:
         raise HTTPException(status_code=400, detail="X-Chunk-SHA256 header required")
     if sequence_number < 0 or sequence_number > 100000:
         raise HTTPException(status_code=422, detail="Invalid sequence number")
+    if not 0 <= x_chunk_segment <= rec_svc.MAX_SEGMENT_NUMBER:
+        raise HTTPException(status_code=422, detail="Invalid segment number")
     # Read the upload BEFORE touching the database. Authentication is a query,
     # and every query here opens BEGIN IMMEDIATE — SQLite's single writer slot.
     # Resolving the session as a dependency held that slot for the whole body
@@ -192,7 +197,7 @@ async def upload_chunk(
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
         outcome = rec_svc.receive_chunk(
-            session, recording, sequence_number, x_chunk_sha256, body
+            session, recording, sequence_number, x_chunk_sha256, body, x_chunk_segment
         )
         language = ""
         if not outcome.get("duplicate"):
@@ -205,7 +210,9 @@ async def upload_chunk(
     if not result.get("duplicate"):
         # provisional live captions ride on the safety upload — failures here
         # never affect the recording (brief §51)
-        LIVE_CAPTIONS.feed(recording_id_out, body, stt, language, assembly_id)
+        LIVE_CAPTIONS.feed(
+            recording_id_out, body, stt, language, assembly_id, segment=x_chunk_segment
+        )
     return result
 
 
@@ -224,6 +231,7 @@ async def upload_part(
     x_chunk_sha256: Annotated[str, Header()] = "",
     x_part_sha256: Annotated[str, Header()] = "",
     x_total_bytes: Annotated[int, Header()] = 0,
+    x_chunk_segment: Annotated[int, Header()] = 0,
 ):
     import re
 
@@ -231,7 +239,8 @@ async def upload_part(
 
     max_parts = -(-multipart_audio.MAX_DECLARED_CHUNK_BYTES // multipart_audio.PART_BYTES)
     if (not 0 <= sequence_number <= 100000 or not 0 <= part_number < max_parts
-            or not 0 < x_total_bytes <= multipart_audio.MAX_DECLARED_CHUNK_BYTES):
+            or not 0 < x_total_bytes <= multipart_audio.MAX_DECLARED_CHUNK_BYTES
+            or not 0 <= x_chunk_segment <= rec_svc.MAX_SEGMENT_NUMBER):
         raise HTTPException(422, "Invalid part metadata")
     if not all(re.fullmatch("[a-f0-9]{64}", value) for value in (x_chunk_sha256, x_part_sha256)):
         raise HTTPException(422, "Invalid checksum")
@@ -260,20 +269,26 @@ async def upload_part(
     # disk but would push the same audio into the caption stream a second
     # time — mid-stream, which the decoder cannot tell from new speech.
     if not result.get("duplicate"):
-        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id)
+        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id, segment=x_chunk_segment)
     return result
 
 
 @router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/finalize")
 def finalize_uploaded_chunk(
-    recording_id: str, sequence_number: int, recorder_session: RecorderSess, session: DB
+    recording_id: str,
+    sequence_number: int,
+    recorder_session: RecorderSess,
+    session: DB,
+    x_chunk_segment: Annotated[int, Header()] = 0,
 ):
     from citizens.services.multipart_audio import finalize_chunk
 
+    if not 0 <= x_chunk_segment <= rec_svc.MAX_SEGMENT_NUMBER:
+        raise HTTPException(status_code=422, detail="Invalid segment number")
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
     # Live captions were fed as each part landed (upload_part) — reading the
     # assembled chunk back here would feed every byte a second time.
-    return finalize_chunk(session, recording, sequence_number)
+    return finalize_chunk(session, recording, sequence_number, x_chunk_segment)
 
 
 class CompleteIn(BaseModel):
@@ -363,6 +378,15 @@ class HeartbeatIn(BaseModel):
     # on iOS without any error the page can catch; the Live tab says so
     # instead of showing a healthy CONNECTED pill.
     visible: bool | None = None
+    # While recording: whether audio is still coming out of the microphone.
+    # False means the phone's watchdog found the recorder quiet and is
+    # bridging the gap; the Live tab shows "capture interrupted" — the one
+    # pill that means "nothing is being recorded at this table right now".
+    capture_ok: bool | None = None
+    # Whether the phone holds a screen wake lock. False: no API, refused, or
+    # released — the screen will go off at the phone's own timeout, and the
+    # organizer can have auto-lock set to Never on that phone by hand.
+    screen_awake: bool | None = None
 
 
 @router.post("/recorder/heartbeat")

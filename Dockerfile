@@ -60,7 +60,14 @@ RUN pip install --no-cache-dir . && chmod +x start.sh healthcheck.sh
 # injects these three, but the image must be correct on its own.
 ENV APP_PERSISTENT_STORAGE=/data \
     APP_HOST=0.0.0.0 \
-    APP_PORT=23000
+    APP_PORT=23000 \
+    NPA_TIMEOUT=10
+
+# NPA_TIMEOUT: nc_py_api's per-call timeout towards Nextcloud, 30 s by
+# default. Every OCS call the app makes goes through the same Apache workers
+# that serve the phones, so a Nextcloud that is slow because the app is busy
+# must not park a thread (and, before 0.6.2, a database connection) for half
+# a minute. Nothing the app asks Nextcloud takes more than a second.
 
 # The service user. Explicit gid: `useradd --system` alone picks gid 999.
 # /data is the hand-run deployment's mount; /nc_app_citizens_data is where

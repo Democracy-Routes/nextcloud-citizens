@@ -2,6 +2,59 @@
 
 All notable changes to Nextcloud Citizens.
 
+## 0.6.2 — 2026-09-29
+
+Two things found on the same day: phones whose screens went dark while
+recording, and a server that froze under five of them.
+
+- **The recording screen asks for the wake lock.** It evaluated its
+  condition ("the engine is recording") once, at mount, a tick before
+  recording started — so it never asked, the screen went off at the phone's
+  own timeout, and the lock was only taken once somebody woke the phone and
+  the page became visible again (which is why the same phones stayed lit
+  later in the session). The condition is watched now; a lock the browser
+  releases is asked for again; every outcome is in the device log
+  (`wake_lock_acquired`, `wake_lock_released`, `wake_lock_failed`,
+  `wake_lock_unsupported`); the phone says "set auto-lock to Never" when it
+  cannot hold the screen, and the Live tab shows "screen may lock".
+- **A microphone that goes quiet is noticed, and the same recording
+  continues when it comes back.** A watchdog probes the recorder when no
+  chunk has arrived for thirty seconds while the page is on screen; a track
+  that stays muted on screen, or ends, counts too. The MediaRecorder session
+  is closed, everything captured is kept, the microphone is asked back every
+  five seconds, and the recording goes on in a new segment: the server
+  remuxes each segment on its own and joins them into one file
+  (`audio_chunks.segment_number`, migration 0023; `X-Chunk-Segment` on
+  uploads; live captions restart their decoder at the boundary). The screen
+  says "interrupted" and afterwards how many seconds were missed; the Live
+  tab shows "capture interrupted" while it lasts. Only ten minutes of
+  refusals finish the recording with what it has. `finish()` no longer waits
+  forever for a recorder that will never stop. `capture_after_background`
+  in the device log says, per phone, whether chunks kept coming while the
+  page was hidden.
+- **The request path never asks Nextcloud for its settings.** The status
+  poll made six OCS calls per phone whenever a 30-second cache expired, with
+  a database connection checked out; the calls went through the same Apache
+  workers the phones occupy; Apache filled, the calls timed out at 30 s, the
+  15-connection pool ran out, and the proxy answered the phones with 500.
+  One reader now fills a config snapshot in the background (at startup, on
+  every sweep, right after Settings are saved, in a helper thread when it is
+  older than 30 s) and every request reads memory. The pool is sized for the
+  threads that can want a connection (16 + 40, 15 s) and a wait over a
+  second is logged (`db_pool_wait`) and shown in `/api/v1/health` and on the
+  status screen. `NPA_TIMEOUT=10` in the image. The job runner has its own
+  thread pool, so `CITIZENS_JOB_WORKERS` means what it says. The audio
+  bundle download plans its files, releases its connection, then zips. The
+  guard test that forbids config reads inside a transaction now covers every
+  module, including the one where this lived.
+- **`scripts/device-report.py`** prints, per phone: browser, wake-lock
+  outcome, hidden windows with the chunks captured inside, gaps, interruptions
+  and resumptions — the answer to "does this model record with the screen
+  off". The rehearsal checklist's screen-off step covers the iPhone too, and
+  the week-before list says how to set every phone so its screen cannot go
+  off on its own.
+- The recording screen polls the round every 8 s instead of 5.
+
 ## 0.6.1 — 2026-09-28
 
 Three fixes from the first install on a second Nextcloud (33.0.6, HaRP):

@@ -20,6 +20,9 @@ const TONE: Record<string, string> = {
 	COMPLETE: 'green', TRANSCRIBED: 'green', REVIEWED: 'green', SAFE: 'green', CONNECTED: 'green',
 	UPLOAD_INCOMPLETE: 'orange', AUDIO_INVALID: 'orange',
 	TRANSCRIPTION_FAILED: 'orange', ANALYSIS_FAILED: 'orange', STALE: 'orange', OFFLINE: 'orange',
+	// a phone whose microphone went quiet mid-round: red, because it is
+	// happening now and somebody at the table can fix it
+	STALLED: 'red',
 }
 
 const { t, te } = useI18n()

@@ -68,7 +68,6 @@ def assemble_recording(session: Session, recording: Recording) -> list | None:
         root, recording.assembly_id, recording.round_id, recording.table_id, recording.id
     )
     extension = _extension_for(recording.mime_type)
-    raw_path = temp_dir(root) / f"{recording.id}-raw{extension}"
     canonical = assembled_dir(root, recording.assembly_id) / f"{recording.id}{extension}"
     canonical.parent.mkdir(parents=True, exist_ok=True)
 
@@ -79,9 +78,17 @@ def assemble_recording(session: Session, recording: Recording) -> list | None:
     # MediaRecorder stream concatenated across a gap is not decodable audio.
     if recording.total_chunks is not None:
         chunks = [c for c in chunks if c.sequence_number < recording.total_chunks]
+    # One MediaRecorder session per segment. A phone that lost its microphone
+    # mid-round and got it back continues the SAME recording in a new session,
+    # whose first chunk opens with a fresh container header; concatenated
+    # mid-stream that is not decodable audio, so each segment is remuxed on
+    # its own and the results are joined. An uninterrupted recording is one
+    # segment and takes exactly the path it always took.
+    segments = _segments_of(chunks)
     # assembly writes a full raw concat plus the remuxed copy, so it needs
-    # roughly twice the recording free before it starts
-    needed = sum(chunk.size_bytes for chunk in chunks) * 2
+    # roughly twice the recording free before it starts — three times when
+    # segments are remuxed separately and then joined
+    needed = sum(chunk.size_bytes for chunk in chunks) * (2 if len(segments) == 1 else 3)
     if not has_room_for(root, needed):
         # deliberately NOT an AudioAssemblyError: that marks the recording
         # AUDIO_INVALID for good, and there is nothing wrong with this audio.
@@ -102,45 +109,31 @@ def assemble_recording(session: Session, recording: Recording) -> list | None:
         raise AudioAssemblyError(
             "AUDIO_DELETED", "The audio of this recording was deleted while it was assembling"
         )
-    digest = hashlib.sha256()
-    with open(raw_path, "wb") as raw:
-        for chunk in chunks:
-            try:
-                source = open(root / chunk.path, "rb")
-            except FileNotFoundError as exc:
-                # Not a transient fault: the bytes are gone, so retrying can
-                # only fail the same way five times and then strand the
-                # recording in ASSEMBLING with nothing able to free it.
-                raw_path.unlink(missing_ok=True)
-                raise AudioAssemblyError(
-                    "CHUNKS_GONE",
-                    f"Chunk {chunk.sequence_number} is missing from storage",
-                ) from exc
-            chunk_digest = hashlib.sha256()
-            with source:
-                while data := source.read(1024 * 1024):
-                    raw.write(data)
-                    digest.update(data)
-                    chunk_digest.update(data)
-            if chunk_digest.hexdigest() != chunk.sha256:
-                raw_path.unlink(missing_ok=True)
-                raise AudioAssemblyError(
-                    "CHUNK_CORRUPTED", f"Chunk {chunk.sequence_number} failed checksum on disk"
-                )
-        raw.flush()
-        os.fsync(raw.fileno())
-
+    temporaries: list = []
     try:
-        probe = _ffprobe(raw_path)
-        _remux(raw_path, canonical)
+        remuxed: list = []
+        raw_durations: list[float] = []
+        for segment_number, segment_chunks in segments:
+            raw_path = temp_dir(root) / f"{recording.id}-raw-{segment_number}{extension}"
+            temporaries.append(raw_path)
+            _write_raw_stream(raw_path, root, segment_chunks)
+            raw_durations.append(_ffprobe(raw_path).get("duration") or 0.0)
+            if len(segments) == 1:
+                _remux(raw_path, canonical)
+            else:
+                part = temp_dir(root) / f"{recording.id}-seg-{segment_number}{extension}"
+                temporaries.append(part)
+                _remux(raw_path, part)
+                remuxed.append(part)
+        if len(segments) > 1:
+            _join_segments(remuxed, canonical, extension, recording.id)
         final_probe = _ffprobe(canonical)
-    except AudioAssemblyError:
-        raise
     finally:
-        raw_path.unlink(missing_ok=True)
+        for path in temporaries:
+            path.unlink(missing_ok=True)
 
     recording.canonical_audio_path = str(canonical.relative_to(root))
-    recording.duration_seconds = final_probe.get("duration") or probe.get("duration")
+    recording.duration_seconds = final_probe.get("duration") or (sum(raw_durations) or None)
     with canonical.open("rb") as audio:
         recording.sha256 = hashlib.file_digest(audio, "sha256").hexdigest()
         os.fsync(audio.fileno())
@@ -234,12 +227,119 @@ def _write_manifest(directory, recording: Recording, chunks) -> None:
         "canonical_audio_path": recording.canonical_audio_path,
         "sha256": recording.sha256,
         "duration_seconds": recording.duration_seconds,
+        "segments": len(_segments_of(chunks)),
         "chunks": [
-            {"sequence": c.sequence_number, "sha256": c.sha256, "size": c.size_bytes} for c in chunks
+            {
+                "sequence": c.sequence_number,
+                "segment": c.segment_number,
+                "sha256": c.sha256,
+                "size": c.size_bytes,
+            }
+            for c in chunks
         ],
     }
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=1))
+
+
+def _segments_of(chunks) -> list[tuple[int, list]]:
+    """The recording's MediaRecorder sessions, in order, each with its chunks
+    in sequence order. Grouped by segment number rather than by run: the
+    final blob of a stopped recorder can land after the replacement's first
+    chunk, and it still belongs with the bytes of its own container."""
+    by_segment: dict[int, list] = {}
+    for chunk in chunks:
+        by_segment.setdefault(chunk.segment_number, []).append(chunk)
+    return [(number, by_segment[number]) for number in sorted(by_segment)]
+
+
+def _write_raw_stream(raw_path, root, chunks) -> None:
+    """Concatenate one segment's chunks, verifying each against its receipt."""
+    with open(raw_path, "wb") as raw:
+        for chunk in chunks:
+            try:
+                source = open(root / chunk.path, "rb")
+            except FileNotFoundError as exc:
+                # Not a transient fault: the bytes are gone, so retrying can
+                # only fail the same way five times and then strand the
+                # recording in ASSEMBLING with nothing able to free it.
+                raise AudioAssemblyError(
+                    "CHUNKS_GONE",
+                    f"Chunk {chunk.sequence_number} is missing from storage",
+                ) from exc
+            chunk_digest = hashlib.sha256()
+            with source:
+                while data := source.read(1024 * 1024):
+                    raw.write(data)
+                    chunk_digest.update(data)
+            if chunk_digest.hexdigest() != chunk.sha256:
+                raise AudioAssemblyError(
+                    "CHUNK_CORRUPTED", f"Chunk {chunk.sequence_number} failed checksum on disk"
+                )
+        raw.flush()
+        os.fsync(raw.fileno())
+
+
+# the encoder used when segments have to be re-encoded to join them
+_JOIN_CODEC_BY_EXTENSION = {".m4a": ["-c:a", "aac"], ".ogg": ["-c:a", "libopus"]}
+
+
+def _join_segments(parts, target, extension: str, recording_id: str) -> None:
+    """One file out of several remuxed segments, in order.
+
+    The concat demuxer splices streams with the same codec parameters
+    without decoding — every segment came from the same phone in the same
+    round, so that is the normal case. Should ffmpeg refuse (a browser that
+    changed parameters between sessions), the concat filter decodes and
+    re-encodes, which costs quality it can afford: the alternative is losing
+    everything after the first interruption.
+    """
+    list_path = target.with_name(target.name + ".segments.txt")
+    list_path.write_text(
+        "".join("file '" + str(part).replace("'", r"'\''") + "'\n" for part in parts)
+    )
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0",
+             "-i", str(list_path), "-c", "copy", str(target)],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        if result.returncode == 0:
+            try:
+                _ffprobe(target)
+                log.info("audio_segments_joined", recording_id=recording_id,
+                         segments=len(parts), method="copy")
+                return
+            except AudioAssemblyError:
+                log.warning("audio_segments_copy_unreadable", recording_id=recording_id)
+        else:
+            log.warning("audio_segments_copy_failed", recording_id=recording_id,
+                        error=result.stderr[-300:])
+        target.unlink(missing_ok=True)
+        inputs = [arg for part in parts for arg in ("-i", str(part))]
+        filter_spec = (
+            "".join(f"[{index}:a]" for index in range(len(parts)))
+            + f"concat=n={len(parts)}:v=0:a=1[out]"
+        )
+        codec = _JOIN_CODEC_BY_EXTENSION.get(extension, ["-c:a", "libopus"])
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", filter_spec,
+             "-map", "[out]", *codec, str(target)],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        if result.returncode != 0:
+            target.unlink(missing_ok=True)
+            raise AudioAssemblyError(
+                "AUDIO_INVALID", f"ffmpeg segment join failed: {result.stderr[-500:]}"
+            )
+        log.info("audio_segments_joined", recording_id=recording_id,
+                 segments=len(parts), method="reencode")
+    finally:
+        list_path.unlink(missing_ok=True)
 
 
 def _ffprobe(path) -> dict:

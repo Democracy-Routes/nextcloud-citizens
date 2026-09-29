@@ -54,11 +54,14 @@ def delete_logo() -> bool:
 
 def organization_name() -> str:
     """Admin-configured organization name for report branding ('' when the
-    config store is unreachable — branding must never break a report)."""
+    config store is unreachable — branding must never break a report).
+
+    Read from the config snapshot: the report and QR-sheet handlers hold a
+    database connection while they render, and an OCS round-trip there is
+    the pattern that exhausted the pool."""
     try:
         from citizens.services import provider_config
 
-        store = provider_config.default_store()
-        return provider_config.get_setting(store, "organization_name")
+        return provider_config.organization_name_cached()
     except Exception:
         return ""

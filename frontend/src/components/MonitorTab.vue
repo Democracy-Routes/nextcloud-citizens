@@ -353,6 +353,15 @@ const LOW_BATTERY = 0.15
 /** States in which a table is still expected to be sending audio. */
 const LIVE_RECORDING_STATES = ['RECORDING', 'FINALIZING', 'WAITING_FOR_CHUNKS']
 
+/** The phone says it is recording but no audio has come out of the
+ * microphone for half a minute. Only a recent heartbeat counts: a stale one
+ * is the STALE pill's business, and older recorder builds never send the
+ * field at all. */
+function captureInterrupted(table: MonitorTable): boolean {
+	const status = table.device.status
+	return table.device.connected && status.recording_active === true && status.capture_ok === false
+}
+
 const confirmReplace = ref<MonitorTable | null>(null)
 
 /** Offer to hand this table to another phone.
@@ -632,10 +641,24 @@ function pendingChunks(table: MonitorTable): number {
 							     only ever rendered once storage_ok went false — i.e. after
 							     it had already failed. A table about to run out mid-round
 							     is exactly what an organizer can still act on. -->
+							<!-- The microphone went quiet mid-round (screen off on an
+							     iPhone, a call) and the phone is trying to get it back.
+							     Red, ahead of everything: nothing is being recorded at
+							     that table right now, and a tap on the phone fixes it. -->
 							<CzStatusPill
-								v-if="table.device.status.storage_ok === false"
+								v-if="captureInterrupted(table)"
+								status="STALLED"
+								label="capture interrupted" />
+							<CzStatusPill
+								v-else-if="table.device.status.storage_ok === false"
 								status="OFFLINE"
 								label="storage error" />
+							<!-- No wake lock: the screen will switch off at the phone's own
+							     timeout unless auto-lock is set to Never by hand. -->
+							<CzStatusPill
+								v-else-if="table.device.connected && table.device.status.screen_awake === false"
+								status="PROCESSING"
+								label="screen may lock" />
 							<CzStatusPill
 								v-else-if="lowBattery(table)"
 								status="PROCESSING"

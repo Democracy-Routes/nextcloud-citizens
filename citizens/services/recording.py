@@ -381,14 +381,22 @@ def get_session_recording(
     return recording
 
 
+#: Upper bound on the segment a chunk may claim. A phone bridges at most a
+#: few interruptions per round; anything larger is a garbage header.
+MAX_SEGMENT_NUMBER = 1000
+
+
 def receive_chunk(
     session: Session,
     recording: Recording,
     sequence_number: int,
     client_sha256: str,
     data: bytes,
+    segment_number: int = 0,
 ) -> dict:
     """Store one chunk. Idempotent on (recording, sequence, sha256)."""
+    if not 0 <= segment_number <= MAX_SEGMENT_NUMBER:
+        raise HTTPException(status_code=422, detail="Invalid segment number")
     if recording.audio_deleted_at is not None:
         raise HTTPException(409, "Recording audio was deleted; keep the local copy")
     if recording.state == "UPLOAD_INCOMPLETE":
@@ -414,7 +422,7 @@ def receive_chunk(
         )
     ).scalar_one_or_none()
     if existing is not None:
-        if existing.sha256 == actual:
+        if existing.sha256 == actual and existing.segment_number == segment_number:
             # duplicate upload of the identical chunk: idempotent ACK
             return {"acknowledged": True, "duplicate": True, "sequence_number": sequence_number}
         raise HTTPException(status_code=409, detail="Sequence already stored with different content")
@@ -438,10 +446,13 @@ def receive_chunk(
     target = chunk_path(directory, sequence_number)
     write_audio(target, data)
 
+    if segment_number > 0:
+        note_segment_start(session, recording, sequence_number, segment_number)
     session.add(
         AudioChunk(
             recording_id=recording.id,
             sequence_number=sequence_number,
+            segment_number=segment_number,
             sha256=actual,
             size_bytes=len(data),
             path=str(target.relative_to(root)),
@@ -454,8 +465,29 @@ def receive_chunk(
         recording_id=recording.id,
         sequence_number=sequence_number,
         size_bytes=len(data),
+        segment_number=segment_number,
     )
     return {"acknowledged": True, "duplicate": False, "sequence_number": sequence_number}
+
+
+def note_segment_start(
+    session: Session, recording: Recording, sequence_number: int, segment_number: int
+) -> None:
+    """One log line per new MediaRecorder session of a recording — the
+    server-side trace of a phone that lost its microphone and got it back."""
+    seen = session.execute(
+        select(AudioChunk.id).where(
+            AudioChunk.recording_id == recording.id,
+            AudioChunk.segment_number == segment_number,
+        ).limit(1)
+    ).first()
+    if seen is None:
+        log.info(
+            "chunk_segment_started",
+            recording_id=recording.id,
+            segment_number=segment_number,
+            sequence_number=sequence_number,
+        )
 
 
 def salvage_total_chunks(session: Session, recording: Recording) -> int:

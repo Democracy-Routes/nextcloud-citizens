@@ -226,8 +226,8 @@ def analysis_configured(monkeypatch):
     the store."""
     from citizens.api import findings as findings_api
 
-    monkeypatch.setattr(findings_api, "analysis_ready", lambda store: True)
-    monkeypatch.setattr(findings_api.provider_config, "default_store", lambda: object())
+    # since 0.6.2 the handler reads the config snapshot, never the store
+    monkeypatch.setattr(findings_api.provider_config, "analysis_ready_cached", lambda: True)
 
 
 def test_round_findings_carry_the_last_jobs_reason(client, analysis_configured):

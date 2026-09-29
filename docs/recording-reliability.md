@@ -37,12 +37,29 @@ that evidence their local audio remains untouched.
   session's lifetime (16 h) runs from the phone's last contact, not from the
   scan, so a phone in use does not expire mid-round.
 - A finished recording does not end the table's round. The recovery screen
-  declares what it recovered complete; a lost microphone finishes the
-  recording the same way. While the facilitator still has the round open, the
-  phone offers "Record the rest of round N" — on the armed screen and on the
-  finished screen, never automatically — and the server keeps the first
-  recording as part 1 of the table's round. The analysis waits for both parts.
-  Ended rounds, and independent-mode rounds, are not continued.
+  declares what it recovered complete. While the facilitator still has the
+  round open, the phone offers "Record the rest of round N" — on the armed
+  screen and on the finished screen, never automatically — and the server
+  keeps the first recording as part 1 of the table's round. The analysis
+  waits for both parts. Ended rounds, and independent-mode rounds, are not
+  continued.
+- A microphone lost mid-round is bridged, not finished. The engine watches
+  for audio: no chunk for thirty seconds while the page is on screen makes
+  it ask the recorder for its buffer, and silence to that — or a track that
+  stays muted on screen, or one that ended — closes the MediaRecorder
+  session, keeps everything captured, and asks for the microphone back every
+  five seconds. When it returns, the SAME recording continues: the sequence
+  goes on, the new session's chunks carry the next segment number, and the
+  server remuxes each segment on its own before joining them into one file
+  (`audio_chunks.segment_number`, migration 0023). The screen says
+  "interrupted" meanwhile and how many seconds were missed afterwards; the
+  device log has `capture_interrupted`, `capture_resumed`, and, on every
+  return from the background, `capture_after_background` with the number of
+  chunks captured while hidden — which is how a phone model's background
+  behaviour is established. Only after ten minutes of refusals is the
+  recording finished with what it has, and then the manual "Record the rest"
+  applies. Nothing is judged while the page is hidden: Android slows timers
+  down and iOS freezes the page, so a late chunk on return proves nothing.
 - Audio the server received from a phone that never came back is assembled by
   itself after thirty minutes of silence, whatever gave up on the phone (a
   replacement, the automatic takeover, the twenty-minute timeout, an organizer
@@ -68,10 +85,23 @@ that evidence their local audio remains untouched.
   Unreadable storage or unknown ownership is reported as unknown, not zero.
 - The device log records the page going to the background, being frozen,
   torn down or restored, and the phone's user agent once per session; the
-  heartbeat says whether the page is on screen, and the Live tab shows "in
-  background" for a phone whose page is not. iOS may stop the microphone in
-  that state without any error the page can catch: the log can only show
-  that it happened, not prevent it.
+  heartbeat says whether the page is on screen, whether audio is arriving
+  (`capture_ok`) and whether the screen wake lock is held (`screen_awake`).
+  The Live tab shows "in background" for a phone whose page is not on
+  screen, "capture interrupted" for one whose microphone went quiet, and
+  "screen may lock" for one that cannot hold its screen — that phone needs
+  auto-lock set to Never by hand.
+- The wake lock is asked for whenever a screen has a reason to stay awake,
+  and asked again when the browser lets go of it. Every outcome is in the
+  device log (`wake_lock_acquired`, `wake_lock_released`, `wake_lock_failed`,
+  `wake_lock_unsupported`). Before 0.6.2 the recording screen evaluated its
+  condition once, at mount, before recording had started — so it never asked,
+  and the screen went dark at the phone's own timeout until somebody woke it.
+- `scripts/device-report.py` reads the device logs of the last hours and
+  prints, per phone: browser, wake-lock outcome, hidden windows with the
+  chunks captured inside, gaps over fifteen seconds, interruptions and
+  resumptions. It is the way to answer "does this model record with the
+  screen off" after a rehearsal.
 
 ## Before using this build for an assembly
 

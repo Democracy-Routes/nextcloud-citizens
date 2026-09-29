@@ -9,7 +9,9 @@ const PART_BYTES = 1024 * 1024
 export async function transferChunk(token: string, recordingId: string, chunk: StoredChunk): Promise<void> {
 	if (chunk.blob.size <= 5 * 1024 * 1024) {
 		try {
-			await recorderApi.uploadChunk(token, recordingId, chunk.seq, chunk.blob, chunk.sha256)
+			await recorderApi.uploadChunk(
+				token, recordingId, chunk.seq, chunk.blob, chunk.sha256, chunk.segment ?? 0,
+			)
 			return
 		} catch (error) {
 			if (!(error instanceof RecorderApiError) || error.status !== 413) throw error
@@ -31,18 +33,18 @@ export async function transferChunk(token: string, recordingId: string, chunk: S
 			const hash = await sha256Blob(blob)
 			if (!force && status.parts.some((p) => p.number === number && p.sha256 === hash)) continue
 			await recorderApi.uploadPart(token, recordingId, chunk.seq, number,
-				chunk.blob.size, chunk.sha256, hash, blob)
+				chunk.blob.size, chunk.sha256, hash, blob, chunk.segment ?? 0)
 		}
 	}
 	await sendParts(false)
 	let result
 	try {
-		result = await recorderApi.finalizeChunk(token, recordingId, chunk.seq)
+		result = await recorderApi.finalizeChunk(token, recordingId, chunk.seq, chunk.segment ?? 0)
 	} catch (error) {
 		if (!(error instanceof RecorderApiError) || error.status !== 409) throw error
 		// Repair missing/damaged persisted parts once; do not loop on a conflict.
 		await sendParts(true)
-		result = await recorderApi.finalizeChunk(token, recordingId, chunk.seq)
+		result = await recorderApi.finalizeChunk(token, recordingId, chunk.seq, chunk.segment ?? 0)
 	}
 	if (result.sha256 !== chunk.sha256 || result.size_bytes !== chunk.blob.size) {
 		throw new RecorderApiError(409, t('recorder.safety.unverified'))

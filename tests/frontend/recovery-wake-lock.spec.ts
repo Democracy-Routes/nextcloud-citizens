@@ -73,7 +73,7 @@ const release = vi.fn().mockResolvedValue(undefined)
 
 beforeEach(() => {
 	request.mockReset()
-	request.mockResolvedValue({ release })
+	request.mockResolvedValue({ release, addEventListener: vi.fn(), removeEventListener: vi.fn() })
 	Object.defineProperty(navigator, 'wakeLock', { value: { request }, configurable: true })
 })
 

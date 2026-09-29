@@ -19,7 +19,7 @@ import AddDeviceQr from './AddDeviceQr.vue'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
 import { clientLog, ship } from '../logger'
-import { useWakeLock } from '../useWakeLock'
+import { useWakeLock, wakeLockHeld } from '../useWakeLock'
 import { clearSynchronizedRecordings, RecorderEngine } from '../engine'
 
 const props = defineProps<{ session: JoinResult; round: RoundInfo }>()
@@ -211,6 +211,7 @@ function watchForNextRound(): void {
 						storage_ok: true,
 						local_recordings: held,
 						visible: document.visibilityState === 'visible',
+						screen_awake: wakeLockHeld.value === true,
 					})
 					.catch(() => undefined)
 			}
@@ -282,6 +283,19 @@ const elapsed = computed(() => {
 
 const pendingChunks = computed(() => state.localChunks - state.ackedChunks)
 
+/** Seconds of the round that went unrecorded across every bridged
+ * interruption — what the table is told once capture is back. */
+const interruptedSeconds = computed(() =>
+	Math.round(state.interruptions.reduce((sum, gap) => sum + (gap.to - gap.from), 0) / 1000),
+)
+
+/** The microphone was lost to the screen going off or the OS muting it —
+ * not to a phone call — so the wording must not send people after a call
+ * that never happened. */
+const lostToScreen = computed(() =>
+	state.micLostCause === 'capture_stalled' || state.micLostCause === 'track_muted',
+)
+
 watch(liveLines, () => {
 	void nextTick(() => {
 		captionsBox.value?.scrollTo({ top: captionsBox.value.scrollHeight })
@@ -298,7 +312,9 @@ watch(
 
 // Not just while recording: the finished screen polls for the next round and
 // auto-starts it, so letting the phone sleep here means missing that too.
-useWakeLock(() =>
+// The condition is false at mount (recording starts below) and watched by
+// the composable, which asks for the lock the moment it turns true.
+const { held: screenAwake, supported: wakeLockSupported } = useWakeLock(() =>
 	['recording', 'finishing', 'syncing', 'done', 'uploaded'].includes(state.phase),
 )
 
@@ -333,6 +349,9 @@ onMounted(async () => {
 			level.value = Math.min(100, Math.round((peak / 128) * 160))
 		}, 120)
 	}
+	// Every eight seconds, not five: at twenty tables this poll is most of the
+	// server's traffic, and the round's end is followed by a fifteen-second
+	// countdown anyway, so nobody notices the difference.
 	roundPollTimer = window.setInterval(async () => {
 		if (state.phase !== 'recording') return
 		try {
@@ -345,7 +364,7 @@ onMounted(async () => {
 		} catch {
 			/* offline — round state resumes with the network */
 		}
-	}, 5000)
+	}, 8000)
 	startLivePoll()
 })
 
@@ -516,12 +535,30 @@ async function clearSynced(): Promise<void> {
 
 			<div class="rc-scroll">
 			<div class="rc-timer-wrap">
-				<div class="rc-timer-ring" :class="{ 'rc-timer-ring--live': state.phase === 'recording' }">
+				<div
+					class="rc-timer-ring"
+					:class="{ 'rc-timer-ring--live': state.phase === 'recording' && !state.captureInterrupted }">
 					<span class="rc-timer">{{ elapsed }}</span>
 					<span class="rc-timer-label">
-						{{ state.phase === 'recording' ? t('recorder.recording.timerRecording') : t('recorder.recording.timerStopping') }}
+						{{
+							state.captureInterrupted
+								? t('recorder.recording.timerInterrupted')
+								: state.phase === 'recording'
+									? t('recorder.recording.timerRecording')
+									: t('recorder.recording.timerStopping')
+						}}
 					</span>
 				</div>
+			</div>
+
+			<!-- The microphone went quiet (screen off, a call, the OS muted it) and
+			     the engine is asking for it back every few seconds. Nothing is
+			     lost, the round is not over, and this stays one recording. -->
+			<div v-if="state.captureInterrupted" class="rc-alert" role="alert">
+				{{ t('recorder.recording.interrupted') }}
+			</div>
+			<div v-else-if="state.phase === 'recording' && interruptedSeconds > 0" class="rc-note">
+				{{ t('recorder.recording.resumedAfter', { seconds: interruptedSeconds }) }}
 			</div>
 
 			<div class="rc-level"><div class="rc-level-fill" :style="{ width: level + '%' }"></div></div>
@@ -596,6 +633,11 @@ async function clearSynced(): Promise<void> {
 			</div>
 			<p v-else class="rc-muted rc-center" style="font-size: 0.845rem">
 				{{ t('recorder.recording.keepOpen') }}
+			</p>
+			<!-- No wake lock (old browser, refused, or dropped): the screen will
+			     go off at the phone's own timeout unless somebody changes it. -->
+			<p v-if="!wakeLockSupported || !screenAwake" class="rc-note" style="font-size: 0.845rem">
+				{{ t('recorder.recording.screenLockHint') }}
 			</p>
 
 			<div v-if="state.lowStorage" class="rc-alert">
@@ -681,7 +723,7 @@ async function clearSynced(): Promise<void> {
 		<template v-else-if="state.phase === 'syncing'">
 			<div class="rc-scroll">
 				<div v-if="state.micLost" class="rc-alert" role="alert">
-					{{ t('recorder.recording.micLost') }}
+					{{ lostToScreen ? t('recorder.recording.micLostScreenOff') : t('recorder.recording.micLost') }}
 				</div>
 				<div class="rc-hero">
 					<div class="rc-hero__icon"><SvgIcon :path="mdiCloudUploadOutline" :size="44" style="color: var(--rc-blue)" /></div>
@@ -725,6 +767,14 @@ async function clearSynced(): Promise<void> {
 							{{ recheckBusy ? t('recorder.uploaded.checking') : t('recorder.uploaded.check') }}
 						</button>
 					</div>
+					<!-- the microphone never came back: say so here too, because
+					     this is the screen the table is looking at when it lands -->
+					<div v-if="state.micLost" class="rc-alert" role="alert" style="margin-top: 14px; text-align: left">
+						{{ lostToScreen ? t('recorder.recording.micLostScreenOff') : t('recorder.recording.micLost') }}
+					</div>
+					<p v-else-if="interruptedSeconds > 0" class="rc-muted" style="margin-top: 10px; font-size: 0.875rem">
+						{{ t('recorder.recording.resumedAfter', { seconds: interruptedSeconds }) }}
+					</p>
 					<p v-if="clearedNote" class="rc-muted">{{ clearedNote }}</p>
 
 					<div

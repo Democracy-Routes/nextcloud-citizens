@@ -417,13 +417,34 @@ def build_audio_zip(session: Session, assembly: Assembly, *, retain: bool = Fals
 
 
 def _build_audio_zip(session: Session, assembly: Assembly, target: Path) -> Path:
+    return _write_audio_entries(plan_audio_zip(session, assembly), target)
+
+
+def plan_audio_zip(session: Session, assembly: Assembly) -> list[tuple[Path, str]]:
+    """The (file, name in the archive) pairs the audio bundle is made of —
+    the whole of what it needs the database for, so a caller can let go of
+    its connection before the minutes of disk work that follow."""
     positions = {round_.id: round_.position for round_ in assembly.rounds}
+    plan = []
+    for recording in _recordings(session, assembly):
+        path = canonical_path(recording)
+        if path is None:
+            continue
+        plan.append((path, audio_filename(assembly, recording, positions.get(recording.round_id, 0))))
+    return plan
+
+
+def write_audio_zip(plan: list[tuple[Path, str]], assembly_id: str, *, retain: bool = False) -> Path:
+    """The disk half of build_audio_zip, for a caller that planned first and
+    released its database connection."""
+    with build_target(_storage_root(), assembly_id, "audio", retain) as target:
+        return _write_audio_entries(plan, target)
+
+
+def _write_audio_entries(plan: list[tuple[Path, str]], target: Path) -> Path:
     with zipfile.ZipFile(target, "w", zipfile.ZIP_STORED) as archive:
-        for recording in _recordings(session, assembly):
-            path = canonical_path(recording)
-            if path is None:
-                continue
-            archive.write(path, audio_filename(assembly, recording, positions.get(recording.round_id, 0)))
+        for path, name in plan:
+            archive.write(path, name)
     return target
 
 

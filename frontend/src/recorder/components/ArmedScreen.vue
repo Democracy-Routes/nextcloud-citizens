@@ -9,7 +9,7 @@ import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
 import { heldByAnotherDevice } from '../holding'
 import { idb } from '../idb'
-import { useWakeLock } from '../useWakeLock'
+import { useWakeLock, wakeLockHeld } from '../useWakeLock'
 
 /*
  * Orchestrated mode: the table is ARMED. The phone waits for the facilitator
@@ -108,6 +108,7 @@ async function heartbeat(): Promise<void> {
 			// organizer is reading that number.
 			local_recordings: await idb.countFor(props.session.assembly.id),
 			visible: document.visibilityState === 'visible',
+			screen_awake: wakeLockHeld.value === true,
 		})
 	} catch {
 		/* offline — retried */

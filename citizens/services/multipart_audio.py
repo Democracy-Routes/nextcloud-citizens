@@ -118,12 +118,14 @@ def receive_part(session, recording, sequence, number, total_bytes, chunk_hash, 
     return {"acknowledged": True, "duplicate": existing is not None}
 
 
-def finalize_chunk(session: Session, recording: Recording, sequence: int):
+def finalize_chunk(session: Session, recording: Recording, sequence: int, segment: int = 0):
     _accepting(recording)
     existing = session.scalar(select(AudioChunk).where(
         AudioChunk.recording_id == recording.id, AudioChunk.sequence_number == sequence
     ))
     if existing is not None:
+        if existing.segment_number != segment:
+            raise HTTPException(409, "Chunk already stored with different content")
         return {"acknowledged": True, "duplicate": True,
                 "sha256": existing.sha256, "size_bytes": existing.size_bytes}
     parts = _parts(session, recording.id, sequence)
@@ -179,6 +181,10 @@ def finalize_chunk(session: Session, recording: Recording, sequence: int):
             # the lock.
             session.refresh(recording)
             _accepting(recording)
+            if segment > 0:
+                from citizens.services.recording import note_segment_start
+
+                note_segment_start(session, recording, sequence, segment)
             # Claim the sequence BEFORE publishing the file: a replacement
             # phone finalizing the same chunk concurrently used to pass the
             # duplicate check above during the winner's unlocked copy, then
@@ -191,6 +197,7 @@ def finalize_chunk(session: Session, recording: Recording, sequence: int):
             claim = session.execute(
                 sqlite_insert(AudioChunk)
                 .values(recording_id=recording.id, sequence_number=sequence,
+                        segment_number=segment,
                         sha256=digest.hexdigest(), size_bytes=size,
                         path=str(target.relative_to(root)))
                 .on_conflict_do_nothing(

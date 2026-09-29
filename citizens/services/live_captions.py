@@ -610,6 +610,8 @@ class LiveCaptionManager:
         # feeds scheduled but not yet finished, per recording — what
         # _finish_async fences behind so the sentinel never overtakes audio
         self._pending_feeds: dict[str, set[asyncio.Task]] = {}
+        # the MediaRecorder session each recording's decoder was opened on
+        self._segments: dict[str, int] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     async def _close_stream(self, recording_id: str) -> None:
@@ -635,9 +637,19 @@ class LiveCaptionManager:
         return vosk_model_path(entry.get("live", ""))
 
     def feed(
-        self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
+        self,
+        recording_id: str,
+        data: bytes,
+        config: dict,
+        language: str,
+        assembly_id: str = "",
+        segment: int = 0,
     ) -> None:
-        """Called from the (threadpool) chunk-upload path. Never raises."""
+        """Called from the (threadpool) chunk-upload path. Never raises.
+
+        `segment` is which MediaRecorder session of the recording the bytes
+        come from: a change means a fresh container header, which neither the
+        decoder nor a provider fed raw containers can take mid-stream."""
         try:
             if self._loop is None or not config.get("enabled"):
                 return
@@ -650,7 +662,8 @@ class LiveCaptionManager:
             if provider in ("vosk", "whisper") and not config.get("endpoint"):
                 return
             asyncio.run_coroutine_threadsafe(
-                self._tracked_feed(recording_id, data, config, language, assembly_id), self._loop
+                self._tracked_feed(recording_id, data, config, language, assembly_id, segment),
+                self._loop,
             )
         except Exception:
             log.warning("live_stt_feed_failed", recording_id=recording_id, exc_info=True)
@@ -697,7 +710,13 @@ class LiveCaptionManager:
         return result
 
     async def _tracked_feed(
-        self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
+        self,
+        recording_id: str,
+        data: bytes,
+        config: dict,
+        language: str,
+        assembly_id: str = "",
+        segment: int = 0,
     ) -> None:
         """_feed_async, registered so finish() can fence behind it.
 
@@ -711,7 +730,7 @@ class LiveCaptionManager:
         if task is not None:
             pending.add(task)
         try:
-            await self._feed_async(recording_id, data, config, language, assembly_id)
+            await self._feed_async(recording_id, data, config, language, assembly_id, segment)
         finally:
             if task is not None:
                 pending.discard(task)
@@ -719,11 +738,36 @@ class LiveCaptionManager:
                 self._pending_feeds.pop(recording_id, None)
 
     async def _feed_async(
-        self, recording_id: str, data: bytes, config: dict, language: str, assembly_id: str = ""
+        self,
+        recording_id: str,
+        data: bytes,
+        config: dict,
+        language: str,
+        assembly_id: str = "",
+        segment: int = 0,
     ) -> None:
         provider = config["provider"]
         wants_pcm = SESSION_TYPES[provider].wants_pcm
         session = self._sessions.get(recording_id)
+
+        # A new MediaRecorder session on the phone (the microphone was lost
+        # and came back): its first chunk opens with a container header. The
+        # decoder holds the OLD container's state and a provider fed raw
+        # containers is mid-stream — both must start over on the new one.
+        # The lines already captioned are persisted by the disposed session.
+        last_segment = self._segments.get(recording_id)
+        if last_segment is not None and segment != last_segment:
+            log.info(
+                "live_stt_segment_restart",
+                recording_id=recording_id,
+                segment=segment,
+                previous=last_segment,
+            )
+            old = self._sessions.pop(recording_id, None)
+            await self._dispose(old, keep_stream=False)
+            await self._close_stream(recording_id)
+            session = None
+        self._segments[recording_id] = segment
 
         if session is not None and session.failed_at is not None:
             if time.monotonic() - session.failed_at < FAILURE_COOLDOWN:
@@ -926,6 +970,7 @@ class LiveCaptionManager:
                     recording_id=recording_id, pending=len(unfinished),
                 )
         self._over_capacity.pop(recording_id, None)
+        self._segments.pop(recording_id, None)
         session = self._sessions.pop(recording_id, None)
         if session is not None:
             # the recording is done: this dispose is terminal, so its persisted

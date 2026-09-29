@@ -18,6 +18,7 @@ across those starves every API request into 500s after busy_timeout.
 import asyncio
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from sqlalchemy import and_, or_, select
@@ -211,7 +212,14 @@ async def run_forever(stop_event: asyncio.Event, workers: int | None = None) -> 
     recover_stale_jobs()
     pool_size = _worker_count(workers)
     log.info("job_runner_started", workers=pool_size)
-    running: set[asyncio.Task] = set()
+    # A pool of its own. asyncio.to_thread runs on the loop's default
+    # executor, which is sized min(32, cpus + 4) — eight on this host — so
+    # CITIZENS_JOB_WORKERS=10 quietly meant eight, and the sweep competed
+    # with the jobs for those same threads. One thread per worker plus one
+    # for the sweep and the claim, and nothing else runs on them.
+    executor = ThreadPoolExecutor(max_workers=pool_size + 1, thread_name_prefix="citizens-job")
+    loop = asyncio.get_running_loop()
+    running: set[asyncio.Future] = set()
     stopping = asyncio.create_task(stop_event.wait())
     last_sweep = 0.0
     try:
@@ -221,14 +229,14 @@ async def run_forever(stop_event: asyncio.Event, workers: int | None = None) -> 
             now = time.monotonic()
             if now - last_sweep >= SWEEP_INTERVAL_SECONDS:
                 last_sweep = now
-                await asyncio.to_thread(run_sweeps)
+                await loop.run_in_executor(executor, run_sweeps)
             running = {task for task in running if not task.done()}
             try:
                 while len(running) < pool_size:
-                    job_id = await asyncio.to_thread(_claim_next_job)
+                    job_id = await loop.run_in_executor(executor, _claim_next_job)
                     if job_id is None:
                         break
-                    running.add(asyncio.create_task(asyncio.to_thread(_run_job, job_id)))
+                    running.add(loop.run_in_executor(executor, _run_job, job_id))
             except Exception:
                 log.error("job_runner_iteration_failed", exc_info=True)
             # Wake when a job finishes (its follow-up may already be due),
@@ -243,3 +251,4 @@ async def run_forever(stop_event: asyncio.Event, workers: int | None = None) -> 
         # own HTTP timeout, and a job cut off anyway is reclaimed by the lease
         if running:
             await asyncio.wait(running)
+        executor.shutdown(wait=False)

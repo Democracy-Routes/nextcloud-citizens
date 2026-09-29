@@ -106,7 +106,12 @@ def _audit_after_build(event: str, assembly_id: str, user: str) -> None:
 @router.get("/assemblies/{assembly_id}/audio.zip")
 def download_all_audio(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)
-    archive = files_svc.build_audio_zip(session, assembly, retain=True)
+    plan = files_svc.plan_audio_zip(session, assembly)
+    # Everything the database was needed for is in `plan`; give the pooled
+    # connection back before minutes of disk work rather than sit on one of
+    # the slots the phones' uploads are queueing for.
+    session.close()
+    archive = files_svc.write_audio_zip(plan, assembly.id, retain=True)
     try:
         _audit_after_build("audio_bundle_downloaded", assembly.id, user)
         return _zip_response(archive, f"{_slug(assembly.name)}-audio.zip")

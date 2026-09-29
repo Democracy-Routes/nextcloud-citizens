@@ -50,6 +50,10 @@ export interface StoredChunk {
 	key: string // `${recordingId}:${seq}`
 	recordingId: string
 	seq: number
+	/** which MediaRecorder session produced it — a recording interrupted and
+	 * resumed mid-round is several sessions, each with its own container
+	 * header, that the server joins. Absent on chunks stored before 0.6.2: 0. */
+	segment?: number
 	blob: Blob
 	sha256: string
 	sizeBytes: number

@@ -335,12 +335,15 @@ def sweep_stale_exports() -> int:
 
 
 def run_sweeps() -> None:
-    from citizens.services import public_url
+    from citizens.services import provider_config, public_url
 
     for name, sweep in (
         # the address the QR codes carry, asked of Nextcloud here — outside
         # any request transaction — and merely read where invites are built
         ("public_url", public_url.refresh),
+        # likewise everything the request path wants from Settings: read
+        # here, served from memory to every poll and upload
+        ("config_snapshot", provider_config.refresh_config_snapshot),
         ("stalled_uploads", sweep_stalled_uploads),
         ("superseded_partials", sweep_superseded_partials),
         ("missed_enqueues", sweep_missed_enqueues),

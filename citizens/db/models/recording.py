@@ -106,6 +106,12 @@ class AudioChunk(Base):
         ForeignKey("recordings.id", ondelete="CASCADE"), index=True
     )
     sequence_number: Mapped[int] = mapped_column(Integer)
+    # Which MediaRecorder session of the recording produced it. A phone that
+    # lost the microphone mid-round and got it back keeps the sequence going
+    # in a new session — with a new container header, so assembly remuxes
+    # each segment on its own before joining them. 0 for every chunk of an
+    # uninterrupted recording, and for everything recorded before 0.6.2.
+    segment_number: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     sha256: Mapped[str] = mapped_column(String(64))
     size_bytes: Mapped[int] = mapped_column(Integer)
     path: Mapped[str] = mapped_column(Text)

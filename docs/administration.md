@@ -51,7 +51,7 @@ Nextcloud container (`docker exec -u www-data <nextcloud> php occ …`).
 
    ```
    occ app_api:app:register citizens docker_local --wait-finish \
-       --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.1/appinfo/info.xml
+       --info-xml https://raw.githubusercontent.com/Democracy-Routes/nextcloud-citizens/v0.6.2/appinfo/info.xml
    ```
 
    AppAPI pulls `ghcr.io/democracy-routes/citizens:<version>` (the `<image-tag>`
@@ -344,14 +344,26 @@ table (Live tab, next to Replace device, or Files tab): it assembles the
 contiguous part that arrived. `scripts/event-status.sh` lists such
 recordings under "needs a decision".
 
-**A table reloaded the page (or a phone call took the microphone) and the
-round was still going.** The phone uploads what it captured, then shows
-"Record the rest of round N" — on the armed screen after the recovery, and on
-the finished screen. Tapping it starts a second recording for the same round;
-the first is kept as part 1 ("first part" on the Live tab, `-part1` in the
-export) and the table's analysis waits for both. It is never automatic: a
-table that pressed Finish on purpose simply does not tap it. Once you end the
-round the offer disappears.
+**A table's phone lost the microphone mid-round — the screen went off, a
+call came in — and the round was still going.** Nothing to do. The phone
+notices within about forty seconds of being back on screen, shows
+"interrupted", asks for the microphone back every five seconds and, when it
+returns, carries on in the **same** recording (one file, one transcript; the
+screen says how many seconds were missed). The Live tab shows "capture
+interrupted" while it lasts — if it stays, somebody should pick the phone up
+and look at it. Only after ten minutes without a microphone does the phone
+finish the recording with what it has, and then the next paragraph applies.
+A phone that shows "screen may lock" on the Live tab cannot hold its screen
+awake by itself: set its auto-lock to Never in the phone's settings.
+
+**A table reloaded the page and the round was still going.** The phone
+uploads what it captured, then shows "Record the rest of round N" — on the
+armed screen after the recovery, and on the finished screen. Tapping it
+starts a second recording for the same round; the first is kept as part 1
+("first part" on the Live tab, `-part1` in the export) and the table's
+analysis waits for both. This one is never automatic: a table that pressed
+Finish on purpose simply does not tap it. Once you end the round the offer
+disappears.
 
 **Participants used their own phones.** Closing the session asks the phones to
 clear their copy automatically — that is on by default, and switchable per

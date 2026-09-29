@@ -67,6 +67,16 @@ room.
   should start the day above 80%, plugged in where the venue allows, and be a
   device you have already rehearsed with — not one somebody brought that
   morning.
+- [ ] **Set every table phone so its screen cannot go off on its own.** The
+  page asks the browser to keep the screen awake, but a browser can refuse
+  and a phone can override it, and a dark screen is a phone that may stop
+  recording (iPhones do). iPhone: Settings → Display & Brightness → Auto-Lock
+  → Never, and Low Power Mode off. Android: Settings → Display → Screen
+  timeout → 30 minutes (the longest offered), Battery saver off; on a Samsung
+  also Settings → Battery → Background usage limits → make sure the browser
+  is not among "Sleeping apps". The Live tab shows "screen may lock" on a
+  phone whose browser did not grant the lock; that is the phone to do this on
+  first. Undo it after the event.
 - [ ] **Scan the QR codes on the day, not the evening before.** A session
   lives 16 hours from the phone's last contact; a phone that scanned and was
   then switched off overnight can still arrive at the first round expired,
@@ -173,12 +183,22 @@ stranded audio 30 min after that.
    device appears and is **not** pressed; at End round the duration is the
    whole round; the device log shows `chunk_upload_failed`, `network_online`,
    `chunk_acked`.
-3. [ ] **Screen off 60 s, then another app for 60 s, on the Android**, same
-   round. Pass: elapsed keeps climbing on the Live tab, pending stays at or
-   below 3, the device log has `chunk_saved_local` every 10 s with no gap
-   longer than 15 s. A gap, or "in background" on the Live tab with the
-   counter stopped, means that model must be kept on and awake by hand — or
-   not used.
+3. [ ] **Screen off 60 s, then another app for 60 s — on the Android AND on
+   the iPhone**, same round. First, the screen should not go off by itself
+   at all: leave a phone untouched for three minutes while it records and
+   check it is still lit (the device log has `wake_lock_acquired` at the
+   start of the round; `wake_lock_failed` or `wake_lock_unsupported` means
+   that model needs auto-lock set to Never by hand, and the Live tab shows
+   "screen may lock"). Then press the power button. Pass, one of two ways:
+   chunks keep coming while hidden (`capture_after_background` with
+   `chunksWhileHidden` > 0, no gap over 15 s — Android usually), or the
+   phone shows "interrupted" on return and then "Recording resumed — N s not
+   captured" (`capture_interrupted` then `capture_resumed`; iPhone usually),
+   and at the end of the round the Files tab has **one** file for the table
+   whose duration is the round minus the gap. Fail: a gap with no
+   `capture_resumed`, "capture interrupted" that never clears on the Live
+   tab, or two files. `python3 scripts/device-report.py --since 1` prints all
+   of this per phone.
 4. [ ] **Reload mid-round on the iPhone**, let the recovery screen sync.
    Pass: "Record the rest of round N" appears; tap it; the Live tab shows the
    first part under the new recording; after the round the Files tab lists

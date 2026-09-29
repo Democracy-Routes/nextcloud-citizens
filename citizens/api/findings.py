@@ -15,7 +15,6 @@ from citizens.db.models.base import utcnow
 from citizens.db.session import get_db
 from citizens.security.identity import CurrentUser
 from citizens.services import job_failures, provider_config
-from citizens.services.analysis import analysis_ready
 from citizens.services.assemblies import get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import LIVE_JOB_STATES, enqueue_job
@@ -130,7 +129,7 @@ def round_findings(round_id: str, user: CurrentUser, session: DB):
         "round_id": round_.id,
         "round_status": round_.status,
         "round_summary": round_.analysis_summary,
-        "analysis_configured": analysis_ready(provider_config.default_store()),
+        "analysis_configured": provider_config.analysis_ready_cached(),
         "tables_with_findings": total_tables,
         "cross_table": [
             _finding_payload(session, f, table_numbers) for f in findings if f.scope == "round"
@@ -195,7 +194,7 @@ def request_reclustering(round_id: str, user: CurrentUser, session: DB):
     """Run only the cross-table clustering again, from the tables' current
     findings — not the ten table analyses a full re-run costs."""
     round_ = get_owned_round(session, round_id, user)
-    if not analysis_ready(provider_config.default_store()):
+    if not provider_config.analysis_ready_cached():
         raise HTTPException(
             status_code=409,
             detail="AI analysis is not configured — add an analysis API key in Settings",
@@ -334,7 +333,7 @@ def request_analysis(round_id: str, data: AnalyzeIn, user: CurrentUser, session:
     """(Re)run analysis for every transcribed table of the round; cross-table
     clustering follows automatically once all tables finish."""
     round_ = get_owned_round(session, round_id, user)
-    if not analysis_ready(provider_config.default_store()):
+    if not provider_config.analysis_ready_cached():
         raise HTTPException(
             status_code=409,
             detail="AI analysis is not configured — add an analysis API key in Settings",

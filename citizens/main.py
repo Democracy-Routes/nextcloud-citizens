@@ -30,6 +30,7 @@ from citizens.db.migrate import run_migrations
 from citizens.db.session import configure_database, sqlite_url
 from citizens.jobs.runner import run_forever as jobs_run_forever
 from citizens.logging_setup import get_logger, setup_logging
+from citizens.services import provider_config
 from citizens.services.audit import record_audit_event_standalone
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.storage.paths import db_path, ensure_storage_layout
@@ -89,6 +90,19 @@ async def lifespan(app: FastAPI):
     run_migrations(sqlite_url(db_path(settings.app_persistent_storage)))
     # static dirs are mounted in create_app instead, with cache headers
     set_handlers(app, enabled_handler, map_app_static=False)
+    # Settings, read once before the first request so no request ever asks
+    # Nextcloud for them. Best effort and bounded: a Nextcloud that is not
+    # answering yet must not keep the container from becoming healthy — the
+    # sweep reads again a minute later.
+    if not settings.auth_disabled():
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(provider_config.refresh_config_snapshot), timeout=15
+            )
+        except TimeoutError:
+            log.warning("config_snapshot_startup_timeout")
+        except Exception:
+            log.warning("config_snapshot_startup_failed", exc_info=True)
     stop_event = asyncio.Event()
     jobs_task = asyncio.create_task(jobs_run_forever(stop_event))
     LIVE_CAPTIONS.set_loop(asyncio.get_running_loop())

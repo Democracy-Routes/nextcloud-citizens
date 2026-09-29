@@ -26,14 +26,21 @@ vi.mock('../../frontend/src/recorder/api', async () => {
 		},
 	}
 })
-vi.mock('../../frontend/src/recorder/useWakeLock', () => ({ useWakeLock: vi.fn() }))
+vi.mock('../../frontend/src/recorder/useWakeLock', async () => {
+	const { ref } = await import('vue')
+	return {
+		useWakeLock: () => ({ held: ref(true), supported: true }),
+		wakeLockHeld: ref(true),
+	}
+})
 vi.mock('../../frontend/src/recorder/idb', () => ({ idb: {} }))
 vi.mock('../../frontend/src/recorder/engine', () => {
 	const state = {
 		phase: 'recording', recordingId: 'rec-1', startedAt: Date.now(),
 		localChunks: 0, ackedChunks: 0, storageError: false, lowStorage: false,
 		uploadOnline: true, uploadFailure: '', serverState: '', error: '',
-		errorKind: '', micLost: false,
+		errorKind: '', micLost: false, micLostCause: '', captureInterrupted: false,
+		interruptedSince: 0, interruptions: [], segment: 0,
 	}
 	return {
 		clearSynchronizedRecordings: vi.fn(),
@@ -76,7 +83,7 @@ async function mountRecording() {
 describe('the finishing countdown', () => {
 	it('shows the ended line and the countdown as separate, self-consistent text', async () => {
 		const wrapper = await mountRecording()
-		await vi.advanceTimersByTimeAsync(5100) // the 5 s round poll sees ENDED
+		await vi.advanceTimersByTimeAsync(8100) // the 8 s round poll sees ENDED
 
 		const text = wrapper.text()
 		expect(text).toContain('The round has ended')
@@ -87,7 +94,7 @@ describe('the finishing countdown', () => {
 
 	it('re-arms the auto-finish after "Keep talking" instead of latching forever', async () => {
 		const wrapper = await mountRecording()
-		await vi.advanceTimersByTimeAsync(5100)
+		await vi.advanceTimersByTimeAsync(8100)
 
 		await wrapper.findAll('button').find((b) => b.text().includes('Keep talking'))!.trigger('click')
 		// during the reprieve, the countdown does not run to zero and finish
@@ -96,7 +103,7 @@ describe('the finishing countdown', () => {
 
 		// past the reprieve the next poll re-arms the countdown, which completes
         await vi.advanceTimersByTimeAsync(65_000) // > 120s reprieve
-		await vi.advanceTimersByTimeAsync(5100)  // poll re-arms
+		await vi.advanceTimersByTimeAsync(8100)  // poll re-arms
 		await vi.advanceTimersByTimeAsync(16_000) // countdown to zero
 		expect(finish).toHaveBeenCalled()
 	})

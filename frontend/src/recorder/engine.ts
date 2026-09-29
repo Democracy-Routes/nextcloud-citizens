@@ -11,9 +11,10 @@ import { reactive } from 'vue'
 import { RecorderApiError, recorderApi, type RecordingStatus } from './api'
 import { isGoneError, isTransientError, MicrophoneError } from './errors'
 import { idb, type StoredRecording } from './idb'
-import { clientLog } from './logger'
+import { clientLog, ship } from './logger'
 import { sha256Blob, sha256Hex } from './sha'
 import { transferChunk } from './transfer'
+import { wakeLockHeld } from './useWakeLock'
 import { t } from '../i18n'
 
 // ~10 s chunks by default (brief §17.2); overridable via ?chunkms= for tests
@@ -35,6 +36,34 @@ const RETRY_MAX_MS = 60_000
 const HEARTBEAT_MS = 20_000
 const STORAGE_CHECK_MS = 60_000
 const LOW_STORAGE_MB = 100
+
+/* Capture watchdog. A MediaRecorder can stop delivering audio with no error
+ * the page can catch — iOS mutes the microphone track while the screen is
+ * off, some phones freeze the tab — and the screen went on saying RECORDING
+ * with a climbing timer while nothing was captured. No chunk for this many
+ * intervals while the page is VISIBLE is a trigger, not a verdict: a probe
+ * asks the recorder for its buffer and only silence to that is a stall. */
+const STALL_INTERVALS = 3
+const PROBE_MS = 2_000
+/** iOS mutes the track when the page hides and unmutes it on return; only a
+ * mute that outlives this while the page is on screen means the mic is gone. */
+const MUTE_GRACE_MS = 5_000
+const RECORDER_STOP_TIMEOUT_MS = 5_000
+/** The microphone is asked back this often while the page is visible… */
+const RESUME_RETRY_MS = 5_000
+/** …and given up on after this many refusals — ten minutes of a call, say —
+ * at which point what was captured is finished and the table is told. */
+const MAX_RESUME_ATTEMPTS = 120
+const MICROPHONE_CONSTRAINTS = {
+	audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+}
+
+export type CaptureLossCause =
+	| ''
+	| 'track_ended'
+	| 'recorder_error'
+	| 'capture_stalled'
+	| 'track_muted'
 
 const MIME_CANDIDATES = [
 	'audio/webm;codecs=opus',
@@ -79,6 +108,19 @@ export interface EngineState {
 	 * was captured has been finished and is syncing — but the table must be
 	 * told, because from their side the screen just said RECORDING. */
 	micLost: boolean
+	/** what took the microphone: set while an interruption is being bridged
+	 * and kept when the engine gives up (micLost) */
+	micLostCause: CaptureLossCause
+	/** Capture stopped mid-round and the engine is asking for the microphone
+	 * back. Everything captured so far is safe; the round is not over and
+	 * this stays ONE recording: the next MediaRecorder's chunks continue the
+	 * same sequence in a new segment the server knows how to join. */
+	captureInterrupted: boolean
+	interruptedSince: number
+	/** every gap this recording has, for the table and the device log */
+	interruptions: Array<{ from: number; to: number; cause: CaptureLossCause }>
+	/** which MediaRecorder session the next chunk belongs to (0 = the first) */
+	segment: number
 }
 
 
@@ -99,6 +141,11 @@ export class RecorderEngine {
 		error: '',
 		errorKind: '',
 		micLost: false,
+		micLostCause: '',
+		captureInterrupted: false,
+		interruptedSince: 0,
+		interruptions: [],
+		segment: 0,
 	})
 
 	private token = ''
@@ -106,7 +153,23 @@ export class RecorderEngine {
 	private assemblyId: string | undefined
 	private stream: MediaStream | null = null
 	private mediaRecorder: MediaRecorder | null = null
+	private mimeType = ''
 	private seq = 0
+	/** watchdog bookkeeping — see the constants above */
+	private lastChunkAt = 0
+	private hiddenSince = 0
+	private chunksWhileHidden = 0
+	/** bumped on every visibilitychange so a probe or a mute timer that
+	 * straddled a hide/show cannot deliver a verdict about the wrong period */
+	private visibilityEpoch = 0
+	private mutedSince = 0
+	private resumeAttempts = 0
+	private watchdogTimer = 0
+	private probeTimer = 0
+	private muteTimer = 0
+	private resumeTimer = 0
+	private visibilityListener = () => this.onVisibilityChange()
+	private resumeListener = () => this.checkCapture()
 	private totalChunks: number | null = null
 	// serializes async chunk persistence so sequence order matches event order
 	private chunkPipeline: Promise<void> = Promise.resolve()
@@ -117,6 +180,7 @@ export class RecorderEngine {
 	private uploadBlocked = false
 	private completionReady = false
 	private unsavedChunks = new Map<number, Blob>()
+	private unsavedSegments = new Map<number, number>()
 	private retryDelay = RETRY_BASE_MS
 	private wakeUploader: (() => void) | null = null
 	private heartbeatTimer = 0
@@ -139,9 +203,7 @@ export class RecorderEngine {
 		if (!mimeType) throw new Error(t('recorder.engine.noFormat'))
 
 		try {
-			this.stream = await navigator.mediaDevices.getUserMedia({
-				audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
-			})
+			this.stream = await navigator.mediaDevices.getUserMedia(MICROPHONE_CONSTRAINTS)
 		} catch (error) {
 			// only THIS is a microphone problem; the call below can fail for
 			// reasons the phone's owner can do nothing about
@@ -171,22 +233,47 @@ export class RecorderEngine {
 			serverComplete: false,
 		})
 
-		this.mediaRecorder = new MediaRecorder(this.stream, { mimeType })
-		this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
-			if (event.data && event.data.size > 0) this.enqueueChunk(event.data)
-		}
-		// The OS can take the microphone at any moment — an incoming call,
-		// another app, a Bluetooth headset dropping. Nothing listened for it:
-		// the track ended, capture stopped, and the screen went on saying
-		// RECORDING and "safe" while nothing was being recorded. Finishing
-		// immediately keeps everything captured so far and tells the table.
-		this.mediaRecorder.onerror = () => void this.abortForLostMicrophone('recorder_error')
-		for (const track of this.stream.getAudioTracks()) {
-			track.onended = () => void this.abortForLostMicrophone('track_ended')
-		}
-		this.mediaRecorder.start(CHUNK_INTERVAL_MS)
+		this.mimeType = mimeType
+		this.attachRecorder(this.stream).start(CHUNK_INTERVAL_MS)
+		this.lastChunkAt = Date.now()
 		this.startMonitors()
 		this.runUploader()
+	}
+
+	/** One MediaRecorder session on `stream`, wired to this recording.
+	 *
+	 * Called at start and again by tryResume() with a fresh stream. Chunks
+	 * carry the segment number of the session that produced them, captured
+	 * here rather than read at delivery time: a stopped recorder's final blob
+	 * can arrive after the replacement has started a new segment, and it
+	 * belongs with the bytes of its own container. */
+	private attachRecorder(stream: MediaStream): MediaRecorder {
+		const recorder = new MediaRecorder(stream, { mimeType: this.mimeType })
+		const segment = this.state.segment
+		this.stream = stream
+		this.mediaRecorder = recorder
+		recorder.ondataavailable = (event: BlobEvent) => {
+			// nothing is added past a declared total: a straggler after
+			// finish() would sit beyond total_chunks and never be assembled
+			if (this.totalChunks !== null || !event.data || event.data.size === 0) return
+			this.lastChunkAt = Date.now()
+			if (document.visibilityState === 'hidden') this.chunksWhileHidden += 1
+			this.enqueueChunk(event.data, segment)
+		}
+		// The OS can take the microphone at any moment — an incoming call,
+		// another app, a Bluetooth headset dropping, the screen going off on
+		// an iPhone. Nothing listened for it: the track ended, capture
+		// stopped, and the screen went on saying RECORDING and "safe" while
+		// nothing was being recorded. Every route now leads to
+		// interruptCapture(): what was captured stays safe, the microphone is
+		// asked back, and the same recording continues when it returns.
+		recorder.onerror = () => void this.interruptCapture('recorder_error')
+		for (const track of stream.getAudioTracks()) {
+			track.onended = () => void this.interruptCapture('track_ended')
+			track.onmute = () => this.onTrackMute(track)
+			track.onunmute = () => this.onTrackUnmute()
+		}
+		return recorder
 	}
 
 	/** Resume synchronization of a recording found in IndexedDB after a
@@ -238,9 +325,10 @@ export class RecorderEngine {
 		try {
 			for (const [seq, blob] of this.unsavedChunks) {
 				await idb.putChunk({ key: `${this.state.recordingId}:${seq}`, recordingId: this.state.recordingId,
-					seq, blob, sha256: await sha256Blob(blob), sizeBytes: blob.size,
-					createdAt: Date.now(), acked: false, attempts: 0 })
+					seq, segment: this.unsavedSegments.get(seq) ?? 0, blob, sha256: await sha256Blob(blob),
+					sizeBytes: blob.size, createdAt: Date.now(), acked: false, attempts: 0 })
 				this.unsavedChunks.delete(seq)
+				this.unsavedSegments.delete(seq)
 				this.state.localChunks++
 			}
 			const meta = (await idb.getRecordings()).find((r) => r.recordingId === this.state.recordingId)
@@ -301,15 +389,261 @@ export class RecorderEngine {
 
 	private startMonitors(): void {
 		window.addEventListener('online', this.onlineListener)
+		document.addEventListener('visibilitychange', this.visibilityListener)
+		document.addEventListener('resume', this.resumeListener)
 		this.heartbeatTimer = window.setInterval(() => void this.sendHeartbeat(), HEARTBEAT_MS)
 		this.storageTimer = window.setInterval(() => void this.checkStorage(), STORAGE_CHECK_MS)
+		this.watchdogTimer = window.setInterval(() => this.checkCapture(), CHUNK_INTERVAL_MS)
 		void this.sendHeartbeat()
 	}
 
 	private stopMonitors(): void {
 		window.removeEventListener('online', this.onlineListener)
+		document.removeEventListener('visibilitychange', this.visibilityListener)
+		document.removeEventListener('resume', this.resumeListener)
 		window.clearInterval(this.heartbeatTimer)
 		window.clearInterval(this.storageTimer)
+		window.clearInterval(this.watchdogTimer)
+		window.clearTimeout(this.probeTimer)
+		window.clearTimeout(this.muteTimer)
+		this.probeTimer = 0
+		this.muteTimer = 0
+		this.cancelResume()
+	}
+
+	/* ---- the capture watchdog ------------------------------------------ */
+
+	private captureLooksAlive(): boolean {
+		return (
+			!this.state.captureInterrupted &&
+			Date.now() - this.lastChunkAt <= STALL_INTERVALS * CHUNK_INTERVAL_MS
+		)
+	}
+
+	private onVisibilityChange(): void {
+		this.visibilityEpoch += 1
+		if (document.visibilityState === 'hidden') {
+			this.hiddenSince = Date.now()
+			this.chunksWhileHidden = 0
+			return
+		}
+		if (this.hiddenSince) {
+			// the line that says, per phone model, whether it records with
+			// the screen off: chunks that arrived while nobody was looking
+			clientLog('info', 'capture_after_background', {
+				hiddenMs: Date.now() - this.hiddenSince,
+				chunksWhileHidden: this.chunksWhileHidden,
+				sinceLastChunkMs: Date.now() - this.lastChunkAt,
+				phase: this.state.phase,
+				interrupted: this.state.captureInterrupted,
+			})
+			this.hiddenSince = 0
+		}
+		if (this.state.captureInterrupted) {
+			// the phone is back in somebody's hand: ask for the mic now, not
+			// in five seconds
+			this.cancelResume()
+			void this.tryResume()
+			return
+		}
+		// a track still muted after the page came back gets a fresh grace
+		// period under the new epoch — the old timer's verdict was discarded
+		for (const track of this.stream?.getAudioTracks() ?? []) {
+			if (track.muted) this.onTrackMute(track)
+		}
+		this.checkCapture()
+	}
+
+	private checkCapture(): void {
+		if (this.state.phase !== 'recording' || this.state.captureInterrupted) return
+		// never a verdict while hidden: Android slows timers down and iOS
+		// freezes the page, so on return the gap is long even when the
+		// recorder is perfectly healthy (and delivering chunks throughout)
+		if (document.visibilityState !== 'visible' || this.probeTimer) return
+		if (this.captureLooksAlive()) return
+		this.probe()
+	}
+
+	/** Ask the recorder for whatever it has buffered. A healthy recorder that
+	 * has been quiet for 30 s answers with 20 s of audio; a dead one answers
+	 * with nothing, or throws because it is no longer 'recording'. */
+	private probe(): void {
+		const recorder = this.mediaRecorder
+		const epoch = this.visibilityEpoch
+		const seqBefore = this.seq
+		try {
+			if (!recorder || recorder.state !== 'recording') {
+				throw new Error(`recorder ${recorder?.state ?? 'missing'}`)
+			}
+			recorder.requestData()
+		} catch (error) {
+			void this.interruptCapture('capture_stalled', {
+				probe: 'request_failed',
+				error: String(error).slice(0, 120),
+			})
+			return
+		}
+		this.probeTimer = window.setTimeout(() => {
+			this.probeTimer = 0
+			// the page hid (or hid and came back) meanwhile: no verdict
+			if (this.visibilityEpoch !== epoch || document.visibilityState !== 'visible') return
+			if (this.state.phase !== 'recording' || this.state.captureInterrupted) return
+			if (this.seq > seqBefore) return
+			void this.interruptCapture('capture_stalled', { probe: 'no_data' })
+		}, PROBE_MS)
+	}
+
+	private onTrackMute(track: MediaStreamTrack): void {
+		if (!this.mutedSince) this.mutedSince = Date.now()
+		clientLog('warn', 'track_muted', { visible: document.visibilityState === 'visible' })
+		const epoch = this.visibilityEpoch
+		window.clearTimeout(this.muteTimer)
+		this.muteTimer = window.setTimeout(() => {
+			this.muteTimer = 0
+			// iOS mutes on hide and unmutes on return; a timer set while hidden
+			// fires the instant the page resumes, racing the unmute — so only
+			// a mute that persists on screen, in the same visibility period,
+			// counts as the microphone being gone
+			if (!track.muted || document.visibilityState !== 'visible') return
+			if (this.visibilityEpoch !== epoch) return
+			if (this.state.phase !== 'recording' || this.state.captureInterrupted) return
+			void this.interruptCapture('track_muted', { mutedMs: Date.now() - this.mutedSince })
+		}, MUTE_GRACE_MS)
+	}
+
+	private onTrackUnmute(): void {
+		window.clearTimeout(this.muteTimer)
+		this.muteTimer = 0
+		clientLog('info', 'track_unmuted', {
+			mutedMs: this.mutedSince ? Date.now() - this.mutedSince : 0,
+		})
+		this.mutedSince = 0
+	}
+
+	/** Capture is gone. Close the MediaRecorder session cleanly (its final
+	 * blob is the last chunk of this segment), keep everything, and start
+	 * asking for the microphone back. The round goes on; so does this
+	 * recording. */
+	private async interruptCapture(
+		cause: Exclude<CaptureLossCause, ''>,
+		details: Record<string, unknown> = {},
+	): Promise<void> {
+		if (this.state.phase !== 'recording' || this.state.captureInterrupted) return
+		if (this.abandoned || this.stopRequested) return
+		this.state.captureInterrupted = true
+		this.state.interruptedSince = Date.now()
+		this.state.micLostCause = cause
+		this.resumeAttempts = 0
+		window.clearTimeout(this.probeTimer)
+		window.clearTimeout(this.muteTimer)
+		this.probeTimer = 0
+		this.muteTimer = 0
+		const recorder = this.mediaRecorder
+		const stream = this.stream
+		this.mediaRecorder = null
+		this.stream = null
+		clientLog('error', 'capture_interrupted', {
+			cause,
+			segment: this.state.segment,
+			seq: this.seq,
+			sinceLastChunkMs: Date.now() - this.lastChunkAt,
+			recorderState: recorder?.state ?? 'missing',
+			tracks: (stream?.getAudioTracks() ?? []).map(
+				(track) => `${track.readyState}${track.muted ? '/muted' : ''}`,
+			),
+			visible: document.visibilityState === 'visible',
+			...details,
+		})
+		void ship()
+		await this.stopRecorder(recorder, stream)
+		if (this.abandoned || this.stopRequested || !this.state.captureInterrupted) return
+		void this.tryResume()
+	}
+
+	private async tryResume(): Promise<void> {
+		if (!this.state.captureInterrupted || this.abandoned || this.stopRequested) return
+		if (document.visibilityState === 'visible') {
+			if (this.resumeAttempts >= MAX_RESUME_ATTEMPTS) {
+				// the microphone is not coming back: finish with what there is
+				await this.abortForLostMicrophone(this.state.micLostCause || 'capture_stalled')
+				return
+			}
+			this.resumeAttempts += 1
+			try {
+				const stream = await navigator.mediaDevices.getUserMedia(MICROPHONE_CONSTRAINTS)
+				if (!this.state.captureInterrupted || this.abandoned || this.stopRequested) {
+					stream.getTracks().forEach((track) => track.stop())
+					return
+				}
+				const from = this.state.interruptedSince
+				const cause = this.state.micLostCause
+				this.state.segment += 1
+				this.attachRecorder(stream).start(CHUNK_INTERVAL_MS)
+				this.lastChunkAt = Date.now()
+				this.state.captureInterrupted = false
+				this.state.interruptedSince = 0
+				this.state.micLostCause = ''
+				this.state.interruptions.push({ from, to: Date.now(), cause })
+				clientLog('warn', 'capture_resumed', {
+					segment: this.state.segment,
+					interruptedMs: Date.now() - from,
+					attempts: this.resumeAttempts,
+					seq: this.seq,
+				})
+				void ship()
+				return
+			} catch (error) {
+				const named = error as { name?: string } | null
+				clientLog('warn', 'capture_resume_failed', {
+					attempt: this.resumeAttempts,
+					name: named?.name ?? '',
+					error: String(error).slice(0, 120),
+				})
+			}
+		}
+		this.resumeTimer = window.setTimeout(() => {
+			this.resumeTimer = 0
+			void this.tryResume()
+		}, RESUME_RETRY_MS)
+	}
+
+	private cancelResume(): void {
+		window.clearTimeout(this.resumeTimer)
+		this.resumeTimer = 0
+	}
+
+	/** Stop a MediaRecorder session and its tracks, waiting (bounded) for
+	 * the final dataavailable/stop pair. A recorder the OS killed under us
+	 * may never fire onstop; before the bound, finish() waited on it forever
+	 * and the screen sat in a button-less 'finishing' state. */
+	private async stopRecorder(recorder: MediaRecorder | null, stream: MediaStream | null): Promise<void> {
+		if (recorder) {
+			await new Promise<void>((resolve) => {
+				const timer = window.setTimeout(() => {
+					clientLog('warn', 'recorder_stop_timeout', { state: recorder.state })
+					resolve()
+				}, RECORDER_STOP_TIMEOUT_MS)
+				const done = () => {
+					window.clearTimeout(timer)
+					resolve()
+				}
+				recorder.onstop = done
+				recorder.onerror = null
+				try {
+					if (recorder.state === 'inactive') done()
+					else recorder.stop()
+				} catch {
+					// already inactive — the OS took the microphone
+					done()
+				}
+			})
+		}
+		for (const track of stream?.getTracks() ?? []) {
+			track.onended = null
+			track.onmute = null
+			track.onunmute = null
+			track.stop()
+		}
 	}
 
 	private async sendHeartbeat(): Promise<void> {
@@ -331,6 +665,10 @@ export class RecorderEngine {
 				// a backgrounded page can stop capturing on iOS with no error:
 				// the Live tab says "in background" rather than a healthy pill
 				visible: document.visibilityState === 'visible',
+				// …and "capture interrupted" when the recorder itself has gone
+				// quiet, which is the thing the organizer can act on
+				capture_ok: this.state.phase === 'recording' ? this.captureLooksAlive() : undefined,
+				screen_awake: wakeLockHeld.value === true,
 			})
 		} catch {
 			/* offline — heartbeats resume when the network does */
@@ -351,10 +689,11 @@ export class RecorderEngine {
 		}
 	}
 
-	private enqueueChunk(blob: Blob): void {
+	private enqueueChunk(blob: Blob, segment = 0): void {
 		const seq = this.seq
 		this.seq += 1
 		this.unsavedChunks.set(seq, blob)
+		this.unsavedSegments.set(seq, segment)
 		this.chunkPipeline = this.chunkPipeline
 			.then(async () => {
 				const sha256 = blob.size > 5 * 1024 * 1024
@@ -363,6 +702,7 @@ export class RecorderEngine {
 					key: `${this.state.recordingId}:${seq}`,
 					recordingId: this.state.recordingId,
 					seq,
+					segment,
 					blob,
 					sha256,
 					sizeBytes: blob.size,
@@ -372,7 +712,8 @@ export class RecorderEngine {
 				})
 				this.state.localChunks += 1
 				this.unsavedChunks.delete(seq)
-				clientLog('info', 'chunk_saved_local', { seq, bytes: blob.size })
+				this.unsavedSegments.delete(seq)
+				clientLog('info', 'chunk_saved_local', { seq, bytes: blob.size, segment })
 				this.kickUploader()
 			})
 			.catch((error) => {
@@ -477,6 +818,7 @@ export class RecorderEngine {
 	stop(): void {
 		if (this.abandoned) return
 		this.abandoned = true
+		this.state.captureInterrupted = false
 		// stop late chunk/track events from re-entering
 		if (this.mediaRecorder) {
 			// stop() emits one final blob. Persist it even when this screen left.
@@ -489,6 +831,8 @@ export class RecorderEngine {
 		}
 		for (const track of this.stream?.getTracks() ?? []) {
 			track.onended = null
+			track.onmute = null
+			track.onunmute = null
 			track.stop()
 		}
 		this.stream = null
@@ -498,23 +842,23 @@ export class RecorderEngine {
 	}
 
 	async finish(): Promise<void> {
-		if (!this.mediaRecorder || this.stopRequested || this.abandoned) return
+		if (this.stopRequested || this.abandoned) return
+		// never started — but a recording bridging an interruption has no
+		// recorder either, and must still be able to finish with what it has
+		if (!this.mediaRecorder && !this.state.captureInterrupted) return
 		this.stopRequested = true
 		this.state.phase = 'finishing'
-		clientLog('info', 'finish_requested')
-
-		await new Promise<void>((resolve) => {
-			this.mediaRecorder!.onstop = () => resolve()
-			try {
-				this.mediaRecorder!.stop()
-			} catch {
-				// already inactive — the OS took the microphone. stopRequested
-				// is latched by now, so throwing here wedged the screen in a
-				// button-less 'finishing' state; what was captured still syncs.
-				resolve()
-			}
+		clientLog('info', 'finish_requested', {
+			interrupted: this.state.captureInterrupted,
+			segment: this.state.segment,
 		})
-		this.stream?.getTracks().forEach((track) => track.stop())
+		this.cancelResume()
+		this.state.captureInterrupted = false
+		const recorder = this.mediaRecorder
+		const stream = this.stream
+		this.mediaRecorder = null
+		this.stream = null
+		await this.stopRecorder(recorder, stream)
 
 		// wait until the final dataavailable chunk is persisted
 		await this.chunkPipeline
@@ -564,11 +908,15 @@ export class RecorderEngine {
 		this.kickUploader()
 	}
 
-	/** The microphone died under us: salvage what was captured, loudly. */
-	private async abortForLostMicrophone(cause: string): Promise<void> {
+	/** The microphone died under us and is not coming back: salvage what was
+	 * captured, loudly. */
+	private async abortForLostMicrophone(cause: Exclude<CaptureLossCause, ''>): Promise<void> {
 		if (this.state.phase !== 'recording' || this.state.micLost) return
 		this.state.micLost = true
-		clientLog('error', 'microphone_lost', { cause, recordingId: this.state.recordingId })
+		this.state.micLostCause = cause
+		clientLog('error', 'microphone_lost', {
+			cause, recordingId: this.state.recordingId, segment: this.state.segment,
+		})
 		try {
 			await this.finish()
 		} catch (error) {

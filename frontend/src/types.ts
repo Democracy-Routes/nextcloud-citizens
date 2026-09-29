@@ -171,6 +171,13 @@ export interface DeviceStatus {
 	/** whether the recorder page is in the foreground; absent from older
 	 * recorder builds */
 	visible?: boolean
+	/** while recording: whether audio is actually arriving from the
+	 * microphone (false = the recorder went quiet and the phone is bridging
+	 * an interruption); absent when not recording or from older builds */
+	capture_ok?: boolean
+	/** whether the phone holds a screen wake lock; false means the screen may
+	 * switch off by itself (no API, refused, or released) */
+	screen_awake?: boolean
 }
 
 export interface MonitorTable {
