@@ -32,9 +32,12 @@ docker inspect "$CONTAINER" --format 'health={{if .State.Health}}{{.State.Health
 echo "(reload=YES means the DEV container is running, not the frozen one; a memory_cap of 0 means no limit — AppAPI-managed containers need 'docker update --memory 2g --memory-swap 2g $CONTAINER')"
 # The database connection pool, from the app itself. "slow_waits" counts
 # checkouts that waited over a second for a connection — the number that was
-# invisible while five phones exhausted a 15-connection pool. Best effort: a
-# HaRP-managed container listens on a socket, not a port, and prints nothing.
-docker exec "$CONTAINER" sh -c 'curl -sf "http://127.0.0.1:${APP_PORT:-23000}/api/v1/health"' 2>/dev/null \
+# invisible while five phones exhausted a 15-connection pool. The health
+# route sits behind AppAPI's authentication like every other, so the call
+# signs itself with the container's own secret (read, never printed). Best
+# effort: a HaRP-managed container listens on a socket, not a port, and the
+# line then says so.
+docker exec "$CONTAINER" sh -c 'auth=$(printf "status:%s" "$APP_SECRET" | base64 -w0); curl -sf -H "EX-APP-ID: $APP_ID" -H "EX-APP-VERSION: $APP_VERSION" -H "AUTHORIZATION-APP-API: $auth" "http://127.0.0.1:${APP_PORT:-23000}/api/v1/health"' 2>/dev/null \
   | python3 -c 'import json,sys; p=json.load(sys.stdin).get("pool") or {}; print("db pool: in_use=%s/%s  max_wait_ms=%s  slow_waits=%s" % (p.get("in_use"), p.get("capacity"), p.get("max_wait_ms"), p.get("slow_waits")))' 2>/dev/null \
   || echo "db pool: (health endpoint not reachable from the host)"
 echo
