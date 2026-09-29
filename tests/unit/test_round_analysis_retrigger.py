@@ -24,7 +24,7 @@ from citizens.db.session import session_scope
 from citizens.jobs import handlers
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.services import round_analysis
-from citizens.services.jobs import LIVE_JOB_STATES, enqueue_job
+from citizens.services.jobs import enqueue_job
 
 
 def _seed(session, owner="tester"):
@@ -156,8 +156,13 @@ def test_the_handler_stamps_what_it_read_and_records_what_it_applied(seeded, mon
 # ---------------------------------------------- through the real review routes
 
 
-def _live(session, round_id):
-    return _round_jobs(session, round_id, states=LIVE_JOB_STATES)
+def _reclusters(session, round_id):
+    """Every ANALYZE_ROUND job the route enqueued for the round, whatever
+    state it is in by now: the app's own job runner is live under the test
+    client and can claim and finish a job in the milliseconds between the
+    request and this query, so counting only live states raced it (once,
+    in CI, to "rejecting never re-clustered" with the job already run)."""
+    return _round_jobs(session, round_id)
 
 
 def test_rejecting_a_finding_reclusters(client):
@@ -166,7 +171,7 @@ def test_rejecting_a_finding_reclusters(client):
     response = client.put(f"/api/v1/findings/{ids['finding']}", json={"status": "REJECTED"})
     assert response.status_code == 200, response.text
     with session_scope() as session:
-        assert len(_live(session, ids["round"])) == 1, "rejecting never re-clustered"
+        assert len(_reclusters(session, ids["round"])) == 1, "rejecting never re-clustered"
         assert _revisions(session, ids["round"])[0] == 1
 
 
@@ -178,7 +183,7 @@ def test_editing_a_finding_reclusters(client):
     )
     assert response.status_code == 200, response.text
     with session_scope() as session:
-        assert len(_live(session, ids["round"])) == 1
+        assert len(_reclusters(session, ids["round"])) == 1
 
 
 def test_approving_alone_does_not_recluster(client):
@@ -189,7 +194,7 @@ def test_approving_alone_does_not_recluster(client):
     assert client.put(f"/api/v1/findings/{ids['finding']}", json={"status": "APPROVED"}).status_code == 200
     assert client.post(f"/api/v1/rounds/{ids['round']}/findings/approve", json={}).status_code == 200
     with session_scope() as session:
-        assert _live(session, ids["round"]) == []
+        assert _reclusters(session, ids["round"]) == []
         assert _revisions(session, ids["round"]) == (0, 0)
 
 
@@ -317,7 +322,7 @@ def test_recluster_waits_for_pending_tables_then_queues_exactly_once(client, ana
     second = client.post(f"/api/v1/rounds/{ids['round']}/recluster")
     assert second.status_code == 202 and second.json() == {"queued": False}
     with session_scope() as session:
-        assert len(_live(session, ids["round"])) == 1
+        assert len(_reclusters(session, ids["round"])) == 1
 
 
 def test_files_listing_and_live_tab_carry_the_job_behind_a_failed_table(client):
