@@ -558,21 +558,64 @@ def source_recordings(container: str, pattern: str) -> list[Source]:
     return chosen
 
 
-def uniform_loop(sources: list[Source], container: str, workdir: pathlib.Path,
-                 copies: int) -> tuple[pathlib.Path, float]:
-    """One long stream out of several recordings, re-encoded to one format.
+def mean_volume_db(path: pathlib.Path) -> float:
+    """Average level of a file, as ffmpeg's volumedetect reports it.
 
-    The sources run from 75 to 130 kbps, so the concat demuxer cannot copy them
-    together; each is re-encoded once at a speech bitrate. The result is the
-    material every table's window is cut from, cached in the workdir because
-    re-encoding three hours of audio is a minute of CPU nobody needs twice.
+    Digital silence comes back around -91 dB, ordinary recorded speech between
+    -40 and -25. The number is what tells a dead recording from a quiet one.
     """
-    loop = workdir / f"loop-{copies}.webm"
-    if loop.exists():
-        return loop, ffprobe_seconds(loop)
-    parts: list[pathlib.Path] = []
+    out = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", str(path), "-af", "volumedetect",
+         "-f", "null", os.devnull],
+        capture_output=True, text=True, timeout=1800,
+    )
+    match = re.search(r"mean_volume:\s*(-?[\d.]+) dB", out.stderr)
+    return float(match.group(1)) if match else -999.0
+
+
+@dataclass
+class Part:
+    """One source, re-encoded to the common format the loop is built from."""
+    path: pathlib.Path
+    seconds: float
+    mean_db: float
+    assembly: str
+
+
+#: below this a recording holds no speech at all. One of our own test
+#: recordings is exactly this: six minutes at -91 dB, which became a table's
+#: whole window in the eight-minute run and produced no captions and no
+#: transcript. A load test must not ship silence and call it audio.
+SILENCE_FLOOR_DB = -60.0
+
+
+def part_name(workdir: pathlib.Path, source: str, bitrate: str, normalised: bool) -> pathlib.Path:
+    """Fingerprint of (source, bitrate, normalisation) — same discipline as
+    cut_name, for the same reason: a cached file from a run with different
+    settings must never be mistaken for this run's."""
+    key = f"{source}|{bitrate}|{'norm' if normalised else 'raw'}"
+    return workdir / f"part-{hashlib.sha256(key.encode()).hexdigest()[:12]}.webm"
+
+
+def drop_silent(parts: list[Part], floor_db: float = SILENCE_FLOOR_DB) -> tuple[list[Part], list[Part]]:
+    """(kept, dropped). Pure, so the rule is testable without any audio."""
+    kept = [part for part in parts if part.mean_db > floor_db]
+    return kept, [part for part in parts if part.mean_db <= floor_db]
+
+
+def prepare_parts(sources: list[Source], container: str,
+                  workdir: pathlib.Path) -> tuple[list[Part], list[Part]]:
+    """Every source, re-encoded to one format and levelled, silence discarded.
+
+    Re-encoding is not optional: the sources run from 75 to 130 kbps and the
+    concat demuxer cannot copy those together. Levelling is not either — twelve
+    decibels between sources meant a table receiving speech at the edge of
+    audibility, which is a confound on one of the things this test measures
+    (how many tables get live captions). EBU R128 at -20 LUFS, one pass.
+    """
+    parts: list[Part] = []
     for index, source in enumerate(sources):
-        part = workdir / f"source-{index}.webm"
+        part = part_name(workdir, source.path, AUDIO_BITRATE, normalised=True)
         if not part.exists():
             copied = workdir / f"raw-{index}.webm"
             if not copied.exists():
@@ -580,21 +623,43 @@ def uniform_loop(sources: list[Source], container: str, workdir: pathlib.Path,
                                check=True, capture_output=True, timeout=600)
             subprocess.run(
                 ["ffmpeg", "-v", "error", "-y", "-i", str(copied),
+                 "-af", "loudnorm=I=-20:TP=-2:LRA=11",
                  "-c:a", "libopus", "-b:a", AUDIO_BITRATE, "-ac", "1", "-ar", "48000",
                  str(part)],
-                check=True, capture_output=True, timeout=1800,
+                check=True, capture_output=True, timeout=3600,
             )
             copied.unlink(missing_ok=True)
-        parts.append(part)
-    listing = workdir / f"loop-{copies}.txt"
-    listing.write_text("".join(f"file '{part}'\n" for part in parts * copies))
+        # Measuring means decoding the whole file, so the answer is cached
+        # beside it: without this, every run spent minutes re-measuring three
+        # hours of audio it had already measured, with the operators waiting.
+        receipt = part.with_suffix(".json")
+        try:
+            measured = json.loads(receipt.read_text())
+        except (OSError, ValueError):
+            measured = {"seconds": ffprobe_seconds(part), "mean_db": mean_volume_db(part)}
+            receipt.write_text(json.dumps(measured))
+        parts.append(Part(part, float(measured["seconds"]), float(measured["mean_db"]),
+                          source.assembly))
+    return drop_silent(parts)
+
+
+def concat_loop(parts: list[Part], workdir: pathlib.Path,
+                copies: int) -> tuple[pathlib.Path, float]:
+    """The material every window is cut from: the parts, end to end, `copies`
+    times over. Cached, because concatenating hours of audio is not free."""
+    key = "|".join(str(part.path) for part in parts) + f"|{copies}"
+    loop = workdir / f"loop-{hashlib.sha256(key.encode()).hexdigest()[:12]}.webm"
+    if loop.exists():
+        return loop, ffprobe_seconds(loop)
+    listing = loop.with_suffix(".txt")
+    listing.write_text("".join(f"file '{part.path}'\n" for part in parts * copies))
     subprocess.run(
         ["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0",
          "-i", str(listing), "-c", "copy", str(loop)],
-        check=True, capture_output=True, timeout=1800,
+        check=True, capture_output=True, timeout=3600,
     )
     seconds = ffprobe_seconds(loop)
-    expected = sum(ffprobe_seconds(part) for part in parts) * copies
+    expected = sum(part.seconds for part in parts) * copies
     if abs(seconds - expected) > max(2.0, expected * 0.01):
         raise SystemExit(
             f"the concatenation lost audio: {seconds:.0f}s against {expected:.0f}s expected"
@@ -1564,14 +1629,22 @@ def prepare_audio(args, tables: list[Table], workdir: pathlib.Path) -> str:
             f"Use --tone, or --audio-pattern to widen it — but never point it at "
             f"real citizens' assemblies."
         )
-    total = sum(source.seconds for source in sources)
-    say(f"  {len(sources)} test recordings, {total / 60:.0f} min of speech:")
-    for source in sources:
-        say(f"    {source.seconds / 60:5.1f} min  {source.assembly}")
+    say(f"  {len(sources)} candidate recordings; levelling them (one pass, cached)…")
+    parts, silent = prepare_parts(sources, args.container, workdir)
+    for part in parts:
+        say(f"    {part.seconds / 60:5.1f} min  {part.mean_db:6.1f} dB  {part.assembly}")
+    for part in silent:
+        say(f"    {part.seconds / 60:5.1f} min  {part.mean_db:6.1f} dB  {part.assembly}"
+            f"   DROPPED: no audible speech")
+    if not parts:
+        raise SystemExit("every candidate recording is silent")
+    total = sum(part.seconds for part in parts)
+    # the window plan has to see the minutes that SURVIVED the drop, or a
+    # discarded recording's minutes end up in somebody's window as silence
     copies, stride = window_plan(total, len(tables), args.minutes)
-    loop, loop_seconds = uniform_loop(sources, args.container, workdir, copies)
-    say(f"  material: {loop_seconds / 60:.0f} min ({copies} copy/copies), "
-        f"windows {stride / 60:.1f} min apart")
+    loop, loop_seconds = concat_loop(parts, workdir, copies)
+    say(f"  material: {loop_seconds / 60:.0f} min ({copies} copy/copies of "
+        f"{total / 60:.0f} min), windows {stride / 60:.1f} min apart")
     for index, (table, plan) in enumerate(zip(tables, plans, strict=True)):
         offset = index * stride
         table.plan = plan
@@ -1597,9 +1670,10 @@ def prepare_audio(args, tables: list[Table], workdir: pathlib.Path) -> str:
                 f"{args.minutes:g}-minute round: {short_by:.0f}s missing. Clear "
                 f"{workdir} and try again."
             )
-    note = f"real Italian speech, {copies} copy/copies of {total / 60:.0f} min"
-    if copies > 1:
-        note += f" (tables {len(tables) // copies} apart hear the same conversation)"
+    note = (f"real Italian speech, levelled to -20 LUFS, {copies} copy/copies of "
+            f"{total / 60:.0f} min from {len(parts)} recording(s)")
+    if silent:
+        note += f"; {len(silent)} silent recording(s) discarded"
     return note
 
 
@@ -1642,15 +1716,26 @@ def main() -> int:
     parser.add_argument("--repo", default=str(pathlib.Path(__file__).resolve().parents[2]))
     parser.add_argument("--workdir", default="/tmp/citizens-load-i")
     parser.add_argument("--plan-only", action="store_true", help="arithmetic, then stop")
+    parser.add_argument("--prepare-audio-only", action="store_true",
+                        help="level, concatenate and cut the audio, then stop — the slow "
+                             "part, done while the operators set their assembly up. The "
+                             "cuts are named by content, so the real run finds them cached.")
     parser.add_argument("--no-ip-lookup", action="store_true")
     parser.add_argument("--yes", action="store_true", help="required over 10 minutes")
     args = parser.parse_args()
 
     if args.before_run:
+        # What this mode is for: measuring a build that predates the fix, on
+        # purpose. It does NOT shorten the run — it used to cap it at eight
+        # minutes, which would have turned a deliberate forty-minute
+        # measurement into an eight-minute one without saying so, and a flag
+        # that quietly changes what you asked for is how the first run on
+        # somebody else's server ended up carrying 40% of its audio.
         args.allow_old_version = True
         args.interrupt = 0
-        args.minutes = min(args.minutes, 8.0)
         args.abort_server_errors = min(args.abort_server_errors, 8)
+        say("--before-run: old build allowed, interruptions off (the old build "
+            f"ignores segments), stopping after {args.abort_server_errors} server errors")
     if args.allow_old_version and args.interrupt:
         raise SystemExit(
             "a build older than 0.6.2 ignores X-Chunk-Segment, so an interrupted table's "
@@ -1684,6 +1769,18 @@ def main() -> int:
 
     workdir = pathlib.Path(args.workdir)
     workdir.mkdir(parents=True, exist_ok=True)
+
+    if args.prepare_audio_only:
+        # No links, no server, no joins: the windows depend on (tables, minutes,
+        # interruptions) and the files are named by content, so this is exactly
+        # what the real run will look for.
+        placeholder = Link(base="https://example.invalid/citizens", token="x" * 32)
+        say("preparing audio only — no server is contacted\n")
+        note = prepare_audio(args, [Table(link=placeholder, number=index + 1)
+                                    for index in range(args.tables)], workdir)
+        say(f"\nready: {note}\n  cached in {workdir}")
+        return 0
+
     metrics = Metrics()
     breaker = Breaker(args.abort_server_errors, consecutive_slow=5, slow_seconds=30.0)
     stop = threading.Event()

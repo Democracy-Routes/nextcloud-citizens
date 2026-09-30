@@ -214,6 +214,57 @@ def test_byte_slices_cover_the_file_exactly_and_none_is_empty(tmp_path):
         data[pieces[3].offset:pieces[3].offset + pieces[3].length]).hexdigest()
 
 
+def test_a_recording_with_no_audible_speech_is_discarded():
+    """One of our own test recordings is six minutes of digital silence. It
+    became a whole table's window in the eight-minute run on eumans: zero
+    captions, an empty transcript, and a table that measured nothing."""
+    parts = [
+        load_i.Part(pathlib.Path("a"), 2400.0, -35.0, "testCASA"),
+        load_i.Part(pathlib.Path("b"), 360.0, -91.0, "testSimoMistral"),
+        load_i.Part(pathlib.Path("c"), 1800.0, -27.0, "politest"),
+        load_i.Part(pathlib.Path("d"), 600.0, -59.9, "edge"),  # just audible
+    ]
+
+    kept, dropped = load_i.drop_silent(parts)
+
+    assert [part.assembly for part in kept] == ["testCASA", "politest", "edge"]
+    assert [part.assembly for part in dropped] == ["testSimoMistral"]
+
+
+def test_a_measurement_is_kept_beside_the_file_it_measured(tmp_path):
+    """Measuring a part means decoding it. Three hours of audio re-measured on
+    every run is minutes of the operators of somebody else's server waiting for
+    us, which is what happened on the forty-minute run."""
+    part = load_i.part_name(tmp_path, "/data/x.webm", "48k", normalised=True)
+
+    assert part.with_suffix(".json") != part
+    assert part.with_suffix(".json").suffix == ".json"
+
+
+def test_a_levelled_part_is_not_confused_with_an_unlevelled_one(tmp_path):
+    """The cache trap again: reusing the files from before levelling would
+    quietly undo it."""
+    levelled = load_i.part_name(tmp_path, "/data/x.webm", "48k", normalised=True)
+    raw = load_i.part_name(tmp_path, "/data/x.webm", "48k", normalised=False)
+    louder = load_i.part_name(tmp_path, "/data/x.webm", "96k", normalised=True)
+    other = load_i.part_name(tmp_path, "/data/y.webm", "48k", normalised=True)
+
+    assert len({levelled, raw, louder, other}) == 4
+    assert levelled == load_i.part_name(tmp_path, "/data/x.webm", "48k", normalised=True)
+
+
+def test_forty_minutes_on_ten_tables_needs_three_copies_and_stays_distinct():
+    """180 minutes of kept material, the real number after the silent
+    recording goes: every table still starts somewhere different, even read
+    modulo the length of the material."""
+    copies, stride = load_i.window_plan(180 * 60, tables=10, minutes=40)
+
+    assert copies == 3
+    starts = [round((index * stride) % (180 * 60)) for index in range(10)]
+    assert len(set(starts)) == 10
+    assert 9 * stride + 40 * 60 <= 180 * 60 * copies + 1
+
+
 def test_a_cut_is_named_after_the_window_it_holds(tmp_path):
     """The bug this prevents cost a real run against another organisation's
     server: cuts named `table-3-seg0.webm` were reused by a later run that
@@ -260,6 +311,19 @@ def test_the_manifest_we_expect_is_the_one_the_server_builds():
 def test_the_version_gate_knows_which_builds_understand_segments(declared, accepted):
     numbers = load_i.version_tuple(declared)
     assert (numbers is not None and numbers >= load_i.SEGMENT_VERSION) is accepted
+
+
+def test_the_before_run_mode_never_shortens_what_was_asked_for():
+    """It capped the run at eight minutes, so a deliberate forty-minute
+    measurement on an old build would have quietly become an eight-minute one.
+    A flag that changes what you asked for without saying is the same class of
+    bug as the cuts that were reused at 40% of their length."""
+    source = (ROOT / "tests" / "load" / "load_i_remote_tables.py").read_text()
+    before_run = source.split("if args.before_run:")[1].split("if args.allow_old_version")[0]
+
+    assert "args.interrupt = 0" in before_run
+    assert "args.allow_old_version = True" in before_run
+    assert "args.minutes" not in before_run, "--before-run must not touch the duration"
 
 
 # ------------------------------------------------------------------- failures
