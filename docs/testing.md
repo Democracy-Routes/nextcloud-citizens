@@ -115,7 +115,7 @@ Test F (10 concurrent devices):
 
 ```bash
 sh scripts/browser-test-env.sh start
-python3 tests/load/test_f_concurrent_devices.py   # prints PASS/FAIL
+python3 tests/load/load_f_concurrent_devices.py   # prints PASS/FAIL
 sh scripts/browser-test-env.sh stop
 ```
 
@@ -162,3 +162,46 @@ CI must never depend on paid APIs.
   AppAPI signature validation; auth logic itself gets dedicated tests.
 - Every reliability feature (retry, dedupe, recovery) lands together with a
   test that exercises its failure mode.
+
+Test I (ten tables on somebody else's instance, from the QR links alone):
+
+```bash
+python3 tests/load/load_i_remote_tables.py --plan-only --minutes 8      # arithmetic
+python3 tests/load/load_i_remote_tables.py --seed-local --minutes 3 --interrupt 2
+python3 tests/load/load_i_remote_tables.py --links-pdf sheet.pdf --minutes 8
+```
+
+The only load test that needs no access to the server it measures. Tests F, G
+and H all discover the container with `docker inspect`, sign their requests
+with the ExApp secret and drive the round through the organizer API; none of
+that exists when the instance belongs to another organisation — which is
+exactly when a ten-table rehearsal matters, because their proxy, their PHP
+workers and their speech-to-text account are the parts we have never
+exercised. A QR link carries the API base and a session token, and a phone
+needs nothing else, so this replays real speech through the public routes:
+ten-second chunks on an absolute schedule, heartbeats, the 8-second status
+poll, caption polls, the device log, and `--interrupt N` tables that stop
+mid-round and resume in the same recording as a second segment.
+
+What it proves from outside, with no log access: every table reached
+AUDIO_READY and beyond, the server's `audio_manifest_sha256` equals the one
+computed from the bytes we sent (byte-for-byte, not "about the right length"),
+and an interrupted table's assembled duration is the round minus the gap —
+which is the only external proof that 0.6.2 joined the segments rather than
+splicing two container headers together.
+
+It cannot press "Start round": the AppAPI proxy authenticates non-public
+routes with a Nextcloud session cookie. So it waits, printing a banner, until
+the round goes ACTIVE.
+
+Rails, because the target is production and not ours: it refuses a build older
+than 0.6.2 (whose status poll exhausts the connection pool at ten tables)
+unless `--before-run` says the collapse is the measurement; it refuses an
+assembly whose name does not look like a test; it joins sequentially and never
+retries a 4xx, because the public route reports 401/403/429 to Nextcloud's
+brute-force protection against *our* address; and a breaker stops the whole
+run once the server starts failing, instead of holding somebody's instance
+down for the remaining minutes. Audio comes from our own test recordings,
+chosen by assembly name — never by duration, which would pick up real
+citizens' assemblies. See [remote-load-test.md](remote-load-test.md) for what
+the other side has to do.

@@ -114,6 +114,10 @@ The same list, sequenced for a real day with hosted speech-to-text:
 2. Check the actual Nextcloud/proxy path permits the new part/status/finalize
    routes and binary bodies of at least 1 MiB. Check storage supports file and
    directory fsync. SQLite now uses `synchronous=FULL` for durable receipts.
+   On an instance you do not administer, `tests/load/load_i_remote_tables.py`
+   checks all of that from the QR links alone, and
+   [remote-load-test.md](remote-load-test.md) is the page to send its
+   operators.
 3. Run a rehearsal over the venue's HTTPS connection on the actual Android and
    iPhone devices: capture, disconnect Wi-Fi, reconnect, finish, play the server
    export, then test reload recovery and a fresh QR after session expiry.

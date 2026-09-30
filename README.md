@@ -103,6 +103,8 @@ Full note: [docs/privacy.md](docs/privacy.md).
 * [Privacy & data handling](docs/privacy.md)
 * [Running one assembly, rehearsed](docs/event-checklist.md) — the day-of runbook
 * [Architecture](docs/architecture.md) — how the pipeline works
+* [A ten-table rehearsal on your Nextcloud](docs/remote-load-test.md) — for the
+  operators of an instance somebody is load-testing from outside
 * [Development environment](docs/development-environment.md) — run it locally
 * [Testing](docs/testing.md)
 * [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md)

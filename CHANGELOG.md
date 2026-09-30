@@ -2,6 +2,29 @@
 
 All notable changes to Nextcloud Citizens.
 
+## Unreleased
+
+- **A ten-table rehearsal can be run against an instance we do not
+  administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from
+  a file or straight out of the printed sheet, which puts each address in text
+  under its code — and drives ten virtual phones through the public recorder
+  API alone: ten-second chunks on an absolute schedule, heartbeats, the
+  eight-second status poll, caption polls, the device log, and `--interrupt N`
+  tables that stop mid-round and resume in the same recording as a second
+  segment. It verifies from outside what only a server can confirm: that the
+  `audio_manifest_sha256` it publishes equals the one computed from the bytes
+  we sent, and that an interrupted table's assembled audio is the round minus
+  the gap. Tests F, G and H all need this machine's docker and the ExApp
+  secret; this one needs neither, which is the point — the proxy, the PHP
+  workers and the speech-to-text account that break at ten tables belong to
+  whoever runs the instance. It refuses a build older than 0.6.2, refuses an
+  assembly that does not look like a test, joins sequentially and never
+  retries a 4xx (the public route reports those to Nextcloud's brute-force
+  protection against the caller), and stops the whole run once the server
+  starts failing rather than holding somebody's instance down. Audio comes
+  from our own test recordings, chosen by assembly name and never by duration.
+  Operators' side: `docs/remote-load-test.md`.
+
 ## 0.6.2 — 2026-09-29
 
 Two things found on the same day: phones whose screens went dark while
