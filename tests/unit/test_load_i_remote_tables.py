@@ -214,6 +214,21 @@ def test_byte_slices_cover_the_file_exactly_and_none_is_empty(tmp_path):
         data[pieces[3].offset:pieces[3].offset + pieces[3].length]).hexdigest()
 
 
+def test_a_cut_is_named_after_the_window_it_holds(tmp_path):
+    """The bug this prevents cost a real run against another organisation's
+    server: cuts named `table-3-seg0.webm` were reused by a later run that
+    wanted a different length, which sent the right number of chunks at the
+    right cadence carrying 40% of the audio."""
+    loop = tmp_path / "loop.webm"
+    eight = load_i.cut_name(tmp_path, loop, 0.0, 480.0)
+    three = load_i.cut_name(tmp_path, loop, 0.0, 180.0)
+    later = load_i.cut_name(tmp_path, loop, 1186.0, 480.0)
+    other = load_i.cut_name(tmp_path, tmp_path / "other.webm", 0.0, 480.0)
+
+    assert len({eight, three, later, other}) == 4
+    assert eight == load_i.cut_name(tmp_path, loop, 0.0, 480.0), "same window, same file"
+
+
 def test_the_manifest_we_expect_is_the_one_the_server_builds():
     """Two independent implementations of the same receipt.
 

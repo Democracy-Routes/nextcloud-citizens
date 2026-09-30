@@ -603,7 +603,7 @@ def uniform_loop(sources: list[Source], container: str, workdir: pathlib.Path,
 
 
 def tone_file(workdir: pathlib.Path, seconds: float, index: int) -> pathlib.Path:
-    path = workdir / f"tone-{index}-{int(seconds)}.webm"
+    path = cut_name(workdir, pathlib.Path(f"tone-{index}"), 0.0, seconds)
     if not path.exists():
         subprocess.run(
             ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
@@ -612,6 +612,20 @@ def tone_file(workdir: pathlib.Path, seconds: float, index: int) -> pathlib.Path
             check=True, capture_output=True, timeout=600,
         )
     return path
+
+
+def cut_name(workdir: pathlib.Path, source: pathlib.Path, offset: float,
+             seconds: float) -> pathlib.Path:
+    """A filename that is the window it holds.
+
+    Naming these `table-3-seg0.webm` cost a real run: a three-minute validation
+    left its cuts in the workdir, and an eight-minute run against another
+    server reused them — the right number of chunks at the right cadence, with
+    40% of the audio. The name is a fingerprint of (material, offset, length)
+    now, so a different window can only ever be a different file.
+    """
+    key = f"{source}|{offset:.3f}|{seconds:.3f}"
+    return workdir / f"cut-{hashlib.sha256(key.encode()).hexdigest()[:12]}.webm"
 
 
 def cut_window(loop: pathlib.Path, offset: float, seconds: float,
@@ -1565,14 +1579,24 @@ def prepare_audio(args, tables: list[Table], workdir: pathlib.Path) -> str:
         table.pieces = []
         for segment, seconds in enumerate(plan.segment_seconds):
             begin = offset + (0.0 if segment == 0 else plan.interrupt_at + plan.gap)
-            out = workdir / f"table-{table.number}-seg{segment}.webm"
-            path, measured = cut_window(loop, begin, seconds, out)
+            path, measured = cut_window(loop, begin, seconds,
+                                        cut_name(workdir, loop, begin, seconds))
             table.cuts.append((path, measured))
             table.pieces.append(slice_pieces(path, plan.pieces_in(segment)))
         megabytes = sum(piece.length for pieces in table.pieces for piece in pieces) / 1e6
         say(f"    table {table.number:>3}: {len(plan.specs):>3} chunks, "
             f"{megabytes:5.1f} MB, {plan.segments} segment(s), "
             f"{table.expected_seconds:.0f}s of audio")
+        short_by = args.minutes * 60 - plan.gap - table.expected_seconds
+        if short_by > 15:
+            # the cut came back far shorter than the round: stale audio, or a
+            # window that ran off the end of the material. Either way the run
+            # would measure the right request rate over the wrong bytes.
+            raise SystemExit(
+                f"table {table.number}'s audio is {table.expected_seconds:.0f}s for a "
+                f"{args.minutes:g}-minute round: {short_by:.0f}s missing. Clear "
+                f"{workdir} and try again."
+            )
     note = f"real Italian speech, {copies} copy/copies of {total / 60:.0f} min"
     if copies > 1:
         note += f" (tables {len(tables) // copies} apart hear the same conversation)"
