@@ -2,7 +2,16 @@
 
 All notable changes to Nextcloud Citizens.
 
-## Unreleased
+## 0.7.0-alpha.1 — in development
+
+Citizens 0.7 starts here, on the `feature/0.7` branch. `main` immediately
+before this work is tagged `pre-0.7-baseline`; 0.6.2 stays the published
+release and its image is not touched. The direction: a Session is the atomic
+unit and an Assembly an optional container around several of them; a Table
+has one or more Recorder phones with one live-caption source; new phones join
+through QR codes whose meaning the already-authorized phone chose. The
+recorder engine, storage, ownership, retention and export paths are extended,
+not rewritten.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from
