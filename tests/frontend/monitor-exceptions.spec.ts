@@ -82,8 +82,8 @@ describe('the exception-first Live tab', () => {
 		expect(wrapper.text()).toContain('phone not answering')
 		expect(wrapper.text()).toContain('battery low — ask the table for a backup phone')
 		expect(wrapper.find('.cz-reasons__blocker').exists()).toBe(true)
-		// the fix sits in the row: Replace device for the silent phone
-		expect(wrapper.findAll('button').some((b) => b.text().includes('Replace device'))).toBe(true)
+		// the fix sits in the row: hand the table over for the silent phone
+		expect(wrapper.findAll('button').some((b) => b.text().includes('Hand over table'))).toBe(true)
 
 		// the folded tables can be shown on demand
 		await wrapper.find('.cz-quietrow button').trigger('click')

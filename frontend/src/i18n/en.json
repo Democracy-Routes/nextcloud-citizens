@@ -48,7 +48,7 @@
 			"blockedBody": "Session {position} is open, but this phone could not start its microphone. Check that no other app is using it, and that the browser is allowed to record.",
 			"serverTitle": "This table cannot start recording",
 			"serverRetry": "Try again",
-			"serverHelp": "Ask the facilitator — they can hand this table to another phone from the Live tab."
+			"serverHelp": "Ask the facilitator — they can hand this table over to another phone from the Live tab."
 		},
 		"uploaded": {
 			"title": "Recording uploaded",
@@ -83,7 +83,7 @@
 			"noRounds": "There are no sessions yet.",
 			"roundSummary": "Session {position} — your table's AI summary",
 			"analyzing": "Analyzing your discussion…",
-			"recordingElsewhere": "This table is already recording on another phone. If that phone has stopped working, ask the facilitator to hand the table to this one.",
+			"recordingElsewhere": "Another phone is recording this table. If that phone has stopped, the facilitator can hand the table over to this one from the Live tab.",
 			"title": "Microphone test",
 			"recordTest": "Record 5-second test",
 			"recordingTest": "Recording 5 seconds…",

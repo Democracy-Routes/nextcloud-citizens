@@ -351,7 +351,7 @@ and offers **Retry** on that recording — free some space, then use it. If the
 recording is abandoned instead, the round's analysis proceeds without it.
 
 **A table's phone died and they want to use another one.** Open the Live tab
-and press **Replace device** on that table. The recording so far is finished
+and press **Hand over table** on that table. The recording so far is finished
 and transcribed — usually most of the round — and the table carries on by
 scanning the same QR code on any phone. If nobody presses it, a replacement
 phone is let in automatically after two minutes of silence; in that case the
@@ -362,7 +362,7 @@ dead can still upload what it recorded while disconnected.
 silence the recording shows UPLOAD_INCOMPLETE with "upload timed out"; the
 audio that reached the server is on disk. Thirty minutes later it is
 assembled and transcribed by itself. To not wait, press **Retry** on that
-table (Live tab, next to Replace device, or Files tab): it assembles the
+table (Live tab, next to Hand over table, or Files tab): it assembles the
 contiguous part that arrived. `scripts/event-status.sh` lists such
 recordings under "needs a decision".
 

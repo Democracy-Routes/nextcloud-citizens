@@ -43,7 +43,7 @@ test('the organizer hands a dead table to another phone', async ({ browser }) =>
 	// Told the truth about why it cannot start: the round is being recorded on
 	// another phone. NOT "this table has completed every round", which is what
 	// it used to say at the exact moment a table's device had just died.
-	await expect(phoneB.page.getByText(/already recording on another phone/)).toBeVisible({
+	await expect(phoneB.page.getByText(/Another phone is recording this table/)).toBeVisible({
 		timeout: 25_000,
 	})
 	await expect(phoneB.page.getByText('completed every session')).toHaveCount(0)

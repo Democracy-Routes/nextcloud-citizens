@@ -169,7 +169,7 @@ Set up a throwaway assembly ("Prova", orchestrated, three tables, rounds of
 three minutes), keep the Live tab and the Files tab open on a laptop with
 `sh scripts/event-status.sh` in a terminal, and scan fresh QR codes on three
 phones: an iPhone (Safari), an Android (Chrome), and a third of whichever kind
-you have most of. Timers to keep in mind: STALE after 45 s, Replace device
+you have most of. Timers to keep in mind: STALE after 45 s, Hand over table
 offered after 120 s, the upload timeout after 20 min, automatic assembly of
 stranded audio 30 min after that.
 
@@ -218,10 +218,10 @@ stranded audio 30 min after that.
    listed under "needs a decision" on the status screen, Retry offered on
    the Live and Files tabs. Pass after 50 min: assembled and transcribed by
    itself. (Press Retry if you cannot wait; that is what it is for.)
-6. [ ] **Replace device.** Kill Chrome on the Android at 1:00; when STALE
-   has lasted two minutes, press Replace device. Pass: the toast says the
+6. [ ] **Hand over table.** Kill Chrome on the Android at 1:00; when STALE
+   has lasted two minutes, press Hand over table. Pass: the toast says the
    recording so far is being transcribed; the old row shows ASSEMBLING then
-   AUDIO_READY under "(replaced device)"; reopen Chrome (or scan the same QR
+   AUDIO_READY under "earlier part — the phone was handed over"; reopen Chrome (or scan the same QR
    with the iPhone) and a new RECORDING starts; after the round the Files tab
    has two files for the table.
 7. [ ] **A long backlog with nobody touching the phone.** iPhone in airplane
@@ -232,7 +232,7 @@ stranded audio 30 min after that.
    third phone's table. Pass: the phone shows the upload-blocked notice and
    keeps recording; the Live tab goes STALE; Finish leaves it on the failed
    screen; scanning a new QR opens the recovery screen and the backlog lands
-   in the same recording → AUDIO_READY. Do not press Replace device during
+   in the same recording → AUDIO_READY. Do not press Hand over table during
    this one.
 9. [ ] **An iPhone older than iOS 18.4, if there is one.** One two-minute
    round, then play the `.m4a` from the Files tab. Otherwise the integration

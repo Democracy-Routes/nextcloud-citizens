@@ -96,6 +96,6 @@ describe('a table that has finished every session', () => {
 		await flushPromises()
 
 		expect(wrapper.text()).not.toContain('All sessions recorded')
-		expect(wrapper.text()).toContain('already recording on another phone')
+		expect(wrapper.text()).toContain('Another phone is recording this table')
 	})
 })

@@ -83,7 +83,7 @@
 			"noRounds": "Non ci sono ancora sessioni.",
 			"roundSummary": "Sessione {position} — la sintesi AI del vostro tavolo",
 			"analyzing": "Analisi della vostra discussione…",
-			"recordingElsewhere": "Questo tavolo sta già registrando su un altro telefono. Se quel telefono ha smesso di funzionare, chiedete all'organizzatore di assegnare il tavolo a questo.",
+			"recordingElsewhere": "Un altro telefono sta registrando questo tavolo. Se quel telefono si è fermato, l'organizzatore può passare il tavolo a questo dalla scheda In diretta.",
 			"title": "Prova del microfono",
 			"recordTest": "Registra una prova di 5 secondi",
 			"recordingTest": "Registrazione di 5 secondi…",

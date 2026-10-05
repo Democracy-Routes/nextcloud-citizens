@@ -154,6 +154,13 @@ not rewritten.
   phone*, *no phone has joined — show the table its QR code*…) and the fix in
   the same row. A table the server judged fine but whose own heartbeat says
   otherwise is never hidden.
+- **Recovery is described in the room's words.** The Live tab's *Replace
+  device* is *Hand over table*; an earlier recording of a table reads "earlier
+  part — the phone went silent / reconnected / was handed over / the table
+  continued" instead of "(replaced device)"; the phone says "Another phone is
+  recording this table" and points at the Live tab. The engine's terms
+  (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
+  the diagnostics and the export's file names, where they belong.
 - **Rounds are called Sessions where people read them.** The organizer's
   tabs, buttons and hints and the phone's strings (en, it) now say Session;
   `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in

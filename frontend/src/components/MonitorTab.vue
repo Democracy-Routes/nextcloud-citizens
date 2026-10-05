@@ -461,17 +461,19 @@ async function retryAssembly(table: MonitorTable): Promise<void> {
 	)
 }
 
-/** What the earlier recording of a table is, in a word. */
+/** What the earlier recording of a table is, in the room's words — never the
+ * engine's ("superseded", "replacement"). It is an earlier part of the same
+ * discussion; the suffix says why the phone changed. */
 function priorLabel(prior: { error_code: string }): string {
 	switch (prior.error_code) {
 		case 'ROUND_CONTINUED':
-			return 'first part'
+			return 'earlier part — the table continued'
 		case 'DEVICE_REJOINED':
-			return 'before the phone reconnected'
+			return 'earlier part — the phone reconnected'
 		case 'DEVICE_SILENT':
-			return 'phone went silent'
+			return 'earlier part — the phone went silent'
 		default:
-			return 'replaced device'
+			return 'earlier part — the phone was handed over'
 	}
 }
 
@@ -622,7 +624,7 @@ function pendingChunks(table: MonitorTable): number {
 			v-if="confirmReplace"
 			title="Hand this table to another phone?"
 			:message="`Table ${confirmReplace.number}'s phone has stopped responding. Its recording is finished with the audio already received — usually most of the session — and transcribed. The table can then record the rest on any phone by scanning the same QR code.`"
-			confirm-label="Replace device"
+			confirm-label="Hand over the table"
 			tone="danger"
 			@confirm="replaceDevice"
 			@cancel="confirmReplace = null" />
@@ -793,10 +795,10 @@ function pendingChunks(table: MonitorTable): number {
 									small
 									variant="danger"
 									:icon="mdiCellphoneRemove"
-									title="This table's phone has stopped responding — hand the table to another device"
+									title="This table's phone has stopped responding — hand the table to another phone"
 									:disabled="busy"
 									@click="confirmReplace = table">
-									Replace device
+									Hand over table
 								</CzButton>
 								<CzButton
 									v-if="canRetryAssembly(table)"

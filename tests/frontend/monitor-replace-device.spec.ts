@@ -74,14 +74,14 @@ function monitor({
 }
 
 const replaceButton = (wrapper: ReturnType<typeof mountWithI18n>) =>
-	wrapper.findAll('button').find((b) => b.text().includes('Replace device'))
+	wrapper.findAll('button').find((b) => b.text().includes('Hand over table'))
 
 beforeEach(() => {
 	roundMonitor.mockReset()
 	replaceDevice.mockReset().mockResolvedValue({ state: 'UPLOAD_INCOMPLETE', assembling: true })
 })
 
-describe('the Replace device action', () => {
+describe('the Hand over table action', () => {
 	it('appears for a table whose phone has stopped answering', async () => {
 		roundMonitor.mockResolvedValue(monitor({ connected: false }))
 		const wrapper = mountWithI18n(MonitorTab, { props: { assembly: ASSEMBLY } })
