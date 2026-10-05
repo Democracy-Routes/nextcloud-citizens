@@ -6,6 +6,7 @@ API keys are stored with the `sensitive` flag (encrypted by Nextcloud, brief
 §28) and are never returned by any API — only `configured` + a short hint.
 """
 
+import copy
 import json
 import threading
 import time
@@ -59,6 +60,10 @@ class ConfigSnapshot:
     consent_contact: str = ""
     # the rest of the organization data the notice prints (see DEFAULTS)
     organization: dict = field(default_factory=dict)
+    # the Settings page's view (providers_summary), kept here so opening
+    # Settings costs no OCS round-trip; empty until the first request for it
+    # or the first save — the minute sweep does not rebuild it
+    summary: dict = field(default_factory=dict)
     refreshed_at: float = 0.0
     # False: the refresh failed and these are defaults (or the previous values)
     ok: bool = False
@@ -175,9 +180,13 @@ def organization_data() -> dict:
     return data
 
 
-def refresh_config_snapshot() -> ConfigSnapshot:
+def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
     """Read Nextcloud's config once, for everybody. The ONLY OCS reader the
     request path can ever reach, and it is never called from a request.
+
+    `with_summary` also rebuilds the Settings page's summary (another ~40
+    reads) — the save path and a Settings open with no summary yet ask for
+    it; the minute sweep keeps the previous one.
 
     Single-flight: concurrent callers queue on the lock and all see the one
     fresh result. A failure keeps the previous snapshot (or the defaults when
@@ -190,6 +199,7 @@ def refresh_config_snapshot() -> ConfigSnapshot:
         try:
             store = default_store()
             analysis_enabled = get_setting(store, "analysis_enabled") == "1"
+            previous_summary = dict(_snapshot.summary) if _snapshot else {}
             fresh = ConfigSnapshot(
                 data_handling=_read_data_handling(store),
                 analysis_enabled=analysis_enabled,
@@ -199,6 +209,7 @@ def refresh_config_snapshot() -> ConfigSnapshot:
                 consent_controller=get_setting(store, "consent_controller"),
                 consent_contact=get_setting(store, "consent_contact"),
                 organization=_read_organization(store),
+                summary=providers_summary(store) if with_summary else previous_summary,
                 refreshed_at=time.monotonic(),
                 ok=True,
                 store_id=id(store),
@@ -217,6 +228,7 @@ def refresh_config_snapshot() -> ConfigSnapshot:
                 consent_controller=previous.consent_controller if previous else "",
                 consent_contact=previous.consent_contact if previous else "",
                 organization=dict(previous.organization) if previous else {},
+                summary=dict(previous.summary) if previous else {},
                 refreshed_at=time.monotonic(),
                 ok=False,
                 store_id=previous.store_id if previous else 0,
@@ -261,6 +273,25 @@ def invalidate_snapshot() -> None:
     """Settings changed: read them again now, before the caller answers, so
     the next request already sees them. Called outside any transaction."""
     refresh_config_snapshot()
+
+
+def settings_summary(store: "ConfigStore") -> dict:
+    """The Settings page, from memory.
+
+    Opening Settings used to read every field through Nextcloud one call at
+    a time, and saving re-read them twice. The summary now lives on the
+    snapshot: built once after a save (where the write pass already pays for
+    a refresh) or on the first open with none cached, served from memory
+    after that. A store swapped in by a test is read afresh, like the rest of
+    the snapshot."""
+    snapshot = config_snapshot()
+    if snapshot.summary and (not snapshot.store_id or snapshot.store_id == id(store)):
+        return copy.deepcopy(snapshot.summary)
+    if id(store) != id(default_store()):
+        # a per-request store that is not the background one (tests): no
+        # cache can speak for it
+        return providers_summary(store)
+    return copy.deepcopy(refresh_config_snapshot(with_summary=True).summary)
 
 
 def organization_name_cached() -> str:
@@ -565,9 +596,16 @@ def set_settings(store: ConfigStore, values: dict[str, str]) -> list[str]:
     changed = []
     for key, value in values.items():
         sensitive = key in KEY_FIELDS
+        current = store.get_value(key)
         if sensitive and value == "":
+            if current is None:
+                continue  # nothing to clear
             store.delete_value(key)
         else:
+            # a field sent unchanged costs nothing: the Settings form used to
+            # post every field on every save, each one an OCS write
+            if (current if current is not None else DEFAULTS.get(key, "")) == value:
+                continue
             store.set_value(key, value, sensitive=sensitive)
         changed.append(key)
     return changed

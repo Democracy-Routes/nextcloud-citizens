@@ -82,7 +82,9 @@ def ping(user: AdminUser):
 
 @router.get("/providers")
 def get_providers(store: Store, user: AdminUser):
-    summary = provider_config.providers_summary(store)
+    # from the snapshot: opening Settings no longer asks Nextcloud for every
+    # field one call at a time (see provider_config.settings_summary)
+    summary = provider_config.settings_summary(store)
     # shown read-only in Settings so admins see what their extra
     # instructions are appended to
     summary["analysis"]["default_prompts"] = {
@@ -181,11 +183,19 @@ def update_providers(data: ProvidersUpdate, store: Store, user: AdminUser, sessi
             values[field] = value.strip() if field in provider_config.KEY_FIELDS else value
     _validate_endpoints(values)
     changed = provider_config.set_settings(store, values)
-    provider_config.invalidate_snapshot()
-    # Read the summary back BEFORE the audit row opens the write transaction:
-    # providers_summary() is an OCS call to Nextcloud, and holding SQLite's
-    # single writer slot across it blocks every phone uploading a chunk.
-    summary = provider_config.providers_summary(store)
+    # One read pass: the snapshot refresh the phones need and the Settings
+    # summary this response returns are built together — BEFORE the audit row
+    # opens the write transaction, since every read is an OCS call to
+    # Nextcloud and holding SQLite's single writer slot across them blocks
+    # every phone uploading a chunk. Nothing changed: nothing to re-read.
+    if changed:
+        if id(store) == id(provider_config.default_store()):
+            summary = provider_config.refresh_config_snapshot(with_summary=True).summary
+        else:
+            provider_config.invalidate_snapshot()
+            summary = provider_config.providers_summary(store)
+    else:
+        summary = provider_config.settings_summary(store)
     record_audit_event(
         session, "providers_updated", actor=user, data={"fields": changed}
     )

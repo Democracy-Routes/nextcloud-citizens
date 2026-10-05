@@ -300,7 +300,14 @@ async function save(): Promise<void> {
 	busy.value = true
 	error.value = ''
 	try {
-		const payload = currentPayload()
+		// only what changed since the last load or save: every field posted
+		// is a write through Nextcloud, and one Vosk URL used to cost thirty
+		const current = currentPayload()
+		const base: Record<string, unknown> = saved.value ? JSON.parse(saved.value) : {}
+		const payload: Record<string, unknown> = {}
+		for (const [key, value] of Object.entries(current)) {
+			if (JSON.stringify(value) !== JSON.stringify(base[key])) payload[key] = value
+		}
 		// secrets are only sent when actually retyped, so they are deliberately
 		// outside currentPayload() and therefore outside the dirty comparison
 		if (mistralKey.value) payload.mistral_api_key = mistralKey.value

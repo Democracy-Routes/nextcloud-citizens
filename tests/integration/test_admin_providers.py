@@ -292,6 +292,46 @@ def test_update_is_audited_without_values(admin_client):
     assert "mk-super-secret-999" not in events[-1].data_json
 
 
+def test_saving_writes_only_what_changed(admin_client):
+    """The form posts a diff, and the server skips fields equal to what is
+    stored: a save that changes one URL is one write, not thirty, and a
+    save that changes nothing is none."""
+    client, store = admin_client
+    writes: list[str] = []
+    original = store.set_value
+
+    def counting(key, value, sensitive=False):
+        writes.append(key)
+        original(key, value, sensitive)
+
+    store.set_value = counting
+    first = client.put(
+        "/api/v1/admin/providers",
+        json={"vosk_url": "ws://vosk:2700", "organization_name": "Comune"},
+    )
+    assert first.status_code == 200 and sorted(writes) == ["organization_name", "vosk_url"]
+    assert first.json()["organization_name"] == "Comune"
+
+    writes.clear()
+    again = client.put(
+        "/api/v1/admin/providers",
+        json={"vosk_url": "ws://vosk:2700", "organization_name": "Comune", "stt_provider": "mistral"},
+    )
+    assert again.status_code == 200
+    assert writes == []  # unchanged values and the default provider: nothing written
+    assert again.json()["stt"]["vosk_url"] == "ws://vosk:2700"
+
+    # the organization data round-trips the same way
+    org = client.put(
+        "/api/v1/admin/providers",
+        json={"org_address": "Piazza Maggiore 6", "org_dpo": "dpo@example.org",
+              "org_hosting": "Hetzner, Germany", "org_authority": "Garante"},
+    ).json()
+    assert (org["org_address"], org["org_dpo"], org["org_hosting"], org["org_authority"]) == (
+        "Piazza Maggiore 6", "dpo@example.org", "Hetzner, Germany", "Garante",
+    )
+
+
 def test_participant_notice_follows_the_endpoint_not_the_engine_name(admin_client):
     """Whisper and Vosk are self-hosted in the usual case, but nothing stops an
     admin pointing them at a public server — and the table must not be told
