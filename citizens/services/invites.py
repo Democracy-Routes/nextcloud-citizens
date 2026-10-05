@@ -1,6 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Recorder invites: per assembly+table QR tokens (brief §13–§14)."""
+"""Table codes: the per-table QR invites an organizer prints (brief §13–§14).
+
+A table code is one kind of capability (`RecorderInvite.purpose = JOIN_TABLE`):
+reusable for thirty days, so a replacement phone can rescan the same poster.
+The short-lived single-use action codes a phone makes for the next phone live
+in services/capabilities.py on the same rows; everything here that lists,
+prints, regenerates or re-materialises codes is about the printed table codes
+only, and filters by purpose.
+"""
 
 import io
 from datetime import timedelta
@@ -25,6 +33,8 @@ log = get_logger(__name__)
 # assembly months later. Regenerating the sheets resets the clock.
 INVITE_LIFETIME_DAYS = 30
 
+JOIN_TABLE = "JOIN_TABLE"
+
 
 def recorder_join_url(token: str) -> str:
     """The URL a table phone opens. The token travels in the fragment so it
@@ -34,7 +44,7 @@ def recorder_join_url(token: str) -> str:
     return f"{recorder_page_url()}#/join/{token}"
 
 
-def _qr_svg(url: str) -> str:
+def qr_svg(url: str) -> str:
     """A QR code as a STANDALONE SVG document.
 
     Not svg_inline(): that serialises with svgns=False, which is correct only
@@ -64,22 +74,24 @@ def _invite_card(table_number: int, token: str) -> schemas.InviteGenerated:
     return schemas.InviteGenerated(
         table_number=table_number,
         url=url,
-        qr_svg=_qr_svg(url),
+        qr_svg=qr_svg(url),
     )
 
 
 def generate_invites(session: Session, assembly: Assembly) -> list[schemas.InviteGenerated]:
-    """Create fresh invites for every table number, revoking any active ones.
+    """Create fresh table codes for every table number, revoking the active ones.
 
     Join verification uses only the SHA-256 hash; the raw token is also kept
     encrypted with the app secret so the QR sheet can be re-viewed anytime.
+    Action codes a phone made for the next phone are left alone: they are not
+    on the sheet being replaced.
     """
     table_numbers = sorted(
         {table.number for round_ in assembly.rounds for table in round_.tables}
     ) or list(range(1, assembly.default_table_count + 1))
 
     now = utcnow()
-    for invite in _active_invites(session, assembly.id):
+    for invite in _active_invites(session, assembly.id, purpose=JOIN_TABLE):
         invite.revoked_at = now
 
     generated = [issue_invite(session, assembly, number, now=now) for number in table_numbers]
@@ -90,7 +102,7 @@ def generate_invites(session: Session, assembly: Assembly) -> list[schemas.Invit
 def issue_invite(
     session: Session, assembly: Assembly, table_number: int, now=None
 ) -> schemas.InviteGenerated:
-    """One fresh invite for one table, leaving every other table's code alone.
+    """One fresh table code for one table, leaving every other table's code alone.
 
     This is what a table added mid-event gets: the sheet already on the wall
     stays valid, and only the new table has a code to print.
@@ -100,6 +112,7 @@ def issue_invite(
     session.add(
         RecorderInvite(
             assembly_id=assembly.id,
+            purpose=JOIN_TABLE,
             table_number=table_number,
             token_hash=hash_token(token),
             token_encrypted=encrypt_token(token),
@@ -110,15 +123,15 @@ def issue_invite(
 
 
 def invite_links(session: Session, assembly: Assembly) -> list[schemas.InviteGenerated]:
-    """Re-materialize the QR sheet for the currently active invites.
+    """Re-materialize the QR sheet for the currently active table codes.
 
     Invites issued before token storage existed (or under a different app
     secret) cannot be decrypted and are skipped — the UI falls back to a
     regenerate hint when the list comes back shorter than the active count.
     """
     cards: list[schemas.InviteGenerated] = []
-    for invite in _active_invites(session, assembly.id):
-        if not invite.token_encrypted:
+    for invite in _active_invites(session, assembly.id, purpose=JOIN_TABLE):
+        if not invite.token_encrypted or invite.table_number is None:
             continue
         token = decrypt_token(invite.token_encrypted)
         if token is None:
@@ -139,7 +152,9 @@ def session_invite_card(
     rotated app secret) — a dead QR on screen is worse than none.
     """
     invite = session.get(RecorderInvite, recorder_session.invite_id)
-    if invite is None or invite.revoked_at is not None:
+    if invite is None or invite.revoked_at is not None or invite.table_number is None:
+        return None
+    if invite.single_use and invite.consumed_at is not None:
         return None
     if invite.expires_at is not None and invite.expires_at <= utcnow():
         return None
@@ -154,7 +169,7 @@ def session_invite_card(
 def list_invites(session: Session, assembly_id: str) -> list[schemas.InviteOut]:
     invites = session.execute(
         select(RecorderInvite)
-        .where(RecorderInvite.assembly_id == assembly_id)
+        .where(RecorderInvite.assembly_id == assembly_id, RecorderInvite.purpose == JOIN_TABLE)
         .order_by(RecorderInvite.table_number, RecorderInvite.created_at)
     ).scalars()
     latest: dict[int, RecorderInvite] = {}
@@ -186,7 +201,9 @@ def revoke_invites(session: Session, assembly_id: str) -> int:
     currently-active invite. Regeneration marks the previous invites revoked
     while their sessions keep working (by design), so scoping this to active
     invites left exactly those devices connected — through the one action an
-    organizer reaches for when they want everyone off now.
+    organizer reaches for when they want everyone off now. Action codes a
+    phone made are revoked too: "everyone off" includes whoever was about to
+    scan one.
     """
     now = utcnow()
     active = _active_invites(session, assembly_id)
@@ -210,25 +227,55 @@ def revoke_invites(session: Session, assembly_id: str) -> int:
     return len(active)
 
 
-def find_active_by_token(session: Session, token: str) -> RecorderInvite | None:
-    invite = session.execute(
+def find_by_token(session: Session, token: str) -> RecorderInvite | None:
+    """The invite behind a token, whatever its state. Callers decide what a
+    revoked, expired or consumed one means to them."""
+    return session.execute(
         select(RecorderInvite).where(RecorderInvite.token_hash == hash_token(token))
     ).scalar_one_or_none()
+
+
+def is_expired(invite: RecorderInvite, now=None) -> bool:
+    return invite.expires_at is not None and invite.expires_at < (now or utcnow())
+
+
+def find_active_by_token(session: Session, token: str) -> RecorderInvite | None:
+    invite = find_by_token(session, token)
     if invite is None or invite.revoked_at is not None:
         return None
-    if invite.expires_at is not None and invite.expires_at < utcnow():
+    if invite.single_use and invite.consumed_at is not None:
+        return None
+    if is_expired(invite):
         log.info("invite_expired", assembly_id=invite.assembly_id,
-                 table_number=invite.table_number)
+                 table_number=invite.table_number, purpose=invite.purpose)
         return None
     return invite
 
 
-def _active_invites(session: Session, assembly_id: str) -> list[RecorderInvite]:
-    return list(
-        session.execute(
-            select(RecorderInvite).where(
-                RecorderInvite.assembly_id == assembly_id,
-                RecorderInvite.revoked_at.is_(None),
-            )
-        ).scalars()
+def active_invite_for_table(
+    session: Session, assembly_id: str, table_number: int
+) -> RecorderInvite | None:
+    """The newest active table code for one table, or None."""
+    return session.execute(
+        select(RecorderInvite)
+        .where(
+            RecorderInvite.assembly_id == assembly_id,
+            RecorderInvite.purpose == JOIN_TABLE,
+            RecorderInvite.table_number == table_number,
+            RecorderInvite.revoked_at.is_(None),
+        )
+        .order_by(RecorderInvite.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def _active_invites(
+    session: Session, assembly_id: str, purpose: str | None = None
+) -> list[RecorderInvite]:
+    query = select(RecorderInvite).where(
+        RecorderInvite.assembly_id == assembly_id,
+        RecorderInvite.revoked_at.is_(None),
     )
+    if purpose is not None:
+        query = query.where(RecorderInvite.purpose == purpose)
+    return list(session.execute(query).scalars())

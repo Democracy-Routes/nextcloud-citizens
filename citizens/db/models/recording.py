@@ -40,6 +40,11 @@ class RecorderSession(Base):
         ForeignKey("assemblies.id", ondelete="CASCADE"), index=True
     )
     table_number: Mapped[int] = mapped_column(Integer)
+    # which of the table's recorders this phone is. The phone that scanned the
+    # table's own code is 1 — and so is a replacement that rescans it, same
+    # role — while a phone added through ADD_RECORDER_TO_TABLE gets the next
+    # number. Recorders in different slots record the same table side by side.
+    slot: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     # only the SHA-256 of the bearer token is stored
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)

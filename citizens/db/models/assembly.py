@@ -176,14 +176,42 @@ class TableAssignment(Base):
     participant: Mapped[Participant] = relationship()
 
 
+#: What scanning the code does. JOIN_TABLE is the printed table code, reusable
+#: for thirty days so a replacement phone can rescan the poster. The other two
+#: are made by a phone that already joined, shown as a QR for the next phone,
+#: short-lived and single-use — and the scanner never chooses between them.
+INVITE_PURPOSES = ("JOIN_TABLE", "ADD_RECORDER_TO_TABLE", "ADD_TABLE")
+
+
 class RecorderInvite(Base):
+    """A capability a phone redeems by scanning: a table code or an action code.
+
+    One row, one token mechanism (hash, vault, rate limit, brute-force
+    protection, the #/join route) for every purpose; `purpose` says which.
+    """
+
     __tablename__ = "recorder_invites"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     assembly_id: Mapped[str] = mapped_column(
         ForeignKey("assemblies.id", ondelete="CASCADE"), index=True
     )
-    table_number: Mapped[int] = mapped_column(Integer)
+    purpose: Mapped[str] = mapped_column(
+        String(32), default="JOIN_TABLE", server_default="JOIN_TABLE"
+    )
+    # the table this code concerns; NULL for ADD_TABLE, whose number is
+    # allocated when the code is consumed
+    table_number: Mapped[int | None] = mapped_column(Integer)
+    # the Session (round) an action code was made in — scope and audit, not a
+    # restriction on where the table lives: tables span every round
+    round_id: Mapped[str | None] = mapped_column(ForeignKey("rounds.id", ondelete="SET NULL"))
+    # action codes are redeemed once: consumed_at is claimed atomically by the
+    # first scan (services/capabilities.py) and a second scan is refused
+    single_use: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    consumed_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # the recorder session that made an action code. A plain id, not a foreign
+    # key: recorder_sessions already references this table
+    created_by_session_id: Mapped[str | None] = mapped_column(String(36))
     # the SHA-256 hex digest is what join verification uses; the token itself
     # is additionally kept encrypted (app-secret Fernet) so the organizer can
     # re-view and re-print QR sheets at any time

@@ -34,15 +34,30 @@ MAX_CHUNK_BYTES = 5 * 1024 * 1024
 
 
 def create_session_from_invite(session: Session, token: str) -> tuple[RecorderSession, str]:
+    """A phone scanning a printed table code: the legacy join, slot 1.
+
+    Action codes (services/capabilities.py) go through `join_with_token`
+    instead; one that reaches this path is refused rather than guessed at.
+    """
     invite = invite_svc.find_active_by_token(session, token)
     if invite is None:
         raise HTTPException(status_code=401, detail="Invalid or revoked invite")
+    if invite.table_number is None:
+        raise HTTPException(status_code=409, detail="This code is not a table code")
+    return mint_session(session, invite, invite.table_number, slot=1)
+
+
+def mint_session(
+    session: Session, invite, table_number: int, slot: int = 1
+) -> tuple[RecorderSession, str]:
+    """A bearer session for one phone at one table, in one recorder slot."""
     invite.last_used_at = utcnow()
     bearer = generate_token()
     recorder_session = RecorderSession(
         invite_id=invite.id,
         assembly_id=invite.assembly_id,
-        table_number=invite.table_number,
+        table_number=table_number,
+        slot=slot,
         token_hash=hash_token(bearer),
         expires_at=utcnow() + timedelta(hours=SESSION_LIFETIME_HOURS),
     )
@@ -51,7 +66,9 @@ def create_session_from_invite(session: Session, token: str) -> tuple[RecorderSe
     log.info(
         "recorder_session_created",
         assembly_id=invite.assembly_id,
-        table_number=invite.table_number,
+        table_number=table_number,
+        slot=slot,
+        purpose=invite.purpose,
     )
     return recorder_session, bearer
 

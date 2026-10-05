@@ -46,6 +46,10 @@ JOIN_TOKEN_LIMITER = SlidingWindowLimiter(max_events=10, window_seconds=60)
 # phone, so it must never be the thing that stops a room full of tables.
 JOIN_IP_LIMITER = SlidingWindowLimiter(max_events=120, window_seconds=60)
 
+# A joined phone making codes for the next phone: a handful a minute is a room
+# adding tables and recorders, hundreds is a script. Keyed by recorder session.
+CAPABILITY_LIMITER = SlidingWindowLimiter(max_events=20, window_seconds=60)
+
 
 def token_key(token: str) -> str:
     """Bucket key for an invite token — hashed so raw invite secrets are not

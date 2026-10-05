@@ -47,6 +47,20 @@ not rewritten.
   the same moment get distinct numbers. Completeness and the report count the
   tables that exist, not the count the assembly was created with, so a table
   added mid-event is expected like any other.
+- **A phone that has joined can make the QR code for the next phone — and
+  decides what it means.** `POST /api/v1/public/recorder/capabilities` with
+  `ADD_RECORDER_TO_TABLE` or `ADD_TABLE` returns a code that does exactly
+  that when scanned: the scanner joins the same table as another recorder, or
+  the next table is created (in every round, numbered and coloured, with its
+  own printed code) and the scanner is its first recorder. The scanning phone
+  never chooses. These codes share the row, hashing, vault, rate limit,
+  brute-force protection and `#/join` route with the printed table codes
+  (`recorder_invites.purpose`, migration 0026); they live fifteen minutes and
+  are single-use — the first scan claims `consumed_at` atomically and the
+  second is told the code was already used. Printed table codes stay reusable.
+  Creation and consumption are audited by invite id, never by token.
+  Recorder phones now carry a `slot` (the table's own code is slot 1, a
+  replacement that rescans it too; an added recorder gets the next number).
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

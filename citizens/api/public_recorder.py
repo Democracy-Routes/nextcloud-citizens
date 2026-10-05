@@ -7,7 +7,7 @@ recordings for its own table, upload chunks, and complete recordings.
 """
 
 import json
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -22,11 +22,13 @@ from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.domain.tables import color_for
 from citizens.security.rate_limit import (
+    CAPABILITY_LIMITER,
     JOIN_IP_LIMITER,
     JOIN_TOKEN_LIMITER,
     client_ip,
     token_key,
 )
+from citizens.services import capabilities as capabilities_svc
 from citizens.services import invites as invites_svc
 from citizens.services import provider_config
 from citizens.services import recording as rec_svc
@@ -87,14 +89,36 @@ def join(data: JoinIn, request: Request, session: DB):
     # held across an HTTPS round-trip while the room is scanning QR codes.
     handling = data_handling_summary()
     analysis_enabled = provider_config.analysis_enabled_cached()
-    recorder_session, bearer = rec_svc.create_session_from_invite(session, data.token)
+    # a printed table code, or an action code another phone made: the token
+    # decides, never the scanner (services/capabilities.py)
+    joined = capabilities_svc.join_with_token(session, data.token)
+    recorder_session = joined.recorder_session
     return {
-        "session_token": bearer,
+        "session_token": joined.bearer,
         "expires_at": recorder_session.expires_at,
+        "joined": joined.as_dict(),
         **_assembly_state(
             session, recorder_session, handling=handling, analysis_enabled=analysis_enabled
         ),
     }
+
+
+class CapabilityIn(BaseModel):
+    purpose: Literal["ADD_RECORDER_TO_TABLE", "ADD_TABLE"]
+    # the Session this is being done in, when the phone knows it
+    round_id: str | None = None
+
+
+@router.post("/recorder/capabilities", status_code=201)
+def create_capability(data: CapabilityIn, recorder_session: RecorderSess, session: DB):
+    """A joined phone makes a QR code for the next phone — add a recorder to
+    this table, or add a new table. The code means exactly that; the phone
+    that scans it does not choose."""
+    CAPABILITY_LIMITER.check(recorder_session.id)
+    card = capabilities_svc.create_capability(
+        session, recorder_session, data.purpose, round_id=data.round_id
+    )
+    return card.as_dict()
 
 
 @router.get("/recorder/status")
@@ -517,6 +541,8 @@ def _assembly_state(
         # the colour beside the number, the same in every round — a cue for
         # people looking for "the blue table", never something to depend on
         "table_color": color_for(recorder_session.table_number),
+        # which of the table's recorders this phone is (1 = the table's own code)
+        "slot": recorder_session.slot,
         # The organizer has asked the phones to delete their local copies. The
         # server cannot push, so it rides on this poll — which every recorder
         # already makes every few seconds.
