@@ -261,6 +261,8 @@
 			"noLiveSource": "Live captions: none yet",
 			"addTable": "Add new Table",
 			"addRecorder": "Add Recorder to this Table",
+			"newTable": "New table",
+			"addRecorderShort": "Add recorder",
 			"addTableTitle": "ADD NEW TABLE",
 			"addRecorderTitle": "ADD RECORDER",
 			"addTableHint": "The phone that scans this code becomes the recorder of the next table.",

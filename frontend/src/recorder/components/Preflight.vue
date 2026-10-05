@@ -17,8 +17,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
-import TableActions from './TableActions.vue'
 import TableBadge from './TableBadge.vue'
+import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
 import { clientLog, ship } from '../logger'
 import { useWakeLock } from '../useWakeLock'
@@ -374,11 +374,10 @@ const STATE_CLASS: Record<CheckState, string> = {
 				</p>
 			</div>
 		</template>
-		<!-- add the next table, or another recorder for this one -->
-		<TableActions :session="session" :round-id="selectedRound?.id ?? null" />
 		</div>
 
-		<div class="rc-actions">
+		<!-- New table | primary action | Add recorder: the same bar on every screen -->
+		<TableBar :session="session" :round-id="selectedRound?.id ?? null">
 			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 				{{ t('recorder.armed.viewReport') }}
 			</button>
@@ -393,6 +392,6 @@ const STATE_CLASS: Record<CheckState, string> = {
 				<SvgIcon :path="mdiRecordCircleOutline" :size="22" />
 				{{ t('recorder.preflight.startRecording') }}
 			</button>
-		</div>
+		</TableBar>
 	</div>
 </template>

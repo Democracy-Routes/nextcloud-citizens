@@ -7,8 +7,8 @@ import { mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
-import TableActions from './TableActions.vue'
 import TableBadge from './TableBadge.vue'
+import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
 import { idb } from '../idb'
 import { useWakeLock, wakeLockHeld } from '../useWakeLock'
@@ -148,11 +148,6 @@ onBeforeUnmount(() => {
 				</p>
 			</div>
 
-			<!-- add the next table, or another recorder for this one: the code
-			     decides, the next phone follows it (not in plenary, which has
-			     its one shared code below) -->
-			<TableActions :session="session" :round-id="rounds.find((r) => r.status === 'ACTIVE')?.id ?? null" />
-
 			<!-- the microphone failed for the round that is currently open: say so
 			     and wait to be asked, rather than silently retrying forever -->
 			<template v-if="blockedRound">
@@ -262,7 +257,8 @@ onBeforeUnmount(() => {
 			</template>
 		</div>
 
-		<div class="rc-actions">
+		<!-- New table | primary action | Add recorder: the same bar on every screen -->
+		<TableBar :session="session" :round-id="rounds.find((r) => r.status === 'ACTIVE')?.id ?? null">
 			<!-- a finished table has no microphone test to go back to -->
 			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 				{{ t('recorder.armed.viewReport') }}
@@ -270,6 +266,6 @@ onBeforeUnmount(() => {
 			<button v-else-if="!allRecorded" class="rc-btn rc-subtle" @click="emit('back')">
 				{{ t('recorder.armed.backToTest') }}
 			</button>
-		</div>
+		</TableBar>
 	</div>
 </template>

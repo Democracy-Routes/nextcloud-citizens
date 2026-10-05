@@ -16,8 +16,8 @@ import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
-import TableActions from './TableActions.vue'
 import TableBadge from './TableBadge.vue'
+import TableBar from './TableBar.vue'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
 import { clientLog, ship } from '../logger'
@@ -750,13 +750,11 @@ async function clearSynced(): Promise<void> {
 					{{ t('recorder.addDevice.button') }}
 				</button>
 				<AddDeviceQr v-if="plenary && showAddDevice" :token="props.session.session_token" />
-				<!-- every other mode: add the next table, or another recorder for
-				     this one — the code decides, the next phone follows it -->
-				<TableActions :session="props.session" :round-id="props.round.id" />
 			</template>
 			</div>
 
-			<div v-if="state.phase === 'recording'" class="rc-actions">
+			<!-- New table | Finish | Add recorder — the sides step back while recording -->
+			<TableBar v-if="state.phase === 'recording'" :session="props.session" :round-id="props.round.id" quiet>
 				<button v-if="!confirmFinish" class="rc-btn" @click="confirmFinish = true">
 					{{ t('recorder.recording.finishButton') }}
 				</button>
@@ -767,7 +765,7 @@ async function clearSynced(): Promise<void> {
 						{{ t('recorder.recording.keepRecording') }}
 					</button>
 				</template>
-			</div>
+			</TableBar>
 		</template>
 
 		<template v-else-if="state.phase === 'syncing'">
@@ -880,7 +878,8 @@ async function clearSynced(): Promise<void> {
 				</div>
 			</div>
 
-			<div class="rc-actions">
+			<!-- the done screen keeps the same bar: a table can still grow -->
+			<TableBar :session="props.session" :round-id="props.round.id">
 				<button
 					v-if="nextRound && !orchestrated"
 					class="rc-btn rc-record"
@@ -906,7 +905,7 @@ async function clearSynced(): Promise<void> {
 					@click="clearSynced">
 					{{ t('recorder.recording.clearAudio') }}
 				</button>
-			</div>
+			</TableBar>
 		</template>
 
 		<template v-else-if="state.phase === 'failed'">

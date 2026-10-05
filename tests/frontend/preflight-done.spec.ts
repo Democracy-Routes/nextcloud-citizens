@@ -55,8 +55,8 @@ describe('a table that has finished every session', () => {
 		expect(wrapper.text()).not.toContain('Record 5-second test')
 		expect(wrapper.find('.rc-status-row').exists()).toBe(false)
 		expect(wrapper.find('.rc-level').exists()).toBe(false)
-		// the one action left is the report
-		const actions = wrapper.findAll('.rc-actions button').map((b) => b.text())
+		// the one primary action left is the report (the bar's side buttons stay)
+		const actions = wrapper.findAll('.rc-bar__main button').map((b) => b.text())
 		expect(actions).toEqual(['View assembly report'])
 	})
 
@@ -67,7 +67,7 @@ describe('a table that has finished every session', () => {
 
 		expect(wrapper.text()).toContain('All sessions recorded')
 		expect(wrapper.text()).not.toContain('Microphone test')
-		expect(wrapper.findAll('.rc-actions button')).toHaveLength(0)
+		expect(wrapper.findAll('.rc-bar__main button')).toHaveLength(0)
 	})
 
 	it('gets its checklist back when a new session appears', async () => {

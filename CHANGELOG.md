@@ -123,6 +123,13 @@ not rewritten.
   assembly report* instead, in every recording mode, and the armed screen no
   longer offers "Back to microphone test". A session added later brings the
   checklist back by itself (the status poll keeps the list fresh).
+- **One bottom bar on every table screen.** *New table* on the left, the
+  screen's own action in the middle (READY, Start recording, Finish, View
+  report), *Add recorder* on the right — the same positions on preflight,
+  armed, recording and done, so people learn it once. A side button opens the
+  intent-carrying QR as a sheet over the screen instead of pushing content
+  around; while recording the sides step back and Finish keeps its weight.
+  Plenary rooms keep only the middle (their one shared code stays where it is).
 - **Rounds are called Sessions where people read them.** The organizer's
   tabs, buttons and hints and the phone's strings (en, it) now say Session;
   `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in

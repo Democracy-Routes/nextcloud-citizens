@@ -9,7 +9,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CapabilityQr from '../../frontend/src/recorder/components/CapabilityQr.vue'
-import TableActions from '../../frontend/src/recorder/components/TableActions.vue'
 import { mountWithI18n } from './support/mount'
 
 const createCapability = vi.fn()
@@ -93,35 +92,3 @@ describe('the capability card', () => {
 	})
 })
 
-describe('the table actions', () => {
-	const session = {
-		session_token: 'tok',
-		table_number: 7,
-		table_color: 'blue',
-		assembly: { id: 'a1', name: 'Milan', language: 'en', recording_mode: 'orchestrated' },
-		rounds: [],
-	}
-
-	it('offers both actions and opens the chosen code', async () => {
-		createCapability.mockResolvedValue(card('ADD_RECORDER_TO_TABLE'))
-		const wrapper = mountWithI18n(TableActions, { props: { session, roundId: 'r1' } })
-		const labels = wrapper.findAll('.rc-table-actions__row button').map((b) => b.text())
-		expect(labels).toEqual(['Add new Table', 'Add Recorder to this Table'])
-		expect(wrapper.find('.rc-capability').exists()).toBe(false)
-
-		await wrapper.findAll('.rc-table-actions__row button')[1].trigger('click')
-		await flushPromises()
-		expect(createCapability).toHaveBeenCalledWith('tok', 'ADD_RECORDER_TO_TABLE', 'r1')
-		expect(wrapper.find('.rc-capability .rc-eyebrow').text()).toBe('ADD RECORDER')
-
-		// the same button again closes it
-		await wrapper.findAll('.rc-table-actions__row button')[1].trigger('click')
-		expect(wrapper.find('.rc-capability').exists()).toBe(false)
-	})
-
-	it('is absent in a plenary room, which has its one shared code', () => {
-		const plenary = { ...session, assembly: { ...session.assembly, recording_mode: 'plenary' } }
-		const wrapper = mountWithI18n(TableActions, { props: { session: plenary } })
-		expect(wrapper.find('.rc-table-actions').exists()).toBe(false)
-	})
-})

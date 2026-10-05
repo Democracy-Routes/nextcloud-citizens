@@ -261,6 +261,8 @@
 			"noLiveSource": "Sottotitoli in diretta: nessuno per ora",
 			"addTable": "Aggiungi un nuovo Tavolo",
 			"addRecorder": "Aggiungi un Registratore a questo Tavolo",
+			"newTable": "Nuovo tavolo",
+			"addRecorderShort": "Altro telefono",
 			"addTableTitle": "NUOVO TAVOLO",
 			"addRecorderTitle": "AGGIUNGI REGISTRATORE",
 			"addTableHint": "Il telefono che scansiona questo codice diventa il registratore del prossimo tavolo.",

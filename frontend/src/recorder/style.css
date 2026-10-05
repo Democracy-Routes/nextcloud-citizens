@@ -532,19 +532,61 @@ body {
 	color: var(--rc-muted);
 }
 
-/* Add new Table / Add Recorder: side by side where there is room, stacked on
-   a narrow phone; the open one is highlighted */
-.rc-table-actions { margin-top: 12px; }
-.rc-table-actions__row {
+/* The bottom bar every table screen ends with: New table | primary action |
+   Add recorder. Side buttons are icon + one word, 44 px tall; the primary
+   action keeps its full weight in the middle. */
+.rc-bar {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: end;
 	gap: 10px;
 }
-.rc-table-actions__row .rc-btn { margin: 0; }
-@media (max-width: 479px) {
-	.rc-table-actions__row { grid-template-columns: 1fr; }
+.rc-bar--plain { grid-template-columns: minmax(0, 1fr); }
+.rc-bar__main { min-width: 0; display: flex; flex-direction: column; }
+.rc-bar__side {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	min-width: 64px;
+	min-height: 48px;
+	padding: 6px 6px 5px;
+	border: 1px solid var(--rc-border);
+	border-radius: 12px;
+	background: var(--rc-surface);
+	color: var(--rc-text);
+	font: inherit;
+	font-size: 0.7rem;
+	font-weight: 650;
+	line-height: 1.1;
+	cursor: pointer;
+	user-select: none;
+	-webkit-user-select: none;
 }
-.rc-capability { margin-top: 12px; }
+.rc-bar__side:active { filter: brightness(0.94); }
+.rc-bar__side--open { border-color: var(--rc-blue); color: var(--rc-blue); }
+/* while recording the sides step back; Finish keeps its weight */
+.rc-bar--quiet .rc-bar__side { background: transparent; border-color: transparent; color: var(--rc-muted); }
+
+/* the QR as a bottom sheet over the screen */
+.rc-sheet-scrim {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	display: flex;
+	align-items: flex-end;
+	background: rgba(0, 0, 0, 0.45);
+}
+.rc-sheet {
+	width: 100%;
+	max-height: 92dvh;
+	overflow-y: auto;
+	background: var(--rc-bg);
+	border-radius: 18px 18px 0 0;
+	padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+.rc-capability { margin-top: 0; }
 
 /* ================= add-a-device QR (plenary) ================= */
 
