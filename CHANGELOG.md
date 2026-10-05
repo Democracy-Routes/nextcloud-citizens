@@ -117,6 +117,12 @@ not rewritten.
   blocked. Computed from the heartbeats and recordings the Live tab already
   reads; it is what an exception-first screen and an organizer's autopilot
   will build on.
+- **A table that has recorded every session sees a done screen.** The
+  microphone checklist, level meter and test are for a table about to record;
+  once every session is recorded the phone shows its summaries and *View
+  assembly report* instead, in every recording mode, and the armed screen no
+  longer offers "Back to microphone test". A session added later brings the
+  checklist back by itself (the status poll keeps the list fresh).
 - **Rounds are called Sessions where people read them.** The organizer's
   tabs, buttons and hints and the phone's strings (en, it) now say Session;
   `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in

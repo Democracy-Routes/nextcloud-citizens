@@ -263,7 +263,13 @@ onBeforeUnmount(() => {
 		</div>
 
 		<div class="rc-actions">
-			<button class="rc-btn rc-subtle" @click="emit('back')">{{ t('recorder.armed.backToTest') }}</button>
+			<!-- a finished table has no microphone test to go back to -->
+			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
+				{{ t('recorder.armed.viewReport') }}
+			</button>
+			<button v-else-if="!allRecorded" class="rc-btn rc-subtle" @click="emit('back')">
+				{{ t('recorder.armed.backToTest') }}
+			</button>
 		</div>
 	</div>
 </template>

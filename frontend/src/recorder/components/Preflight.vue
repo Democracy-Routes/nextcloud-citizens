@@ -41,6 +41,13 @@ const orchestrated = props.session.assembly.recording_mode !== 'independent'
 const rounds = ref<RoundInfo[]>([...props.session.rounds])
 const openRounds = computed(() => rounds.value.filter((r) => !r.recorded_state))
 const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
+// Every session recorded: the table is done. The microphone checklist, the
+// level meter and the test are for a table about to record, and showing them
+// here read as "there is more to do". The status poll keeps `rounds` fresh,
+// so a session added later brings the checklist back by itself.
+const allRecorded = computed(
+	() => rounds.value.length > 0 && openRounds.value.length === 0 && !recordingElsewhere.value,
+)
 
 function pickRound(): RoundInfo | null {
 	const open = rounds.value.filter((r) => !r.recorded_state)
@@ -180,8 +187,9 @@ async function runChecks(): Promise<void> {
 
 	// Independent tables poll throughout, not only once every round is done:
 	// the list must stay fresh while rounds are still open, so a round recorded
-	// elsewhere or a just-failed sync is reflected rather than re-offered.
-	if (!orchestrated && rounds.value.length > 0) {
+	// elsewhere or a just-failed sync is reflected rather than re-offered. A
+	// finished table polls in every mode, so a session added later shows up.
+	if ((!orchestrated || allRecorded.value) && rounds.value.length > 0) {
 		void pollReport()
 		reportTimer = window.setInterval(() => void pollReport(), 20_000)
 	}
@@ -259,7 +267,23 @@ const STATE_CLASS: Record<CheckState, string> = {
 		</div>
 
 		<div class="rc-scroll">
-		<div class="rc-card">
+		<!-- the table is done: its summaries and the report, nothing about microphones -->
+		<div v-if="allRecorded" class="rc-card">
+			<p class="rc-eyebrow rc-center" style="display: block">{{ t('recorder.armed.allRecordedTitle') }}</p>
+			<p class="rc-muted rc-center" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
+			<template v-for="entry in tableSummaries" :key="entry.position">
+				<p class="rc-eyebrow" style="margin: 10px 0 2px; color: var(--rc-blue)">
+					{{ t('recorder.preflight.roundSummary', { position: entry.position }) }}
+				</p>
+				<p v-if="entry.summary" style="font-size: 0.875rem; margin: 0">{{ entry.summary }}</p>
+				<p v-else class="rc-muted" style="font-size: 0.845rem; margin: 0">{{ t('recorder.preflight.analyzing') }}</p>
+			</template>
+			<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
+				{{ t('recorder.armed.viewReport') }}
+			</button>
+		</div>
+
+		<div v-if="!allRecorded" class="rc-card">
 			<h2>{{ t('recorder.preflight.title') }}</h2>
 			<div v-for="row in ROWS" :key="row.key" class="rc-status-row">
 				<span class="rc-status-row__label">
@@ -301,18 +325,18 @@ const STATE_CLASS: Record<CheckState, string> = {
 			</button>
 		</div>
 
-		<div v-if="checks.microphone.state === 'fail'" class="rc-alert">
+		<div v-if="!allRecorded && checks.microphone.state === 'fail'" class="rc-alert">
 			<strong>{{ t('recorder.preflight.micRequired') }}</strong>
 			<p style="margin: 8px 0 0">{{ t('recorder.preflight.micGuidance') }}</p>
 			<button class="rc-btn rc-primary" style="margin-top: 12px" @click="runChecks">
 				{{ t('recorder.preflight.micRetry') }}
 			</button>
 		</div>
-		<div v-else-if="checks.storage.state === 'fail'" class="rc-alert">
+		<div v-else-if="!allRecorded && checks.storage.state === 'fail'" class="rc-alert">
 			{{ t('recorder.preflight.noStorage') }}
 		</div>
 
-		<template v-if="!orchestrated">
+		<template v-if="!orchestrated && !allRecorded">
 			<div v-if="selectedRound" class="rc-card">
 				<p class="rc-eyebrow" style="margin-bottom: 4px">
 					{{ t('recorder.common.roundOf', { position: selectedRound.position, total: session.rounds.length }) }} ·
@@ -349,32 +373,20 @@ const STATE_CLASS: Record<CheckState, string> = {
 					{{ t('recorder.preflight.recordingElsewhere') }}
 				</p>
 			</div>
-
-			<div v-else class="rc-card">
-				<p class="rc-eyebrow rc-center" style="display: block">{{ t('recorder.armed.allRecordedTitle') }}</p>
-				<p class="rc-muted rc-center" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
-				<template v-for="entry in tableSummaries" :key="entry.position">
-					<p class="rc-eyebrow" style="margin: 10px 0 2px; color: var(--rc-blue)">
-						{{ t('recorder.preflight.roundSummary', { position: entry.position }) }}
-					</p>
-					<p v-if="entry.summary" style="font-size: 0.875rem; margin: 0">{{ entry.summary }}</p>
-					<p v-else class="rc-muted" style="font-size: 0.845rem; margin: 0">{{ t('recorder.preflight.analyzing') }}</p>
-				</template>
-				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
-					{{ t('recorder.armed.viewReport') }}
-				</button>
-			</div>
 		</template>
 		<!-- add the next table, or another recorder for this one -->
 		<TableActions :session="session" :round-id="selectedRound?.id ?? null" />
 		</div>
 
 		<div class="rc-actions">
-			<button v-if="orchestrated" class="rc-btn rc-primary" :disabled="!canProceed()" @click="emit('ready')">
+			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
+				{{ t('recorder.armed.viewReport') }}
+			</button>
+			<button v-else-if="orchestrated && !allRecorded" class="rc-btn rc-primary" :disabled="!canProceed()" @click="emit('ready')">
 				{{ t('recorder.preflight.ready') }}
 			</button>
 			<button
-				v-else-if="selectedRound"
+				v-else-if="!allRecorded && selectedRound"
 				class="rc-btn rc-record"
 				:disabled="!canProceed()"
 				@click="emit('start', selectedRound)">
