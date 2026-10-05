@@ -161,6 +161,13 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **Print event kit.** Beside Print on the QR tab: one A5 card per table —
+  the number large, a band in the table's colour, its QR code and the join
+  link in full — two per sheet with a cut line, then the programme (every
+  session with its question, objective and duration) and the recording
+  notice in the assembly's language, the same facts the phone shows before
+  recording. `GET /api/v1/assemblies/{id}/event-kit.pdf`, rendered without
+  the write lock like the sheet.
 - **A table can raise its hand.** A quiet "Need help" button on the
   microphone test, the waiting screen and the recording screen asks what
   kind — technical problem, call the organizer, question about the process

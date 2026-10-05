@@ -112,26 +112,31 @@ async function revoke(): Promise<void> {
 	}
 }
 
-const printing = ref(false)
+const printing = ref<'' | 'sheet' | 'kit'>('')
 
-async function printSheet(): Promise<void> {
+/** The QR sheet (four codes per page, cut at the door) or the event kit (a
+ * card per table with its colour, the programme, the recording notice —
+ * printed the evening before). */
+async function printSheet(kind: 'sheet' | 'kit' = 'sheet'): Promise<void> {
 	// A real PDF, not window.print(): the browser print dropped every page
 	// after the first, and the layout had to survive Nextcloud's global CSS.
 	//
 	// Fetched rather than window.open'd, because a popup blocker swallows the
 	// new tab silently — and this is the single most time-critical action of
 	// the event, taken at the door with people waiting.
-	const url = `${BASE}/api/v1/assemblies/${props.assembly.id}/invites/sheet.pdf`
-	printing.value = true
+	const path = kind === 'kit' ? 'event-kit.pdf' : 'invites/sheet.pdf'
+	const url = `${BASE}/api/v1/assemblies/${props.assembly.id}/${path}`
+	const name = `${props.assembly.name.slice(0, 40).replace(/ /g, '-')}-${kind === 'kit' ? 'event-kit' : 'qr-sheet'}.pdf`
+	printing.value = kind
 	try {
-		await downloadFromApi(url, `${props.assembly.name.slice(0, 40).replace(/ /g, '-')}-qr-sheet.pdf`)
+		await downloadFromApi(url, name)
 	} catch {
 		// last resort: let the browser try, and say so if that is blocked too
 		if (!window.open(url, '_blank')) {
 			toast('The sheet could not be downloaded — check the pop-up blocker', 'error')
 		}
 	} finally {
-		printing.value = false
+		printing.value = ''
 	}
 }
 
@@ -176,8 +181,16 @@ const hasActive = () => invites.value.some((i) => i.active)
 						@click="hasActive() ? (confirmRegenerate = true) : generate()">
 						{{ hasActive() ? 'Regenerate all' : 'Generate codes' }}
 					</CzButton>
-					<CzButton v-if="generated.length" :icon="mdiPrinter" :disabled="printing" @click="printSheet">
-						{{ printing ? 'Preparing…' : 'Print' }}
+					<CzButton v-if="generated.length" :icon="mdiPrinter" :disabled="!!printing" @click="printSheet('sheet')">
+						{{ printing === 'sheet' ? 'Preparing…' : 'Print' }}
+					</CzButton>
+					<CzButton
+						v-if="generated.length"
+						:icon="mdiPrinter"
+						:disabled="!!printing"
+						title="A card per table with its colour and code, the programme and the recording notice — print the evening before"
+						@click="printSheet('kit')">
+						{{ printing === 'kit' ? 'Preparing…' : 'Print event kit' }}
 					</CzButton>
 					<CzButton v-if="!plenary" :icon="mdiPlus" :disabled="busy" title="Add the next table to every round" @click="addTable">
 						Add a table

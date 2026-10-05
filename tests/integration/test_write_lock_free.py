@@ -86,6 +86,21 @@ def test_the_qr_sheet_is_rendered_without_the_write_lock(
     assert response.status_code == 200
 
 
+def test_the_event_kit_is_rendered_without_the_write_lock(
+    client, monkeypatch, writer_slot_probe
+):
+    """Printed the evening before — or at the door, like the sheet."""
+    assembly = _assembly(client)
+    client.post(f"/api/v1/assemblies/{assembly['id']}/invites/generate")
+    monkeypatch.setattr(
+        invite_svc, "invite_links", _probing(writer_slot_probe, invite_svc.invite_links)
+    )
+    response = client.get(f"/api/v1/assemblies/{assembly['id']}/event-kit.pdf")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+
+
 def test_the_report_is_built_without_the_write_lock(client, monkeypatch, writer_slot_probe):
     # patched on the api module, not the service: reports.py imports
     # build_report by name, so the service attribute is not what it calls

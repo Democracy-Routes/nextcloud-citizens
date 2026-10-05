@@ -270,6 +270,39 @@ def invite_sheet_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
     return Response(pdf, media_type="application/pdf", headers=download_headers(filename))
 
 
+@router.get("/assemblies/{assembly_id}/event-kit.pdf")
+def event_kit_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
+    """The printable event kit: one card per table (number, colour band, QR),
+    the programme of sessions, and the recording notice in the assembly's
+    language. Printed the evening before; see services/event_kit.py."""
+    from fastapi.responses import Response
+
+    from citizens.services.branding import logo_path, organization_name
+    from citizens.services.event_kit import render_event_kit
+    from citizens.services.provider_config import data_handling_summary
+
+    assembly = get_owned_assembly(session, assembly_id, user)
+    cards = invite_svc.invite_links(session, assembly)
+    rounds = [
+        {
+            "position": round_.position,
+            "title": round_.title,
+            "question": round_.question,
+            "objective": round_.objective,
+            "duration_minutes": round_.duration_minutes,
+        }
+        for round_ in assembly.rounds
+    ]
+    handling = data_handling_summary()
+    if assembly.audio_retention_days is not None:
+        handling = {**handling, "audio_retention_days": assembly.audio_retention_days}
+    pdf = render_event_kit(
+        assembly.name, assembly.language, cards, rounds, handling, logo_path(), organization_name()
+    )
+    filename = f"{assembly.name[:40].replace(' ', '-')}-event-kit.pdf"
+    return Response(pdf, media_type="application/pdf", headers=download_headers(filename))
+
+
 @router.post(
     "/assemblies/{assembly_id}/invites/generate",
     response_model=list[schemas.InviteGenerated],
