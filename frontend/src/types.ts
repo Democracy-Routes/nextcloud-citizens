@@ -248,6 +248,18 @@ export interface MonitorTable {
 		error_code: string
 		job?: JobInfo | null
 	} | null
+	/** Every recorder of the table, one per slot (A, B, …): the newest phone in
+	 * that slot and its newest recording of this round. `device` and
+	 * `recording` above keep describing the newest phone and recording overall;
+	 * absent from a server older than 0.7. */
+	recorders?: Array<{
+		slot: number
+		label: string
+		connected: boolean
+		seconds_since_contact: number | null
+		status: DeviceStatus
+		recording: { id: string; state: string } | null
+	}>
 	/** Recordings from a phone this table has since replaced. The server ships
 	 * these so the salvaged half of a round stays visible while it finishes
 	 * transcribing — otherwise it vanished from the Live tab the moment the

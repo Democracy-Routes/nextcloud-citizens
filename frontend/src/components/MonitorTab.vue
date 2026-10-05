@@ -584,7 +584,18 @@ function pendingChunks(table: MonitorTable): number {
 				</thead>
 				<tbody>
 					<tr v-for="table in monitor.tables" :key="table.table_id">
-						<td><span class="cz-posbadge">{{ table.number }}</span></td>
+						<td>
+							<span class="cz-posbadge">{{ table.number }}</span>
+							<!-- a table with more than one recorder phone: say so, and
+							     which of them are reachable -->
+							<div
+								v-if="(table.recorders?.length ?? 0) > 1"
+								class="cz-muted"
+								style="font-size: 0.78rem; margin-top: 4px; white-space: nowrap">
+								{{ table.recorders!.length }} recorders ·
+								{{ table.recorders!.filter((r) => r.connected).map((r) => r.label).join(', ') || 'none' }} connected
+							</div>
+						</td>
 						<td><CzStatusPill :status="deviceState(table).status" :label="deviceState(table).label" /></td>
 						<td>
 							<CzStatusPill v-if="table.recording" :status="table.recording.state" />

@@ -7,7 +7,7 @@ import json
 from datetime import timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
@@ -228,7 +228,7 @@ def _release_silent_recording(
 def _guard_one_recording_per_table(
     session: Session, recorder_session: RecorderSession, round_: Round, table: Table
 ) -> None:
-    """One healthy recording per table+round.
+    """One healthy recording per table+round — per recorder SLOT.
 
     Prevents accidental extra recordings after a table already finished (unless
     the earlier attempt failed), while letting a phone reclaim its OWN
@@ -236,11 +236,19 @@ def _guard_one_recording_per_table(
     while the facilitator still has it open, and freeing a table whose device
     has gone silent. Not applied in plenary mode, where concurrent devices are
     expected.
+
+    A table may have several recorders (recorder_sessions.slot): a second phone
+    added by QR records beside the first, so only recordings made from THIS
+    phone's slot can block it. Recordings whose session is gone count as slot 1,
+    which is what every recording was before slots existed.
     """
     existing = session.execute(
-        select(Recording).where(
+        select(Recording)
+        .outerjoin(RecorderSession, Recording.recorder_session_id == RecorderSession.id)
+        .where(
             Recording.round_id == round_.id,
             Recording.table_id == table.id,
+            func.coalesce(RecorderSession.slot, 1) == recorder_session.slot,
             Recording.state.notin_(RERECORDABLE_STATES),
             # a superseded recording is still progressing towards a transcript
             # — it holds most of the round — but its phone is gone, so it must

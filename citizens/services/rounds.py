@@ -13,6 +13,7 @@ from citizens.db.models.base import utcnow
 from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
 from citizens.services import job_failures
+from citizens.services.table_recordings import slot_label
 
 log = get_logger(__name__)
 
@@ -56,6 +57,52 @@ def end_round(session: Session, round_: Round) -> Round:
     session.flush()
     log.info("round_ended", round_id=round_.id, assembly_id=round_.assembly_id)
     return round_
+
+
+def _table_recorders(
+    session: Session, round_: Round, table, recordings: list[Recording], now
+) -> list[dict]:
+    """One entry per recorder slot at the table: the newest phone in that slot,
+    its liveness, and its newest recording of this round."""
+    sessions = list(
+        session.execute(
+            select(RecorderSession)
+            .where(
+                RecorderSession.assembly_id == round_.assembly_id,
+                RecorderSession.table_number == table.number,
+            )
+            .order_by(RecorderSession.slot, RecorderSession.created_at.desc())
+        ).scalars()
+    )
+    newest_by_slot: dict[int, RecorderSession] = {}
+    for recorder_session in sessions:
+        newest_by_slot.setdefault(recorder_session.slot, recorder_session)
+    slot_of_session = {s.id: s.slot for s in sessions}
+    recording_by_slot: dict[int, Recording] = {}
+    for recording in recordings:  # newest first
+        slot = slot_of_session.get(recording.recorder_session_id or "", 1)
+        recording_by_slot.setdefault(slot, recording)
+    recorders = []
+    for slot, recorder_session in sorted(newest_by_slot.items()):
+        age = (
+            (now - recorder_session.last_status_at).total_seconds()
+            if recorder_session.last_status_at is not None
+            else None
+        )
+        recording = recording_by_slot.get(slot)
+        recorders.append(
+            {
+                "slot": slot,
+                "label": slot_label(slot),
+                "connected": age is not None and age < STALE_HEARTBEAT_SECONDS,
+                "seconds_since_contact": int(age) if age is not None else None,
+                "status": json.loads(recorder_session.last_status_json or "{}"),
+                "recording": None
+                if recording is None
+                else {"id": recording.id, "state": recording.state},
+            }
+        )
+    return recorders
 
 
 def round_monitor(session: Session, round_: Round) -> dict:
@@ -114,6 +161,10 @@ def round_monitor(session: Session, round_: Round) -> dict:
                 "device": device,
                 "armed": armed,
                 "local_recording_safe": local_safe,
+                # every recorder of the table, one entry per slot (A, B, …):
+                # `device` and `recording` above keep describing the newest
+                # phone and the newest recording, as they always did
+                "recorders": _table_recorders(session, round_, table, recordings, now),
                 "recording": None
                 if recording is None
                 else {

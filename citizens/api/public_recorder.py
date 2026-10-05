@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -480,13 +480,24 @@ def _assembly_state(
     # In plenary the whole room is recorded by many phones at once, so a round
     # is "recorded" only from THIS phone's point of view — another device
     # recording the same round must not lock it out. Every other mode scopes to
-    # the table (one phone per table), where any device's recording means done.
+    # the table AND this phone's recorder slot: the table's own phone and a
+    # replacement that rescanned its code share slot 1, so either's recording
+    # means "done" for the other, while a second recorder added by QR records
+    # beside them and must not be told its table is taken. Recordings whose
+    # session is gone count as slot 1, which is what they were before slots.
     plenary = assembly.recording_mode == "plenary"
-    recorded_scope = (
-        Recording.recorder_session_id == recorder_session.id
-        if plenary
-        else Recording.table_number == recorder_session.table_number
-    )
+    if plenary:
+        recorded_scope = Recording.recorder_session_id == recorder_session.id
+    else:
+        same_slot = select(RecorderSession.id).where(
+            RecorderSession.assembly_id == assembly.id,
+            RecorderSession.table_number == recorder_session.table_number,
+            RecorderSession.slot == recorder_session.slot,
+        )
+        slot_scope = Recording.recorder_session_id.in_(same_slot)
+        if recorder_session.slot == 1:
+            slot_scope = or_(slot_scope, Recording.recorder_session_id.is_(None))
+        recorded_scope = and_(Recording.table_number == recorder_session.table_number, slot_scope)
     for recording in session.execute(
         select(Recording).where(
             Recording.assembly_id == assembly.id,

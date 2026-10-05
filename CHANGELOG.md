@@ -61,6 +61,20 @@ not rewritten.
   Creation and consumption are audited by invite id, never by token.
   Recorder phones now carry a `slot` (the table's own code is slot 1, a
   replacement that rescans it too; an added recorder gets the next number).
+- **A table may have several recorder phones.** A recorder added by QR is
+  slot B: it records beside slot A, neither is told the table is taken, both
+  recordings belong to the one table, and losing one changes nothing about
+  the other. The one-recording-per-table rule now holds per slot, so
+  replacement is what it always was — a phone rescanning the table's own
+  code into slot A — and every recovery path (own-recording reclaim, "record
+  the rest", silent-device takeover) is unchanged. `services/table_recordings`
+  is the home of "every recording of this table": the analysis merges
+  recordings that overlap in time (side-by-side recorders, as plenary always
+  did) and concatenates the ones that follow one another (a replacement),
+  deciding by time rather than by how the recording came to exist. The Live
+  tab lists a table's recorders (`recorders`), `GET
+  /api/v1/rounds/{id}/tables/{table_id}/recordings` lists its recordings with
+  their slot, and exports name a second recorder's file `-recorderB`.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

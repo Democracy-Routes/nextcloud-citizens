@@ -11,19 +11,20 @@ from sqlalchemy.orm import Session
 
 from citizens.api.downloads import download_headers
 from citizens.config import get_settings
-from citizens.db.models import RecorderSession, Recording
+from citizens.db.models import RecorderSession, Recording, Table
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.security.identity import CurrentUser
 from citizens.services import invites as invite_svc
-from citizens.services.assemblies import get_owned_assembly
+from citizens.services.assemblies import get_owned_assembly, get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording import salvage_total_chunks
 from citizens.services.recording_states import transition
+from citizens.services.table_recordings import recording_slots, recordings_for_table, slot_label
 from citizens.storage.paths import device_log_path
 
 router = APIRouter()
@@ -267,6 +268,33 @@ def revoke_invites(assembly_id: str, user: CurrentUser, session: DB):
     record_audit_event(
         session, "invites_revoked", "assembly", assembly.id, actor=user, data={"count": count}
     )
+
+
+@router.get("/rounds/{round_id}/tables/{table_id}/recordings")
+def table_recordings(round_id: str, table_id: str, user: CurrentUser, session: ReadDB):
+    """Every recording of one table's discussion in one round — however many
+    phones made them — with the recorder slot each came from."""
+    round_ = get_owned_round(session, round_id, user)
+    table = session.get(Table, table_id)
+    if table is None or table.round_id != round_.id:
+        raise HTTPException(status_code=404, detail="Table not found")
+    recordings = recordings_for_table(session, round_.id, table.id)
+    slots = recording_slots(session, recordings)
+    return [
+        {
+            "id": recording.id,
+            "slot": slots.get(recording.id, 1),
+            "slot_label": slot_label(slots.get(recording.id, 1)),
+            "state": recording.state,
+            "error_code": recording.error_code,
+            "started_at": recording.started_at,
+            "ended_at": recording.ended_at,
+            "duration_seconds": recording.duration_seconds,
+            "superseded_at": recording.superseded_at,
+            "received_chunks": recording.received_chunks,
+        }
+        for recording in recordings
+    ]
 
 
 @router.get("/assemblies/{assembly_id}/tables/{table_number}/device-logs")

@@ -31,6 +31,7 @@ from citizens.services import job_failures
 from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
+from citizens.services.table_recordings import recording_slots, slot_label
 from citizens.services.transcription import transcript_payload
 from citizens.storage.exports import build_target
 from citizens.storage.paths import (
@@ -55,12 +56,17 @@ def canonical_path(recording: Recording) -> Path | None:
     return path if path.is_file() else None
 
 
-def audio_filename(assembly: Assembly, recording: Recording, position: int) -> str:
-    """Keep plenary devices and repeated replacements distinct within an export."""
+def audio_filename(assembly: Assembly, recording: Recording, position: int, slot: int = 1) -> str:
+    """Keep plenary devices, repeated replacements and side-by-side recorders
+    distinct within an export: table 7's second recorder is `-recorderB`."""
     stem = "".join(c if c.isalnum() or c in "-_" else "-" for c in assembly.name)[:40].strip("-")
     suffix = Path(recording.canonical_audio_path or "audio.webm").suffix or ".webm"
+    recorder = f"-recorder{slot_label(slot)}" if slot > 1 else ""
     part = "-part1" if recording.superseded_at is not None else ""
-    return f"{stem or 'assembly'}-round{position}-table{recording.table_number}{part}-{recording.id}{suffix}"
+    return (
+        f"{stem or 'assembly'}-round{position}-table{recording.table_number}"
+        f"{recorder}{part}-{recording.id}{suffix}"
+    )
 
 
 def list_files(session: Session, assembly: Assembly) -> dict:
@@ -425,12 +431,19 @@ def plan_audio_zip(session: Session, assembly: Assembly) -> list[tuple[Path, str
     the whole of what it needs the database for, so a caller can let go of
     its connection before the minutes of disk work that follow."""
     positions = {round_.id: round_.position for round_ in assembly.rounds}
+    recordings = _recordings(session, assembly)
+    slots = recording_slots(session, recordings)
     plan = []
-    for recording in _recordings(session, assembly):
+    for recording in recordings:
         path = canonical_path(recording)
         if path is None:
             continue
-        plan.append((path, audio_filename(assembly, recording, positions.get(recording.round_id, 0))))
+        plan.append((
+            path,
+            audio_filename(
+                assembly, recording, positions.get(recording.round_id, 0), slots.get(recording.id, 1)
+            ),
+        ))
     return plan
 
 
@@ -461,6 +474,7 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
 
     positions = {round_.id: round_.position for round_ in assembly.rounds}
     recordings = _recordings(session, assembly)
+    slots = recording_slots(session, recordings)
     report = build_report(session, assembly, include_drafts=True)
 
     manifest = {
@@ -512,7 +526,7 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
                 "sha256": r.sha256,
                 "analysis_summary": r.analysis_summary,
                 "audio_file": (
-                    f"audio/{audio_filename(assembly, r, positions.get(r.round_id, 0))}"
+                    f"audio/{audio_filename(assembly, r, positions.get(r.round_id, 0), slots.get(r.id, 1))}"
                     if canonical_path(r)
                     else None
                 ),
@@ -538,7 +552,10 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
             if path is not None:
                 archive.write(
                     path,
-                    f"audio/{audio_filename(assembly, recording, positions.get(recording.round_id, 0))}",
+                    "audio/" + audio_filename(
+                        assembly, recording, positions.get(recording.round_id, 0),
+                        slots.get(recording.id, 1),
+                    ),
                 )
             transcript = session.execute(
                 select(Transcript).where(Transcript.recording_id == recording.id)

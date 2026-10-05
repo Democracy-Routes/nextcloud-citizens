@@ -24,6 +24,7 @@ from citizens.domain.analysis_schemas import RoundAnalysis, TableAnalysis
 from citizens.logging_setup import get_logger
 from citizens.providers.analysis.openai_compat import AnalysisError, chat_json
 from citizens.services import provider_config, pseudonyms
+from citizens.services.table_recordings import recordings_for_table, recordings_overlap
 
 log = get_logger(__name__)
 
@@ -255,19 +256,12 @@ def table_recordings(session: Session, recording: Recording) -> list[Recording]:
     """Every recording of this table's discussion in this round, oldest first.
 
     Normally one. Two when the phone was replaced mid-round — one group of
-    people having one conversation with a technical interruption in the middle,
-    which is how the analysis and the report should treat it.
+    people having one conversation with a technical interruption in the middle
+    — or when a second recorder was added to the table and both ran side by
+    side. services/table_recordings.py is the home of this; kept here for the
+    callers that already use it.
     """
-    return list(
-        session.execute(
-            select(Recording)
-            .where(
-                Recording.round_id == recording.round_id,
-                Recording.table_id == recording.table_id,
-            )
-            .order_by(Recording.created_at)
-        ).scalars()
-    )
+    return recordings_for_table(session, recording.round_id, recording.table_id)
 
 
 def analyze_table(session: Session, store: provider_config.ConfigStore, recording: Recording) -> int:
@@ -313,10 +307,17 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     hidden = pseudonyms.name_map(session, assembly) if assembly else {}
 
     lines: list[str] = []
-    if assembly is not None and assembly.recording_mode == "plenary" and len(siblings) > 1:
-        # The whole room on many phones: one discussion, overlapping captures.
-        # Merge and dedupe into a single timeline rather than concatenating the
-        # devices back to back (which would count each statement once per phone).
+    side_by_side = len(siblings) > 1 and (
+        (assembly is not None and assembly.recording_mode == "plenary")
+        or recordings_overlap(siblings)
+    )
+    if side_by_side:
+        # Several phones on one discussion at the same time — the whole room in
+        # plenary, or a table with more than one recorder: overlapping captures
+        # of the same words. Merge and dedupe into a single timeline rather than
+        # concatenating the devices back to back (which would count each
+        # statement once per phone). Recordings that FOLLOW one another (a phone
+        # replaced, "record the rest") are concatenated below instead.
         for block in merge_plenary_segments(siblings, transcripts):
             lines.append(
                 f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
