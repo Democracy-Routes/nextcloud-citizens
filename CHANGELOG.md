@@ -28,6 +28,14 @@ not rewritten.
   what it is about. It reaches the phone's status payload, the analysis
   prompts (one extra line, only when stated) and the Markdown and PDF reports.
   Legacy rounds have none and read exactly as before.
+- **Citizens opens on three actions, not on an assembly.** Home offers
+  *Record now*, *Start a Session* and *Create an Assembly*; the app no longer
+  opens the first assembly it finds. Record now creates the Session and opens
+  the recorder in a new tab (or shows the link when the browser blocks the
+  tab); Start a Session is a one-step form — question, optional objective,
+  duration, tables, how the tables record; Create an Assembly is the wizard as
+  before. The sidebar lists standalone Sessions under their question, apart
+  from assemblies, and the Rounds tab can set a round's objective.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

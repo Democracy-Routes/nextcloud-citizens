@@ -1,12 +1,14 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiAccountVoice, mdiChevronLeft, mdiChevronRight, mdiCog, mdiMenu, mdiPlus } from '@mdi/js'
+import { mdiChevronLeft, mdiChevronRight, mdiCog, mdiHomeOutline, mdiMenu } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
 import { describeError, type UiError } from './errors'
 import { api, ApiError } from './api'
 import AssemblyDetail from './components/AssemblyDetail.vue'
 import AssemblyWizard from './components/AssemblyWizard.vue'
+import HomeView from './components/HomeView.vue'
+import SessionWizard from './components/SessionWizard.vue'
 import SettingsView from './components/SettingsView.vue'
 import CzButton from './components/ui/CzButton.vue'
 import CzError from './components/ui/CzError.vue'
@@ -14,14 +16,22 @@ import CzToasts from './components/ui/CzToasts.vue'
 import SvgIcon from './components/ui/SvgIcon.vue'
 import type { Assembly, InviteGenerated } from './types'
 
-type View = { name: 'empty' } | { name: 'create' } | { name: 'detail'; id: string } | { name: 'settings' }
+type View =
+	| { name: 'home' }
+	| { name: 'create' }
+	| { name: 'create-session' }
+	| { name: 'detail'; id: string }
+	| { name: 'settings' }
 
 const assemblies = ref<Assembly[]>([])
 const loaded = ref(false)
-const view = ref<View>({ name: 'empty' })
+// Home is where everyone lands: Record now, Start a Session, Create an
+// Assembly. The app used to open the first assembly, which presumed there
+// was one to configure.
+const view = ref<View>({ name: 'home' })
 const isAdmin = ref(false)
 const sidebarOpen = ref(false)
-// Desktop collapse of the assemblies column, like Calendar's navigation
+// Desktop collapse of the sidebar column, like Calendar's navigation
 // toggle. Remembered per browser; localStorage can throw in private windows,
 // so both sides are guarded and the default is simply "open".
 const sidebarCollapsed = ref(false)
@@ -39,13 +49,12 @@ function toggleSidebar(): void {
 		/* preference simply not remembered */
 	}
 }
-// QR codes generated at creation: handed to the detail view exactly once
-/** QR codes from a just-created assembly, handed to the detail view.
+/** QR codes from a just-created assembly or Session, handed to the detail view.
  *
- * Keyed by assembly, because it is app-level state consumed by whatever mounts
- * next: if @invites-consumed never fired (QrTab throwing on mount was enough),
- * the NEXT assembly opened was forced onto its QR tab and shown the previous
- * assembly's codes under its own name.
+ * Keyed by container, because it is app-level state consumed by whatever
+ * mounts next: if @invites-consumed never fired (QrTab throwing on mount was
+ * enough), the NEXT one opened was forced onto its QR tab and shown the
+ * previous codes under its own name.
  */
 const freshInvites = ref<{ assemblyId: string; invites: InviteGenerated[] } | null>(null)
 
@@ -55,18 +64,20 @@ const STATUS_TONE: Record<string, string> = {
 
 const selectedId = computed(() => (view.value.name === 'detail' ? view.value.id : ''))
 
+// A standalone Session is stored behind a container row of kind "session";
+// the list shows it as a Session, under its question, never as an assembly.
+const sessions = computed(() => assemblies.value.filter((a) => a.kind === 'session'))
+const events = computed(() => assemblies.value.filter((a) => a.kind !== 'session'))
+
 const loadError = ref<UiError | null>(null)
 
-async function loadAssemblies(selectFirst = false): Promise<void> {
+async function loadAssemblies(): Promise<void> {
 	try {
 		assemblies.value = await api.listAssemblies()
 		loadError.value = null
-		if (selectFirst && view.value.name === 'empty' && assemblies.value.length > 0) {
-			view.value = { name: 'detail', id: assemblies.value[0].id }
-		}
 	} catch (err) {
-		// Without this the list stayed empty and the app said "No assemblies
-		// yet", inviting the facilitator to create the assembly they already
+		// Without this the list stayed empty and the app said "nothing yet",
+		// inviting the facilitator to create the assembly they already
 		// had — during the event, with the API merely unreachable.
 		loadError.value = describeError(err)
 	} finally {
@@ -75,7 +86,7 @@ async function loadAssemblies(selectFirst = false): Promise<void> {
 }
 
 onMounted(async () => {
-	void loadAssemblies(true)
+	void loadAssemblies()
 	try {
 		await api.adminPing()
 		isAdmin.value = true
@@ -93,9 +104,20 @@ function open(id: string): void {
 	sidebarOpen.value = false
 }
 
+function goHome(): void {
+	view.value = { name: 'home' }
+	sidebarOpen.value = false
+}
+
 function openCreate(): void {
 	freshInvites.value = null
 	view.value = { name: 'create' }
+	sidebarOpen.value = false
+}
+
+function openCreateSession(): void {
+	freshInvites.value = null
+	view.value = { name: 'create-session' }
 	sidebarOpen.value = false
 }
 
@@ -115,20 +137,71 @@ async function onCreated(id: string, invites: InviteGenerated[]): Promise<void> 
 
 async function onDeleted(): Promise<void> {
 	await loadAssemblies()
-	view.value = assemblies.value.length
-		? { name: 'detail', id: assemblies.value[0].id }
-		: { name: 'empty' }
+	view.value = { name: 'home' }
+}
+
+/* ---- Record now: a one-table Session and this phone as its recorder ---- */
+
+const recordNowBusy = ref(false)
+const recordNowError = ref('')
+// shown when the browser refused to open the recorder tab itself
+const recorderUrl = ref('')
+
+/** The Nextcloud page language, when it is one the server transcribes. */
+function uiLanguage(): string {
+	const lang = (document.documentElement.lang || 'en').slice(0, 2).toLowerCase()
+	return ['en', 'it', 'de', 'fr', 'es'].includes(lang) ? lang : 'en'
+}
+
+async function recordNow(): Promise<void> {
+	recordNowBusy.value = true
+	recordNowError.value = ''
+	recorderUrl.value = ''
+	try {
+		const made = await api.recordNow({ language: uiLanguage() })
+		// The recorder is a separate public page: open it beside the organizer
+		// so the Session's Live and Files tabs stay a click away. A browser that
+		// blocks the popup gets an explicit link instead of nothing.
+		const opened = window.open(made.recorder_url, '_blank', 'noopener')
+		if (!opened) recorderUrl.value = made.recorder_url
+		await loadAssemblies()
+	} catch (err) {
+		recordNowError.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		recordNowBusy.value = false
+	}
 }
 </script>
 
 <template>
 	<aside class="cz-sidebar" :class="{ 'cz-sidebar--open': sidebarOpen, 'cz-sidebar--collapsed': sidebarCollapsed }">
 		<div class="cz-sidebar__top">
-			<CzButton variant="primary" :icon="mdiPlus" wide @click="openCreate">New assembly</CzButton>
+			<CzButton variant="primary" :icon="mdiHomeOutline" wide @click="goHome">Home</CzButton>
 		</div>
 		<nav class="cz-sidebar__list">
+			<p v-if="sessions.length" class="cz-sidebar__group">Sessions</p>
 			<button
-				v-for="assembly in assemblies"
+				v-for="session in sessions"
+				:key="session.id"
+				class="cz-navitem"
+				:class="{ 'cz-navitem--active': session.id === selectedId }"
+				@click="open(session.id)">
+				<span
+					class="cz-dot"
+					:class="`cz-dot--${STATUS_TONE[session.status] ?? 'gray'}`"
+					role="img"
+					:aria-label="session.status.replaceAll('_', ' ').toLowerCase()"
+					:title="session.status.replaceAll('_', ' ').toLowerCase()"></span>
+				<span class="cz-navitem__body">
+					<span class="cz-navitem__name">{{ session.name }}</span>
+					<span class="cz-navitem__meta">
+						Session · {{ session.default_table_count }} {{ session.default_table_count === 1 ? 'table' : 'tables' }}
+					</span>
+				</span>
+			</button>
+			<p v-if="events.length && sessions.length" class="cz-sidebar__group">Assemblies</p>
+			<button
+				v-for="assembly in events"
 				:key="assembly.id"
 				class="cz-navitem"
 				:class="{ 'cz-navitem--active': assembly.id === selectedId }"
@@ -154,7 +227,7 @@ async function onDeleted(): Promise<void> {
 				v-else-if="loaded && assemblies.length === 0"
 				class="cz-muted"
 				style="padding: 12px; font-size: 0.8125rem">
-				No assemblies yet.
+				No sessions or assemblies yet.
 			</p>
 		</nav>
 		<div v-if="isAdmin" class="cz-sidebar__bottom">
@@ -174,38 +247,32 @@ async function onDeleted(): Promise<void> {
 		<button
 			class="cz-sidebar-toggle"
 			:class="{ 'cz-sidebar-toggle--collapsed': sidebarCollapsed }"
-			:aria-label="sidebarCollapsed ? 'Show assembly list' : 'Hide assembly list'"
-			:title="sidebarCollapsed ? 'Show assembly list' : 'Hide assembly list'"
+			:aria-label="sidebarCollapsed ? 'Show the list' : 'Hide the list'"
+			:title="sidebarCollapsed ? 'Show the list' : 'Hide the list'"
 			@click="toggleSidebar">
 			<SvgIcon :path="sidebarCollapsed ? mdiChevronRight : mdiChevronLeft" :size="20" />
 		</button>
 		<div class="cz-mobilebar">
-			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">Assemblies</CzButton>
+			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">Sessions</CzButton>
 		</div>
 
-		<div v-if="view.name === 'empty' && loadError" class="cz-page">
-			<!-- the list failed to load; there may well BE assemblies, so do not
-			     invite the facilitator to create one they already have -->
-			<CzError :error="loadError" @retry="loadAssemblies(true)" />
-		</div>
+		<HomeView
+			v-if="view.name === 'home'"
+			:recording="recordNowBusy"
+			:recorder-url="recorderUrl"
+			:error="recordNowError"
+			@record-now="recordNow"
+			@start-session="openCreateSession"
+			@create-assembly="openCreate" />
 
-		<div v-else-if="view.name === 'empty'" class="cz-page">
-			<div class="cz-empty" style="padding-top: 12vh">
-				<div class="cz-empty__icon"><SvgIcon :path="mdiAccountVoice" :size="44" /></div>
-				<h3 class="cz-empty__title">Welcome to Citizens</h3>
-				<p class="cz-empty__hint">
-					Run in-person citizens' assemblies: one phone per table records the discussion safely,
-					even with unstable connectivity, and transcripts arrive automatically.
-				</p>
-				<div class="cz-empty__action">
-					<CzButton variant="primary" :icon="mdiPlus" @click="openCreate">Create your first assembly</CzButton>
-				</div>
-			</div>
-		</div>
+		<SessionWizard
+			v-else-if="view.name === 'create-session'"
+			@cancel="goHome"
+			@created="onCreated" />
 
 		<AssemblyWizard
 			v-else-if="view.name === 'create'"
-			@cancel="view = assemblies.length ? { name: 'detail', id: assemblies[0].id } : { name: 'empty' }"
+			@cancel="goHome"
 			@created="onCreated" />
 
 		<SettingsView v-else-if="view.name === 'settings'" />

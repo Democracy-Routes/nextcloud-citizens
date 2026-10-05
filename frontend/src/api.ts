@@ -11,12 +11,15 @@ import type {
 	InviteGenerated,
 	Participant,
 	ProvidersSummary,
+	RecordNowOut,
 	SttProvider,
 	ReportData,
 	Round,
 	RoundFindings,
 	RoundIn,
 	RoundMonitor,
+	SessionCreate,
+	SessionCreated,
 	Table,
 	TranscriptData,
 } from './types'
@@ -83,6 +86,12 @@ export const api = {
 		rounds: RoundIn[]
 	}) => request<AssemblyCreated>('POST', '/api/v1/assemblies', data),
 	getAssembly: (id: string) => request<AssemblyDetail>('GET', `/api/v1/assemblies/${id}`),
+
+	// A Session on its own: no assembly to name or configure first. The rows
+	// behind it are reached through container_id on the assembly routes.
+	createSession: (data: SessionCreate) => request<SessionCreated>('POST', '/api/v1/sessions', data),
+	recordNow: (data: { language: string }) =>
+		request<RecordNowOut>('POST', '/api/v1/sessions/record-now', data),
 	updateAssembly: (id: string, data: AssemblyUpdate) =>
 		request<AssemblyDetail>('PUT', `/api/v1/assemblies/${id}`, data),
 	deleteAssembly: (id: string) => request<void>('DELETE', `/api/v1/assemblies/${id}`),

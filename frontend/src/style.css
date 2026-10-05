@@ -544,6 +544,124 @@
 	font-weight: 500;
 }
 
+/* ================= home ================= */
+
+/* The three ways in. Large targets: Record now is meant to be tapped on a
+   phone held in one hand, standing at a table. */
+#citizens-app .cz-home {
+	max-width: 760px;
+}
+
+#citizens-app .cz-home__title {
+	margin: 1.5rem 0 0.25rem;
+	font-size: 1.75rem;
+}
+
+#citizens-app .cz-home__hint {
+	margin: 0 0 1.5rem;
+	font-size: 0.9375rem;
+}
+
+#citizens-app .cz-home__actions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 14px;
+}
+
+#citizens-app .cz-home__action {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+	min-height: 150px;
+	padding: 18px 18px 16px;
+	border: 1px solid var(--cz-border);
+	border-radius: var(--cz-radius-lg);
+	background: var(--cz-bg);
+	color: var(--cz-text);
+	text-align: left;
+	cursor: pointer;
+	box-shadow: var(--cz-shadow);
+	transition: box-shadow 0.12s ease, transform 0.12s ease, background 0.12s ease;
+	font: inherit;
+}
+
+#citizens-app .cz-home__action:hover:not(:disabled) {
+	box-shadow: var(--cz-shadow-lift);
+	transform: translateY(-1px);
+}
+
+#citizens-app .cz-home__action:focus-visible {
+	outline: 2px solid var(--cz-primary);
+	outline-offset: 2px;
+}
+
+#citizens-app .cz-home__action:disabled {
+	opacity: 0.7;
+	cursor: progress;
+}
+
+#citizens-app .cz-home__action--primary {
+	background: var(--cz-primary);
+	border-color: var(--cz-primary);
+	color: var(--cz-primary-text);
+}
+
+#citizens-app .cz-home__action--primary:hover:not(:disabled) {
+	background: var(--cz-primary-hover);
+}
+
+#citizens-app .cz-home__action-name {
+	font-size: 1.125rem;
+	font-weight: 600;
+}
+
+#citizens-app .cz-home__action-hint {
+	font-size: 0.875rem;
+	opacity: 0.85;
+	line-height: 1.35;
+}
+
+#citizens-app .cz-home__ready {
+	margin-bottom: 14px;
+	border-color: var(--cz-green);
+}
+
+#citizens-app .cz-home__link {
+	display: inline-block;
+	padding: 10px 16px;
+	border-radius: var(--cz-radius);
+	background: var(--cz-primary);
+	color: var(--cz-primary-text);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+#citizens-app .cz-home__foot {
+	margin-top: 18px;
+	display: flex;
+	justify-content: flex-end;
+}
+
+/* "Sessions" / "Assemblies" headings in the sidebar list */
+#citizens-app .cz-sidebar__group {
+	margin: 10px 14px 4px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--cz-text-muted);
+}
+
+/* a small label above a page heading ("Session") */
+#citizens-app .cz-eyebrow {
+	margin: 0 0 2px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
 /* ================= empty state / skeleton ================= */
 
 #citizens-app .cz-empty {

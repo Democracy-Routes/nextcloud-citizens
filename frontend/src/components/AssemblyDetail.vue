@@ -87,8 +87,15 @@ async function deleteAssembly(): Promise<void> {
 		<template v-if="assembly">
 			<div class="cz-pagehead">
 				<div style="min-width: 0">
+					<!-- a standalone Session is never presented as an assembly -->
+					<p v-if="assembly.kind === 'session'" class="cz-muted cz-eyebrow">Session</p>
 					<h2 style="overflow-wrap: anywhere">{{ assembly.name }}</h2>
-					<p class="cz-muted" style="margin: 4px 0 0">
+					<p v-if="assembly.kind === 'session'" class="cz-muted" style="margin: 4px 0 0">
+						<template v-if="assembly.recording_mode === 'plenary'">One room, many phones</template>
+						<template v-else>{{ assembly.default_table_count }} {{ assembly.default_table_count === 1 ? 'table' : 'tables' }}</template> ·
+						{{ assembly.language.toUpperCase() }}
+					</p>
+					<p v-else class="cz-muted" style="margin: 4px 0 0">
 						{{ assembly.participant_count }} / {{ assembly.expected_participants }} participants ·
 						<template v-if="assembly.recording_mode === 'plenary'">Plenary (one shared recorder)</template>
 						<template v-else>{{ assembly.default_table_count }} tables</template> ·

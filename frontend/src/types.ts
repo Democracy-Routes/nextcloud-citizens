@@ -3,6 +3,9 @@
 export interface RoundIn {
 	title: string
 	question: string
+	/** What the discussion should produce, as distinct from what it is about.
+	 * Optional; null on every round made before 0.7. */
+	objective?: string | null
 	duration_minutes: number
 }
 
@@ -16,8 +19,14 @@ export interface Round extends RoundIn {
 	ended_at: string | null
 }
 
+export type RecordingMode = 'orchestrated' | 'independent' | 'plenary'
+
 export interface Assembly {
 	id: string
+	/** "assembly" for an organized event; "session" for the container behind a
+	 * standalone Session, which the UI lists as a Session and never as an
+	 * assembly. Absent only from a server older than 0.7. */
+	kind?: 'assembly' | 'session'
 	name: string
 	description: string
 	language: string
@@ -156,6 +165,37 @@ export interface InviteGenerated {
 
 export interface AssemblyCreated extends AssemblyDetail {
 	invites: InviteGenerated[]
+}
+
+/** Start a Session: no assembly to describe first. */
+export interface SessionCreate {
+	question: string
+	objective?: string | null
+	duration_minutes: number
+	table_count: number
+	recording_mode: RecordingMode
+	language: string
+}
+
+export interface SessionCreated {
+	/** the Session's own id — what every /rounds/{id} route accepts */
+	session_id: string
+	/** the container the organizer screens are reached through */
+	container_id: string
+	question: string
+	objective: string | null
+	recording_mode: RecordingMode
+	table_count: number
+	invites: InviteGenerated[]
+}
+
+export interface RecordNowOut {
+	session_id: string
+	container_id: string
+	table_number: number
+	/** the recorder page with Table 1's join token: opening it on this device
+	 * makes it the Session's recorder */
+	recorder_url: string
 }
 
 export interface DeviceStatus {

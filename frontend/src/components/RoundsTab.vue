@@ -26,6 +26,7 @@ const error = ref('')
 const editingId = ref('')
 const editTitle = ref('')
 const editQuestion = ref('')
+const editObjective = ref('')
 const editDuration = ref(30)
 const deleteId = ref('')
 
@@ -48,6 +49,7 @@ function startEdit(roundId: string): void {
 	editingId.value = roundId
 	editTitle.value = round.title
 	editQuestion.value = round.question
+	editObjective.value = round.objective ?? ''
 	editDuration.value = round.duration_minutes
 }
 
@@ -64,6 +66,8 @@ const saveEdit = () =>
 		await api.updateRound(editingId.value, {
 			title: editTitle.value,
 			question: editQuestion.value,
+			// an empty string clears it; the server stores "none stated" as null
+			objective: editObjective.value.trim(),
 			duration_minutes: editDuration.value,
 		})
 		editingId.value = ''
@@ -110,6 +114,10 @@ const add = () =>
 					<div class="cz-field">
 						<label>Question / prompt</label><textarea v-model="editQuestion" rows="2"></textarea>
 					</div>
+					<div class="cz-field">
+						<label>Objective (optional)</label>
+						<textarea v-model="editObjective" rows="2" maxlength="2000" placeholder="Produce three concrete proposals."></textarea>
+					</div>
 					<div class="cz-row" style="justify-content: flex-end">
 						<CzButton variant="tertiary" small @click="editingId = ''">Cancel</CzButton>
 						<CzButton variant="primary" small @click="saveEdit">Save round</CzButton>
@@ -127,6 +135,9 @@ const add = () =>
 								</div>
 								<p style="margin: 6px 0 0; font-size: 0.9375rem">
 									{{ round.question || 'No question set yet.' }}
+								</p>
+								<p v-if="round.objective" class="cz-muted" style="margin: 4px 0 0; font-size: 0.875rem">
+									Objective: {{ round.objective }}
 								</p>
 							</div>
 						</div>
