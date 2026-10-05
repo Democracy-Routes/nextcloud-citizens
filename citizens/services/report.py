@@ -24,7 +24,7 @@ from citizens.services.report_text import (
     type_labels,
     type_labels_singular,
 )
-from citizens.services.speaking import table_speaking_balance
+from citizens.services.speaking import round_speaking_comparison, table_speaking_balance
 
 # The wording lives in report_text.py, per language. These module names are
 # the English values, kept for callers that want a language-neutral constant
@@ -286,6 +286,31 @@ def _transcript_engines(session: Session, assembly: Assembly) -> str:
     return ", ".join(names)
 
 
+def _synthesis_payload(assembly: Assembly) -> dict | None:
+    if not assembly.synthesis_json:
+        return None
+    try:
+        payload = json.loads(assembly.synthesis_json)
+    except ValueError:
+        return None
+    payload["generated_at"] = assembly.synthesis_at.isoformat() if assembly.synthesis_at else None
+    return payload
+
+
+def _markdown_synthesis(synthesis: dict | None, language: str | None) -> list[str]:
+    if not synthesis or not synthesis.get("narrative"):
+        return []
+    lines = [f"## {text(language, 'synthesis_heading')}", "", synthesis["narrative"], ""]
+    for stage in synthesis.get("stages") or []:
+        lines += [f"### {stage['title']}", "", stage["summary"], ""]
+    carried = synthesis.get("carried_forward") or []
+    if carried:
+        lines += [f"**{text(language, 'carried_forward')}**", ""]
+        lines += [f"- {item}" for item in carried]
+        lines.append("")
+    return lines
+
+
 def _validation_payload(entry: dict | None, include_notes: bool) -> dict | None:
     """Participants' word on a table's summary: counts for everyone, the
     notes only where the organizer reads them (drafts included = organizer)."""
@@ -445,6 +470,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                 "summary": round_.analysis_summary,
                 "recordings": recordings_by_round.get(round_.id, 0),
                 "cross_table": cross,
+                # the tables side by side: voices, largest/smallest share and
+                # their ratio — never summed across tables
+                "speaking_comparison": round_speaking_comparison(session, round_),
                 "tables": [
                     {
                         "table_number": number,
@@ -480,6 +508,8 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             language,
             "method_diarized" if _has_speaker_labels(session, assembly) else "method",
         ),
+        # how the discussion developed across sessions (0.7), when produced
+        "synthesis": _synthesis_payload(assembly),
         # built by accumulation rather than a ternary: there are three notes
         # now, and "(A + B) if cond else A" does not extend to a third
         "methodology_note": _methodology_note(session, assembly),
@@ -563,6 +593,7 @@ def render_markdown(report: dict) -> str:
     ]
     ai_summary = text(language, "ai_summary")
     no_findings = f"_{text(language, 'no_findings_yet')}_"
+    lines += _markdown_synthesis(report.get("synthesis"), language)
     plenary = assembly.get("recording_mode") == "plenary"
     for round_ in report["rounds"]:
         lines += [f"## {round_heading(round_['position'], round_['title'], language)}", ""]
@@ -591,6 +622,7 @@ def render_markdown(report: dict) -> str:
                 lines += [f"#### {label}", ""]
                 for finding in group:
                     lines += _markdown_finding(finding, cross=True, language=language)
+        lines += _markdown_comparison(round_.get("speaking_comparison") or [], language)
         for table in round_["tables"]:
             balance_lines = _markdown_balance(table.get("speaking_balance"), language)
             if not table["findings"] and not table["summary"] and not balance_lines:
@@ -613,6 +645,29 @@ def render_markdown(report: dict) -> str:
             lines += [no_findings, ""]
     lines += ["---", "", f"_{report['methodology_note']}_", ""]
     return "\n".join(lines)
+
+
+def _markdown_comparison(rows: list[dict], language: str | None) -> list[str]:
+    """The tables side by side, when at least two have a measured balance."""
+    if len(rows) < 2:
+        return []
+    lines = [
+        f"### {text(language, 'speaking_comparison')}",
+        "",
+        f"_{text(language, 'speaking_comparison_caveat')}_",
+        "",
+        "| " + " | ".join(text(language, f"comparison_col_{col}")
+                          for col in ("table", "voices", "largest", "smallest", "ratio")) + " |",
+        "|---|---|---|---|---|",
+    ]
+    for row in rows:
+        ratio = f"{row['ratio']}×" if row.get("ratio") else "—"
+        lines.append(
+            f"| {row['table_number']} | {row['voices']} | {row['largest_percent']}% | "
+            f"{row['smallest_percent']}% | {ratio} |"
+        )
+    lines.append("")
+    return lines
 
 
 def _markdown_balance(balance: dict | None, language: str | None) -> list[str]:

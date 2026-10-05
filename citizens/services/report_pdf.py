@@ -165,6 +165,56 @@ def _balance_color(index: int, label: str) -> tuple:
     return BALANCE_OTHERS if label == "Others" else BALANCE_PALETTE[index % len(BALANCE_PALETTE)]
 
 
+def _synthesis(pdf: _ReportPDF, synthesis: dict | None, language: str | None) -> None:
+    """How the discussion developed across sessions, after the executive
+    summary: the narrative, one block per session, what was carried on."""
+    if not synthesis or not synthesis.get("narrative"):
+        return
+    pdf.section_banner(text(language, "synthesis_heading"))
+    pdf.text_block(synthesis["narrative"], height=5)
+    pdf.ln(1.5)
+    for stage in synthesis.get("stages") or []:
+        pdf.text_block(stage["title"], size=10.5, style="B", height=5)
+        pdf.text_block(stage["summary"], height=5)
+        pdf.ln(1.5)
+    carried = synthesis.get("carried_forward") or []
+    if carried:
+        pdf.text_block(text(language, "carried_forward"), size=9.5, style="B", color=MUTED, height=4.8)
+        for item in carried:
+            pdf.text_block(f"• {item}", size=9.5, height=4.8)
+        pdf.ln(1.5)
+
+
+def _speaking_comparison(pdf: _ReportPDF, rows: list[dict], language: str | None) -> None:
+    """The session's tables side by side — voices, largest/smallest share,
+    ratio — when at least two have a measured balance. Plain cells; the
+    ratio column is what a lopsided table stands out by."""
+    if len(rows) < 2:
+        return
+    pdf.group_heading(text(language, "speaking_comparison"), MUTED)
+    pdf.text_block(text(language, "speaking_comparison_caveat"), size=8.5, color=MUTED, height=4.4)
+    pdf.ln(1)
+    widths = (26, 22, 30, 30, 22)
+    columns = ("table", "voices", "largest", "smallest", "ratio")
+    headers = [text(language, f"comparison_col_{col}") for col in columns]
+    pdf.set_font(pdf.family, "B", 8.5)
+    pdf.set_text_color(*MUTED)
+    for width, header in zip(widths, headers, strict=True):
+        pdf.cell(width, 5.5, header)
+    pdf.ln(5.5)
+    pdf.set_font(pdf.family, "", 9)
+    pdf.set_text_color(*INK)
+    for row in rows:
+        cells = (
+            str(row["table_number"]), str(row["voices"]), f"{row['largest_percent']}%",
+            f"{row['smallest_percent']}%", f"{row['ratio']}×" if row.get("ratio") else "—",
+        )
+        for width, cell in zip(widths, cells, strict=True):
+            pdf.cell(width, 5.5, cell)
+        pdf.ln(5.5)
+    pdf.ln(2)
+
+
 def _speaking_balance(pdf: _ReportPDF, balance: dict, language: str | None) -> None:
     """Talk-time per detected voice: a 100%-stacked bar and a legend.
 
@@ -364,6 +414,8 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             pdf.text_block(round_["summary"], height=5)
             pdf.ln(1.5)
 
+    _synthesis(pdf, report.get("synthesis"), language)
+
     plenary = report["assembly"].get("recording_mode") == "plenary"
     no_findings = text(language, "no_findings_yet")
 
@@ -403,6 +455,8 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             pdf.group_heading(label, AMBER if type_ == "disagreement" else ACCENT)
             for finding in group:
                 _finding(pdf, finding, cross=True, language=language)
+
+        _speaking_comparison(pdf, round_.get("speaking_comparison") or [], language)
 
         def _balance_of(t: dict) -> dict | None:
             b = t.get("speaking_balance")

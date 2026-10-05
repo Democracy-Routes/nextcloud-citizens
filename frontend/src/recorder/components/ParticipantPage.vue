@@ -119,6 +119,15 @@ onBeforeUnmount(() => window.clearInterval(poll))
 				{{ t('recorder.participant.registeredAt', { number: status.table_number }) }}
 			</p>
 
+			<!-- a remix moved this person: say where, big enough to read across a room -->
+			<div v-if="status.next_table" class="rc-card rc-center rc-next" :class="`rc-next--${status.next_table.color_key}`" data-test="next-table">
+				<p class="rc-eyebrow" style="margin-bottom: 6px; color: inherit">
+					{{ t('recorder.participant.nextTable', { session: status.next_table.round_title || status.next_table.round_position }) }}
+				</p>
+				<p class="rc-next__number">{{ status.next_table.table_number }}</p>
+				<TableBadge :number="status.next_table.table_number" :color-key="status.next_table.color_key" />
+			</div>
+
 			<div class="rc-card" style="margin-top: 16px; text-align: left">
 				<p class="rc-eyebrow" style="margin-bottom: 6px">{{ t('recorder.participant.consentTitle') }}</p>
 				<!-- one acceptance was signed, so one line says what it covered -->
@@ -196,6 +205,14 @@ onBeforeUnmount(() => window.clearInterval(poll))
 .rc-pad { padding: 6px 2px calc(12px + env(safe-area-inset-bottom, 0px)); }
 .rc-lead { font-size: 1.02rem; line-height: 1.5; margin: 8px 0 0; }
 .rc-consent-line { margin: 0; line-height: 1.45; font-weight: 600; }
+.rc-next { margin-top: 16px; color: #fff; }
+.rc-next__number { font-size: 4.5rem; font-weight: 800; line-height: 1; margin: 4px 0 10px; }
+.rc-next--blue { background: #00679e; }
+.rc-next--green { background: #2d7b41; }
+.rc-next--orange { background: #c05000; }
+.rc-next--purple { background: #6a4fa3; }
+.rc-next--red { background: #c62828; }
+.rc-next--teal { background: #00796b; }
 .rc-textarea {
 	width: 100%;
 	box-sizing: border-box;

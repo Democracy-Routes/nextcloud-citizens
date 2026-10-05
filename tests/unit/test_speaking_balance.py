@@ -16,7 +16,24 @@ from citizens.db.models.assembly import Round, Table
 from citizens.db.models.base import utcnow
 from citizens.db.models.transcript import Transcript, TranscriptSegment
 from citizens.db.session import session_scope
-from citizens.services.speaking import table_speaking_balance
+from citizens.services.speaking import round_speaking_comparison, table_speaking_balance
+
+
+def test_the_comparison_sets_the_tables_side_by_side(client):
+    """One line per table with a measured balance: voices, largest and
+    smallest share, their ratio — nothing summed across tables."""
+    assembly = _assembly(client, tables=3)
+    with session_scope() as session:
+        round_, t1 = _round_and_table(session, assembly["id"], 1)
+        _, t2 = _round_and_table(session, assembly["id"], 2)
+        _, tr1 = _recording(session, assembly["id"], round_, t1, 1, 0)
+        _segments(session, tr1.id, [("SPEAKER_00", 0, 60), ("SPEAKER_01", 60, 70), ("SPEAKER_02", 70, 80)])
+        _, tr2 = _recording(session, assembly["id"], round_, t2, 2, 1)
+        _segments(session, tr2.id, [("SPEAKER_00", 0, 30), ("SPEAKER_01", 30, 60)])
+        rows = round_speaking_comparison(session, round_)
+    assert [row["table_number"] for row in rows] == [1, 2]  # table 3 recorded nothing
+    assert rows[0]["voices"] == 3 and rows[0]["largest_percent"] == 75 and rows[0]["ratio"] == 6.0
+    assert rows[1]["voices"] == 2 and rows[1]["largest_percent"] == 50 and rows[1]["ratio"] == 1.0
 
 
 def _assembly(client, tables=1):

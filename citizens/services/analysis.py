@@ -20,6 +20,7 @@ from citizens.db.models import (
     Transcript,
     TranscriptSegment,
 )
+from citizens.db.models.base import utcnow
 from citizens.domain.analysis_schemas import RoundAnalysis, TableAnalysis
 from citizens.logging_setup import get_logger
 from citizens.providers.analysis.openai_compat import AnalysisError, chat_json
@@ -142,6 +143,80 @@ Rules:
 - Never mention speaker labels such as SPEAKER_03 in titles or summaries;
   write "a participant" or "some participants" instead.
 - Write everything in {language}."""
+
+
+ASSEMBLY_SYSTEM = """You are an analyst supporting an in-person citizens' assembly.
+The assembly ran several sessions in order, each with a question and, often,
+an objective. You describe HOW THE DISCUSSION DEVELOPED across them: what the
+earlier sessions raised, what later sessions did with it, where views
+converged, what stayed unresolved, what came out at the end.
+
+Rules:
+- Respond with ONLY a JSON object: {{"narrative": "...", "stages": [{{"title": ...,
+  "summary": ...}}], "carried_forward": ["...", ...]}}
+- "narrative": a neutral account in 3-6 sentences of the arc from the first
+  session to the last.
+- "stages": one entry per session, in order, with a short title (the
+  session's own title or question) and 2-4 sentences on what that session
+  contributed to the arc. Never invent a session that was not given.
+- "carried_forward": the ideas, proposals or concerns that reappeared in a
+  later session, one short phrase each; empty when nothing did.
+- Never state or imply percentages of participant support; tables are not
+  votes, and recurrence is not agreement.
+- Never mention speaker labels such as SPEAKER_03; write "participants".
+- Write everything in {language}."""
+
+
+def analyze_assembly(
+    session: Session, store: provider_config.ConfigStore, assembly: Assembly
+) -> dict:
+    """How the discussion developed across the assembly's sessions, from the
+    sessions' summaries and approved cross-table findings. Stored on the
+    assembly as JSON and printed in the report after the executive summary.
+    Needs at least two sessions with a summary; returns {} otherwise."""
+    rounds = sorted(assembly.rounds, key=lambda r: r.position)
+    summarised = [r for r in rounds if r.analysis_summary]
+    if len(summarised) < 2:
+        log.info("analysis_assembly_too_few_sessions", assembly_id=assembly.id, sessions=len(summarised))
+        return {}
+    hidden = pseudonyms.name_map(session, assembly)
+    blocks = []
+    for round_ in summarised:
+        findings = list(
+            session.execute(
+                select(Finding).where(
+                    Finding.round_id == round_.id,
+                    Finding.scope == "round",
+                    Finding.status.in_(("APPROVED", "EDITED_AND_APPROVED")),
+                )
+            ).scalars()
+        )
+        lines = [
+            f"- {f.type} · {pseudonyms.redact(f.title, hidden)} (mentioned at "
+            f"{f.mentioned_table_count} tables)"
+            for f in findings[:25]
+        ]
+        blocks.append(
+            f"Session {round_.position}: {round_.title or round_.question}\n"
+            f"Question: {round_.question}\n{_objective_line(round_)}"
+            f"Summary: {pseudonyms.redact(round_.analysis_summary, hidden)[:1500]}\n"
+            + ("Approved cross-table findings:\n" + "\n".join(lines) if lines else "")
+        )
+    user_prompt = f"Assembly: {assembly.name}\n\n" + "\n\n".join(blocks)
+    language = LANGUAGE_NAMES.get(assembly.language, "English")
+    session.commit()
+    base_url, key, model = _analysis_config(store)
+    log.info("analysis_started", assembly_id=assembly.id, scope="assembly", sessions=len(summarised))
+    system_prompt = build_system_prompt(ASSEMBLY_SYSTEM, language, store, assembly.analysis_instructions)
+    from citizens.domain.analysis_schemas import AssemblySynthesis
+
+    result = chat_json(base_url, key, model, system_prompt, user_prompt, AssemblySynthesis)
+    payload = {**result.model_dump(), "model": model, "sessions": len(summarised)}
+    assembly.synthesis_json = json.dumps(payload)
+    assembly.synthesis_at = utcnow()
+    session.commit()
+    log.info("analysis_completed", assembly_id=assembly.id, scope="assembly")
+    return payload
 
 
 def build_system_prompt(

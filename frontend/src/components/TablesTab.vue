@@ -59,6 +59,25 @@ async function run(action: () => Promise<Table[]>): Promise<boolean> {
 
 const randomize = () => run(() => api.randomize(roundId.value))
 const copyPrevious = () => run(() => api.copyPrevious(roundId.value))
+
+/** Seat everyone with a goal. "Meet new people" is the default: as few
+ * repeated table-mates as possible, the people registered at the tables
+ * included; the outcome says how many pairs still met before. */
+const remixGoal = ref<'new_people' | 'random' | 'continuity'>('new_people')
+const remixNote = ref('')
+async function remix(): Promise<void> {
+	remixNote.value = ''
+	let outcome: { seated: number; repeated_pairs: number } | null = null
+	const ok = await run(async () => {
+		const result = await api.remix(roundId.value, remixGoal.value)
+		outcome = result
+		return result.tables
+	})
+	if (ok && outcome) {
+		const o = outcome as { seated: number; repeated_pairs: number }
+		remixNote.value = `${o.seated} seated · ${o.repeated_pairs} ${o.repeated_pairs === 1 ? 'pair' : 'pairs'} who already sat together`
+	}
+}
 /** Move a participant, and put the dropdown back if the server refuses.
  *
  * The select is bound with :value, so a failed move left the vnode prop
@@ -90,12 +109,18 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 					{{ roundHeading(round.position, round.title) }}
 				</option>
 			</select>
-			<CzButton variant="primary" small :icon="mdiShuffleVariant" :disabled="busy || !roundId" @click="randomize">
-				Random assignment
+			<select v-model="remixGoal" data-test="remix-goal" title="How to seat people for this session">
+				<option value="new_people">Meet new people</option>
+				<option value="random">Random</option>
+				<option value="continuity">Keep previous seating</option>
+			</select>
+			<CzButton variant="primary" small :icon="mdiShuffleVariant" :disabled="busy || !roundId" data-test="remix" @click="remix">
+				Remix
 			</CzButton>
 			<CzButton small :icon="mdiContentCopy" :disabled="busy || !roundId" @click="copyPrevious">
 				Copy previous session
 			</CzButton>
+			<span v-if="remixNote" class="cz-muted" style="font-size: 0.8125rem" data-test="remix-note">{{ remixNote }}</span>
 		</div>
 
 		<CzSkeleton v-if="!loaded" :rows="3" :height="120" />

@@ -49,6 +49,10 @@ class Assembly(Base):
     closed_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     final_report_json: Mapped[str | None] = mapped_column(Text)
     final_report_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # how the discussion developed across sessions (services/analysis.py
+    # analyze_assembly): narrative, stages, what was carried forward
+    synthesis_json: Mapped[str | None] = mapped_column(Text)
+    synthesis_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     # days of audio retention after closing, overriding the instance default;
     # NULL = follow the default, 0 = keep indefinitely
     audio_retention_days: Mapped[int | None] = mapped_column(Integer())

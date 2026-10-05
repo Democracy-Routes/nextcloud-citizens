@@ -478,8 +478,38 @@ def participant_status(
         "rounds": rounds,
         # what this person already said about their table's summaries
         "validations": validation_svc.for_participant(session, participant.id),
+        # where to go next: the first coming session with a seat for them
+        "next_table": _next_table(rounds, participant),
         "contact": snapshot.consent_contact or organization_data().get("org_dpo", ""),
         "controller": snapshot.consent_controller or snapshot.organization_name,
+    }
+
+
+def _next_table(rounds: list[dict], participant: Participant) -> dict | None:
+    """"Your next table: 4 · Green" — a seat worth announcing: in a coming
+    session once the event is under way (a session has started or ended
+    before it), or in any session where the seat differs from the table the
+    person registered at (a remix moved them)."""
+    under_way = False
+    for round_ in rounds:
+        if round_["status"] in ("ACTIVE", "ENDED", "PROCESSING", "READY_FOR_REVIEW"):
+            under_way = True
+        if round_["table_number"] is None:
+            continue
+        moved = round_["table_number"] != participant.registered_table_number
+        if round_["status"] == "NOT_STARTED" and (under_way or moved):
+            return _table_card(round_)
+        if round_["status"] == "ACTIVE" and moved:
+            return _table_card(round_)
+    return None
+
+
+def _table_card(round_: dict) -> dict:
+    return {
+        "round_position": round_["position"],
+        "round_title": round_["title"],
+        "table_number": round_["table_number"],
+        "color_key": color_for(round_["table_number"]),
     }
 
 

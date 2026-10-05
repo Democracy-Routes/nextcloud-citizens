@@ -129,6 +129,13 @@ export const api = {
 		request<Table[]>('POST', `/api/v1/rounds/${roundId}/assignments/randomize`),
 	copyPrevious: (roundId: string) =>
 		request<Table[]>('POST', `/api/v1/rounds/${roundId}/assignments/copy-previous`),
+	/** Seat everyone with a goal: meet new people, random, or continuity. */
+	remix: (roundId: string, goal: 'new_people' | 'random' | 'continuity') =>
+		request<{ goal: string; seated: number; repeated_pairs: number; tables: Table[] }>(
+			'POST',
+			`/api/v1/rounds/${roundId}/assignments/remix`,
+			{ goal },
+		),
 	moveParticipant: (roundId: string, participantId: string, toTableId: string) =>
 		request<Table[]>('POST', `/api/v1/rounds/${roundId}/assignments/move`, {
 			participant_id: participantId,
@@ -207,6 +214,9 @@ export const api = {
 		request<void>('DELETE', `/api/v1/assemblies/${assemblyId}/close`),
 	refreshFinalReport: (assemblyId: string) =>
 		request<{ final_report_at: string }>('POST', `/api/v1/assemblies/${assemblyId}/report/refresh`),
+	/** Queue "How the discussion developed" across sessions (at least two with a summary). */
+	generateSynthesis: (assemblyId: string) =>
+		request<{ queued: boolean; sessions: number }>('POST', `/api/v1/assemblies/${assemblyId}/synthesis`),
 
 	listFiles: (assemblyId: string) =>
 		request<FilesListing>('GET', `/api/v1/assemblies/${assemblyId}/files`),

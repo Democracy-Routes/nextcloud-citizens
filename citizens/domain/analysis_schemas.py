@@ -41,3 +41,17 @@ class RoundClusterItem(BaseModel):
 class RoundAnalysis(BaseModel):
     summary: str = Field(min_length=10, max_length=1500)
     clusters: list[RoundClusterItem] = Field(max_length=40)
+
+
+class SynthesisStage(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    summary: str = Field(min_length=3, max_length=2000)
+
+
+class AssemblySynthesis(BaseModel):
+    """How the discussion developed across sessions: a narrative, the stages
+    it went through, and what was carried from one session to the next."""
+
+    narrative: str = Field(min_length=10, max_length=4000)
+    stages: list[SynthesisStage] = Field(max_length=12)
+    carried_forward: list[str] = Field(default_factory=list, max_length=20)

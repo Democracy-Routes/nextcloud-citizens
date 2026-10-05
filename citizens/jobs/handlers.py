@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import Recording, Round
+from citizens.db.models import Assembly, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.logging_setup import get_logger
 from citizens.providers.analysis.openai_compat import AnalysisError
@@ -446,6 +446,43 @@ def handle_analyze_round(session: Session, payload: dict) -> None:
     if round_.status in ("ENDED", "PROCESSING"):
         round_.status = "READY_FOR_REVIEW"
     _refresh_frozen_report_if_closed(session, round_)
+    # a closed assembly's synthesis follows its last session analysis
+    if round_.assembly is not None and round_.assembly.closed_at is not None:
+        maybe_enqueue_synthesis(session, round_.assembly)
+
+
+def maybe_enqueue_synthesis(session: Session, assembly: Assembly) -> bool:
+    """How the discussion developed across sessions — once at least two
+    sessions have a summary and none is still being analysed. Deduped like
+    the round analysis."""
+    summarised = [r for r in assembly.rounds if r.analysis_summary]
+    if len(summarised) < 2:
+        return False
+    if any(has_live_job(session, "ANALYZE_ROUND", "round_id", r.id) for r in assembly.rounds):
+        return False
+    if has_live_job(session, "ANALYZE_ASSEMBLY", "assembly_id", assembly.id):
+        return False
+    enqueue_job(session, "ANALYZE_ASSEMBLY", {"assembly_id": assembly.id})
+    return True
+
+
+def handle_analyze_assembly(session: Session, payload: dict) -> None:
+    assembly = session.get(Assembly, payload["assembly_id"])
+    if assembly is None:
+        raise PermanentJobError(f"Assembly {payload['assembly_id']} no longer exists")
+    session.commit()
+    store = provider_config.default_store()
+    try:
+        produced = analysis_svc.analyze_assembly(session, store, assembly)
+    except AnalysisError as exc:
+        log.error("analysis_failed", assembly_id=assembly.id, scope="assembly", permanent=exc.permanent)
+        if exc.permanent:
+            raise PermanentJobError(str(exc)) from exc
+        raise
+    if produced and assembly.closed_at is not None:
+        from citizens.services.lifecycle import snapshot_final_report
+
+        snapshot_final_report(session, assembly)
 
 
 HANDLERS = {
@@ -454,4 +491,5 @@ HANDLERS = {
     "TRANSCRIBE_FROM_LIVE": handle_transcribe_from_live,
     "ANALYZE_TABLE": handle_analyze_table,
     "ANALYZE_ROUND": handle_analyze_round,
+    "ANALYZE_ASSEMBLY": handle_analyze_assembly,
 }

@@ -40,6 +40,36 @@ def _percentages(seconds: list[float], total: float) -> list[int]:
     return floors
 
 
+def round_speaking_comparison(session: Session, round_: Round) -> list[dict]:
+    """One line per table of the session: detected voices, the largest and
+    smallest shares and their ratio — side by side, never summed across
+    tables (a voice at Table 3 is not a voice at Table 4). The ratio is the
+    one number that makes a lopsided table stand out; the caveats of the
+    per-table balance (estimates, detected voices, no judgement) apply."""
+    rows = []
+    for table in sorted(round_.tables, key=lambda t: t.number):
+        balance = table_speaking_balance(session, round_, table)
+        if not balance or len(balance["voices"]) < 2:
+            continue
+        named = [v for v in balance["voices"] if v["label"] != "Others"] or balance["voices"]
+        largest = max(named, key=lambda v: v["seconds"])
+        smallest = min(named, key=lambda v: v["seconds"])
+        rows.append(
+            {
+                "table_number": table.number,
+                "voices": len(balance["voices"]),
+                "total_seconds": balance["total_seconds"],
+                "largest_percent": largest["percent"],
+                "smallest_percent": smallest["percent"],
+                "ratio": round(largest["seconds"] / smallest["seconds"], 1)
+                if smallest["seconds"] > 0
+                else None,
+                "recorder_changed": balance.get("recorder_changed", False),
+            }
+        )
+    return rows
+
+
 def table_speaking_balance(session: Session, round_: Round, table: Table) -> dict | None:
     """Talk-time share per detected voice, from the table's fullest recording.
 

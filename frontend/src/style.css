@@ -677,6 +677,10 @@
 #citizens-app .cz-health--ok { border-color: var(--cz-green); color: var(--cz-green); }
 #citizens-app .cz-health--warn { border-color: var(--cz-amber); color: var(--cz-amber); }
 #citizens-app .cz-health--bad { border-color: var(--cz-danger); color: var(--cz-danger); }
+/* Analysis tab: the tables side by side */
+#citizens-app .cz-compare { margin-bottom: 20px; }
+#citizens-app .cz-compare--lopsided td { color: var(--cz-amber); }
+
 /* Report tab: participants' word on a table's summary */
 #citizens-app .cz-validation { font-size: 0.8rem; margin: 0 0 6px; }
 #citizens-app .cz-validation__ok { color: var(--cz-green); font-weight: 600; }

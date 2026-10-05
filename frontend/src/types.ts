@@ -478,12 +478,24 @@ export interface SpeakingBalance {
 	recorder_changed?: boolean
 }
 
+/** One table of a session beside the others: voices, largest/smallest share, ratio. */
+export interface SpeakingComparisonRow {
+	table_number: number
+	voices: number
+	total_seconds: number
+	largest_percent: number
+	smallest_percent: number
+	ratio: number | null
+	recorder_changed: boolean
+}
+
 export interface RoundFindings {
 	round_id: string
 	round_status: string
 	round_summary: string
 	analysis_configured: boolean
 	tables_with_findings: number
+	speaking_comparison?: SpeakingComparisonRow[]
 	cross_table: FindingData[]
 	tables: Array<{
 		table_number: number
@@ -498,7 +510,19 @@ export interface RoundFindings {
 	round_job?: JobInfo | null
 }
 
+/** How the discussion developed across sessions (0.7). */
+export interface ReportSynthesis {
+	narrative: string
+	stages: Array<{ title: string; summary: string }>
+	carried_forward: string[]
+	model?: string
+	sessions?: number
+	generated_at?: string | null
+}
+
 export interface ReportData {
+	/** present once the analysis model has written it; null before */
+	synthesis?: ReportSynthesis | null
 	assembly: {
 		name: string
 		description: string

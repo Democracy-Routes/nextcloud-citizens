@@ -112,6 +112,18 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "{answered} participants said whether their table's summary reflected the "
             "discussion; {missing} flagged something missing, for the organiser to review."
         ),
+        "synthesis_heading": "How the discussion developed",
+        "carried_forward": "Carried from one session to the next",
+        "speaking_comparison": "Speaking balance across tables",
+        "speaking_comparison_caveat": (
+            "Each line measures one table on its own; voices are detected, not identified, "
+            "and talk-time is an estimate, not a measure of influence."
+        ),
+        "comparison_col_table": "Table",
+        "comparison_col_voices": "Voices",
+        "comparison_col_largest": "Largest share",
+        "comparison_col_smallest": "Smallest share",
+        "comparison_col_ratio": "Ratio",
         # executive summary (PDF)
         "executive_summary": "Executive summary",
         "executive_summary_note": (
@@ -221,6 +233,18 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "la discussione; {missing} hanno segnalato che manca qualcosa, da rivedere da "
             "parte di chi organizza."
         ),
+        "synthesis_heading": "Come si è sviluppata la discussione",
+        "carried_forward": "Portato da una sessione alla successiva",
+        "speaking_comparison": "Equilibrio di parola tra i tavoli",
+        "speaking_comparison_caveat": (
+            "Ogni riga misura un tavolo da solo; le voci sono rilevate, non identificate, e "
+            "il tempo di parola è una stima, non una misura di influenza."
+        ),
+        "comparison_col_table": "Tavolo",
+        "comparison_col_voices": "Voci",
+        "comparison_col_largest": "Quota maggiore",
+        "comparison_col_smallest": "Quota minore",
+        "comparison_col_ratio": "Rapporto",
         "device_replaced_note": (
             "Il telefono di almeno un tavolo ha smesso di funzionare durante un turno e "
             "la discussione è proseguita su un altro dispositivo. Entrambe le parti sono "

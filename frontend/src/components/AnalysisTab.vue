@@ -379,6 +379,29 @@ async function recluster(): Promise<void> {
 				title="No findings match this filter"
 				hint="Change the filters above to see the rest of this session's findings." />
 			<template v-else>
+				<!-- the tables side by side: a lopsided table stands out by its
+				     ratio; each line measures one table, voices detected not named -->
+				<div v-if="(data.speaking_comparison?.length ?? 0) >= 2 && !filtering" class="cz-card cz-compare" data-test="comparison">
+					<h3 style="margin: 0 0 4px">Speaking balance across tables</h3>
+					<p class="cz-muted" style="font-size: 0.8125rem; margin: 0 0 10px">
+						Each line measures one table on its own — voices are detected, not identified, and
+						talk-time is an estimate, not a measure of influence.
+					</p>
+					<table class="cz-table">
+						<thead>
+							<tr><th>Table</th><th>Voices</th><th>Largest share</th><th>Smallest share</th><th>Ratio</th></tr>
+						</thead>
+						<tbody>
+							<tr v-for="row in data.speaking_comparison" :key="row.table_number" :class="{ 'cz-compare--lopsided': (row.ratio ?? 0) >= 4 }">
+								<td><strong>Table {{ row.table_number }}</strong><span v-if="row.recorder_changed" class="cz-muted"> · recorder changed</span></td>
+								<td>{{ row.voices }}</td>
+								<td>{{ row.largest_percent }}%</td>
+								<td>{{ row.smallest_percent }}%</td>
+								<td>{{ row.ratio ? `${row.ratio}×` : '—' }}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 				<div v-if="shown.cross_table.length || (data.round_summary && !filtering)" style="margin-bottom: 24px">
 					<h3 style="margin-bottom: 10px">
 						Across all tables

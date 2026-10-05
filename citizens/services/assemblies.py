@@ -166,6 +166,114 @@ def randomize_assignments(session: Session, round_: Round) -> None:
     )
 
 
+REMIX_GOALS = ("new_people", "random", "continuity")
+
+
+def remix_assignments(session: Session, round_: Round, goal: str = "new_people") -> dict:
+    """Seat everyone for this session with a goal (0.7):
+
+    - new_people: as few repeated table-mates as possible — each person goes
+      to the table, among the emptiest, where they have sat with the fewest
+      of its members in earlier sessions;
+    - random: today's shuffle;
+    - continuity: the previous session's seating, newcomers dealt to the
+      smallest tables.
+
+    Everyone on the assembly's list is seated, those who registered at the
+    tables included. Returns how many repeated pairs the seating has, so the
+    organizer sees what the goal achieved."""
+    if goal not in REMIX_GOALS:
+        raise HTTPException(status_code=422, detail="Unknown remix goal")
+    if not round_.tables:
+        raise HTTPException(status_code=422, detail="Round has no tables")
+    tables = sorted(round_.tables, key=lambda t: t.number)
+    participants = list(round_.assembly.participants)
+    met = _co_seatings(session, round_)
+
+    if goal == "random":
+        randomize_assignments(session, round_)
+    elif goal == "continuity":
+        mapping = _previous_mapping(session, round_)
+        seated = {t.id: [pid for pid, tid in mapping.items() if tid == t.id] for t in tables}
+        rng = random.Random(round_.id)
+        newcomers = [p for p in participants if p.id not in mapping]
+        rng.shuffle(newcomers)
+        for person in newcomers:
+            target = min(tables, key=lambda t: (len(seated[t.id]), t.number))
+            seated[target.id].append(person.id)
+            mapping[person.id] = target.id
+        _replace_assignments(session, round_, mapping)
+    else:
+        rng = random.Random(round_.id)
+        order = list(participants)
+        rng.shuffle(order)
+        # the most "connected" people first: they are the hardest to place
+        def connections(p: Participant) -> int:
+            return sum(met.get(frozenset((p.id, q.id)), 0) for q in participants if q is not p)
+
+        order.sort(key=lambda p: -connections(p))
+        seated: dict[str, list[str]] = {t.id: [] for t in tables}
+        mapping = {}
+        for person in order:
+            smallest = min(len(members) for members in seated.values())
+            candidates = [t for t in tables if len(seated[t.id]) <= smallest]
+            target = min(
+                candidates,
+                key=lambda t: (
+                    sum(met.get(frozenset((person.id, other)), 0) for other in seated[t.id]),
+                    rng.random(),
+                ),
+            )
+            seated[target.id].append(person.id)
+            mapping[person.id] = target.id
+        _replace_assignments(session, round_, mapping)
+
+    repeated = 0
+    for assignment_group in _group_by_table(session, round_).values():
+        for i, a in enumerate(assignment_group):
+            for b in assignment_group[i + 1:]:
+                repeated += 1 if met.get(frozenset((a, b)), 0) else 0
+    return {"goal": goal, "seated": len(participants), "repeated_pairs": repeated}
+
+
+def _previous_mapping(session: Session, round_: Round) -> dict[str, str]:
+    previous = next(
+        (r for r in sorted(round_.assembly.rounds, key=lambda r: r.position, reverse=True)
+         if r.position < round_.position),
+        None,
+    )
+    if previous is None:
+        return {}
+    tables_by_number = {t.number: t for t in round_.tables}
+    mapping: dict[str, str] = {}
+    for assignment in _round_assignments(session, previous.id):
+        target = tables_by_number.get(assignment.table.number)
+        if target is not None:
+            mapping[assignment.participant_id] = target.id
+    return mapping
+
+
+def _co_seatings(session: Session, round_: Round) -> dict[frozenset, int]:
+    """How often each pair of people sat together in the sessions before this one."""
+    met: dict[frozenset, int] = {}
+    for earlier in round_.assembly.rounds:
+        if earlier.position >= round_.position:
+            continue
+        for members in _group_by_table(session, earlier).values():
+            for i, a in enumerate(members):
+                for b in members[i + 1:]:
+                    key = frozenset((a, b))
+                    met[key] = met.get(key, 0) + 1
+    return met
+
+
+def _group_by_table(session: Session, round_: Round) -> dict[str, list[str]]:
+    groups: dict[str, list[str]] = {}
+    for assignment in _round_assignments(session, round_.id):
+        groups.setdefault(assignment.table_id, []).append(assignment.participant_id)
+    return groups
+
+
 def copy_previous_assignments(session: Session, round_: Round) -> None:
     previous = next(
         (r for r in sorted(round_.assembly.rounds, key=lambda r: r.position, reverse=True)

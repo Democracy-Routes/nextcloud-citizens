@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Organizer API: assemblies, rounds, participants, table assignments."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -321,6 +322,20 @@ def randomize(round_id: str, user: CurrentUser, session: DB):
     round_ = svc.get_owned_round(session, round_id, user)
     svc.randomize_assignments(session, round_)
     return svc.tables_with_participants(session, round_)
+
+
+class RemixIn(BaseModel):
+    goal: Literal["new_people", "random", "continuity"] = "new_people"
+
+
+@router.post("/rounds/{round_id}/assignments/remix")
+def remix(round_id: str, data: RemixIn, user: CurrentUser, session: DB):
+    """Seat everyone for this session with a goal — meet new people, random,
+    or continuity — including the people who registered at the tables."""
+    round_ = svc.get_owned_round(session, round_id, user)
+    outcome = svc.remix_assignments(session, round_, data.goal)
+    record_audit_event(session, "assignments_remixed", "round", round_.id, actor=user, data=outcome)
+    return {**outcome, "tables": svc.tables_with_participants(session, round_)}
 
 
 @router.post("/rounds/{round_id}/assignments/copy-previous", response_model=list[schemas.TableOut])

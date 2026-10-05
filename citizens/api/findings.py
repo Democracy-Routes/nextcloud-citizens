@@ -25,7 +25,7 @@ from citizens.services.round_analysis import (
     enqueue_round_analysis_if_stale,
     tables_pending,
 )
-from citizens.services.speaking import table_speaking_balance
+from citizens.services.speaking import round_speaking_comparison, table_speaking_balance
 
 router = APIRouter()
 
@@ -133,6 +133,8 @@ def round_findings(round_id: str, user: CurrentUser, session: DB):
         "round_summary": round_.analysis_summary,
         "analysis_configured": provider_config.analysis_ready_cached(),
         "tables_with_findings": total_tables,
+        # the tables side by side (0.7): voices, largest/smallest share, ratio
+        "speaking_comparison": round_speaking_comparison(session, round_),
         "cross_table": [
             _finding_payload(session, f, table_numbers) for f in findings if f.scope == "round"
         ],

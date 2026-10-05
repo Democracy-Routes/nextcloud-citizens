@@ -345,6 +345,7 @@
 			"reportPending": "Il rapporto comparirà qui quando l'organizzatore lo pubblicherà. Conserva questa pagina.",
 			"reportReady": "Il rapporto è stato pubblicato.",
 			"viewReport": "Vedi il rapporto",
+			"nextTable": "Il tuo tavolo per {session}",
 			"validateAsk": "Rispecchia la discussione del tuo tavolo?",
 			"looksRight": "Sì, va bene",
 			"missing": "Manca qualcosa",

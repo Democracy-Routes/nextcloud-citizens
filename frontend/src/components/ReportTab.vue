@@ -105,6 +105,21 @@ async function togglePublish(): Promise<void> {
  * The consequence was a dead end: approve a finding after reopening, close
  * again, and the phones still read the old version with nothing in the UI able
  * to update it. The endpoint existed and had never been given a button. */
+const synthesising = ref(false)
+async function generateSynthesis(): Promise<void> {
+	synthesising.value = true
+	try {
+		await api.generateSynthesis(props.assembly.id)
+		toast('Synthesis queued — it appears here in a minute or two')
+		// the job runs in the background: look again a little later
+		window.setTimeout(() => void reload(), 20_000)
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		window.setTimeout(() => (synthesising.value = false), 20_000)
+	}
+}
+
 async function refreshFinal(): Promise<void> {
 	refreshing.value = true
 	try {
@@ -230,6 +245,45 @@ const hasContent = () =>
 					Reopen session
 				</CzButton>
 			</div>
+		</div>
+
+		<!-- how the discussion developed across sessions: made by itself at
+		     closing; here for an organizer who wants it earlier or again -->
+		<div v-if="report && report.rounds.length >= 2" class="cz-card" style="margin-bottom: 16px" data-test="synthesis-card">
+			<div class="cz-row cz-row--spread">
+				<div style="flex: 1; min-width: 240px">
+					<h3>How the discussion developed</h3>
+					<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
+						<template v-if="report.synthesis">
+							A chapter across the sessions, written from their summaries and approved
+							cross-table findings
+							<template v-if="report.synthesis.generated_at"> · {{ report.synthesis.generated_at.slice(0, 16).replace('T', ' ') }}</template>.
+							It is remade at closing once every session's analysis is in.
+						</template>
+						<template v-else>
+							Once at least two sessions have a summary, the analysis model writes how
+							the discussion moved from the first session to the last. It happens by
+							itself at closing; generate it earlier here.
+						</template>
+					</p>
+				</div>
+				<CzButton small variant="secondary" :icon="mdiRefresh" :disabled="synthesising" data-test="synthesis" @click="generateSynthesis">
+					{{ synthesising ? 'Queued…' : report.synthesis ? 'Generate again' : 'Generate synthesis' }}
+				</CzButton>
+			</div>
+			<template v-if="report.synthesis">
+				<p style="font-size: 0.9375rem; line-height: 1.55; margin: 12px 0 0">{{ report.synthesis.narrative }}</p>
+				<div v-for="stage in report.synthesis.stages" :key="stage.title" style="margin-top: 10px">
+					<strong style="font-size: 0.875rem">{{ stage.title }}</strong>
+					<p style="font-size: 0.875rem; margin: 2px 0 0">{{ stage.summary }}</p>
+				</div>
+				<p v-if="report.synthesis.carried_forward.length" class="cz-muted" style="font-size: 0.8125rem; margin: 10px 0 4px">
+					Carried from one session to the next
+				</p>
+				<ul v-if="report.synthesis.carried_forward.length" style="margin: 0; padding-left: 18px; font-size: 0.875rem">
+					<li v-for="item in report.synthesis.carried_forward" :key="item">{{ item }}</li>
+				</ul>
+			</template>
 		</div>
 
 		<div class="cz-row cz-row--spread" style="margin-bottom: 16px">

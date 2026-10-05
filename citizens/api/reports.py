@@ -123,6 +123,29 @@ def refresh_final_report(assembly_id: str, user: CurrentUser, session: DB):
     return {"final_report_at": assembly.final_report_at.isoformat()}
 
 
+@router.post("/assemblies/{assembly_id}/synthesis", status_code=202)
+def generate_synthesis(assembly_id: str, user: CurrentUser, session: DB):
+    """How the discussion developed across sessions: queue the synthesis
+    (at least two sessions with a summary). Happens by itself at closing;
+    this is for an organizer who wants it earlier or again."""
+    from citizens.jobs.handlers import maybe_enqueue_synthesis
+    from citizens.services.jobs import enqueue_job, has_live_job
+
+    assembly = get_owned_assembly(session, assembly_id, user)
+    summarised = [r for r in assembly.rounds if r.analysis_summary]
+    if len(summarised) < 2:
+        raise HTTPException(
+            status_code=409, detail="The synthesis needs at least two sessions with a summary"
+        )
+    queued = maybe_enqueue_synthesis(session, assembly)
+    if not queued and not has_live_job(session, "ANALYZE_ASSEMBLY", "assembly_id", assembly.id):
+        # a round analysis is running: queue anyway, the runner orders them
+        enqueue_job(session, "ANALYZE_ASSEMBLY", {"assembly_id": assembly.id})
+        queued = True
+    record_audit_event(session, "synthesis_requested", "assembly", assembly.id, actor=user)
+    return {"queued": queued, "sessions": len(summarised)}
+
+
 @router.get("/assemblies/{assembly_id}/progress")
 def assembly_progress(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = get_owned_assembly(session, assembly_id, user)

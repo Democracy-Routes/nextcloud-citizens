@@ -345,6 +345,7 @@
 			"reportPending": "The report will appear here when the organizer publishes it. Keep this page.",
 			"reportReady": "The report has been published.",
 			"viewReport": "View the report",
+			"nextTable": "Your table for {session}",
 			"validateAsk": "Does this reflect your table's discussion?",
 			"looksRight": "Looks right",
 			"missing": "Something is missing",

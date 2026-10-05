@@ -80,6 +80,8 @@ export interface ParticipantStatus {
 	rounds?: Array<{ id: string; position: number; title: string; status: string; table_number: number | null }>
 	/** what this person already said about their table's summaries, by session id */
 	validations?: Record<string, { verdict: 'LOOKS_RIGHT' | 'MISSING'; note: string }>
+	/** where to go next: the first coming session with a seat for this person */
+	next_table?: { round_position: number; round_title: string; table_number: number; color_key: string } | null
 	contact: string
 	controller: string
 }

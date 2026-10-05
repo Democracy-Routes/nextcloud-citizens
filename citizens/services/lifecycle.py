@@ -73,6 +73,11 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
             enqueue_job(session, "ANALYZE_ROUND", {"round_id": round_.id})
     assembly.closed_at = utcnow()
     assembly.status = "COMPLETE"
+    # how the discussion developed across sessions, once the sessions'
+    # analyses are in (a pending round analysis re-enqueues it when it lands)
+    from citizens.jobs.handlers import maybe_enqueue_synthesis
+
+    maybe_enqueue_synthesis(session, assembly)
     # Every phone still holds its table's audio — that is what makes recording
     # survive a bad network — and when those are the participants' own devices,
     # leaving it there is the surprising outcome. Each phone deletes only what

@@ -177,6 +177,25 @@ not rewritten.
   `POST/GET /api/v1/assemblies/{id}/registration-link`, `GET
   /api/v1/public/recorder/participants/search`, `POST
   /api/v1/public/recorder/participants/{id}/seat`.
+- **Remix the tables to meet new people.** Tables tab → *Remix* with a goal:
+  *new people* seats everyone (including those registered at the tables)
+  so that as few pairs as possible sit together again, balanced table sizes;
+  *continuity* keeps the previous tables and seats the newcomers; *random*
+  is the old shuffle. The note says how many pairs still repeat. A person
+  who registered on their own phone sees "Your next table: 4 · Green" as
+  soon as the organizer has seated them for the next session.
+  `POST /api/v1/rounds/{id}/assignments/remix`.
+- **How the discussion developed.** Once two sessions have a summary, the
+  analysis model writes a short synthesis across them — a narrative, one
+  paragraph per session, what was carried from one session to the next —
+  made at closing and from a *Generate synthesis* button on the Report tab;
+  printed after the executive summary in the report (JSON, Markdown, PDF).
+  Migration 0034; `POST /api/v1/assemblies/{id}/synthesis`.
+- **Speaking balance across tables.** The Analysis tab and the report show,
+  per session, each table's voices, largest and smallest share and the
+  ratio between them, with lopsided tables marked; the same caveat as the
+  per-table balance (voices are the engine's guess, a changed phone resets
+  the count).
 - **Record now follows the language that was spoken.** A Record-now session
   asks the engine to detect the language (Whisper, Mistral, Deepgram; Vosk
   keeps its model) and the first final transcript decides it once — analysis
