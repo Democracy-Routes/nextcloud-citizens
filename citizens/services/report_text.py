@@ -64,6 +64,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "participants": "Participants: {count} (expected {expected})",
         "tables": "Tables: {count}",
         "language": "Language: {code}",
+        "objective": "Objective",
         "participants_expected": "{count} participants (expected {expected})",
         "tables_count": "{count} tables",
         "tables_contributed_to_report": (
@@ -160,6 +161,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "participants": "Partecipanti: {count} (previsti {expected})",
         "tables": "Tavoli: {count}",
         "language": "Lingua: {code}",
+        "objective": "Obiettivo",
         "participants_expected": "{count} partecipanti (previsti {expected})",
         "tables_count": "{count} tavoli",
         "tables_contributed_to_report": (

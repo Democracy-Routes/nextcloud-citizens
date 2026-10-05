@@ -70,6 +70,18 @@ def _timestamp(seconds: float) -> str:
     return f"{int(seconds // 60):02d}:{int(seconds % 60):02d}"
 
 
+def _objective_line(round_: Round | None) -> str:
+    """The session's objective as a prompt line, or nothing when none is stated.
+
+    The question says what the discussion is about; the objective says what it
+    should produce ("three concrete proposals"). Legacy rounds have none, and
+    the prompt must then read exactly as it did before the field existed.
+    """
+    if round_ is None or not round_.objective:
+        return ""
+    return f"Session objective: {round_.objective}\n"
+
+
 def _analysis_config(store: provider_config.ConfigStore) -> tuple[str, str, str]:
     key = store.get_value("analysis_api_key")
     if not key:
@@ -324,6 +336,7 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title if round_ else ''}\n"
+        f"{_objective_line(round_)}"
         f"Table number: {recording.table_number}\n\n"
         "Transcript segments (format: [segment ids] SPEAKER (start-end): text):\n"
         + "\n".join(lines)
@@ -471,6 +484,7 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title}\n"
+        f"{_objective_line(round_)}"
         f"Tables that produced findings: {total_tables}\n\n"
         "Table findings (format: [finding id] table N · type · title: summary):\n"
         + "\n".join(lines)

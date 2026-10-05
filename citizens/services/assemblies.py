@@ -58,6 +58,7 @@ def _build_round(round_in: schemas.RoundIn, position: int, table_count: int) -> 
         position=position,
         title=round_in.title,
         question=round_in.question,
+        objective=round_in.objective or None,
         duration_minutes=round_in.duration_minutes,
     )
     for number in range(1, table_count + 1):
@@ -78,6 +79,10 @@ def update_round(session: Session, round_: Round, data: schemas.RoundUpdate) -> 
         round_.title = data.title
     if data.question is not None:
         round_.question = data.question
+    # None is the field's default, so "sent as null" and "not sent" look alike;
+    # the fields-set tells them apart, and an empty string clears it
+    if "objective" in data.model_fields_set:
+        round_.objective = data.objective or None
     if data.duration_minutes is not None:
         round_.duration_minutes = data.duration_minutes
     if data.position is not None and data.position != round_.position:

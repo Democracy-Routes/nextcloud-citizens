@@ -13,6 +13,22 @@ through QR codes whose meaning the already-authorized phone chose. The
 recorder engine, storage, ownership, retention and export paths are extended,
 not rewritten.
 
+- **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
+  a question, an optional objective, a duration and a table count — no
+  assembly to name or configure first — and `POST /api/v1/sessions/record-now`
+  is the shortest path: a one-table Session in independent mode plus Table 1's
+  join link, so the phone that opens it records at once with nobody pressing
+  Start. Behind the scenes a standalone Session is still a round inside a
+  container row (`assemblies.kind = "session"`, migration 0024): every storage
+  path, ownership check, retention sweep and export is keyed by the assembly
+  id, and none of that is worth rewriting for a tidier schema. The container
+  is never presented as an assembly; existing rows are `kind = "assembly"`.
+- **Question and objective are separate.** A round (a Session) now carries an
+  optional `objective` — what the discussion should produce, as distinct from
+  what it is about. It reaches the phone's status payload, the analysis
+  prompts (one extra line, only when stated) and the Markdown and PDF reports.
+  Legacy rounds have none and read exactly as before.
+
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from
   a file or straight out of the printed sheet, which puts each address in text

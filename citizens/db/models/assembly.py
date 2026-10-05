@@ -11,12 +11,18 @@ from citizens.db.models.base import Base, TZDateTime, new_uuid, utcnow
 
 ASSEMBLY_STATUSES = ("DRAFT", "READY", "ACTIVE", "PROCESSING", "REVIEW", "COMPLETE")
 ROUND_STATUSES = ("NOT_STARTED", "ACTIVE", "ENDED", "PROCESSING", "READY_FOR_REVIEW")
+# "assembly": an organized event the user created as such, holding rounds.
+# "session": the container behind a standalone Session (services/sessions.py)
+# — persisted this way because every storage path, ownership check and sweep
+# is keyed by assembly_id, but never shown to the user as an assembly.
+ASSEMBLY_KINDS = ("assembly", "session")
 
 
 class Assembly(Base):
     __tablename__ = "assemblies"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    kind: Mapped[str] = mapped_column(String(16), default="assembly", server_default="assembly")
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     language: Mapped[str] = mapped_column(String(10), default="en")
@@ -90,6 +96,10 @@ class Round(Base):
     position: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(200), default="")
     question: Mapped[str] = mapped_column(Text, default="")
+    # What the discussion should produce ("three concrete proposals"), as
+    # distinct from what it is about (the question). Optional; NULL on every
+    # round made before 0.7 and on any session that does not state one.
+    objective: Mapped[str | None] = mapped_column(Text)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
     status: Mapped[str] = mapped_column(String(20), default="NOT_STARTED")
     analysis_summary: Mapped[str] = mapped_column(Text, default="")

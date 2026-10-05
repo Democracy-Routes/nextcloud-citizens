@@ -367,6 +367,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                 # assembly's language without a dictionary of its own
                 "heading": round_heading(round_.position, round_.title, assembly.language),
                 "question": round_.question,
+                # NULL on every round made before 0.7: the renderers print
+                # nothing for an empty objective
+                "objective": round_.objective or "",
                 "status": round_.status,
                 "summary": round_.analysis_summary,
                 "recordings": recordings_by_round.get(round_.id, 0),
@@ -490,6 +493,8 @@ def render_markdown(report: dict) -> str:
         lines += [f"## {round_heading(round_['position'], round_['title'], language)}", ""]
         if round_["question"]:
             lines += [f"> {round_['question']}", ""]
+        if round_.get("objective"):
+            lines += [f"*{text(language, 'objective')}:* {round_['objective']}", ""]
         if round_["summary"]:
             lines += [f"*{ai_summary}:* {round_['summary']}", ""]
         balance = round_.get("speaking_balance")

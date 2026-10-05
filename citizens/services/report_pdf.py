@@ -371,6 +371,11 @@ def render_pdf(report: dict, logo_path: Path | None = None,
         if round_["question"]:
             pdf.text_block(f"“{round_['question']}”", size=11.5, style="B", color=ACCENT)
             pdf.ln(1.5)
+        if round_.get("objective"):
+            pdf.text_block(
+                f"{text(language, 'objective')}: {round_['objective']}", size=10, style="I"
+            )
+            pdf.ln(1.5)
         # The round summary is NOT repeated here: the Executive summary above
         # already carries every round's summary verbatim, and printing it a
         # second time at the head of each round section was pure duplication.

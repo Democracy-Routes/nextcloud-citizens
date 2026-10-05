@@ -488,6 +488,9 @@ def _assembly_state(
     return {
         "assembly": {
             "id": assembly.id,
+            # "session" when this is the container behind a standalone Session:
+            # the phone then has no event name worth a hero line
+            "kind": assembly.kind,
             "name": assembly.name,
             "language": assembly.language,
             "recording_mode": assembly.recording_mode,
@@ -520,6 +523,7 @@ def _assembly_state(
                 "position": round_.position,
                 "title": round_.title,
                 "question": round_.question,
+                "objective": round_.objective,
                 "duration_minutes": round_.duration_minutes,
                 "status": round_.status,
                 "recorded_state": recorded_rounds.get(round_.id),
