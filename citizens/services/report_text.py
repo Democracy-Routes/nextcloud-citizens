@@ -115,6 +115,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "round_titled": "Round {position} — {title}",
         "ai_summary": "AI summary",
         "speaking_balance": "Speaking balance",
+        "recorder_changed_caveat": (
+            "The phone recording this table changed during the session; voices cannot "
+            "be matched across the parts, so the balance covers the fullest part only."
+        ),
         "voice": "Voice {label}",
         "others": "Others",
         "voices_caveat": (
@@ -214,6 +218,11 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "round_titled": "Turno {position} — {title}",
         "ai_summary": "Sintesi IA",
         "speaking_balance": "Equilibrio degli interventi",
+        "recorder_changed_caveat": (
+            "Il telefono che registrava questo tavolo è cambiato durante la sessione; le "
+            "voci non possono essere abbinate tra le parti, quindi l'equilibrio riguarda "
+            "solo la parte più completa."
+        ),
         "voice": "Voce {label}",
         "others": "Altri",
         "voices_caveat": (

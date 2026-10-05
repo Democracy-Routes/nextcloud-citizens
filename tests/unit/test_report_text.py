@@ -146,15 +146,21 @@ class TestPlenaryReportHasNoDuplication:
 
 def _balanced_report() -> dict:
     r = _report()
-    r["rounds"][0]["speaking_balance"] = {
-        "voices": [
-            {"label": "A", "seconds": 750, "percent": 60},
-            {"label": "B", "seconds": 375, "percent": 30},
-            {"label": "Others", "seconds": 125, "percent": 10},
-        ],
-        "total_seconds": 1250,
-        "from_recording_id": "rec-1",
-    }
+    # per table, never per round: diarization labels do not cross tables
+    r["rounds"][0]["tables"] = [{
+        "table_number": 1, "summary": "", "findings": [],
+        "speaking_balance": {
+            "voices": [
+                {"label": "A", "seconds": 750, "percent": 60},
+                {"label": "B", "seconds": 375, "percent": 30},
+                {"label": "Others", "seconds": 125, "percent": 10},
+            ],
+            "total_seconds": 1250,
+            "from_recording_id": "rec-1",
+            "parts": 1,
+            "recorder_changed": False,
+        },
+    }]
     return r
 
 
@@ -163,16 +169,23 @@ class TestSpeakingBalanceInReport:
     diarization actually produced distinct voices. One voice means the whole
     recording was a single label (no diarization) and says nothing."""
 
-    def test_voices_and_caption_render(self):
+    def test_voices_and_caption_render_under_the_table(self):
         md = render_markdown(_balanced_report())
         assert "Speaking balance" in md
+        assert md.index("### Table 1") < md.index("**Speaking balance**")
         assert "- Voice A — 60% (12:30)" in md
         assert "- Others — 10%" in md
         assert "not identified by name" in md
+        assert "fullest part" not in md
+
+    def test_a_changed_phone_is_said_plainly(self):
+        r = _balanced_report()
+        r["rounds"][0]["tables"][0]["speaking_balance"]["recorder_changed"] = True
+        assert "covers the fullest part only" in render_markdown(r)
 
     def test_a_single_voice_is_not_printed(self):
         r = _balanced_report()
-        r["rounds"][0]["speaking_balance"]["voices"] = [
+        r["rounds"][0]["tables"][0]["speaking_balance"]["voices"] = [
             {"label": "A", "seconds": 100, "percent": 100},
         ]
         assert "Speaking balance" not in render_markdown(r)

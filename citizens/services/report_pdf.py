@@ -198,6 +198,8 @@ def _speaking_balance(pdf: _ReportPDF, balance: dict, language: str | None) -> N
             size=8.5, height=4.6, indent=5,
         )
     pdf.ln(0.5)
+    if balance.get("recorder_changed"):
+        pdf.text_block(text(language, "recorder_changed_caveat"), size=8, color=MUTED, height=4.2)
     pdf.text_block(caption, size=8, color=MUTED, height=4.2)
     pdf.ln(2.5)
 
@@ -380,17 +382,15 @@ def render_pdf(report: dict, logo_path: Path | None = None,
         # already carries every round's summary verbatim, and printing it a
         # second time at the head of each round section was pure duplication.
 
-        balance = round_.get("speaking_balance")
-        if balance and len(balance["voices"]) >= 2:
-            # one voice means no diarization — nothing worth printing
-            _speaking_balance(pdf, balance, language)
-
         if plenary:
             # One group = one table. Its findings ARE the round's findings, so
             # render them once, with no cross-table section (none exists) and no
             # "Table detail / Table N" framing that a single group makes noise.
             table = round_["tables"][0] if round_["tables"] else None
             findings = table["findings"] if table else []
+            balance = table.get("speaking_balance") if table else None
+            if balance and len(balance["voices"]) >= 2:
+                _speaking_balance(pdf, balance, language)
             for type_, label, group in group_findings_by_type(findings, language):
                 pdf.group_heading(label, AMBER if type_ == "disagreement" else ACCENT)
                 for finding in group:
@@ -404,16 +404,24 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             for finding in group:
                 _finding(pdf, finding, cross=True, language=language)
 
+        def _balance_of(t: dict) -> dict | None:
+            b = t.get("speaking_balance")
+            # one voice means no diarization — nothing worth printing
+            return b if b and len(b["voices"]) >= 2 else None
+
         tables_with_content = [
-            t for t in round_["tables"] if t["findings"] or t["summary"]
+            t for t in round_["tables"] if t["findings"] or t["summary"] or _balance_of(t)
         ]
         if tables_with_content:
             pdf.group_heading(text(language, "table_detail"), MUTED)
             for table in tables_with_content:
+                # per table: summary → speaking balance → findings
                 pdf.eyebrow(text(language, "table", number=table["table_number"]), ACCENT)
                 if table["summary"]:
                     pdf.text_block(table["summary"], size=9.5, color=MUTED, height=4.8)
                     pdf.ln(1)
+                if _balance_of(table):
+                    _speaking_balance(pdf, table["speaking_balance"], language)
                 for finding in table["findings"]:
                     _finding(pdf, finding, cross=False, language=language)
                 pdf.ln(1)

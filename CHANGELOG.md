@@ -138,6 +138,14 @@ not rewritten.
   session* asks for the event's name and turns it into an Assembly (`POST
   /api/v1/sessions/{id}/promote`), keeping its tables, codes, recordings and
   report; choosing *Start a Session* first is never a mistake.
+- **Speaking balance is per table.** It used to pick the single recording
+  with the most speech across the whole session and print it at session level
+  — the wrong scope for a multi-table assembly. Each table now gets its own
+  balance from its own fullest recording (Analysis tab under the table, report
+  and PDF as Summary → Speaking balance → Findings per table); it is never
+  aggregated across tables, and when a table's phone changed mid-session the
+  chart says it covers the fullest part only, because voices cannot be matched
+  across parts.
 - **Rounds are called Sessions where people read them.** The organizer's
   tabs, buttons and hints and the phone's strings (en, it) now say Session;
   `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in

@@ -400,6 +400,11 @@ export interface SpeakingBalance {
 	voices: SpeakingVoice[]
 	total_seconds: number
 	from_recording_id: string
+	/** how many of the table's recordings held speech */
+	parts?: number
+	/** the balance covers only the fullest of several parts: voices cannot be
+	 * matched across a replaced phone's recordings */
+	recorder_changed?: boolean
 }
 
 export interface RoundFindings {
@@ -409,12 +414,13 @@ export interface RoundFindings {
 	analysis_configured: boolean
 	tables_with_findings: number
 	cross_table: FindingData[]
-	speaking_balance: SpeakingBalance | null
 	tables: Array<{
 		table_number: number
 		recording: { id: string; state: string; error_code?: string; job?: JobInfo | null } | null
 		summary: string
 		analyzed: boolean
+		/** talk-time per detected voice at THIS table (never across tables) */
+		speaking_balance?: SpeakingBalance | null
 		findings: FindingData[]
 	}>
 	/** The newest cross-table clustering job, whatever its state. */
@@ -448,7 +454,12 @@ export interface ReportData {
 		summary: string
 		recordings: number
 		cross_table: ReportFinding[]
-		tables: Array<{ table_number: number; summary: string; findings: ReportFinding[] }>
+		tables: Array<{
+			table_number: number
+			summary: string
+			speaking_balance?: SpeakingBalance | null
+			findings: ReportFinding[]
+		}>
 	}>
 }
 

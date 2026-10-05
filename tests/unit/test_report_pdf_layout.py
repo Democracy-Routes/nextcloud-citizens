@@ -171,17 +171,23 @@ def test_plenary_report_has_no_table_detail_heading(monkeypatch):
 
 def test_the_speaking_balance_strip_draws_once_when_voices_exist(monkeypatch):
     report = _report("Short but real quote text here.", findings=2)
-    report["rounds"][0]["speaking_balance"] = {
+    # per table, never per round
+    report["rounds"][0]["tables"][0]["speaking_balance"] = {
         "voices": [
             {"label": "A", "seconds": 300, "percent": 70},
             {"label": "B", "seconds": 129, "percent": 30},
         ],
         "total_seconds": 429,
         "from_recording_id": "rec-1",
+        "parts": 2,
+        "recorder_changed": True,
     }
     seen = _captured_text(lambda: render_pdf(report), monkeypatch)
     assert seen.count("Speaking balance") == 1
     assert any(t.startswith("Voice A — 70%") for t in seen)
+    assert any("fullest part only" in t for t in seen)
+    # drawn inside the table's section, after its heading
+    assert seen.index("Table 1") < seen.index("Speaking balance")
 
 
 def test_no_strip_without_diarized_voices(monkeypatch):
@@ -207,7 +213,7 @@ def _italian_report() -> dict:
             ],
         }
     ]
-    report["rounds"][0]["speaking_balance"] = {
+    report["rounds"][0]["tables"][0]["speaking_balance"] = {
         "voices": [
             {"label": "A", "seconds": 300, "percent": 70},
             {"label": "Others", "seconds": 129, "percent": 30},

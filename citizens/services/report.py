@@ -24,7 +24,7 @@ from citizens.services.report_text import (
     type_labels,
     type_labels_singular,
 )
-from citizens.services.speaking import round_speaking_balance
+from citizens.services.speaking import table_speaking_balance
 
 # The wording lives in report_text.py, per language. These module names are
 # the English values, kept for callers that want a language-neutral constant
@@ -370,6 +370,11 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
     rounds_payload = []
     for round_ in assembly.rounds:
         table_numbers = {table.id: table.number for table in round_.tables}
+        # talk-time per detected voice, PER TABLE (services/speaking.py): the
+        # renderers show it only when diarization produced >= 2 voices
+        balances = {
+            table.number: table_speaking_balance(session, round_, table) for table in round_.tables
+        }
         round_findings = [f for f in findings if f.round_id == round_.id]
         cross = [finding_payload(f, table_numbers) for f in round_findings if f.scope == "round"]
         per_table: dict[int, list[dict]] = {}
@@ -379,10 +384,11 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             number = table_numbers.get(finding.table_id or "")
             if number is not None:
                 per_table.setdefault(number, []).append(finding_payload(finding, table_numbers))
-        # tables with an AI summary appear even without findings
+        # tables with an AI summary or a measured balance appear even without findings
         round_table_numbers = sorted(
             set(per_table)
             | {num for (rid, num) in table_summaries if rid == round_.id}
+            | {num for num, balance in balances.items() if balance}
         )
         rounds_payload.append(
             {
@@ -398,14 +404,12 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                 "status": round_.status,
                 "summary": round_.analysis_summary,
                 "recordings": recordings_by_round.get(round_.id, 0),
-                # talk-time per detected voice (services/speaking.py); the
-                # renderers show it only when diarization produced >= 2 voices
-                "speaking_balance": round_speaking_balance(session, round_),
                 "cross_table": cross,
                 "tables": [
                     {
                         "table_number": number,
                         "summary": table_summaries.get((round_.id, number), ""),
+                        "speaking_balance": balances.get(number),
                         "findings": per_table.get(number, []),
                     }
                     for number in round_table_numbers
@@ -523,20 +527,12 @@ def render_markdown(report: dict) -> str:
             lines += [f"*{text(language, 'objective')}:* {round_['objective']}", ""]
         if round_["summary"]:
             lines += [f"*{ai_summary}:* {round_['summary']}", ""]
-        balance = round_.get("speaking_balance")
-        if balance and len(balance["voices"]) >= 2:
-            lines += [f"**{text(language, 'speaking_balance')}**", ""]
-            lines += [
-                f"- {voice_name(language, v['label'])} — {v['percent']}% "
-                f"({_timestamp(v['seconds'])})"
-                for v in balance["voices"]
-            ]
-            lines += ["", f"*{text(language, 'voices_caveat')}*", ""]
         if plenary:
             # One group = one table: render its findings once, grouped by type,
             # with no "Across all tables" section and no "Table N" heading.
             table = round_["tables"][0] if round_["tables"] else None
             findings = table["findings"] if table else []
+            lines += _markdown_balance(table.get("speaking_balance") if table else None, language)
             for _type, label, group in group_findings_by_type(findings, language):
                 lines += [f"### {label}", ""]
                 for finding in group:
@@ -551,21 +547,44 @@ def render_markdown(report: dict) -> str:
                 for finding in group:
                     lines += _markdown_finding(finding, cross=True, language=language)
         for table in round_["tables"]:
-            if not table["findings"] and not table["summary"]:
+            balance_lines = _markdown_balance(table.get("speaking_balance"), language)
+            if not table["findings"] and not table["summary"] and not balance_lines:
                 continue
+            # per table: summary → speaking balance → findings
             lines += [f"### {text(language, 'table', number=table['table_number'])}", ""]
             if table["summary"]:
                 lines += [f"*{ai_summary}:* {table['summary']}", ""]
+            lines += balance_lines
             for finding in table["findings"]:
                 lines += _markdown_finding(finding, cross=False, language=language)
         if (
             not round_["summary"]
             and not round_["cross_table"]
-            and not any(t["findings"] or t["summary"] for t in round_["tables"])
+            and not any(
+                t["findings"] or t["summary"] or _markdown_balance(t.get("speaking_balance"), language)
+                for t in round_["tables"]
+            )
         ):
             lines += [no_findings, ""]
     lines += ["---", "", f"_{report['methodology_note']}_", ""]
     return "\n".join(lines)
+
+
+def _markdown_balance(balance: dict | None, language: str | None) -> list[str]:
+    """The table's talk-time per detected voice — only when diarization gave
+    at least two voices; one voice means the whole recording was one label."""
+    if not balance or len(balance.get("voices") or []) < 2:
+        return []
+    lines = [f"**{text(language, 'speaking_balance')}**", ""]
+    lines += [
+        f"- {voice_name(language, v['label'])} — {v['percent']}% ({_timestamp(v['seconds'])})"
+        for v in balance["voices"]
+    ]
+    lines += ["", f"*{text(language, 'voices_caveat')}*"]
+    if balance.get("recorder_changed"):
+        lines += [f"*{text(language, 'recorder_changed_caveat')}*"]
+    lines += [""]
+    return lines
 
 
 def voice_name(language: str | None, label: str) -> str:

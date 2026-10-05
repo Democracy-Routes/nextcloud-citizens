@@ -379,10 +379,6 @@ async function recluster(): Promise<void> {
 				title="No findings match this filter"
 				hint="Change the filters above to see the rest of this session's findings." />
 			<template v-else>
-				<SpeakingBalanceCard
-					v-if="data.speaking_balance && data.speaking_balance.voices.length"
-					:balance="data.speaking_balance" />
-
 				<div v-if="shown.cross_table.length || (data.round_summary && !filtering)" style="margin-bottom: 24px">
 					<h3 style="margin-bottom: 10px">
 						Across all tables
@@ -413,6 +409,11 @@ async function recluster(): Promise<void> {
 							<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">AI SUMMARY</span>
 							{{ table.summary }}
 						</p>
+						<!-- talk-time per detected voice at THIS table: diarization
+						     labels never carry across tables, so the chart never does -->
+						<SpeakingBalanceCard
+							v-if="table.speaking_balance && table.speaking_balance.voices.length >= 2"
+							:balance="table.speaking_balance" />
 						<p v-if="table.analyzed && !table.findings.length" class="cz-muted" style="font-size: 0.845rem">
 							Analyzed — no substantive findings for the session question in this discussion.
 						</p>

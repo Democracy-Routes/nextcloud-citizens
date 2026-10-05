@@ -59,6 +59,12 @@ const legend = computed(() =>
 <template>
 	<div class="cz-card cz-speaking">
 		<span class="cz-muted cz-speaking__eyebrow">SPEAKING BALANCE</span>
+		<!-- a replaced phone leaves two parts whose voices cannot be matched;
+		     the chart covers the fullest part and says so -->
+		<p v-if="balance.recorder_changed" class="cz-muted cz-speaking__caveat">
+			The phone recording this table changed during the session; voices cannot be matched
+			across the parts, so this covers the fullest part only.
+		</p>
 		<div class="cz-speaking__body">
 			<svg
 				class="cz-speaking__donut"
@@ -102,6 +108,10 @@ const legend = computed(() =>
 	letter-spacing: 0.04em;
 	display: block;
 	margin-bottom: 12px;
+}
+.cz-speaking__caveat {
+	margin: -6px 0 12px;
+	font-size: 0.8125rem;
 }
 .cz-speaking__body {
 	display: flex;

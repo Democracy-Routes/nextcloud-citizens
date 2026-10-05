@@ -36,13 +36,14 @@ function payload(speaking_balance: unknown) {
 		analysis_configured: true,
 		tables_with_findings: 1,
 		cross_table: [],
-		speaking_balance,
 		tables: [
 			{
 				table_number: 1,
 				recording: { id: 'rec-1', state: 'READY_FOR_REVIEW' },
 				summary: 'They discussed cycle lanes.',
 				analyzed: true,
+				// per table, never per round: diarization labels do not cross tables
+				speaking_balance,
 				findings: [
 					{
 						id: 'f1',
@@ -67,7 +68,7 @@ function payload(speaking_balance: unknown) {
 beforeEach(() => roundFindings.mockReset())
 
 describe('speaking balance on the Analysis tab', () => {
-	it('renders the donut when the round has one', async () => {
+	it('renders the donut under the table that has one', async () => {
 		roundFindings.mockResolvedValue(
 			payload({
 				total_seconds: 120,
@@ -83,9 +84,24 @@ describe('speaking balance on the Analysis tab', () => {
 
 		expect(wrapper.find('.cz-speaking').exists()).toBe(true)
 		expect(wrapper.text()).toContain('Voice A')
+		// inside the table's section, after its heading
+		const html = wrapper.html()
+		expect(html.indexOf('Table 1')).toBeLessThan(html.indexOf('cz-speaking'))
 	})
 
-	it('shows no chart when the round has no measurable speech', async () => {
+	it('says so when the table\'s phone changed and the chart covers one part', async () => {
+		roundFindings.mockResolvedValue(
+			payload({
+				total_seconds: 120, from_recording_id: 'rec-1', parts: 2, recorder_changed: true,
+				voices: [{ label: 'A', seconds: 80, percent: 67 }, { label: 'B', seconds: 40, percent: 33 }],
+			}),
+		)
+		const wrapper = mountWithI18n(AnalysisTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.find('.cz-speaking__caveat').text()).toContain('covers the fullest part only')
+	})
+
+	it('shows no chart when the table has no measurable speech', async () => {
 		roundFindings.mockResolvedValue(payload(null))
 		const wrapper = mountWithI18n(AnalysisTab, { props: { assembly: ASSEMBLY } })
 		await flushPromises()

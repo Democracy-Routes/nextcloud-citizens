@@ -1,14 +1,16 @@
 # SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""How much each voice spoke in a round — an honest, single-device estimate.
+"""How much each voice spoke at a table — an honest, single-recording estimate.
 
 Diarization gives us anonymous speaker labels ("who spoke", not "whom"), and
 those labels are **only** consistent within one recording: SPEAKER_00 on one
-phone is not SPEAKER_00 on another. So a round's speaking balance is computed
-from the one recording that captured the most speech — a single coherent voice
-set — rather than trying to reconcile labels across devices, which is
-impossible from diarization alone. The result is deliberately anonymous: voices
-are relabelled A, B, C… and never named.
+phone is not SPEAKER_00 on another. So a table's speaking balance is computed
+from the one recording of that table that captured the most speech — a single
+coherent voice set — rather than trying to reconcile labels across devices or
+across the parts a replaced phone leaves behind, which is impossible from
+diarization alone. The result is deliberately anonymous: voices are relabelled
+A, B, C… and never named, and it is per logical table, never aggregated across
+tables.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from citizens.db.models import Recording, Round, Transcript, TranscriptSegment
+from citizens.db.models import Recording, Round, Table, Transcript, TranscriptSegment
 
 # Above this many distinct voices the donut turns to mush, so the quietest are
 # folded into a single "Others" slice.
@@ -38,16 +40,19 @@ def _percentages(seconds: list[float], total: float) -> list[int]:
     return floors
 
 
-def round_speaking_balance(session: Session, round_: Round) -> dict | None:
-    """Talk-time share per detected voice, from the round's fullest recording.
+def table_speaking_balance(session: Session, round_: Round, table: Table) -> dict | None:
+    """Talk-time share per detected voice, from the table's fullest recording.
 
     Returns ``{"voices": [{"label", "seconds", "percent"}], "total_seconds",
-    "from_recording_id"}`` or ``None`` when the round has no transcribed speech
-    to measure.
+    "from_recording_id", "parts", "recorder_changed"}`` or ``None`` when the
+    table has no transcribed speech to measure. ``parts`` is how many of the
+    table's recordings held speech; ``recorder_changed`` says the balance
+    covers only the fullest of several parts (a replaced phone, a second
+    recorder) because voices cannot be matched between them.
     """
     recordings = list(
         session.execute(
-            select(Recording).where(Recording.round_id == round_.id)
+            select(Recording).where(Recording.round_id == round_.id, Recording.table_id == table.id)
         ).scalars()
     )
     if not recordings:
@@ -57,6 +62,7 @@ def round_speaking_balance(session: Session, round_: Round) -> dict | None:
     best_id: str | None = None
     best_total = 0.0
     best_segments: list[TranscriptSegment] = []
+    parts = 0
     for rec in recordings:
         segments = list(
             session.execute(
@@ -66,6 +72,8 @@ def round_speaking_balance(session: Session, round_: Round) -> dict | None:
             ).scalars()
         )
         total = sum(max(0.0, s.end_seconds - s.start_seconds) for s in segments)
+        if total > 0:
+            parts += 1
         if total > best_total:
             best_total, best_id, best_segments = total, rec.id, segments
 
@@ -102,4 +110,6 @@ def round_speaking_balance(session: Session, round_: Round) -> dict | None:
         "voices": voices,
         "total_seconds": round(best_total, 1),
         "from_recording_id": best_id,
+        "parts": parts,
+        "recorder_changed": parts > 1,
     }
