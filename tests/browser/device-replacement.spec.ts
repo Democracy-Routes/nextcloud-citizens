@@ -34,7 +34,7 @@ test('the organizer hands a dead table to another phone', async ({ browser }) =>
 	await phoneB.page.goto(
 		`/recorder.html?chunkms=${CHUNK_MS}#/join/${encodeURIComponent(fixture.token)}`,
 	)
-	const agree = phoneB.page.getByRole('button', { name: /Everyone at this table agrees/ })
+	const agree = phoneB.page.getByRole('button', { name: /continue/ })
 	await agree.waitFor({ state: 'visible', timeout: 20_000 })
 	await agree.click()
 	await expect(phoneB.page.getByRole('button', { name: 'READY' })).toBeEnabled({ timeout: 20_000 })
