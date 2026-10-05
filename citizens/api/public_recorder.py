@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -589,6 +589,9 @@ def _assembly_state(
         "table_color": color_for(recorder_session.table_number),
         # which of the table's recorders this phone is (1 = the table's own code)
         "slot": recorder_session.slot,
+        # the table as a whole: how many recorder phones it has right now and
+        # which of them carries the live captions, for the status line
+        "table": _table_summary(session, assembly.id, recorder_session),
         # The organizer has asked the phones to delete their local copies. The
         # server cannot push, so it rides on this poll — which every recorder
         # already makes every few seconds.
@@ -610,6 +613,38 @@ def _assembly_state(
             }
             for round_ in assembly.rounds
         ],
+    }
+
+
+def _table_summary(session: Session, assembly_id: str, recorder_session: RecorderSession) -> dict:
+    """Recorders: 2 · Live captions: Recorder A — what the phone shows about
+    its table. Recorders are counted by slot among sessions not revoked; the
+    live source is whichever recorder's recording in progress carries it."""
+    recorders = session.execute(
+        select(func.count(func.distinct(RecorderSession.slot))).where(
+            RecorderSession.assembly_id == assembly_id,
+            RecorderSession.table_number == recorder_session.table_number,
+            RecorderSession.revoked_at.is_(None),
+        )
+    ).scalar_one()
+    live_slot = session.execute(
+        select(RecorderSession.slot)
+        .join(Recording, Recording.recorder_session_id == RecorderSession.id)
+        .where(
+            Recording.assembly_id == assembly_id,
+            Recording.table_number == recorder_session.table_number,
+            Recording.state == "RECORDING",
+            Recording.live_source.is_(True),
+        )
+    ).scalars().first()
+    return {
+        "number": recorder_session.table_number,
+        "color_key": color_for(recorder_session.table_number),
+        "slot": recorder_session.slot,
+        "slot_label": slot_label(recorder_session.slot),
+        "recorders": int(recorders or 0),
+        "live_source_slot": live_slot,
+        "live_source_label": slot_label(live_slot) if live_slot else None,
     }
 
 

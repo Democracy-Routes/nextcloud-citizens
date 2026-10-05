@@ -88,6 +88,15 @@ not rewritten.
   source passes to a sibling still recording. **Plenary rooms change
   behaviour:** N phones used to open N streaming sessions for one discussion;
   now one does. The Live tab shows which recorder carries the captions.
+- **The recorder screen shows the table's identity and can grow the room.**
+  Every recorder screen reads *TABLE 7 · BLUE*. Two actions — *Add new Table*
+  and *Add Recorder to this Table* — make a QR code whose intent is printed
+  above it; the phone that scans it is told what the code made it (*You join
+  as Recorder B*, or *This phone is the recorder of the new table*) and taps
+  Continue, never choosing a role. A table with several recorders shows
+  *Recorders: 2 · Live captions: Recorder A*; a backup phone's caption panel
+  says whose captions the room is reading and offers to show them here
+  instead. All of it is translated (en, it) like the rest of the recorder.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

@@ -16,6 +16,8 @@ import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
+import TableActions from './TableActions.vue'
+import TableBadge from './TableBadge.vue'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
 import { clientLog, ship } from '../logger'
@@ -53,6 +55,29 @@ const clearedNote = ref('')
 const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
 const plenary = props.session.assembly.recording_mode === 'plenary'
 const showAddDevice = ref(false)
+
+// The table as a whole — how many recorder phones, whose captions the room
+// reads. From the join snapshot first, refreshed by the status poll.
+const tableInfo = ref(props.session.table ?? null)
+// which recorder carries the captions while this phone is a backup
+const liveSourceLabel = ref<string | null>(null)
+const takingOver = ref(false)
+
+/** This phone takes over its table's live captions. The other recorder keeps
+ * recording; only its caption session ends. */
+async function takeOverCaptions(): Promise<void> {
+	if (!state.recordingId || takingOver.value) return
+	takingOver.value = true
+	try {
+		await recorderApi.promoteLiveSource(props.session.session_token, state.recordingId)
+		captionState.value = 'waiting'
+		captionHistory = { sawLines: false, consecutiveInactive: 0 }
+	} catch {
+		/* the footer keeps saying who has the captions; the next poll tells the truth */
+	} finally {
+		takingOver.value = false
+	}
+}
 
 // How long "Keep talking" holds off the auto-finish before it re-arms. Long
 // enough to finish a thought; bounded, so a table that taps it and walks away
@@ -190,6 +215,7 @@ function watchForNextRound(): void {
 	const poll = async () => {
 		try {
 			const status = await recorderApi.status(props.session.session_token)
+			if (status.table) tableInfo.value = status.table
 			reportAvailable.value = status.report_available ?? false
 			assemblyClosed.value = status.assembly_closed ?? false
 			currentRoundOpen.value =
@@ -408,6 +434,7 @@ function startLivePoll(): void {
 			}
 			captionHistory = updateHistory(result, captionHistory)
 			captionState.value = captionFooter(result, captionHistory)
+			liveSourceLabel.value = result.live_source_label ?? null
 		} catch {
 			/* captions are best-effort; the footer keeps its last state */
 		}
@@ -488,9 +515,19 @@ async function clearSynced(): Promise<void> {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
+			<TableBadge :number="session.table_number" :color-key="tableInfo?.color_key ?? session.table_color" />
 			<span v-if="state.phase === 'recording'" class="rc-live">{{ t('recorder.recording.badge') }}</span>
 		</div>
+		<!-- more than one phone records this table: say how many, and whose
+		     captions the room is reading -->
+		<p v-if="tableInfo && tableInfo.recorders > 1" class="rc-recorders">
+			{{ t('recorder.table.recorders', { count: tableInfo.recorders }) }} ·
+			{{
+				tableInfo.live_source_label
+					? t('recorder.table.liveSource', { label: tableInfo.live_source_label })
+					: t('recorder.table.noLiveSource')
+			}}
+		</p>
 
 		<div v-if="startError" class="rc-scroll">
 			<div class="rc-alert">
@@ -668,7 +705,17 @@ async function clearSynced(): Promise<void> {
 			<template v-if="state.phase === 'recording'">
 				<div v-if="showLive" class="rc-card">
 					<p class="rc-eyebrow">{{ t('recorder.recording.liveTranscript') }}</p>
-					<p v-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 0.875rem; margin: 0">
+					<!-- a backup recorder: another phone at the table carries the
+					     captions; offer to take them over rather than an alarm -->
+					<template v-if="captionBlocks.length === 0 && captionState === 'backup'">
+						<p class="rc-muted" style="font-size: 0.875rem; margin: 0">
+							{{ t('recorder.recording.captionsBackup', { label: liveSourceLabel ?? '' }) }}
+						</p>
+						<button class="rc-btn rc-subtle" :disabled="takingOver" @click="takeOverCaptions">
+							{{ takingOver ? t('recorder.recording.takingOver') : t('recorder.recording.takeOverCaptions') }}
+						</button>
+					</template>
+					<p v-else-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 0.875rem; margin: 0">
 						{{
 							captionState === 'capacity'
 								? t('recorder.recording.captionsCapacity')
@@ -703,6 +750,9 @@ async function clearSynced(): Promise<void> {
 					{{ t('recorder.addDevice.button') }}
 				</button>
 				<AddDeviceQr v-if="plenary && showAddDevice" :token="props.session.session_token" />
+				<!-- every other mode: add the next table, or another recorder for
+				     this one — the code decides, the next phone follows it -->
+				<TableActions :session="props.session" :round-id="props.round.id" />
 			</template>
 			</div>
 

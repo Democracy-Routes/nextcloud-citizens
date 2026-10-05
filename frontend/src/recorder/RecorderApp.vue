@@ -4,13 +4,14 @@
 import { mdiAlertCircleOutline, mdiCheckCircle, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SvgIcon from '../components/ui/SvgIcon.vue'
-import { recorderApi, RecorderApiError, type JoinResult, type RoundInfo } from './api'
+import { recorderApi, RecorderApiError, type Joined, type JoinResult, type RoundInfo } from './api'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../i18n'
 import { decideOnStatusFailure } from './errors'
 import { hasUnfinishedAudio, purgeLocalAudio, type PurgeOutcome } from './purge'
 import ArmedScreen from './components/ArmedScreen.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
+import JoinedScreen from './components/JoinedScreen.vue'
 import Preflight from './components/Preflight.vue'
 import RecordingScreen from './components/RecordingScreen.vue'
 import RecoverySync from './components/RecoverySync.vue'
@@ -26,6 +27,7 @@ type Screen =
 	| 'offline'
 	| 'purged'
 	| 'recovery'
+	| 'joined'
 	| 'consent'
 	| 'preflight'
 	| 'armed'
@@ -39,6 +41,9 @@ const screen = ref<Screen>('joining')
 const error = ref('')
 const session = ref<JoinResult | null>(null)
 const selectedRound = ref<RoundInfo | null>(null)
+// What a code other than the printed table code made this phone — shown once,
+// right after the scan, before consent; a resumed session never sees it again.
+const pendingJoined = ref<Joined | null>(null)
 const recoveryRecording = ref<StoredRecording | null>(null)
 const skippedRecovery = new Set<string>()
 
@@ -161,6 +166,18 @@ async function enterWithSession(joined: JoinResult): Promise<void> {
 	// audio from a previous event, and that must not stand between them and
 	// recording this one.
 	if (await scanForRecovery(joined.assembly.id)) return
+	// the code this phone just scanned made it a recorder of a table it did not
+	// pick (another recorder, or a brand-new table): say so, once, first
+	if (pendingJoined.value) {
+		screen.value = 'joined'
+		return
+	}
+	afterJoined()
+}
+
+/** Past the joined screen (or straight here for a printed table code). */
+function afterJoined(): void {
+	pendingJoined.value = null
 	// people are about to be recorded: tell them what happens to the audio
 	// before it starts. Once per device — an interrupted round must not make
 	// the table read it again mid-assembly.
@@ -257,6 +274,8 @@ async function joinFromHash(): Promise<boolean> {
 			const joined = await joinWithRetry(decodeURIComponent(match[1]))
 			sessionStore(joined)
 			skippedRecovery.clear()
+			pendingJoined.value =
+				joined.joined && joined.joined.purpose !== 'JOIN_TABLE' ? joined.joined : null
 			// remove the invite secret from the visible URL (brief §14)
 			history.replaceState(null, '', window.location.pathname + window.location.search)
 			await enterWithSession(joined)
@@ -423,6 +442,11 @@ function sessionStorageClear(): void {
 			:session="session"
 			:recording="recoveryRecording"
 			@done="finishRecovery" />
+
+		<JoinedScreen
+			v-else-if="screen === 'joined' && pendingJoined"
+			:joined="pendingJoined"
+			@continue="afterJoined" />
 
 		<ConsentScreen
 			v-else-if="screen === 'consent' && session"

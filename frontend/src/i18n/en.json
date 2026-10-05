@@ -147,6 +147,9 @@
 			"captionsUnavailable": "Live captions temporarily unavailable. Recording continues safely.",
 			"captionsListening": "Listening — captions appear as people speak.",
 			"captionsCapacity": "Live captions are off on this phone — the room is at capacity. Recording continues safely.",
+			"captionsBackup": "Live captions are shown on Recorder {label}. This phone records as a backup.",
+			"takeOverCaptions": "Show live captions here instead",
+			"takingOver": "Switching…",
 			"waitingCaptions": "Waiting for captions…",
 			"hideTranscript": "Hide live transcript",
 			"showTranscript": "Show live transcript",
@@ -235,6 +238,14 @@
 			"retryNow": "Retry now",
 			"tableBadge": "TABLE {number}",
 			"tableNumber": "Table {number}",
+			"color": {
+				"blue": "BLUE",
+				"green": "GREEN",
+				"orange": "ORANGE",
+				"purple": "PURPLE",
+				"red": "RED",
+				"teal": "TEAL"
+			},
 			"back": "Back",
 			"minutes": "{minutes} minutes | {minutes} minute | {minutes} minutes"
 		},
@@ -243,6 +254,29 @@
 			"title": "Scan to join this room",
 			"hint": "Any phone that scans this code records the same discussion.",
 			"unavailable": "The join code is no longer available — ask the organizer."
+		},
+		"table": {
+			"recorders": "Recorders: {count}",
+			"liveSource": "Live captions: Recorder {label}",
+			"noLiveSource": "Live captions: none yet",
+			"addTable": "Add new Table",
+			"addRecorder": "Add Recorder to this Table",
+			"addTableTitle": "ADD NEW TABLE",
+			"addRecorderTitle": "ADD RECORDER",
+			"addTableHint": "The phone that scans this code becomes the recorder of the next table.",
+			"addRecorderHint": "The phone that scans this code records this table too, beside this one.",
+			"qrAlt": "QR code for the next phone",
+			"expiresIn": "This code works for {minutes} more minutes. | This code works for {minutes} more minute. | This code works for {minutes} more minutes.",
+			"expired": "This code has expired.",
+			"newCode": "Make a new code",
+			"unavailable": "The code could not be made — ask the organizer.",
+			"close": "Close"
+		},
+		"joined": {
+			"asRecorder": "You join as Recorder {label}",
+			"newTable": "This phone is the recorder of the new table",
+			"body": "The code you scanned decided this. Continue to set up the recording.",
+			"continue": "Continue"
 		},
 		"assembly": {
 			"overTitle": "The assembly has ended",

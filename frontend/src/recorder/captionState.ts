@@ -26,7 +26,7 @@ export interface CaptionHistory {
 	consecutiveInactive: number
 }
 
-export type CaptionFooter = 'ok' | 'waiting' | 'listening' | 'capacity' | 'unavailable'
+export type CaptionFooter = 'ok' | 'waiting' | 'listening' | 'capacity' | 'unavailable' | 'backup'
 
 /** Polls in a row that must report "inactive" before the alarm shows.
  * At one poll per 6 s this is ~18 s — enough to ride out the start-of-round
@@ -43,6 +43,8 @@ export function updateHistory(result: CaptionPoll, history: CaptionHistory): Cap
 
 export function captionFooter(result: CaptionPoll, history: CaptionHistory): CaptionFooter {
 	if (result.lines.length > 0) return 'ok'
+	// intentionally off: another recorder of this table carries the captions
+	if (result.reason === 'backup') return 'backup'
 	// intentionally off: the room is at the provider's concurrency cap
 	if (result.reason === 'capacity') return 'capacity'
 	// a live session that simply has nothing committed yet — calm, not an alarm

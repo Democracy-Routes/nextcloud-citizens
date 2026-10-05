@@ -13,6 +13,8 @@ export interface RoundInfo {
 	position: number
 	title: string
 	question: string
+	/** what the discussion should produce, when the organizer stated it */
+	objective?: string | null
 	duration_minutes: number
 	status: string
 	/** state of this table's healthy recording for the round, null if none */
@@ -27,9 +29,45 @@ export interface RoundInfo {
 
 export interface AssemblyInfo {
 	id: string
+	/** "session" when this is the container behind a standalone Session */
+	kind?: 'assembly' | 'session'
 	name: string
 	language: string
 	recording_mode: 'orchestrated' | 'independent' | 'plenary'
+}
+
+export type CapabilityPurpose = 'ADD_RECORDER_TO_TABLE' | 'ADD_TABLE'
+
+/** What scanning a code made this phone — decided by the code, never here. */
+export interface Joined {
+	purpose: 'JOIN_TABLE' | CapabilityPurpose
+	table_number: number
+	color_key: string
+	slot: number
+	table_created: boolean
+}
+
+/** The table as a whole, for the status line: how many recorder phones it has
+ * and which of them carries the live captions. */
+export interface TableInfo {
+	number: number
+	color_key: string
+	slot: number
+	slot_label: string
+	recorders: number
+	live_source_slot: number | null
+	live_source_label: string | null
+}
+
+/** A code this phone made for the next phone (services/capabilities.py). */
+export interface CapabilityCard {
+	purpose: CapabilityPurpose
+	url: string
+	qr_svg: string
+	expires_at: string
+	table_number: number | null
+	color_key: string | null
+	round_id: string | null
 }
 
 /** What the table is told before recording — names and durations only. */
@@ -48,6 +86,13 @@ export interface JoinResult {
 	assembly: AssemblyInfo
 	data_handling?: DataHandling
 	table_number: number
+	/** the colour beside the number — a cue, never something to depend on;
+	 * absent from a server older than 0.7 */
+	table_color?: string
+	/** which of the table's recorders this phone is (1 = the table's own code) */
+	slot?: number
+	joined?: Joined
+	table?: TableInfo
 	rounds: RoundInfo[]
 	/** The organizer has asked the phones to delete their local copies. */
 	purge_local_audio?: boolean
@@ -60,6 +105,9 @@ export interface RecorderStatus {
 	assembly_closed?: boolean
 	data_handling?: DataHandling
 	table_number: number
+	table_color?: string
+	slot?: number
+	table?: TableInfo
 	rounds: RoundInfo[]
 	purge_local_audio?: boolean
 }
@@ -228,13 +276,31 @@ export const recorderApi = {
 			active: boolean
 			lines: Array<{ t: number; text: string; speaker?: number | null }>
 			// why there are no captions: "capacity" (concurrency cap reached,
-			// intentionally off on this phone) or "error" (session failed,
-			// cooling down before a retry). Absent when nothing is wrong.
+			// intentionally off on this phone), "error" (session failed,
+			// cooling down before a retry) or "backup" (another recorder of
+			// this table carries the captions). Absent when nothing is wrong.
 			reason?: string
+			live_source_slot?: number | null
+			live_source_label?: string | null
 		}>(
 			'GET',
 			`/api/v1/public/recorder/recordings/${recordingId}/live`,
 			{ token },
+		),
+
+	/** A code for the next phone: add a recorder to this table, or add a new
+	 * table. The code means exactly that; the phone that scans it does not
+	 * choose. Short-lived and single-use. */
+	createCapability: (token: string, purpose: CapabilityPurpose, roundId?: string | null) =>
+		request<CapabilityCard>('POST', '/api/v1/public/recorder/capabilities', {
+			token,
+			json: { purpose, round_id: roundId ?? null },
+		}),
+
+	/** This phone takes over its table's live captions. */
+	promoteLiveSource: (token: string, recordingId: string) =>
+		request<{ recording_id: string; live_source: boolean; slot: number }>(
+			'POST', '/api/v1/public/recorder/live-source', { token, json: { recording_id: recordingId } },
 		),
 
 	heartbeat: (

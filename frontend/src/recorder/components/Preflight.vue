@@ -17,6 +17,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import TableActions from './TableActions.vue'
+import TableBadge from './TableBadge.vue'
 import { heldByAnotherDevice } from '../holding'
 import { clientLog, ship } from '../logger'
 import { useWakeLock } from '../useWakeLock'
@@ -253,7 +255,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
+			<TableBadge :number="session.table_number" :color-key="session.table_color" />
 		</div>
 
 		<div class="rc-scroll">
@@ -363,6 +365,8 @@ const STATE_CLASS: Record<CheckState, string> = {
 				</button>
 			</div>
 		</template>
+		<!-- add the next table, or another recorder for this one -->
+		<TableActions :session="session" :round-id="selectedRound?.id ?? null" />
 		</div>
 
 		<div class="rc-actions">

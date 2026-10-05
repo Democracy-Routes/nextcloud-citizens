@@ -494,6 +494,58 @@ body {
 	}
 }
 
+/* ================= table identity and actions (0.7) ================= */
+
+/* The colour beside the table number — a cue for a room looking for "the blue
+   table", never something to depend on. Same palette as the organizer. */
+.rc-tabledot {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	background: var(--rc-border);
+}
+.rc-tabledot--blue { background: #1565c0; }
+.rc-tabledot--green { background: #2d7b41; }
+.rc-tabledot--orange { background: #c05000; }
+.rc-tabledot--purple { background: #6a1b9a; }
+.rc-tabledot--red { background: #c62828; }
+.rc-tabledot--teal { background: #00796b; }
+
+/* the armed screen's big table line, as a badge without the pill */
+.rc-table-badge--hero {
+	font-size: 38px;
+	letter-spacing: 0.02em;
+	background: none;
+	border: none;
+	padding: 0;
+	gap: 14px;
+	line-height: 1;
+}
+.rc-table-badge--hero .rc-tabledot { width: 20px; height: 20px; }
+
+/* "Recorders: 2 · Live captions: Recorder A", under the header */
+.rc-recorders {
+	margin: -8px 0 12px;
+	font-size: 0.8125rem;
+	color: var(--rc-muted);
+}
+
+/* Add new Table / Add Recorder: side by side where there is room, stacked on
+   a narrow phone; the open one is highlighted */
+.rc-table-actions { margin-top: 12px; }
+.rc-table-actions__row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px;
+}
+.rc-table-actions__row .rc-btn { margin: 0; }
+@media (max-width: 479px) {
+	.rc-table-actions__row { grid-template-columns: 1fr; }
+}
+.rc-capability { margin-top: 12px; }
+
 /* ================= add-a-device QR (plenary) ================= */
 
 /* A QR must sit on a light ground with a quiet zone whatever the theme, or

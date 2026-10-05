@@ -147,6 +147,9 @@
 			"captionsUnavailable": "Sottotitoli in diretta momentaneamente non disponibili. La registrazione prosegue in sicurezza.",
 			"captionsListening": "In ascolto — i sottotitoli compaiono quando qualcuno parla.",
 			"captionsCapacity": "Sottotitoli in diretta disattivati su questo telefono — la sala è al completo. La registrazione prosegue in sicurezza.",
+			"captionsBackup": "I sottotitoli in diretta sono mostrati sul Registratore {label}. Questo telefono registra come riserva.",
+			"takeOverCaptions": "Mostra qui i sottotitoli in diretta",
+			"takingOver": "Passaggio in corso…",
 			"waitingCaptions": "In attesa dei sottotitoli…",
 			"hideTranscript": "Nascondi la trascrizione in diretta",
 			"showTranscript": "Mostra la trascrizione in diretta",
@@ -235,6 +238,14 @@
 			"retryNow": "Riprova ora",
 			"tableBadge": "TAVOLO {number}",
 			"tableNumber": "Tavolo {number}",
+			"color": {
+				"blue": "BLU",
+				"green": "VERDE",
+				"orange": "ARANCIONE",
+				"purple": "VIOLA",
+				"red": "ROSSO",
+				"teal": "VERDE ACQUA"
+			},
 			"back": "Indietro",
 			"minutes": "{minutes} minuti | {minutes} minuto | {minutes} minuti"
 		},
@@ -243,6 +254,29 @@
 			"title": "Scansiona per unirti a questa sala",
 			"hint": "Ogni telefono che scansiona questo codice registra la stessa discussione.",
 			"unavailable": "Il codice di accesso non è più disponibile — chiedi all'organizzatore."
+		},
+		"table": {
+			"recorders": "Registratori: {count}",
+			"liveSource": "Sottotitoli in diretta: Registratore {label}",
+			"noLiveSource": "Sottotitoli in diretta: nessuno per ora",
+			"addTable": "Aggiungi un nuovo Tavolo",
+			"addRecorder": "Aggiungi un Registratore a questo Tavolo",
+			"addTableTitle": "NUOVO TAVOLO",
+			"addRecorderTitle": "AGGIUNGI REGISTRATORE",
+			"addTableHint": "Il telefono che scansiona questo codice diventa il registratore del prossimo tavolo.",
+			"addRecorderHint": "Il telefono che scansiona questo codice registra anche questo tavolo, accanto a questo.",
+			"qrAlt": "Codice QR per il prossimo telefono",
+			"expiresIn": "Questo codice vale ancora per {minutes} minuti. | Questo codice vale ancora per {minutes} minuto. | Questo codice vale ancora per {minutes} minuti.",
+			"expired": "Questo codice è scaduto.",
+			"newCode": "Crea un nuovo codice",
+			"unavailable": "Non è stato possibile creare il codice — chiedi all'organizzatore.",
+			"close": "Chiudi"
+		},
+		"joined": {
+			"asRecorder": "Ti unisci come Registratore {label}",
+			"newTable": "Questo telefono è il registratore del nuovo tavolo",
+			"body": "Lo ha deciso il codice che hai scansionato. Continua per preparare la registrazione.",
+			"continue": "Continua"
 		},
 		"assembly": {
 			"overTitle": "L'assemblea è terminata",

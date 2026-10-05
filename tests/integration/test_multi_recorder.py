@@ -207,6 +207,25 @@ def test_both_recordings_reach_the_server_as_audio_of_one_table(client):
     assert sorted(f["recording_id"] for f in round_files["tables"]) == sorted([rec_a, rec_b])
 
 
+def test_the_phone_is_told_how_many_recorders_and_who_carries_the_captions(client):
+    assembly = _assembly(client)
+    round_id = assembly["rounds"][0]["id"]
+    joined_a, phone_a = _join(client, assembly["invites"][0]["url"], "10.6.0.1")
+    assert joined_a["table"] == {
+        "number": 1, "color_key": "blue", "slot": 1, "slot_label": "A",
+        "recorders": 1, "live_source_slot": None, "live_source_label": None,
+    }
+    joined_b, phone_b = _second_recorder(client, phone_a, "10.6.0.2")
+    assert joined_b["table"]["recorders"] == 2
+    assert (joined_b["table"]["slot"], joined_b["table"]["slot_label"]) == (2, "B")
+
+    _start(client, phone_b, round_id)
+    table = _status(client, phone_a)["table"]
+    assert table["recorders"] == 2
+    # B started first, so B carries the captions until A starts or takes over
+    assert (table["live_source_slot"], table["live_source_label"]) == (2, "B")
+
+
 def _table_id(session, round_id):
     from citizens.db.models import Table
 

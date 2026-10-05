@@ -7,6 +7,8 @@ import { mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
+import TableActions from './TableActions.vue'
+import TableBadge from './TableBadge.vue'
 import { heldByAnotherDevice } from '../holding'
 import { idb } from '../idb'
 import { useWakeLock, wakeLockHeld } from '../useWakeLock'
@@ -138,8 +140,18 @@ onBeforeUnmount(() => {
 		<div class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 16px; padding-bottom: 8px">
 				<p class="rc-eyebrow">{{ session.assembly.name }}</p>
-				<div class="rc-hero__table">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</div>
+				<div class="rc-hero__table">
+					<TableBadge :number="session.table_number" :color-key="session.table_color" hero />
+				</div>
+				<p v-if="session.table && session.table.recorders > 1" class="rc-muted" style="margin: 6px 0 0; font-size: 0.8125rem">
+					{{ t('recorder.table.recorders', { count: session.table.recorders }) }}
+				</p>
 			</div>
+
+			<!-- add the next table, or another recorder for this one: the code
+			     decides, the next phone follows it (not in plenary, which has
+			     its one shared code below) -->
+			<TableActions :session="session" :round-id="rounds.find((r) => r.status === 'ACTIVE')?.id ?? null" />
 
 			<!-- the microphone failed for the round that is currently open: say so
 			     and wait to be asked, rather than silently retrying forever -->
