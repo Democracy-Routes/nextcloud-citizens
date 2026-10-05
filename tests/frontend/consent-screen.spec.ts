@@ -15,11 +15,15 @@ import { mountWithI18n } from './support/mount'
 
 const consentNotice = vi.fn()
 const registerParticipant = vi.fn()
+const searchParticipants = vi.fn()
+const seatParticipant = vi.fn()
 
 vi.mock('../../frontend/src/recorder/api', () => ({
 	recorderApi: {
 		consentNotice: (...args: unknown[]) => consentNotice(...args),
 		registerParticipant: (...args: unknown[]) => registerParticipant(...args),
+		searchParticipants: (...args: unknown[]) => searchParticipants(...args),
+		seatParticipant: (...args: unknown[]) => seatParticipant(...args),
 	},
 }))
 
@@ -125,6 +129,32 @@ describe('the notice screen', () => {
 		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeUndefined()
 		await wrapper.find('[data-test="continue"]').trigger('click')
 		expect(wrapper.emitted('accept')?.[0]).toEqual([null])
+	})
+
+	it('finds a person who registered ahead and seats them here', async () => {
+		vi.useFakeTimers()
+		searchParticipants.mockResolvedValue([{ id: 'p9', label: 'P009', name: 'Ines Rossi', recording_consent: true }])
+		seatParticipant.mockResolvedValue({
+			participant: { id: 'p9', label: 'P009', name: 'Ines Rossi' },
+			table: { mode: 'required', registered: 1, consenting: 1, can_record: true },
+		})
+		const wrapper = mountScreen()
+		await flushPromises()
+		await wrapper.find('[data-test="find"]').trigger('click')
+		await wrapper.find('[data-test="find-input"]').setValue('ros')
+		vi.advanceTimersByTime(300)
+		await flushPromises()
+		expect(searchParticipants).toHaveBeenCalledWith('tok', 'ros')
+		expect(wrapper.find('[data-test="matches"]').text()).toContain('Ines Rossi')
+		consentNotice.mockResolvedValue({
+			...NOTICE, participants: [{ label: 'P009', name: 'Ines Rossi', recording_consent: true }],
+		})
+		await wrapper.find('[data-test="seat-p9"]').trigger('click')
+		await flushPromises()
+		expect(seatParticipant).toHaveBeenCalledWith('tok', 'p9')
+		expect(wrapper.find('[data-test="roster"]').text()).toContain('Ines Rossi')
+		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeUndefined()
+		vi.useRealTimers()
 	})
 
 	it('falls back to the table-level text on a server without the notice', async () => {

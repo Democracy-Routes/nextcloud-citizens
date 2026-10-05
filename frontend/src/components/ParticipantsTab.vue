@@ -4,6 +4,7 @@
 import {
 	mdiAccountGroup,
 	mdiAccountPlus,
+	mdiContentCopy,
 	mdiDeleteOutline,
 	mdiDownloadOutline,
 	mdiFileDelimitedOutline,
@@ -14,11 +15,12 @@ import { api, BASE } from '../api'
 import { downloadFromApi } from '../download'
 import { describeError, type UiError } from '../errors'
 import { useAsyncAction } from '../composables/useAsyncAction'
-import type { Participant } from '../types'
+import type { Participant, RegistrationLink } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzError from './ui/CzError.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
+import CzQrImage from './ui/CzQrImage.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import { toast } from './ui/toast'
 
@@ -26,6 +28,42 @@ const props = defineProps<{ assemblyId: string }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const participants = ref<Participant[]>([])
+
+/* ---- pre-registration: one link, people register at home, seated at the
+ * door by name on the table's phone ---- */
+const registration = ref<RegistrationLink | null>(null)
+const linkBusy = ref(false)
+const linkCopied = ref(false)
+
+async function loadRegistrationLink(): Promise<void> {
+	try {
+		registration.value = await api.registrationLink(props.assemblyId, false)
+	} catch {
+		/* an older server: the card simply does not appear */
+	}
+}
+
+async function makeRegistrationLink(): Promise<void> {
+	linkBusy.value = true
+	try {
+		registration.value = await api.registrationLink(props.assemblyId, true)
+	} catch (err) {
+		toast(describeError(err).message, 'error')
+	} finally {
+		linkBusy.value = false
+	}
+}
+
+async function copyRegistrationLink(): Promise<void> {
+	if (!registration.value?.url) return
+	try {
+		await navigator.clipboard.writeText(registration.value.url)
+		linkCopied.value = true
+		window.setTimeout(() => (linkCopied.value = false), 2500)
+	} catch {
+		toast('Copy failed — select the link and copy it by hand', 'error')
+	}
+}
 
 async function exportRegister(kind: 'csv' | 'pdf'): Promise<void> {
 	try {
@@ -77,7 +115,10 @@ async function reload(): Promise<void> {
 	}
 }
 
-onMounted(reload)
+onMounted(() => {
+	void reload()
+	void loadRegistrationLink()
+})
 
 const { busy, error: actionError, run: runGuarded } = useAsyncAction()
 
@@ -171,6 +212,36 @@ function initials(participant: Participant): string {
 					<div class="cz-row" style="margin-top: 8px; justify-content: flex-end">
 						<CzButton variant="primary" small :disabled="busy || !csvText.trim()" @click="importCsv">Import participants</CzButton>
 					</div>
+				</div>
+			</div>
+
+			<!-- pre-registration: one link for everyone, people register and
+			     consent at home, the table phone seats them by name -->
+			<div v-if="registration" class="cz-card" data-test="registration-link">
+				<div class="cz-row" style="align-items: flex-start; gap: 16px">
+					<div style="flex: 1">
+						<h3 style="margin: 0 0 6px">Pre-registration link</h3>
+						<p class="cz-muted" style="font-size: 0.8125rem; margin: 0 0 10px">
+							Send this before the event: people read the notice and register at home.
+							At the door, "Find your name" on any table's phone seats them. One link for
+							the whole assembly, valid 30 days, revoked with the table codes.
+							<template v-if="registration.registered.total">
+								<strong>{{ registration.registered.total }} registered ahead · {{ registration.registered.seated }} seated.</strong>
+							</template>
+						</p>
+						<template v-if="registration.url">
+							<code style="font-size: 0.75rem; word-break: break-all">{{ registration.url }}</code>
+							<div class="cz-row" style="margin-top: 8px">
+								<CzButton small :icon="mdiContentCopy" @click="copyRegistrationLink">
+									{{ linkCopied ? 'Link copied' : 'Copy link' }}
+								</CzButton>
+							</div>
+						</template>
+						<CzButton v-else variant="primary" small :disabled="linkBusy" @click="makeRegistrationLink">
+							Create the link
+						</CzButton>
+					</div>
+					<CzQrImage v-if="registration.qr_svg" :svg="registration.qr_svg" label="Pre-registration QR code" style="width: 120px" />
 				</div>
 			</div>
 

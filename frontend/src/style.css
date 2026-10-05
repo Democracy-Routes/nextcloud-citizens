@@ -677,6 +677,17 @@
 #citizens-app .cz-health--ok { border-color: var(--cz-green); color: var(--cz-green); }
 #citizens-app .cz-health--warn { border-color: var(--cz-amber); color: var(--cz-amber); }
 #citizens-app .cz-health--bad { border-color: var(--cz-danger); color: var(--cz-danger); }
+/* Report tab: participants' word on a table's summary */
+#citizens-app .cz-validation { font-size: 0.8rem; margin: 0 0 6px; }
+#citizens-app .cz-validation__ok { color: var(--cz-green); font-weight: 600; }
+#citizens-app .cz-validation__flag { color: var(--cz-amber); font-weight: 600; }
+#citizens-app .cz-validation__notes {
+	margin: 0 0 10px;
+	padding-left: 18px;
+	font-size: 0.8rem;
+	color: var(--cz-amber);
+}
+
 /* Live tab, advanced diagnostics: one line of facts per recorder */
 #citizens-app .cz-diag {
 	list-style: none;

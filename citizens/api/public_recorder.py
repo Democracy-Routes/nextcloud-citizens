@@ -37,6 +37,7 @@ from citizens.services import invites as invites_svc
 from citizens.services import live_source, provider_config
 from citizens.services import messages as messages_svc
 from citizens.services import recording as rec_svc
+from citizens.services import validation as validation_svc
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import data_handling_summary, live_stt_snapshot
 from citizens.services.recording import MAX_CHUNK_BYTES, RERECORDABLE_STATES
@@ -576,8 +577,9 @@ def register_notice(data: RegisterNoticeIn, request: Request, session: ReadDB):
         "mode": assembly.participant_consent,
         "assembly": {"id": assembly.id, "name": assembly.name, "language": assembly.language,
                      "kind": assembly.kind},
+        # None for the assembly's pre-registration link: seated at the door
         "table_number": invite.table_number,
-        "color_key": color_for(invite.table_number),
+        "color_key": color_for(invite.table_number) if invite.table_number is not None else None,
     }
 
 
@@ -612,7 +614,7 @@ def register_self(data: RegisterIn, request: Request, session: DB):
         "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
         "consent": consent_svc.consent_dict(consent),
         "table_number": invite.table_number,
-        "color_key": color_for(invite.table_number),
+        "color_key": color_for(invite.table_number) if invite.table_number is not None else None,
     }
 
 
@@ -633,6 +635,25 @@ def participant_status(participant_session: ParticipantSess, session: ReadDB):
     assembly = session.get(Assembly, participant_session.assembly_id)
     available = assembly is not None and _report_available(session, assembly)
     return consent_svc.participant_status(session, participant_session, available)
+
+
+class ValidateIn(BaseModel):
+    round_id: str
+    verdict: Literal["LOOKS_RIGHT", "MISSING"]
+    note: str = Field(default="", max_length=1000)
+
+
+@router.post("/participant/validate")
+def participant_validate(data: ValidateIn, participant_session: ParticipantSess, session: DB):
+    """"Does this reflect your table?" — once the report is out. One answer per
+    person and session; a second tap replaces the first."""
+    assembly = session.get(Assembly, participant_session.assembly_id)
+    if assembly is None or not _report_available(session, assembly):
+        raise HTTPException(status_code=409, detail="The report has not been published yet")
+    validation = validation_svc.record(
+        session, participant_session, data.round_id, data.verdict, data.note
+    )
+    return {"round_id": validation.round_id, "verdict": validation.verdict, "note": validation.note}
 
 
 @router.get("/participant/report")
@@ -658,6 +679,29 @@ def participant_report_pdf(participant_session: ParticipantSess, session: ReadDB
         media_type="application/pdf",
         headers=download_headers(filename),
     )
+
+
+@router.get("/recorder/participants/search")
+def search_participants(q: str, recorder_session: ReadingSess, session: ReadDB):
+    """The door's "find your name": people who registered ahead and have no
+    table yet. Two characters at least; names only."""
+    if len(q.strip()) < 2:
+        return []
+    return consent_svc.search_unseated(session, recorder_session.assembly_id, q)
+
+
+@router.post("/recorder/participants/{participant_id}/seat")
+def seat_participant(participant_id: str, recorder_session: RecorderSess, session: DB):
+    """A pre-registered person sits down at this table."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    participant = consent_svc.seat(session, assembly, participant_id, recorder_session)
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
 
 
 class HelpIn(BaseModel):

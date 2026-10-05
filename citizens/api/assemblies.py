@@ -218,6 +218,34 @@ def list_participants(assembly_id: str, user: CurrentUser, session: ReadDB):
     return consent_svc.participants_with_consent(session, assembly)
 
 
+@router.post("/assemblies/{assembly_id}/registration-link")
+def registration_link(assembly_id: str, user: CurrentUser, session: DB):
+    """The assembly's pre-registration link (made on first ask, then the same
+    one): people register and consent at home, and are seated at the door
+    by name on the table's phone."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    card = invite_svc.registration_link(session, assembly)
+    record_audit_event(session, "registration_link_issued", "assembly", assembly.id, actor=user)
+    return {**card, "registered": _pre_registered(session, assembly)}
+
+
+@router.get("/assemblies/{assembly_id}/registration-link")
+def get_registration_link(assembly_id: str, user: CurrentUser, session: ReadDB):
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    card = invite_svc.registration_link(session, assembly, create=False)
+    return {**(card or {"url": None, "qr_svg": None, "expires_at": None}),
+            "registered": _pre_registered(session, assembly)}
+
+
+def _pre_registered(session: Session, assembly: Assembly) -> dict:
+    """How many registered ahead, and how many of them have been seated."""
+    people = [p for p in assembly.participants if p.source == "PRE_REGISTRATION"]
+    return {
+        "total": len(people),
+        "seated": sum(1 for p in people if p.registered_table_number is not None),
+    }
+
+
 @router.get("/assemblies/{assembly_id}/consent-register.csv")
 def consent_register_csv(assembly_id: str, user: CurrentUser, session: ReadDB):
     """The consent register as an auditor asks for it: one row per person

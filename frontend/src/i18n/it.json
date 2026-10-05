@@ -48,6 +48,10 @@
 				"another": "Aggiungi un altro partecipante"
 			},
 			"ownPhone": "Registrati dal tuo telefono",
+			"findName": "Già registrato? Trova il tuo nome",
+			"findPlaceholder": "Scrivi il tuo nome",
+			"seatHere": "Siedi qui",
+			"nobodyFound": "Nessuno con questo nome si è registrato in anticipo — aggiungiti qui sopra.",
 			"link": "Partecipanti: {count} · Aggiungi",
 			"linkNone": "Nessun partecipante registrato · Aggiungi",
 			"linkRequired": "Registra un partecipante prima di registrare"
@@ -320,10 +324,13 @@
 		},
 		"register": {
 			"title": "Registrati al Tavolo {number}",
+			"titleAssembly": "Registrati per {name}",
 			"lead": "Hai scansionato il codice di questo tavolo. Leggi l'informativa, poi registrati: il tuo nome resta associato a questo tavolo.",
+			"leadAssembly": "Leggi l'informativa, poi registrati. All'evento, il telefono del tuo tavolo troverà il tuo nome e ti farà sedere.",
 			"button": "Registrati",
 			"formTitle": "La tua registrazione",
 			"formLead": "Tavolo {number}. È richiesto solo il nome.",
+			"formLeadAssembly": "È richiesto solo il nome. Indica il nome che userai all'ingresso.",
 			"invalidTitle": "Questo codice non funziona più",
 			"invalidBody": "Chiedi al tavolo un nuovo codice, oppure registrati sul telefono del tavolo."
 		},
@@ -338,6 +345,13 @@
 			"reportPending": "Il rapporto comparirà qui quando l'organizzatore lo pubblicherà. Conserva questa pagina.",
 			"reportReady": "Il rapporto è stato pubblicato.",
 			"viewReport": "Vedi il rapporto",
+			"validateAsk": "Rispecchia la discussione del tuo tavolo?",
+			"looksRight": "Sì, va bene",
+			"missing": "Manca qualcosa",
+			"missingPlaceholder": "Che cosa manca? (facoltativo)",
+			"sendMissing": "Invia",
+			"saidLooksRight": "Hai detto che va bene. Grazie.",
+			"saidMissing": "Hai segnalato che manca qualcosa. Chi organizza lo guarderà.",
 			"goneTitle": "Questa registrazione non è più disponibile",
 			"goneBody": "Potrebbe essere scaduta, oppure l'organizzatore l'ha cancellata su tua richiesta.",
 			"forget": "Chiudi"

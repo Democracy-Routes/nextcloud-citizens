@@ -87,7 +87,11 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 		<div v-else-if="view === 'form'" class="rc-pad">
 			<h1>{{ t('recorder.register.formTitle') }}</h1>
 			<p class="rc-muted" style="margin: 6px 0 0">
-				{{ t('recorder.register.formLead', { number: notice.table_number }) }}
+				{{
+					notice.table_number
+						? t('recorder.register.formLead', { number: notice.table_number })
+						: t('recorder.register.formLeadAssembly')
+				}}
 			</p>
 			<ConsentForm
 				self
@@ -101,11 +105,19 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 
 		<div v-else class="rc-pad">
 			<p class="rc-eyebrow">{{ notice.assembly.name }}</p>
-			<div style="margin: 4px 0 10px">
+			<!-- a table's code names the table; the assembly's pre-registration
+			     link names nothing — the door seats people by name -->
+			<div v-if="notice.table_number" style="margin: 4px 0 10px">
 				<TableBadge :number="notice.table_number" :color-key="notice.color_key" />
 			</div>
-			<h1>{{ t('recorder.register.title', { number: notice.table_number }) }}</h1>
-			<p class="rc-lead">{{ t('recorder.register.lead') }}</p>
+			<h1>
+				{{
+					notice.table_number
+						? t('recorder.register.title', { number: notice.table_number })
+						: t('recorder.register.titleAssembly', { name: notice.assembly.name })
+				}}
+			</h1>
+			<p class="rc-lead">{{ notice.table_number ? t('recorder.register.lead') : t('recorder.register.leadAssembly') }}</p>
 			<div class="rc-notice" data-test="notice">
 				<p v-for="(paragraph, index) in notice.paragraphs" :key="index">{{ paragraph }}</p>
 			</div>

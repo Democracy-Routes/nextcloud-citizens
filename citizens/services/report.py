@@ -251,6 +251,17 @@ def _methodology_note(session: Session, assembly: Assembly) -> str:
                 registered=counts["registered_at_table"], consenting=counts["consenting"],
             )
         )
+    # participants' word on the published summaries (0.7)
+    from citizens.services import validation as validation_svc
+
+    validated = validation_svc.counts(session, assembly.id)
+    if validated["answered"]:
+        parts.append(
+            text(
+                language, "validation_note",
+                answered=validated["answered"], missing=validated["missing"],
+            )
+        )
     return " ".join(parts)
 
 
@@ -273,6 +284,17 @@ def _transcript_engines(session: Session, assembly: Assembly) -> str:
         }
     )
     return ", ".join(names)
+
+
+def _validation_payload(entry: dict | None, include_notes: bool) -> dict | None:
+    """Participants' word on a table's summary: counts for everyone, the
+    notes only where the organizer reads them (drafts included = organizer)."""
+    if not entry:
+        return None
+    payload = {"looks_right": entry["looks_right"], "missing": entry["missing"]}
+    if include_notes:
+        payload["notes"] = list(entry["notes"])
+    return payload
 
 
 def _has_replaced_device(session: Session, assembly: Assembly) -> bool:
@@ -379,6 +401,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             ),
         }
 
+    from citizens.services import validation as validation_svc
+
+    validations = validation_svc.by_table(session, assembly.id)
     rounds_payload = []
     for round_ in assembly.rounds:
         table_numbers = {table.id: table.number for table in round_.tables}
@@ -401,6 +426,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             set(per_table)
             | {num for (rid, num) in table_summaries if rid == round_.id}
             | {num for num, balance in balances.items() if balance}
+            # a table whose participants answered is listed even without a
+            # summary, so the organizer sees what they said
+            | {num for (rid, num) in validations if rid == round_.id and num is not None}
         )
         rounds_payload.append(
             {
@@ -423,6 +451,11 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                         "summary": table_summaries.get((round_.id, number), ""),
                         "speaking_balance": balances.get(number),
                         "findings": per_table.get(number, []),
+                        # participants' word on the summary: counts for
+                        # everyone, the notes only for the organizer's view
+                        "validations": _validation_payload(
+                            validations.get((round_.id, number)), include_drafts
+                        ),
                     }
                     for number in round_table_numbers
                 ],

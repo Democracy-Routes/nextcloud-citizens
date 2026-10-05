@@ -108,6 +108,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "{registered} participants registered individually at the tables against the "
             "recording notice; {consenting} consented to being recorded."
         ),
+        "validation_note": (
+            "{answered} participants said whether their table's summary reflected the "
+            "discussion; {missing} flagged something missing, for the organiser to review."
+        ),
         # executive summary (PDF)
         "executive_summary": "Executive summary",
         "executive_summary_note": (
@@ -211,6 +215,11 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "{registered} partecipanti si sono registrati individualmente ai tavoli "
             "rispetto all'informativa sulla registrazione; {consenting} hanno acconsentito "
             "a essere registrati."
+        ),
+        "validation_note": (
+            "{answered} partecipanti hanno detto se la sintesi del loro tavolo rispecchiava "
+            "la discussione; {missing} hanno segnalato che manca qualcosa, da rivedere da "
+            "parte di chi organizza."
         ),
         "device_replaced_note": (
             "Il telefono di almeno un tavolo ha smesso di funzionare durante un turno e "

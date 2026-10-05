@@ -298,6 +298,14 @@ export interface SessionMessage {
 	not_seen_by: number[]
 }
 
+/** The assembly's pre-registration link, and how many used it (0.7). */
+export interface RegistrationLink {
+	url: string | null
+	qr_svg: string | null
+	expires_at: string | null
+	registered: { total: number; seated: number }
+}
+
 /** A table's hand, up until the organizer acknowledges it. */
 export interface HelpRequest {
 	id: string
@@ -522,6 +530,8 @@ export interface ReportData {
 			summary: string
 			speaking_balance?: SpeakingBalance | null
 			findings: ReportFinding[]
+			/** participants' word on the summary (0.7): counts, notes for the organizer */
+			validations?: { looks_right: number; missing: number; notes?: string[] } | null
 		}>
 	}>
 }

@@ -21,7 +21,13 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { recorderApi, type ConsentNotice, type DataHandling, type TableConsent } from '../api'
+import {
+	recorderApi,
+	type ConsentNotice,
+	type DataHandling,
+	type TableConsent,
+	type UnseatedParticipant,
+} from '../api'
 import CapabilityQr from './CapabilityQr.vue'
 import ConsentForm, { type ConsentFormValue } from './ConsentForm.vue'
 import TableBadge from './TableBadge.vue'
@@ -46,6 +52,48 @@ const added = ref<{ name: string; consented: boolean } | null>(null)
 const table = ref<TableConsent | null>(null)
 const ownPhone = ref(false)
 let roster = 0
+
+/* ---- "Already registered? Find your name" ----
+ * People who registered ahead through the assembly's link have no table yet;
+ * the door seats them here by name. Two characters, names only. */
+const finding = ref(false)
+const query = ref('')
+const matches = ref<UnseatedParticipant[]>([])
+const seating = ref('')
+let searchTimer = 0
+
+function search(): void {
+	window.clearTimeout(searchTimer)
+	const q = query.value.trim()
+	if (q.length < 2) {
+		matches.value = []
+		return
+	}
+	searchTimer = window.setTimeout(async () => {
+		try {
+			matches.value = await recorderApi.searchParticipants(props.token, q)
+		} catch {
+			matches.value = []
+		}
+	}, 250)
+}
+
+async function seat(person: UnseatedParticipant): Promise<void> {
+	if (seating.value) return
+	seating.value = person.id
+	try {
+		const result = await recorderApi.seatParticipant(props.token, person.id)
+		table.value = result.table
+		matches.value = matches.value.filter((m) => m.id !== person.id)
+		query.value = ''
+		finding.value = false
+		await load()
+	} catch {
+		/* the next tap will say */
+	} finally {
+		seating.value = ''
+	}
+}
 
 /** Somebody at the table objects (legacy screen only). Consent that offers
  * only one button is not consent. */
@@ -224,6 +272,31 @@ const retention = computed(() => {
 				<button class="rc-btn rc-subtle" data-test="own-phone" @click="ownPhone = true">
 					{{ t('recorder.consent.ownPhone') }}
 				</button>
+				<!-- registered ahead through the assembly's link: seated here by name -->
+				<button v-if="!finding" class="rc-btn rc-subtle" data-test="find" @click="finding = true">
+					{{ t('recorder.consent.findName') }}
+				</button>
+				<div v-else class="rc-find" data-test="finder">
+					<input
+						v-model="query"
+						type="search"
+						class="rc-find__input"
+						autocomplete="off"
+						:placeholder="t('recorder.consent.findPlaceholder')"
+						data-test="find-input"
+						@input="search" />
+					<ul v-if="matches.length" class="rc-roster" data-test="matches">
+						<li v-for="person in matches" :key="person.id">
+							<span>{{ person.name }}</span>
+							<button type="button" class="rc-find__seat" :disabled="!!seating" :data-test="`seat-${person.id}`" @click="seat(person)">
+								{{ t('recorder.consent.seatHere') }}
+							</button>
+						</li>
+					</ul>
+					<p v-else-if="query.trim().length >= 2" class="rc-muted" style="font-size: 0.875rem; margin: 6px 0 0">
+						{{ t('recorder.consent.nobodyFound') }}
+					</p>
+				</div>
 				<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
 					{{ t('recorder.consent.continue') }}
 				</button>
@@ -296,6 +369,29 @@ const retention = computed(() => {
 .rc-roster__yes { color: #1e6b3a; font-weight: 600; }
 .rc-roster__no { color: #8c1d18; font-weight: 600; }
 .rc-consent__hint { margin: 8px 0 0; font-size: 0.875rem; }
+.rc-find { margin: 6px 0 0; }
+.rc-find__input {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	font-size: 1.0625rem;
+	padding: 12px 14px;
+	border: 1px solid var(--rc-border);
+	border-radius: 12px;
+	background: var(--rc-surface);
+	color: inherit;
+}
+.rc-find__seat {
+	background: var(--rc-blue);
+	border: 0;
+	border-radius: 999px;
+	color: #fff;
+	font: inherit;
+	font-size: 0.8125rem;
+	min-height: 36px;
+	padding: 4px 14px;
+	cursor: pointer;
+}
 .rc-consent {
 	margin: 18px 0 0;
 	padding-left: 20px;

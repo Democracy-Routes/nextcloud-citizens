@@ -120,11 +120,12 @@ def register(
     act: ConsentAct,
     *,
     method: str,
-    table_number: int,
+    table_number: int | None,
     recorder_session: RecorderSession | None = None,
     notice: Notice | None = None,
 ) -> tuple[Participant, ParticipantConsent]:
-    """Store one person and one consent act at `table_number`.
+    """Store one person and one consent act at `table_number` (None: a
+    pre-registration, seated later by name).
 
     `notice` is the server's current notice (read by the caller outside the
     transaction); the act must carry its hash, or the person read a stale
@@ -147,13 +148,13 @@ def register(
             )
         )
         session.flush()
-    round_ = _round_being_set_up(session, assembly.id, table_number)
+    round_ = _round_being_set_up(session, assembly.id, table_number) if table_number else None
     participant = Participant(
         assembly_id=assembly.id,
         label=next_label(session, assembly.id),
         name=name[:200],
         email=act.email.strip()[:200],
-        source=method if method in ("TABLE_DEVICE", "SELF_PHONE") else "ORGANIZER",
+        source=method if method in ("TABLE_DEVICE", "SELF_PHONE", "PRE_REGISTRATION") else "ORGANIZER",
         registered_table_number=table_number,
         registered_round_id=round_.id if round_ else None,
         registered_session_id=recorder_session.id if recorder_session else None,
@@ -180,14 +181,8 @@ def register(
     session.add(consent)
     # seat the person at the table for the round being set up, so the Tables
     # tab shows them where they are
-    if round_ is not None:
-        table = session.execute(
-            select(Table).where(Table.round_id == round_.id, Table.number == table_number)
-        ).scalar_one_or_none()
-        if table is not None:
-            session.add(
-                TableAssignment(round_id=round_.id, table_id=table.id, participant_id=participant.id)
-            )
+    if round_ is not None and table_number is not None:
+        _seat_in_round(session, round_, table_number, participant)
     session.flush()
     record_audit_event(
         session, "participant_registered", "participant", participant.id,
@@ -204,6 +199,76 @@ def register(
         },
     )
     return participant, consent
+
+
+def _seat_in_round(session: Session, round_: Round, table_number: int, participant: Participant) -> None:
+    table = session.execute(
+        select(Table).where(Table.round_id == round_.id, Table.number == table_number)
+    ).scalar_one_or_none()
+    if table is None:
+        return
+    existing = session.execute(
+        select(TableAssignment).where(
+            TableAssignment.round_id == round_.id, TableAssignment.participant_id == participant.id
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.table_id = table.id
+    else:
+        session.add(TableAssignment(round_id=round_.id, table_id=table.id, participant_id=participant.id))
+
+
+def search_unseated(session: Session, assembly_id: str, query: str, limit: int = 10) -> list[dict]:
+    """People registered ahead (no table yet) whose name contains `query` —
+    the door's "find your name". Names only, never email."""
+    needle = f"%{query.strip().lower()}%"
+    rows = session.execute(
+        select(Participant)
+        .where(
+            Participant.assembly_id == assembly_id,
+            Participant.registered_table_number.is_(None),
+            Participant.source == "PRE_REGISTRATION",
+            func.lower(Participant.name).like(needle),
+        )
+        .order_by(Participant.name)
+        .limit(limit)
+    ).scalars()
+    latest = latest_consents(session, assembly_id)
+    return [
+        {
+            "id": p.id,
+            "label": p.label,
+            "name": p.name,
+            "recording_consent": bool(latest.get(p.id) and latest[p.id].recording_consent),
+        }
+        for p in rows
+    ]
+
+
+def seat(
+    session: Session, assembly: Assembly, participant_id: str, recorder_session: RecorderSession
+) -> Participant:
+    """A pre-registered person sits down at this phone's table: the table is
+    recorded on the participant, and they are seated for the round being
+    set up. Their consent act travels with them."""
+    participant = session.get(Participant, participant_id)
+    if participant is None or participant.assembly_id != assembly.id:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    if participant.registered_table_number is not None:
+        raise HTTPException(status_code=409, detail="This person is already seated at a table")
+    table_number = recorder_session.table_number
+    participant.registered_table_number = table_number
+    participant.registered_session_id = recorder_session.id
+    round_ = _round_being_set_up(session, assembly.id, table_number)
+    if round_ is not None:
+        participant.registered_round_id = round_.id
+        _seat_in_round(session, round_, table_number, participant)
+    session.flush()
+    record_audit_event(
+        session, "participant_seated", "participant", participant.id,
+        data={"table": table_number, "round_id": round_.id if round_ else None},
+    )
+    return participant
 
 
 def latest_consents(session: Session, assembly_id: str) -> dict[str, ParticipantConsent]:
@@ -328,7 +393,9 @@ def registration_code(session: Session, token: str) -> tuple[RecorderInvite, Ass
     invite = invite_svc.find_by_token(session, token)
     if invite is None or invite.revoked_at is not None or invite_svc.is_expired(invite):
         raise HTTPException(status_code=401, detail="Invalid or expired registration code")
-    if invite.purpose != "REGISTER_PARTICIPANT" or invite.table_number is None:
+    # a table's code seats the person there; the assembly's pre-registration
+    # link (no table) registers them to be seated at the door by name
+    if invite.purpose != "REGISTER_PARTICIPANT":
         raise HTTPException(status_code=409, detail="This code does not register a participant")
     assembly = session.get(Assembly, invite.assembly_id)
     if assembly is None:
@@ -346,7 +413,9 @@ def register_by_code(
     from the code — and a bearer for their page."""
     invite, assembly = registration_code(session, token)
     participant, consent = register(
-        session, assembly, act, method="SELF_PHONE", table_number=invite.table_number, notice=notice
+        session, assembly, act,
+        method="SELF_PHONE" if invite.table_number is not None else "PRE_REGISTRATION",
+        table_number=invite.table_number, notice=notice,
     )
     invite.last_used_at = utcnow()
     bearer = generate_token()
@@ -381,6 +450,19 @@ def participant_status(
         raise HTTPException(status_code=404, detail="Participant not found")
     latest = latest_consents(session, assembly.id).get(participant.id)
     snapshot = config_snapshot()
+    from citizens.services import validation as validation_svc
+
+    rounds = [
+        {
+            "id": round_.id,
+            "position": round_.position,
+            "title": round_.title,
+            "status": round_.status,
+            # where this person sat (the seating, else where they registered)
+            "table_number": validation_svc.table_for(session, participant, round_),
+        }
+        for round_ in sorted(assembly.rounds, key=lambda r: r.position)
+    ]
     return {
         "assembly": {"id": assembly.id, "name": assembly.name, "language": assembly.language,
                      "kind": assembly.kind},
@@ -393,6 +475,9 @@ def participant_status(
         ),
         "consent": consent_dict(latest),
         "report_available": report_available,
+        "rounds": rounds,
+        # what this person already said about their table's summaries
+        "validations": validation_svc.for_participant(session, participant.id),
         "contact": snapshot.consent_contact or organization_data().get("org_dpo", ""),
         "controller": snapshot.consent_controller or snapshot.organization_name,
     }

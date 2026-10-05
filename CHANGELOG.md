@@ -161,6 +161,22 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **Participants validate their table's summary.** Once the report is
+  published, a person who registered on their own phone sees the summary of
+  the table they sat at, per session, and says "Looks right" or "Something
+  is missing" (+ a note). One answer per person and session; the Report tab
+  shows "✓ 4 looks right · ⚠ 1 flagged" with the notes beside the table, the
+  participants' report shows the counts, the methodology note counts them.
+  Never a vote, never an edit. Migration 0033; `POST
+  /api/v1/public/participant/validate`.
+- **Pre-registration link.** Participants tab → one reusable link (QR) for
+  the whole assembly: people read the notice and register at home, no table
+  yet (method `PRE_REGISTRATION`). At the door, "Already registered? Find
+  your name" on any table's phone finds them (two letters, names only) and
+  "Seat here" seats them — consent and all — for the session being set up.
+  `POST/GET /api/v1/assemblies/{id}/registration-link`, `GET
+  /api/v1/public/recorder/participants/search`, `POST
+  /api/v1/public/recorder/participants/{id}/seat`.
 - **Record now follows the language that was spoken.** A Record-now session
   asks the engine to detect the language (Whisper, Mistral, Deepgram; Vosk
   keeps its model) and the first final transcript decides it once — analysis

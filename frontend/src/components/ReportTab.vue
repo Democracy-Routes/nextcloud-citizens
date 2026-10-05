@@ -365,6 +365,17 @@ const hasContent = () =>
 							<h4 style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 16px 0 8px">
 								Table {{ table.table_number }}
 							</h4>
+							<!-- participants' word on the summary (0.7): counts, and the
+							     notes of those who flagged something missing -->
+							<p v-if="table.validations" class="cz-validation" data-test="validations">
+								<span class="cz-validation__ok">✓ {{ table.validations.looks_right }} looks right</span>
+								<span v-if="table.validations.missing" class="cz-validation__flag">
+									· ⚠ {{ table.validations.missing }} flagged something missing
+								</span>
+							</p>
+							<ul v-if="table.validations?.notes?.length" class="cz-validation__notes">
+								<li v-for="(note, index) in table.validations.notes" :key="index">“{{ note }}”</li>
+							</ul>
 							<p v-if="table.summary" style="font-size: 0.875rem; font-style: italic; margin: 0 0 10px">
 								<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block">AI SUMMARY</span>
 								{{ table.summary }}

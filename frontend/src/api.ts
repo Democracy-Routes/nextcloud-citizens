@@ -18,6 +18,7 @@ import type {
 	RoundFindings,
 	RoundIn,
 	HelpRequest,
+	RegistrationLink,
 	RoundMonitor,
 	SessionCreate,
 	SessionCreated,
@@ -151,6 +152,12 @@ export const api = {
 	startRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/start`),
 	endRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/end`),
 	roundMonitor: (roundId: string) => request<RoundMonitor>('GET', `/api/v1/rounds/${roundId}/monitor`),
+	/** The assembly's pre-registration link (made on first ask). */
+	registrationLink: (assemblyId: string, create = true) =>
+		request<RegistrationLink>(
+			create ? 'POST' : 'GET',
+			`/api/v1/assemblies/${assemblyId}/registration-link`,
+		),
 	acknowledgeHelp: (requestId: string) =>
 		request<HelpRequest>('POST', `/api/v1/help-requests/${requestId}/acknowledge`),
 	roundMessages: (roundId: string) =>

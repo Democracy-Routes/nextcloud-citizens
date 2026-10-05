@@ -14,13 +14,19 @@ import { mountWithI18n } from './support/mount'
 const registerNotice = vi.fn()
 const registerSelf = vi.fn()
 const participantStatus = vi.fn()
+const validateSummary = vi.fn()
 
 vi.mock('../../frontend/src/recorder/api', () => ({
 	recorderApi: {
 		registerNotice: (...args: unknown[]) => registerNotice(...args),
 		registerSelf: (...args: unknown[]) => registerSelf(...args),
 		participantStatus: (...args: unknown[]) => participantStatus(...args),
-		participantReport: vi.fn().mockResolvedValue({ assembly: { name: 'Bologna', participants: 1, tables: 1 }, rounds: [] }),
+		validateSummary: (...args: unknown[]) => validateSummary(...args),
+		participantReport: vi.fn().mockResolvedValue({
+			assembly: { name: 'Bologna', participants: 1, tables: 1 },
+			rounds: [{ position: 1, title: 'Mobility', heading: 'Session 1 — Mobility', question: 'Q', summary: '', cross_table: [],
+				tables: [{ table_number: 7, summary: 'Table 7 talked about buses.', findings: [] }] }],
+		}),
 	},
 	RecorderApiError: class extends Error {},
 }))
@@ -90,13 +96,25 @@ describe('ParticipantPage', () => {
 		expect(wrapper.text()).toContain('The report will appear here when the organizer publishes it.')
 		expect(wrapper.find('[data-test="report"]').exists()).toBe(false)
 
-		// once published: the same report the table phones read
+		// once published: the same report the table phones read, and the
+		// summary of this person's table to validate
 		participantStatus.mockResolvedValue({
 			...(await participantStatus.mock.results[0].value), report_available: true,
+			rounds: [{ id: 'r1', position: 1, title: 'Mobility', status: 'ENDED', table_number: 7 }],
+			validations: {},
 		})
+		validateSummary.mockResolvedValue({ round_id: 'r1', verdict: 'MISSING', note: 'The bus' })
 		const later = mountWithI18n(ParticipantPage, { props: { token: 'ptok' } })
 		await flushPromises()
 		expect(later.text()).toContain('The report has been published.')
+		const card = later.find('[data-test="validate"]')
+		expect(card.text()).toContain('Table 7 talked about buses.')
+		await card.find('[data-test="missing"]').trigger('click')
+		await card.find('[data-test="note"]').setValue('The bus')
+		await card.find('[data-test="send-missing"]').trigger('click')
+		await flushPromises()
+		expect(validateSummary).toHaveBeenCalledWith('ptok', 'r1', 'MISSING', 'The bus')
+		expect(later.find('[data-test="answered"]').text()).toContain('You said something is missing')
 		await later.find('[data-test="report"]').trigger('click')
 		await flushPromises()
 		expect(later.text()).toContain('Bologna')

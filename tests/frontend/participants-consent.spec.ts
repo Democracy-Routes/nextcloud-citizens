@@ -32,6 +32,10 @@ vi.mock('../../frontend/src/api', () => ({
 		addParticipants: vi.fn(),
 		importCsv: vi.fn(),
 		deleteParticipant: vi.fn(),
+		registrationLink: vi.fn().mockResolvedValue({
+			url: 'https://nc.example/recorder.html#/register/pre', qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+			expires_at: '2026-11-05T00:00:00Z', registered: { total: 4, seated: 1 },
+		}),
 	},
 	ApiError: class extends Error {},
 	BASE: '',
@@ -49,5 +53,9 @@ describe('the Participants tab', () => {
 		])
 		expect(wrapper.findAll('td.cz-consent')[0].attributes('title')).toContain('recording yes')
 		expect(wrapper.findAll('td.cz-consent')[0].attributes('title')).toContain('notice 2026-10')
+		// the pre-registration link, with how many used it
+		const card = wrapper.find('[data-test="registration-link"]')
+		expect(card.text()).toContain('https://nc.example/recorder.html#/register/pre')
+		expect(card.text()).toContain('4 registered ahead · 1 seated.')
 	})
 })

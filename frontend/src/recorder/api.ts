@@ -41,8 +41,17 @@ export type CapabilityPurpose = 'ADD_RECORDER_TO_TABLE' | 'ADD_TABLE' | 'REGISTE
 /** What a registration code is for, read on the participant's own phone. */
 export interface RegisterNotice extends ConsentNotice {
 	assembly: AssemblyInfo
-	table_number: number
-	color_key: string
+	/** null for the assembly's pre-registration link: seated at the door by name */
+	table_number: number | null
+	color_key: string | null
+}
+
+/** A person who registered ahead and has no table yet (names only). */
+export interface UnseatedParticipant {
+	id: string
+	label: string
+	name: string
+	recording_consent: boolean
 }
 
 export interface SelfRegisterResult {
@@ -67,6 +76,10 @@ export interface ParticipantStatus {
 		confirmed_at: string
 	} | null
 	report_available: boolean
+	/** every session, with the table this person sat at (null: none) */
+	rounds?: Array<{ id: string; position: number; title: string; status: string; table_number: number | null }>
+	/** what this person already said about their table's summaries, by session id */
+	validations?: Record<string, { verdict: 'LOOKS_RIGHT' | 'MISSING'; note: string }>
 	contact: string
 	controller: string
 }
@@ -248,7 +261,13 @@ export interface PublishedReport {
 		question: string
 		summary: string
 		cross_table: PublishedFinding[]
-		tables: Array<{ table_number: number; summary: string; findings: PublishedFinding[] }>
+		tables: Array<{
+			table_number: number
+			summary: string
+			findings: PublishedFinding[]
+			/** participants' word on the summary (0.7); null when nobody answered */
+			validations?: { looks_right: number; missing: number } | null
+		}>
 	}>
 }
 
@@ -369,6 +388,22 @@ export const recorderApi = {
 	consentNotice: (token: string) =>
 		request<ConsentNotice>('GET', '/api/v1/public/recorder/consent-notice', { token }),
 
+	/** The door's "find your name": people registered ahead, no table yet. */
+	searchParticipants: (token: string, q: string) =>
+		request<UnseatedParticipant[]>(
+			'GET',
+			`/api/v1/public/recorder/participants/search?q=${encodeURIComponent(q)}`,
+			{ token },
+		),
+
+	/** A pre-registered person sits down at this table. */
+	seatParticipant: (token: string, participantId: string) =>
+		request<{ participant: { id: string; label: string; name: string }; table: TableConsent }>(
+			'POST',
+			`/api/v1/public/recorder/participants/${participantId}/seat`,
+			{ token },
+		),
+
 	/** One person registers at this table on the shared phone. */
 	registerParticipant: (token: string, act: ConsentActIn) =>
 		request<RegisterResult>('POST', '/api/v1/public/recorder/participants', { token, json: act }),
@@ -386,6 +421,13 @@ export const recorderApi = {
 
 	participantReport: (token: string) =>
 		request<PublishedReport>('GET', '/api/v1/public/participant/report', { token }),
+
+	/** "Does this reflect your table?" — once the report is out. */
+	validateSummary: (token: string, roundId: string, verdict: 'LOOKS_RIGHT' | 'MISSING', note = '') =>
+		request<{ round_id: string; verdict: string; note: string }>('POST', '/api/v1/public/participant/validate', {
+			token,
+			json: { round_id: roundId, verdict, note },
+		}),
 
 	/** The table raises its hand; the Live tab shows it until acknowledged. */
 	needHelp: (token: string, kind: HelpKind) =>

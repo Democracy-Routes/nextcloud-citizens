@@ -129,6 +129,45 @@ def issue_invite(
     return _invite_card(table_number, token)
 
 
+REGISTER_PARTICIPANT = "REGISTER_PARTICIPANT"
+
+
+def registration_link(session: Session, assembly: Assembly, create: bool = True) -> dict | None:
+    """The assembly's pre-registration link: one reusable REGISTER_PARTICIPANT
+    code with no table, good for INVITE_LIFETIME_DAYS, revoked with the
+    others. People register at home against the same notice and are seated
+    at the door by name (consent.seat). Returns the active one, making it
+    when there is none and `create` is set."""
+    for invite in _active_invites(session, assembly.id, purpose=REGISTER_PARTICIPANT):
+        if invite.table_number is not None or is_expired(invite) or not invite.token_encrypted:
+            continue
+        token = decrypt_token(invite.token_encrypted)
+        if token is None:
+            continue
+        return _registration_card(invite, token)
+    if not create:
+        return None
+    now = utcnow()
+    token = generate_token()
+    invite = RecorderInvite(
+        assembly_id=assembly.id,
+        purpose=REGISTER_PARTICIPANT,
+        table_number=None,
+        single_use=False,
+        token_hash=hash_token(token),
+        token_encrypted=encrypt_token(token),
+        expires_at=now + timedelta(days=INVITE_LIFETIME_DAYS),
+    )
+    session.add(invite)
+    session.flush()
+    return _registration_card(invite, token)
+
+
+def _registration_card(invite: RecorderInvite, token: str) -> dict:
+    url = participant_register_url(token)
+    return {"url": url, "qr_svg": qr_svg(url), "expires_at": invite.expires_at}
+
+
 def invite_links(session: Session, assembly: Assembly) -> list[schemas.InviteGenerated]:
     """Re-materialize the QR sheet for the currently active table codes.
 

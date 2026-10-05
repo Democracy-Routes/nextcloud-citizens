@@ -9,10 +9,10 @@
 	may come days later, and the bearer outlives the event for that.
 -->
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../../i18n'
-import { recorderApi, type ParticipantStatus } from '../api'
+import { recorderApi, type ParticipantStatus, type PublishedReport } from '../api'
 import ReportScreen from './ReportScreen.vue'
 import TableBadge from './TableBadge.vue'
 
@@ -26,10 +26,60 @@ const gone = ref(false)
 const showReport = ref(false)
 let poll = 0
 
+/* ---- "Does this reflect your table?" ----
+ * Once the report is out, the summary of the table this person sat at, per
+ * session, with Looks right / Something is missing (+ a note). One answer per
+ * session; the organizer sees counts and notes, never a vote. */
+const report = ref<PublishedReport | null>(null)
+const noteFor = ref<Record<string, string>>({})
+const noteOpen = ref<string | null>(null)
+const validating = ref(false)
+
+const toValidate = computed(() => {
+	if (!status.value?.rounds || !report.value) return []
+	return status.value.rounds
+		.filter((r) => r.table_number !== null)
+		.map((r) => {
+			const round = report.value!.rounds.find((x) => x.position === r.position)
+			const table = round?.tables.find((t) => t.table_number === r.table_number)
+			return { round: r, heading: round?.heading ?? round?.title ?? r.title, summary: table?.summary ?? '' }
+		})
+		.filter((entry) => entry.summary)
+})
+
+async function loadReport(): Promise<void> {
+	if (report.value) return
+	try {
+		report.value = await recorderApi.participantReport(props.token)
+	} catch {
+		/* not published after all, or a blink: nothing to validate yet */
+	}
+}
+
+async function validate(roundId: string, verdict: 'LOOKS_RIGHT' | 'MISSING'): Promise<void> {
+	if (validating.value) return
+	validating.value = true
+	try {
+		const answer = await recorderApi.validateSummary(props.token, roundId, verdict, noteFor.value[roundId] ?? '')
+		if (status.value) {
+			status.value = {
+				...status.value,
+				validations: { ...(status.value.validations ?? {}), [roundId]: { verdict: answer.verdict as 'LOOKS_RIGHT' | 'MISSING', note: answer.note } },
+			}
+		}
+		noteOpen.value = null
+	} catch {
+		/* the next tap will say */
+	} finally {
+		validating.value = false
+	}
+}
+
 async function load(): Promise<void> {
 	try {
 		status.value = await recorderApi.participantStatus(props.token)
 		setLocale(status.value.assembly.language)
+		if (status.value.report_available) void loadReport()
 	} catch (err) {
 		// an expired or erased registration: the page has nothing to show
 		if (/HTTP 40[14]/.test(err instanceof Error ? err.message : '')) gone.value = true
@@ -97,6 +147,45 @@ onBeforeUnmount(() => window.clearInterval(poll))
 				</template>
 				<p v-else class="rc-muted" style="margin: 0">{{ t('recorder.participant.reportPending') }}</p>
 			</div>
+
+			<!-- the summary of the table this person sat at, per session, and
+			     their word on it -->
+			<div v-for="entry in toValidate" :key="entry.round.id" class="rc-card" style="margin-top: 12px; text-align: left" data-test="validate">
+				<p class="rc-eyebrow" style="margin-bottom: 4px">
+					{{ entry.heading }} · {{ t('recorder.common.tableBadge', { number: entry.round.table_number }) }}
+				</p>
+				<p style="font-size: 0.9375rem; margin: 0 0 10px; line-height: 1.5">{{ entry.summary }}</p>
+				<template v-if="status.validations?.[entry.round.id]">
+					<p class="rc-consent-line" :class="status.validations[entry.round.id].verdict === 'LOOKS_RIGHT' ? 'rc-yes' : 'rc-no'" data-test="answered">
+						{{
+							status.validations[entry.round.id].verdict === 'LOOKS_RIGHT'
+								? t('recorder.participant.saidLooksRight')
+								: t('recorder.participant.saidMissing')
+						}}
+					</p>
+				</template>
+				<template v-else>
+					<p class="rc-muted" style="font-size: 0.875rem; margin: 0 0 8px">{{ t('recorder.participant.validateAsk') }}</p>
+					<button class="rc-btn rc-primary" style="margin-top: 0" :disabled="validating" data-test="looks-right" @click="validate(entry.round.id, 'LOOKS_RIGHT')">
+						{{ t('recorder.participant.looksRight') }}
+					</button>
+					<button v-if="noteOpen !== entry.round.id" class="rc-btn" :disabled="validating" data-test="missing" @click="noteOpen = entry.round.id">
+						{{ t('recorder.participant.missing') }}
+					</button>
+					<template v-else>
+						<textarea
+							v-model="noteFor[entry.round.id]"
+							class="rc-textarea"
+							rows="3"
+							maxlength="1000"
+							:placeholder="t('recorder.participant.missingPlaceholder')"
+							data-test="note"></textarea>
+						<button class="rc-btn" :disabled="validating" data-test="send-missing" @click="validate(entry.round.id, 'MISSING')">
+							{{ t('recorder.participant.sendMissing') }}
+						</button>
+					</template>
+				</template>
+			</div>
 		</div>
 
 		<div v-else class="rc-pad rc-center"><p class="rc-muted">…</p></div>
@@ -107,6 +196,17 @@ onBeforeUnmount(() => window.clearInterval(poll))
 .rc-pad { padding: 6px 2px calc(12px + env(safe-area-inset-bottom, 0px)); }
 .rc-lead { font-size: 1.02rem; line-height: 1.5; margin: 8px 0 0; }
 .rc-consent-line { margin: 0; line-height: 1.45; font-weight: 600; }
+.rc-textarea {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	padding: 10px 12px;
+	border: 1px solid var(--rc-border);
+	border-radius: 12px;
+	background: var(--rc-surface);
+	color: inherit;
+	margin: 6px 0 4px;
+}
 .rc-consent-line::before { content: '✓ '; }
 .rc-consent-line.rc-no::before { content: '✗ '; }
 .rc-yes { color: #1e6b3a; }
