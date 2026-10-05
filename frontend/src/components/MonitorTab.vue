@@ -407,6 +407,7 @@ const REASON_TEXT: Record<string, string> = {
 	UPLOAD_STALLED: 'upload backlog — check the venue Wi-Fi',
 	LIVE_STT_UNAVAILABLE: 'live captions off at this table',
 	HELP_REQUESTED: 'the table asks for help',
+	PARTICIPANT_CONSENT_MISSING: 'nobody at the table has consented yet — register a participant on the table phone',
 }
 
 /** What a table's raised hand is about, in the organizer's words. */

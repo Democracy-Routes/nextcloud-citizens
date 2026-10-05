@@ -12,6 +12,7 @@ from citizens.db.models import RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
+from citizens.services import consent as consent_svc
 from citizens.services import help as help_svc
 from citizens.services import job_failures, readiness
 from citizens.services.live_captions import LIVE_CAPTIONS
@@ -124,8 +125,16 @@ def round_monitor(session: Session, round_: Round) -> dict:
     live_stt_enabled = bool(live_stt_snapshot().get("enabled"))
     # tables that raised their hand (services/help.py), by number
     hands = help_svc.open_by_table(session, round_.assembly_id)
+    # who registered and consented at each table (services/consent.py); a
+    # table nobody registered at reads as zero under the assembly's rule
+    consents = consent_svc.consent_by_table(session, round_.assembly)
+    consent_required = round_.assembly.participant_consent == "required"
     tables = []
     for table in round_.tables:
+        consent = consents.get(table.number) or {
+            "mode": round_.assembly.participant_consent, "registered": 0, "consenting": 0,
+            "can_record": not consent_required,
+        }
         recordings = list(
             session.execute(
                 select(Recording)
@@ -184,6 +193,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
             ),
             round_active=round_.status == "ACTIVE",
             help_requested=(hands.get(table.number) or {}).get("kind"),
+            consent_missing=not consent["can_record"],
         )
 
         tables.append(
@@ -193,6 +203,9 @@ def round_monitor(session: Session, round_: Round) -> dict:
                 "color_key": table.color_key or color_for(table.number),
                 # the table's open request for the organizer, if its hand is up
                 "help_request": hands.get(table.number),
+                # registered / consenting people at this table, and whether the
+                # assembly's consent rule lets it record
+                "consent": consent,
                 "device": device,
                 "armed": armed,
                 "local_recording_safe": local_safe,

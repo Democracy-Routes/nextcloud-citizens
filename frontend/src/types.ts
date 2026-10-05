@@ -27,6 +27,8 @@ export interface Assembly {
 	 * standalone Session, which the UI lists as a Session and never as an
 	 * assembly. Absent only from a server older than 0.7. */
 	kind?: 'assembly' | 'session'
+	/** the consent rule at the tables (0.7); absent from an older server */
+	participant_consent?: ConsentMode
 	name: string
 	description: string
 	language: string
@@ -127,11 +129,32 @@ export interface AssemblyUpdate {
 	auto_purge_device_audio?: boolean
 	redact_names?: string
 	audio_retention_days?: number | null
+	participant_consent?: ConsentMode
 }
+
+/** 'required': a table records only once one registered person there has
+ * consented; 'optional': the notice is shown and registration offered,
+ * nothing is blocked. */
+export type ConsentMode = 'required' | 'optional'
 
 export interface AssemblyDetail extends Assembly {
 	rounds: Round[]
 	participant_count: number
+}
+
+/** A person's newest consent act, as recorded at the table (0.7). */
+export interface ParticipantConsent {
+	method: 'TABLE_DEVICE' | 'SELF_PHONE' | 'PAPER' | string
+	notice_version: string
+	notice_hash: string
+	notice_language: string
+	notice_read: boolean
+	recording: boolean
+	transcription: boolean
+	analysis: boolean
+	publication: boolean
+	confirmed_at: string
+	withdrawn_at: string | null
 }
 
 export interface Participant {
@@ -140,6 +163,10 @@ export interface Participant {
 	name: string
 	email: string
 	notes: string
+	/** ORGANIZER (the list, the CSV), TABLE_DEVICE or SELF_PHONE; absent on older servers */
+	source?: 'ORGANIZER' | 'TABLE_DEVICE' | 'SELF_PHONE' | string
+	registered_table_number?: number | null
+	consent?: ParticipantConsent | null
 }
 
 export type TableColor = 'blue' | 'green' | 'orange' | 'purple' | 'red' | 'teal'
@@ -331,6 +358,9 @@ export type SttProvider = 'mistral' | 'deepgram' | 'whisper' | 'vosk'
 export interface ProvidersSummary {
 	organization_name: string
 	audio_retention_days: number
+	/** the consent notice's data controller and contact (0.7) */
+	consent_controller?: string
+	consent_contact?: string
 	stt: {
 		provider: SttProvider
 		live_enabled: boolean

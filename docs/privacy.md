@@ -124,9 +124,34 @@ The screen offers a decline as well as a confirmation. A screen with only one
 button is not a consent step, and a table with no way to say no previously had
 to work that out by walking away from the phone.
 
-This is an *information and confirmation* step at the table. It is **not** a
-per-individual consent record: Citizens does not store who agreed. If your
-lawful basis requires individual consent records, collect them separately.
+Since 0.7 the screen is also where **individual consent is recorded**. The
+notice people read is rendered by the server from the Settings (data
+controller and contact) and the live data-handling facts, in the assembly's
+language, and hashed exactly as shown; the text behind every hash is kept
+(`consent_notices`). Each person registers one at a time — on the table's
+phone, or on their own phone through a registration code the table shows —
+giving a name (required), an email (optional) and explicit ticks: notice read,
+recording, transcription, AI analysis, and optionally short anonymous
+quotations in the report. The record (`participant_consents`: who, where,
+method, notice version and hash, the ticks, the server's timestamp) is stored
+as given; a refusal is a record too. Registration is audited without name or
+email.
+
+An assembly set to *Consent at the table: required* (the default for an
+organized assembly) records a table only once one registered person there
+has consented; the rule is enforced where recording starts, not only on the
+phone. *Optional* (the default for a spontaneous Session) shows the notice and
+offers registration without blocking anything.
+
+The lawful basis documented in [consent-form.md](consent-form.md) is explicit
+consent (GDPR Art. 6(1)(a) and Art. 9(2)(a)). Rights: erasing a participant
+from the Participants tab erases their consent record (cascade); the export
+carries every record and every notice text, so a subject-access request can
+be answered from the archive; withdrawal is handled through the contact on
+the notice — there is no self-service withdrawal yet, and a withdrawal does
+not undo processing already done. A person who registered on their own phone
+keeps a page showing their registration, their consent and, once published,
+the report.
 
 ## Identifiability
 

@@ -10,8 +10,10 @@ that a human organizer reviews before anything is published.
 
 > **Beta.** The pipeline is tested end to end. Audio retention is configurable,
 > and the recorder tells each table what happens to the recording before it
-> starts. That screen is not a per-individual consent record, so bring your own
-> privacy notice, and rehearse before a high-stakes assembly.
+> starts — and, since 0.7, records each person's individual consent against
+> that notice (on the table's phone or their own). Set the data controller and
+> contact in Settings, have counsel read the notice if you are a public body,
+> and rehearse before a high-stakes assembly.
 
 ```text
 50 citizens → 10 tables → 1 phone per table

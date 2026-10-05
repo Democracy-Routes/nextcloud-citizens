@@ -73,10 +73,16 @@ def test_registration_is_stored_as_given_with_the_notice_and_seats_the_person(cl
     assert notice["version"] and len(notice["hash"]) == 64
     assert any("responsible for the data" in p for p in notice["paragraphs"])
 
-    # a required assembly: no consenting person, no recording
+    # a required assembly: no consenting person, no recording — and the Live
+    # tab says so before anyone tries
     blocked = _start(client, table1, round1)
     assert blocked.status_code == 409, blocked.text
     assert blocked.json()["detail"]["code"] == "PARTICIPANT_CONSENT_REQUIRED"
+    monitor = client.get(f"/api/v1/rounds/{round1}/monitor").json()
+    row = next(t for t in monitor["tables"] if t["number"] == 1)
+    assert row["consent"] == {"mode": "required", "registered": 0, "consenting": 0, "can_record": False}
+    assert row["readiness"]["status"] == "BLOCKED"
+    assert any(r["code"] == "PARTICIPANT_CONSENT_MISSING" for r in row["readiness"]["reasons"])
     assert client.get("/api/v1/public/recorder/status", headers=table1).json()["consent"] == {
         "mode": "required", "registered": 0, "consenting": 0, "can_record": False,
     }
@@ -103,6 +109,15 @@ def test_registration_is_stored_as_given_with_the_notice_and_seats_the_person(cl
         {"label": "P002", "name": "Bruno", "recording_consent": True},
     ]
     assert _start(client, table1, round1).status_code == 201
+    row = next(
+        t for t in client.get(f"/api/v1/rounds/{round1}/monitor").json()["tables"] if t["number"] == 1
+    )
+    assert row["consent"]["consenting"] == 1 and row["consent"]["can_record"] is True
+    assert not any(r["code"] == "PARTICIPANT_CONSENT_MISSING" for r in row["readiness"]["reasons"])
+    # the report documents the basis it rests on
+    note = client.get(f"/api/v1/assemblies/{assembly['id']}/report").json()["methodology_note"]
+    assert "2 participants registered individually at the tables" in note
+    assert "1 consented to being recorded" in note
 
     # the organizer's list shows the record; email stays off the phone's roster
     listed = client.get(f"/api/v1/assemblies/{assembly['id']}/participants").json()

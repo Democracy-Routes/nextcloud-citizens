@@ -104,6 +104,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "analysed together as one conversation; a short stretch between them was "
             "not recorded."
         ),
+        "consent_registered_note": (
+            "{registered} participants registered individually at the tables against the "
+            "recording notice; {consenting} consented to being recorded."
+        ),
         # executive summary (PDF)
         "executive_summary": "Executive summary",
         "executive_summary_note": (
@@ -202,6 +206,11 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "di tempo e possono perdere parti di parlato che il motore non è riuscito a "
             "seguire, quindi alcuni passaggi potrebbero mancare o essere meno accurati "
             "dell'audio stesso."
+        ),
+        "consent_registered_note": (
+            "{registered} partecipanti si sono registrati individualmente ai tavoli "
+            "rispetto all'informativa sulla registrazione; {consenting} hanno acconsentito "
+            "a essere registrati."
         ),
         "device_replaced_note": (
             "Il telefono di almeno un tavolo ha smesso di funzionare durante un turno e "

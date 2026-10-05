@@ -278,6 +278,34 @@ def table_consent_state(session: Session, assembly: Assembly, table_number: int)
     }
 
 
+def consent_by_table(session: Session, assembly: Assembly) -> dict[int, dict]:
+    """Every table's registered / consenting counts in two queries — for the
+    monitor, which asks for all tables at once every few seconds."""
+    latest = latest_consents(session, assembly.id)
+    counts: dict[int, dict] = {}
+    for participant in session.execute(
+        select(Participant).where(
+            Participant.assembly_id == assembly.id,
+            Participant.registered_table_number.is_not(None),
+        )
+    ).scalars():
+        entry = counts.setdefault(
+            participant.registered_table_number, {"registered": 0, "consenting": 0}
+        )
+        entry["registered"] += 1
+        consent = latest.get(participant.id)
+        if consent is not None and consent.recording_consent and consent.withdrawn_at is None:
+            entry["consenting"] += 1
+    return {
+        number: {
+            "mode": assembly.participant_consent,
+            **entry,
+            "can_record": assembly.participant_consent != "required" or entry["consenting"] > 0,
+        }
+        for number, entry in counts.items()
+    }
+
+
 def guard_recording(session: Session, assembly: Assembly, table_number: int) -> None:
     """The rule behind 'required', enforced where recording starts."""
     if assembly.participant_consent != "required":

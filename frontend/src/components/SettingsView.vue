@@ -7,6 +7,7 @@ import {
 	mdiClose,
 	mdiCogOutline,
 	mdiDeleteClockOutline,
+	mdiShieldAccountOutline,
 	mdiImageOutline,
 	mdiMicrophoneOutline,
 } from '@mdi/js'
@@ -88,6 +89,9 @@ const analysisEnabled = ref(true)
 const analysisExtra = ref('')
 const orgName = ref('')
 const retentionDays = ref(0)
+// the consent notice: who is responsible for the data, and how to reach them
+const consentController = ref('')
+const consentContact = ref('')
 const showPrompts = ref(false)
 const logoSet = ref(false)
 const logoVersion = ref(0)
@@ -190,6 +194,8 @@ async function reload(): Promise<void> {
 	analysisExtra.value = summary.value.analysis.extra_instructions
 	orgName.value = summary.value.organization_name
 	retentionDays.value = summary.value.audio_retention_days ?? 0
+	consentController.value = summary.value.consent_controller ?? ''
+	consentContact.value = summary.value.consent_contact ?? ''
 	logoSet.value = summary.value.logo_set
 	// the baseline every later edit is compared against
 	saved.value = snapshot()
@@ -273,6 +279,8 @@ function currentPayload(): Record<string, unknown> {
 			analysis_extra_instructions: analysisExtra.value.trim(),
 			organization_name: orgName.value.trim(),
 			audio_retention_days: Number(retentionDays.value) || 0,
+			consent_controller: consentController.value.trim(),
+			consent_contact: consentContact.value.trim(),
 	}
 }
 
@@ -800,6 +808,31 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								: 'Audio is kept until someone deletes it. Table phones are told this before recording.'
 						}}
 					</p>
+				</div>
+			</div>
+
+			<div v-show="tab === 'general'" class="cz-card">
+				<div class="cz-row" style="margin-bottom: 4px">
+					<SvgIcon :path="mdiShieldAccountOutline" :size="22" style="color: var(--cz-primary)" />
+					<h3>Privacy notice</h3>
+				</div>
+				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
+					The notice people read before registering at a table is written by the
+					server from these two fields and the live data-handling facts (engine,
+					analysis, retention), in the assembly's language, and every consent is
+					stored with the hash of the text as shown. The contact is where people
+					turn to see, erase or withdraw what they gave.
+				</p>
+				<div class="cz-field" style="max-width: 420px">
+					<label>Data controller</label>
+					<input v-model="consentController" type="text" :placeholder="orgName || 'The organiser'" />
+					<p class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
+						Who is responsible for the data. Empty: the organization name.
+					</p>
+				</div>
+				<div class="cz-field" style="max-width: 420px">
+					<label>Contact for data requests</label>
+					<input v-model="consentContact" type="text" placeholder="privacy@example.org" />
 				</div>
 			</div>
 

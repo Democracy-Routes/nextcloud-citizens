@@ -86,10 +86,11 @@ table an information screen before recording starts, naming the transcription
 engine, whether it is an outside service, and how long audio is kept. That
 screen offers a decline as well as a confirmation.
 
-That screen is an information and confirmation step at the table, **not** a
-per-individual consent record — Citizens does not store who agreed. Organisations
-whose lawful basis requires individual consent should collect it separately, and
-should run a rehearsal before a high-stakes assembly.
+That screen also records each person's individual consent against the notice the
+server renders and hashes — on the table's phone or on their own — so the
+assembly keeps who agreed to what, under which notice, and the export carries it.
+Set the data controller and contact in Settings, have counsel read the notice if
+the organiser is a public body, and run a rehearsal before a high-stakes assembly.
 	]]></description>
 	<version>0.7.0-alpha.1</version>
 	<licence>AGPL-3.0-or-later</licence>

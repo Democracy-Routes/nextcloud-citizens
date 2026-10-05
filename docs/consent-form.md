@@ -12,6 +12,15 @@ analysis — so nothing in it promises what the app cannot deliver. Fields in
 advice: have counsel read it if the organizer is a public body, and adapt the
 recipients if you use a self-hosted engine (then nothing leaves your server).
 
+**Since 0.7 the phone produces the same record.** The notice on each table's
+phone is rendered by the server from the same facts (plus the data controller
+and contact set in Settings) and each person registers against it
+individually — on the table's phone, or on their own through the table's
+registration code — with the same ticks as below. The record is kept with the
+assembly and exported; see [privacy.md](privacy.md). This paper form remains
+the fallback for people without a phone, for a table whose phone is busy
+recording, and for organizers who want a signature on paper.
+
 **How to use it**
 
 - One form per participant, collected before the first round and kept with

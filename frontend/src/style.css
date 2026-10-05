@@ -677,6 +677,11 @@
 #citizens-app .cz-health--ok { border-color: var(--cz-green); color: var(--cz-green); }
 #citizens-app .cz-health--warn { border-color: var(--cz-amber); color: var(--cz-amber); }
 #citizens-app .cz-health--bad { border-color: var(--cz-danger); color: var(--cz-danger); }
+/* Participants tab: the consent act recorded at the table */
+#citizens-app .cz-consent { white-space: nowrap; font-size: 0.82rem; }
+#citizens-app .cz-consent--yes { color: var(--cz-green); font-weight: 600; }
+#citizens-app .cz-consent--no { color: var(--cz-danger); font-weight: 600; }
+
 /* Live tab: the facilitator's voice to the tables, and whether it arrived */
 #citizens-app .cz-broadcast {
 	margin: 0 0 12px;

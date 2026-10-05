@@ -239,6 +239,18 @@ def _methodology_note(session: Session, assembly: Assembly) -> str:
         parts.append(text(language, "live_transcript_note"))
     if _has_replaced_device(session, assembly):
         parts.append(text(language, "device_replaced_note"))
+    # individual consent recorded at the tables (0.7): say how many, so the
+    # report itself documents the basis it rests on
+    from citizens.services import consent as consent_svc
+
+    counts = consent_svc.consent_counts(session, assembly.id)
+    if counts["registered_at_table"]:
+        parts.append(
+            text(
+                language, "consent_registered_note",
+                registered=counts["registered_at_table"], consenting=counts["consenting"],
+            )
+        )
     return " ".join(parts)
 
 

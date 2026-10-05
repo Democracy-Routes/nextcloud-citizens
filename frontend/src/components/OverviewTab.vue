@@ -12,7 +12,7 @@ import {
 } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
-import type { AssemblyDetail, Invite } from '../types'
+import type { AssemblyDetail, ConsentMode, Invite } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import SvgIcon from './ui/SvgIcon.vue'
@@ -30,7 +30,14 @@ const invites = ref<Invite[]>([])
 const editingDetails = ref(false)
 const savingDetails = ref(false)
 const detailsError = ref('')
-const draft = ref({ name: '', description: '', language: 'en', autoPurge: true, redactNames: '' })
+const draft = ref<{
+	name: string
+	description: string
+	language: string
+	autoPurge: boolean
+	redactNames: string
+	participantConsent: ConsentMode
+}>({ name: '', description: '', language: 'en', autoPurge: true, redactNames: '', participantConsent: 'optional' })
 
 /** Has any table started recording?
  *
@@ -49,6 +56,7 @@ function startEditDetails(): void {
 		language: props.assembly.language,
 		autoPurge: props.assembly.auto_purge_device_audio,
 		redactNames: props.assembly.redact_names,
+		participantConsent: props.assembly.participant_consent ?? 'optional',
 	}
 	detailsError.value = ''
 	editingDetails.value = true
@@ -63,6 +71,7 @@ async function saveDetails(): Promise<void> {
 			description: draft.value.description.trim(),
 			auto_purge_device_audio: draft.value.autoPurge,
 			redact_names: draft.value.redactNames.trim(),
+			participant_consent: draft.value.participantConsent,
 			// never sent once recording has begun, so a stale form cannot
 			// change it behind the guard
 			...(recordingHasBegun.value ? {} : { language: draft.value.language }),
@@ -225,6 +234,24 @@ const nextStep = computed<NextStep | null>(() => {
 						ever deletes audio the server has already confirmed, so this cannot remove
 						a last copy. Turn it off to keep the phones' copies until you have
 						downloaded the export.
+					</span>
+				</div>
+				<div class="cz-field">
+					<label>Consent at the table</label>
+					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+						<input v-model="draft.participantConsent" type="radio" value="required" />
+						Required — a table records only once one person registered there has consented
+					</label>
+					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+						<input v-model="draft.participantConsent" type="radio" value="optional" />
+						Optional — the notice is shown and registration offered, nothing is blocked
+					</label>
+					<span class="cz-muted" style="font-size: 0.78rem">
+						Each person registers individually on the table's phone or their own (name,
+						optional email, explicit ticks against the notice the server renders). The
+						record — who, what, which notice — is kept with the assembly and exported.
+						Required is the setting for an organized assembly; Optional suits a
+						spontaneous session.
 					</span>
 				</div>
 				<div class="cz-field">

@@ -66,6 +66,9 @@ async function submit(): Promise<void> {
 			default_table_count: tableCount.value,
 			analysis_instructions: analysisInstructions.value.trim(),
 			rounds: rounds.value,
+			// an organized assembly asks for individual consent at the table
+			// before a table records; the Overview tab can relax it
+			participant_consent: 'required',
 		})
 		emit('created', created.id, created.invites)
 	} catch (err) {

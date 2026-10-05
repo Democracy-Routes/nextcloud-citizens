@@ -87,6 +87,8 @@ export const api = {
 		default_table_count: number
 		analysis_instructions: string
 		rounds: RoundIn[]
+		/** the organizer's wizard sends 'required'; the server defaults to 'optional' */
+		participant_consent?: 'required' | 'optional'
 	}) => request<AssemblyCreated>('POST', '/api/v1/assemblies', data),
 	getAssembly: (id: string) => request<AssemblyDetail>('GET', `/api/v1/assemblies/${id}`),
 

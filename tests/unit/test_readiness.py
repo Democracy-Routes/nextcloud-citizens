@@ -37,6 +37,14 @@ def test_a_raised_hand_keeps_a_healthy_table_in_view_without_blocking_it():
     assert _codes(result) == [(r.NO_RECORDER, r.BLOCKER, None), (r.HELP_REQUESTED, r.WARNING, None)]
 
 
+def test_missing_consent_blocks_whatever_the_phones_say():
+    healthy = _recorder(storage_ok=True, battery_level=0.8, capture_ok=True)
+    result = r.table_readiness([healthy], consent_missing=True)
+    assert result.status == r.BLOCKED
+    assert _codes(result) == [(r.PARTICIPANT_CONSENT_MISSING, r.BLOCKER, None)]
+    assert r.table_readiness([healthy], consent_missing=False).status == r.READY
+
+
 def test_no_recorder_phone_at_all_blocks():
     result = r.table_readiness([])
     assert result.status == r.BLOCKED

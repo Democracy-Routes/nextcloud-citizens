@@ -24,6 +24,29 @@ const props = defineProps<{ assemblyId: string }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const participants = ref<Participant[]>([])
+
+/** Where a person registered: "Table 7 (table phone)" / "(own phone)". */
+function sourceText(participant: Participant): string {
+	const where = participant.registered_table_number ? `Table ${participant.registered_table_number}` : ''
+	const how =
+		participant.source === 'SELF_PHONE' ? 'own phone'
+		: participant.source === 'TABLE_DEVICE' ? 'table phone'
+		: participant.consent?.method === 'PAPER' ? 'paper'
+		: ''
+	return [where, how ? `(${how})` : ''].filter(Boolean).join(' ')
+}
+
+function consentTitle(participant: Participant): string {
+	const consent = participant.consent
+	if (!consent) return 'No consent recorded'
+	const ticks = [
+		`recording ${consent.recording ? 'yes' : 'no'}`,
+		`transcription ${consent.transcription ? 'yes' : 'no'}`,
+		`analysis ${consent.analysis ? 'yes' : 'no'}`,
+		`quotations ${consent.publication ? 'yes' : 'no'}`,
+	]
+	return `${ticks.join(', ')} — notice ${consent.notice_version} (${consent.notice_hash.slice(0, 8)}), ${consent.confirmed_at}`
+}
 const loaded = ref(false)
 const error = ref('')
 const newLabel = ref('')
@@ -138,7 +161,7 @@ function initials(participant: Participant): string {
 				<h3 style="margin: 18px 0 10px">{{ participants.length }} participants</h3>
 				<table class="cz-table">
 					<thead>
-						<tr><th style="width: 40px"></th><th>Label</th><th>Name</th><th>Email</th><th style="width: 60px"></th></tr>
+						<tr><th style="width: 40px"></th><th>Label</th><th>Name</th><th>Email</th><th>Consent</th><th style="width: 60px"></th></tr>
 					</thead>
 					<tbody>
 						<tr v-for="participant in participants" :key="participant.id">
@@ -146,6 +169,17 @@ function initials(participant: Participant): string {
 							<td><strong>{{ participant.label }}</strong></td>
 							<td>{{ participant.name || '—' }}</td>
 							<td class="cz-muted">{{ participant.email || '—' }}</td>
+							<!-- the consent act recorded at the table (0.7): who registered
+							     where and by which method, and whether they consented -->
+							<td class="cz-consent" :title="consentTitle(participant)">
+								<template v-if="participant.consent">
+									<span :class="participant.consent.recording ? 'cz-consent--yes' : 'cz-consent--no'">
+										{{ participant.consent.recording ? '✓ consented' : '✗ refused' }}
+									</span>
+									<span class="cz-muted"> · {{ sourceText(participant) }}</span>
+								</template>
+								<span v-else class="cz-muted">—</span>
+							</td>
 							<td style="text-align: right">
 								<CzButton small variant="tertiary" :icon="mdiDeleteOutline" title="Remove" :disabled="busy" @click="removeTarget = participant" />
 							</td>

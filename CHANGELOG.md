@@ -161,6 +161,20 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **The organizer's side of consent.** Settings → General gains a "Privacy
+  notice" card (data controller — defaults to the organization name — and
+  contact), which the notice names and the participant's page points to.
+  The Overview tab's details form has "Consent at the table: Required /
+  Optional"; the assembly wizard creates organized assemblies as Required.
+  The Participants tab shows each person's consent — ✓ consented / ✗
+  refused, Table 3 (table phone / own phone), the ticks and notice hash on
+  hover. The Live tab blocks a required table nobody has consented at
+  ("nobody at the table has consented yet — register a participant on the
+  table phone", reason `PARTICIPANT_CONSENT_MISSING`) and the monitor
+  carries each table's registered / consenting counts. The report's
+  methodology note says how many registered and how many consented.
+  `docs/privacy.md`, the README, the app description and
+  `docs/consent-form.md` no longer say the app stores no consent.
 - **…or on their own phone, and keep a page.** The notice screen also offers
   "Register on your own phone": a `REGISTER_PARTICIPANT` code scoped to the
   assembly and the table, reusable by the whole table for three hours, that
