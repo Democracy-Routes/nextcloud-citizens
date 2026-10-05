@@ -201,7 +201,7 @@ function extendRound(): void {
 	extraMinutes.value += EXTEND_MINUTES
 	// extending moves the planned end forward, so `overrunning` drops and the
 	// grace state resets itself on the next tick
-	toast(`Round extended by ${EXTEND_MINUTES} minutes`)
+	toast(`Session extended by ${EXTEND_MINUTES} minutes`)
 }
 
 // a new round starts its own clock
@@ -468,11 +468,11 @@ function pendingChunks(table: MonitorTable): number {
 			<div>
 				<strong>This round has finished.</strong>
 				<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-					Armed tables will start recording Round {{ nextUp.position }} automatically.
+					Armed tables will start recording Session {{ nextUp.position }} automatically.
 				</span>
 			</div>
 			<CzButton variant="primary" :icon="mdiPlay" :disabled="busy" @click="startNextRound">
-				Start Round {{ nextUp.position }}{{ nextUp.title ? ` — ${nextUp.title}` : '' }}
+				Start Session {{ nextUp.position }}{{ nextUp.title ? ` — ${nextUp.title}` : '' }}
 			</CzButton>
 		</div>
 
@@ -480,7 +480,7 @@ function pendingChunks(table: MonitorTable): number {
 			v-else-if="allRoundsDone"
 			class="cz-card cz-nextstep">
 			<div>
-				<strong>All rounds are done.</strong>
+				<strong>All sessions are done.</strong>
 				<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 					Review the findings in the Analysis tab, then publish the report to the
 					table phones from the Report tab.
@@ -533,7 +533,7 @@ function pendingChunks(table: MonitorTable): number {
 						:icon="mdiPlay"
 						:disabled="busy"
 						@click="startRound">
-						Start round
+						Start session
 					</CzButton>
 					<CzButton
 						v-else-if="monitor.status === 'ACTIVE'"
@@ -541,7 +541,7 @@ function pendingChunks(table: MonitorTable): number {
 						:icon="mdiStop"
 						:disabled="busy"
 						@click="endRound">
-						End round
+						End session
 					</CzButton>
 				</template>
 				<span v-else class="cz-muted" style="font-size: 0.8125rem">
@@ -553,7 +553,7 @@ function pendingChunks(table: MonitorTable): number {
 		<CzConfirm
 			v-if="confirmReplace"
 			title="Hand this table to another phone?"
-			:message="`Table ${confirmReplace.number}'s phone has stopped responding. Its recording is finished with the audio already received — usually most of the round — and transcribed. The table can then record the rest on any phone by scanning the same QR code.`"
+			:message="`Table ${confirmReplace.number}'s phone has stopped responding. Its recording is finished with the audio already received — usually most of the session — and transcribed. The table can then record the rest on any phone by scanning the same QR code.`"
 			confirm-label="Replace device"
 			tone="danger"
 			@confirm="replaceDevice"
@@ -563,15 +563,15 @@ function pendingChunks(table: MonitorTable): number {
 			v-if="confirmStartUnready && monitor"
 			title="Start with tables missing?"
 			:message="`Only ${monitor.tables_ready} of ${monitor.tables_total} tables are armed and ready. Tables that arm later can still join the round. Start anyway?`"
-			confirm-label="Start round"
+			confirm-label="Start session"
 			@confirm="startRound"
 			@cancel="confirmStartUnready = false" />
 
 		<CzEmptyState
 			v-if="!roundId"
 			:icon="mdiClipboardTextOutline"
-			title="This assembly has no rounds yet"
-			hint="Add a round on the Rounds tab to start recording." />
+			title="This assembly has no sessions yet"
+			hint="Add a session on the Sessions tab to start recording." />
 
 		<CzSkeleton v-else-if="!monitor" :rows="5" />
 

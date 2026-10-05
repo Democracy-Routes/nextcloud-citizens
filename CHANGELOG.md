@@ -117,6 +117,15 @@ not rewritten.
   blocked. Computed from the heartbeats and recordings the Live tab already
   reads; it is what an exception-first screen and an organizer's autopilot
   will build on.
+- **Rounds are called Sessions where people read them.** The organizer's
+  tabs, buttons and hints and the phone's strings (en, it) now say Session;
+  `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in
+  product vocabulary — a `session_id` is the round's id and works on every
+  existing `/rounds/{id}` route. Nothing was renamed underneath: the schema,
+  the recording pipeline, the `/rounds` routes and the reports' "Round N"
+  headings keep their names, and `domain/vocabulary.py` states the mapping.
+  `recorder_sessions` — a phone's bearer session — is a different thing and
+  is never called a Session.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

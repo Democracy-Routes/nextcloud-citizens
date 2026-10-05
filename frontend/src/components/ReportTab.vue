@@ -199,7 +199,7 @@ const hasContent = () =>
 				</template>
 				<template v-else>
 					<strong>Interim report — {{ progress?.tables_complete ?? 0 }} of
-						{{ progress?.tables_expected ?? 0 }} tables have completed all rounds</strong>
+						{{ progress?.tables_expected ?? 0 }} tables have completed all sessions</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
 						This is a preview of an assembly still in progress. Closing the session
 						creates the final report and enables the downloads — you can reopen later.

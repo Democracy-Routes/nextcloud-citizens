@@ -64,7 +64,7 @@ describe('the next-round card', () => {
 		const wrapper = mountWithI18n(MonitorTab, { props: { assembly: STALE_ASSEMBLY } })
 		await flushPromises()
 
-		expect(wrapper.text()).not.toContain('Start Round 2')
+		expect(wrapper.text()).not.toContain('Start Session 2')
 	})
 
 	it('offers a round that really is still waiting', async () => {
@@ -78,7 +78,7 @@ describe('the next-round card', () => {
 		const wrapper = mountWithI18n(MonitorTab, { props: { assembly: STALE_ASSEMBLY } })
 		await flushPromises()
 
-		expect(wrapper.text()).toContain('Round 2')
+		expect(wrapper.text()).toContain('Session 2')
 	})
 
 	it('tells the rest of the app when it sees the round change state', async () => {

@@ -316,8 +316,8 @@ async function recluster(): Promise<void> {
 		<CzEmptyState
 			v-if="!roundId"
 			:icon="mdiClipboardTextOutline"
-			title="This assembly has no rounds yet"
-			hint="Add a round on the Rounds tab; findings appear here once its tables have been analyzed." />
+			title="This assembly has no sessions yet"
+			hint="Add a session on the Sessions tab; findings appear here once its tables have been analyzed." />
 
 		<CzSkeleton v-else-if="!data && !error" :rows="4" />
 
@@ -377,7 +377,7 @@ async function recluster(): Promise<void> {
 				v-else-if="filtering && shownCount === 0"
 				:icon="mdiFilterOutline"
 				title="No findings match this filter"
-				hint="Change the filters above to see the rest of this round's findings." />
+				hint="Change the filters above to see the rest of this session's findings." />
 			<template v-else>
 				<SpeakingBalanceCard
 					v-if="data.speaking_balance && data.speaking_balance.voices.length"
@@ -414,7 +414,7 @@ async function recluster(): Promise<void> {
 							{{ table.summary }}
 						</p>
 						<p v-if="table.analyzed && !table.findings.length" class="cz-muted" style="font-size: 0.845rem">
-							Analyzed — no substantive findings for the round question in this discussion.
+							Analyzed — no substantive findings for the session question in this discussion.
 						</p>
 						<FindingCard
 							v-for="finding in table.findings"
@@ -435,7 +435,7 @@ async function recluster(): Promise<void> {
 		<CzConfirm
 			v-if="confirmApproveAll"
 			title="Approve every draft finding?"
-			:message="`${draftCount} draft finding(s) in this round will be marked approved and included in the report. Rejected findings are left alone, and you can still edit or reject any of them afterwards.`"
+			:message="`${draftCount} draft finding(s) in this session will be marked approved and included in the report. Rejected findings are left alone, and you can still edit or reject any of them afterwards.`"
 			confirm-label="Approve all drafts"
 			@confirm="approveAll"
 			@cancel="confirmApproveAll = false" />
@@ -444,8 +444,8 @@ async function recluster(): Promise<void> {
 			title="Run the analysis again?"
 			:message="
 				reviewedCount > 0
-					? `Every finding of this round — including the ${reviewedCount} you have already approved or edited — is replaced by a freshly generated set. Reviews done so far will have to be redone.`
-					: 'Every draft finding for this round is replaced with freshly generated ones.'
+					? `Every finding of this session — including the ${reviewedCount} you have already approved or edited — is replaced by a freshly generated set. Reviews done so far will have to be redone.`
+					: 'Every draft finding for this session is replaced with freshly generated ones.'
 			"
 			confirm-label="Run analysis again"
 			:tone="reviewedCount > 0 ? 'destructive' : 'danger'"

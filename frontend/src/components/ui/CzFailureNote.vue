@@ -46,9 +46,9 @@ const EXPLANATIONS: Record<string, string> = {
 	STORAGE_FULL:
 		'The server ran out of space while assembling this recording. The uploaded audio is still here — free some space, then try again.',
 	CHUNKS_GONE:
-		'Parts of the upload are missing from storage, so the audio cannot be rebuilt. This table needs to record the round again.',
+		'Parts of the upload are missing from storage, so the audio cannot be rebuilt. This table needs to record the session again.',
 	CHUNK_CORRUPTED:
-		'A piece of the upload failed its checksum, so the audio cannot be trusted. This table needs to record the round again.',
+		'A piece of the upload failed its checksum, so the audio cannot be trusted. This table needs to record the session again.',
 	AUDIO_DELETED: 'The audio was deleted while it was being assembled.',
 	UPLOAD_TIMED_OUT:
 		'The phone stopped uploading and did not come back. Whatever reached the server is kept; the table can record again.',

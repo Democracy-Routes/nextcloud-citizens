@@ -297,3 +297,31 @@ edit code → uvicorn auto-reloads (source bind-mounted) → refresh browser
 - `make register` — register manual-install daemon + ExApp (idempotent).
 - `make logs`, `make test`, `make lint`, `make dev-reset` (Citizens data only).
 - The AppAPI shared secret is generated once into `.app_secret` (gitignored).
+
+## Vocabulary: Session and Round (0.7)
+
+Citizens 1.0 talks about an optional **Assembly** (an organized event), the
+**Session** (one question discussed at one or more tables — the unit a user
+starts from, on its own or inside an Assembly), the **Table** (one discussion
+within a Session, numbered and coloured) and the **Recorder** (a phone
+recording a Table; one or more per Table).
+
+The schema and the recording pipeline still spell a Session as `Round`:
+`rounds`, `round_id`, the `/rounds/{id}` routes, the `Round` model, and ~1,600
+references through recording, transcription, analysis, reports and tests. A
+standalone Session is a `Round` inside a container `Assembly(kind="session")`
+that the UI never presents as an assembly (`services/sessions.py`). None of
+that is renamed in 0.7 — `round_id` is wired through the one part of the app
+that must never wobble — so the bridge is:
+
+- new product and API surfaces say Session (`POST /sessions`,
+  `GET /sessions`, `GET /sessions/{id}`, `session_id` in their payloads, the
+  organizer's labels, the phone's strings);
+- existing routes, columns and internals keep Round, and a `session_id` in a
+  Session payload *is* a round id — every `/rounds/{id}` route accepts it;
+- reports still print "Round N" headings (`report.round_heading`); the
+  report vocabulary moves in a later step with its own fixtures;
+- `recorder_sessions` is a phone's bearer session — a different thing. No
+  recorder code uses a bare `session_id` to mean a Session.
+
+`citizens/domain/vocabulary.py` states the mapping once.

@@ -14,14 +14,29 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from citizens.db.session import get_db
+from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.security.identity import CurrentUser
 from citizens.services import sessions as sessions_svc
+from citizens.services.assemblies import get_owned_round
 
 router = APIRouter()
 
 DB = Annotated[Session, Depends(get_db)]
+ReadDB = Annotated[Session, Depends(get_read_db)]
+
+
+@router.get("/sessions", response_model=list[schemas.SessionOut])
+def list_sessions(user: CurrentUser, session: ReadDB):
+    """Every Session the user owns — standalone ones and those inside assemblies —
+    in product vocabulary (domain/vocabulary.py)."""
+    return sessions_svc.list_sessions(session, user)
+
+
+@router.get("/sessions/{session_id}", response_model=schemas.SessionOut)
+def get_session(session_id: str, user: CurrentUser, session: ReadDB):
+    """A Session by its id — the same id every `/rounds/{id}` route accepts."""
+    return sessions_svc.session_detail(session, get_owned_round(session, session_id, user))
 
 
 @router.post("/sessions", response_model=schemas.SessionCreated, status_code=201)

@@ -81,7 +81,7 @@ async function submit(): Promise<void> {
 		<h2>Create assembly</h2>
 		<div class="cz-row" style="margin: 14px 0 20px; gap: 0">
 			<div
-				v-for="(label, index) in ['Basics', 'Rounds']"
+				v-for="(label, index) in ['Basics', 'Sessions']"
 				:key="label"
 				class="cz-row"
 				style="gap: 8px; flex-wrap: nowrap">
@@ -115,7 +115,7 @@ async function submit(): Promise<void> {
 							Live event (orchestrated)
 						</span>
 						<span class="cz-muted" style="font-weight: 400; font-size: 0.78rem">
-							You start and end each round for all tables at once; phones record simultaneously.
+							You start and end each session for all tables at once; phones record simultaneously.
 						</span>
 					</label>
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': recordingMode === 'independent' }" style="flex: 1; min-width: 240px; align-items: flex-start; flex-direction: column; gap: 4px">
@@ -185,7 +185,7 @@ async function submit(): Promise<void> {
 				<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
 					<div class="cz-row" style="flex-wrap: nowrap">
 						<span class="cz-posbadge">{{ index + 1 }}</span>
-						<strong>Round {{ index + 1 }}</strong>
+						<strong>Session {{ index + 1 }}</strong>
 					</div>
 					<div class="cz-row" style="flex-wrap: nowrap">
 						<CzButton small variant="tertiary" :icon="mdiChevronUp" :disabled="index === 0" @click="moveRound(index, -1)" />
@@ -211,7 +211,7 @@ async function submit(): Promise<void> {
 						placeholder="What mobility problems do people experience?"></textarea>
 				</div>
 			</div>
-			<CzButton :icon="mdiPlus" @click="addRound">Add round</CzButton>
+			<CzButton :icon="mdiPlus" @click="addRound">Add session</CzButton>
 			<div class="cz-row" style="justify-content: flex-end; margin-top: 20px">
 				<CzButton variant="tertiary" @click="step = 1">Back</CzButton>
 				<CzButton variant="primary" :disabled="saving || !basicsValid" @click="submit">

@@ -210,6 +210,38 @@ class SessionCreated(BaseModel):
     invites: list[InviteGenerated]
 
 
+class SessionTableOut(BaseModel):
+    id: str
+    number: int
+    color_key: str
+
+
+class SessionOut(BaseModel):
+    """A Session in product vocabulary — the adapter over a Round.
+
+    `session_id` is the round's id and works on every `/rounds/{id}` route;
+    `container_id` is the assembly behind it, `standalone` whether that
+    container is the synthetic one a standalone Session lives in.
+    """
+
+    session_id: str
+    container_id: str
+    container_name: str
+    standalone: bool
+    position: int
+    title: str
+    question: str
+    objective: str | None
+    duration_minutes: int
+    status: str
+    recording_mode: str
+    language: str
+    started_at: datetime | None
+    ended_at: datetime | None
+    tables: list[SessionTableOut]
+    recording_count: int = 0
+
+
 class RecordNowIn(BaseModel):
     language: Language = "en"
 

@@ -109,7 +109,7 @@ describe('the recording screen during an interruption', () => {
 		shared.state.interruptions = [{ from: 1_000, to: 13_000, cause: 'capture_stalled' }]
 		const wrapper = await mounted()
 
-		expect(wrapper.text()).toContain('12 s of the round were not captured')
+		expect(wrapper.text()).toContain('12 s of the session were not captured')
 		expect(wrapper.text()).not.toContain('The microphone stopped')
 	})
 

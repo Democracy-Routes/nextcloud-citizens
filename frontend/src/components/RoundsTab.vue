@@ -38,9 +38,9 @@ const deleteId = ref('')
 const deleteMessage = computed(() => {
 	const round = props.assembly.rounds.find((r) => r.id === deleteId.value)
 	const count = round?.recording_count ?? 0
-	if (count === 0) return 'The round and its tables will be deleted. It has no recordings.'
+	if (count === 0) return 'The session and its tables will be deleted. It has no recordings.'
 	const plural = count === 1 ? 'recording' : 'recordings'
-	return `The round, its tables and its ${count} ${plural} will be permanently deleted, including the audio.`
+	return `The session, its tables and its ${count} ${plural} will be permanently deleted, including the audio.`
 })
 
 function startEdit(roundId: string): void {
@@ -97,9 +97,9 @@ const add = () =>
 		<CzEmptyState
 			v-if="assembly.rounds.length === 0"
 			:icon="mdiTimelineClockOutline"
-			title="No rounds yet"
-			hint="Each round is one table discussion with its own question and duration.">
-			<CzButton variant="primary" :icon="mdiPlus" @click="add">Add the first round</CzButton>
+			title="No sessions yet"
+			hint="Each session is one discussion with its own question, objective and duration.">
+			<CzButton variant="primary" :icon="mdiPlus" @click="add">Add the first session</CzButton>
 		</CzEmptyState>
 
 		<template v-else>
@@ -120,7 +120,7 @@ const add = () =>
 					</div>
 					<div class="cz-row" style="justify-content: flex-end">
 						<CzButton variant="tertiary" small @click="editingId = ''">Cancel</CzButton>
-						<CzButton variant="primary" small @click="saveEdit">Save round</CzButton>
+						<CzButton variant="primary" small @click="saveEdit">Save session</CzButton>
 					</div>
 				</template>
 				<template v-else>
@@ -129,7 +129,7 @@ const add = () =>
 							<span class="cz-posbadge">{{ round.position }}</span>
 							<div style="min-width: 0">
 								<div class="cz-row" style="gap: 8px">
-									<strong>{{ round.title || 'Untitled round' }}</strong>
+									<strong>{{ round.title || 'Untitled session' }}</strong>
 									<span class="cz-muted" style="font-size: 0.8125rem">{{ round.duration_minutes }} min</span>
 									<CzStatusPill :status="round.status" />
 								</div>
@@ -156,14 +156,14 @@ const add = () =>
 					</div>
 				</template>
 			</div>
-			<CzButton :icon="mdiPlus" :disabled="busy" @click="add">Add round</CzButton>
+			<CzButton :icon="mdiPlus" :disabled="busy" @click="add">Add session</CzButton>
 		</template>
 
 		<CzConfirm
 			v-if="deleteId"
-			title="Delete round?"
+			title="Delete session?"
 			:message="deleteMessage"
-			confirm-label="Delete round"
+			confirm-label="Delete session"
 			tone="danger"
 			@confirm="remove"
 			@cancel="deleteId = ''" />

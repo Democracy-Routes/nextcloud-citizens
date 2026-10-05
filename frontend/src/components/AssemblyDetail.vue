@@ -46,7 +46,7 @@ const confirmDelete = ref(false)
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
 	{ id: 'overview', label: 'Overview', icon: mdiViewDashboardOutline },
-	{ id: 'rounds', label: 'Rounds', icon: mdiTimelineClockOutline },
+	{ id: 'rounds', label: 'Sessions', icon: mdiTimelineClockOutline },
 	{ id: 'participants', label: 'Participants', icon: mdiAccountGroup },
 	{ id: 'tables', label: 'Tables', icon: mdiTableFurniture },
 	{ id: 'qr', label: 'QR codes', icon: mdiQrcode },
@@ -146,7 +146,7 @@ async function deleteAssembly(): Promise<void> {
 		<CzConfirm
 			v-if="confirmDelete && assembly"
 			title="Delete assembly?"
-			:message="`“${assembly.name}” and all of its rounds, transcripts and reports will be permanently deleted — including every audio file stored on the server.`"
+			:message="`“${assembly.name}” and all of its sessions, transcripts and reports will be permanently deleted — including every audio file stored on the server.`"
 			confirm-label="Delete assembly"
 			tone="destructive"
 			:confirm-word="assembly.name"

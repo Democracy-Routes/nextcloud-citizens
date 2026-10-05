@@ -123,7 +123,7 @@ const nextStep = computed<NextStep | null>(() => {
 		return { text: `Round ${activeRound.value.position} is live — watch table health and recordings.`, action: 'Open Live view', tab: 'monitor' }
 	}
 	if (props.assembly.rounds.length === 0) {
-		return { text: 'Start by defining the discussion rounds and their questions.', action: 'Add rounds', tab: 'rounds' }
+		return { text: 'Start by defining the discussion sessions and their questions.', action: 'Add sessions', tab: 'rounds' }
 	}
 	if (props.assembly.participant_count === 0) {
 		return { text: 'Add participants — anonymous labels like P001 are enough.', action: 'Add participants', tab: 'participants' }
@@ -131,7 +131,7 @@ const nextStep = computed<NextStep | null>(() => {
 	if (activeInvites.value === 0) {
 		return { text: 'Generate the recorder QR codes and print one per table.', action: 'Generate QR codes', tab: 'qr' }
 	}
-	return { text: 'Everything is prepared. Start a round from the Live view when the discussion begins.', action: 'Open Live view', tab: 'monitor' }
+	return { text: 'Everything is prepared. Start a session from the Live view when the discussion begins.', action: 'Open Live view', tab: 'monitor' }
 })
 </script>
 
@@ -166,7 +166,7 @@ const nextStep = computed<NextStep | null>(() => {
 				<div class="cz-stat__icon"><SvgIcon :path="mdiTimelineClockOutline" :size="24" /></div>
 				<div>
 					<div class="cz-stat__value">{{ doneRounds }}<span class="cz-muted" style="font-size: 0.9375rem; font-weight: 500"> / {{ assembly.rounds.length }}</span></div>
-					<div class="cz-stat__label">Rounds held</div>
+					<div class="cz-stat__label">Sessions held</div>
 				</div>
 			</button>
 			<button class="cz-stat cz-card--hover" style="background: none" @click="emit('navigate', 'qr')">
@@ -296,7 +296,7 @@ const nextStep = computed<NextStep | null>(() => {
 
 		<div class="cz-card">
 			<div class="cz-row cz-row--spread" style="margin-bottom: 8px">
-				<h3>Rounds</h3>
+				<h3>Sessions</h3>
 				<CzButton variant="tertiary" small :icon="mdiMonitorEye" @click="emit('navigate', 'monitor')">
 					Live view
 				</CzButton>
@@ -329,7 +329,7 @@ const nextStep = computed<NextStep | null>(() => {
 		<div class="cz-card cz-dangerzone">
 			<h3>Danger zone</h3>
 			<p class="cz-muted" style="margin: 6px 0 12px; font-size: 0.875rem">
-				Deleting this assembly permanently removes every round, recording,
+				Deleting this assembly permanently removes every session, recording,
 				transcript, finding and report. There is no undo and no backup.
 			</p>
 			<CzButton variant="danger" :icon="mdiDeleteOutline" @click="emit('requestDelete')">

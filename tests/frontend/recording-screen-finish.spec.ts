@@ -86,7 +86,7 @@ describe('the finishing countdown', () => {
 		await vi.advanceTimersByTimeAsync(8100) // the 8 s round poll sees ENDED
 
 		const text = wrapper.text()
-		expect(text).toContain('The round has ended')
+		expect(text).toContain('The session has ended')
 		expect(text).toMatch(/Finishing in \d+ s/)
 		// the old splice — a full sentence inside the countdown line — is gone
 		expect(text).not.toContain('ended. — finishing')

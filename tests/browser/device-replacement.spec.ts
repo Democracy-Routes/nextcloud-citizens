@@ -46,7 +46,7 @@ test('the organizer hands a dead table to another phone', async ({ browser }) =>
 	await expect(phoneB.page.getByText(/already recording on another phone/)).toBeVisible({
 		timeout: 25_000,
 	})
-	await expect(phoneB.page.getByText('completed every round')).toHaveCount(0)
+	await expect(phoneB.page.getByText('completed every session')).toHaveCount(0)
 
     // --- the facilitator releases the table ---
 	const released = organizerApi<{ assembling: boolean }>(

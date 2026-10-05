@@ -121,7 +121,7 @@ describe('failure explanations', () => {
 		})
 
 		expect(full.text()).toContain('still here')
-		expect(gone.text()).toContain('record the round again')
+		expect(gone.text()).toContain('record the session again')
 	})
 
 	it('falls back to the state when there is no specific code', () => {

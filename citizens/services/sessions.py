@@ -28,11 +28,13 @@ press Start for a round that nobody is orchestrating.
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from citizens.db.models import Assembly, Round
+from citizens.db.models import Assembly, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.domain import schemas
+from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
 from citizens.services import assemblies as assemblies_svc
 from citizens.services import invites as invite_svc
@@ -136,6 +138,49 @@ def created_payload(created: StandaloneSession) -> schemas.SessionCreated:
         table_count=created.container.default_table_count,
         invites=created.invites,
     )
+
+
+def session_detail(session: Session, round_: Round) -> schemas.SessionOut:
+    """A round in product vocabulary (domain/vocabulary.py)."""
+    recording_count = session.execute(
+        select(func.count()).select_from(Recording).where(Recording.round_id == round_.id)
+    ).scalar_one()
+    container = round_.assembly
+    return schemas.SessionOut(
+        session_id=round_.id,
+        container_id=container.id,
+        container_name=container.name,
+        standalone=container.kind == SESSION_KIND,
+        position=round_.position,
+        title=round_.title,
+        question=round_.question,
+        objective=round_.objective,
+        duration_minutes=round_.duration_minutes,
+        status=round_.status,
+        recording_mode=container.recording_mode,
+        language=container.language,
+        started_at=round_.started_at,
+        ended_at=round_.ended_at,
+        tables=[
+            schemas.SessionTableOut(
+                id=table.id, number=table.number, color_key=table.color_key or color_for(table.number)
+            )
+            for table in round_.tables
+        ],
+        recording_count=recording_count,
+    )
+
+
+def list_sessions(session: Session, user_id: str) -> list[schemas.SessionOut]:
+    """Every Session the user owns, standalone ones and those inside assemblies,
+    newest container first then by position."""
+    rounds = session.execute(
+        select(Round)
+        .join(Assembly, Assembly.id == Round.assembly_id)
+        .where(Assembly.created_by == user_id)
+        .order_by(Assembly.created_at.desc(), Round.position)
+    ).scalars()
+    return [session_detail(session, round_) for round_ in rounds]
 
 
 def _container_name(question: str) -> str:
