@@ -44,6 +44,7 @@ vi.mock('../../frontend/src/recorder/engine', () => {
 	}
 	return {
 		clearSynchronizedRecordings: vi.fn(),
+		readBatteryLevel: vi.fn().mockResolvedValue(undefined),
 		RecorderEngine: class {
 			state = state
 			mediaStream = null

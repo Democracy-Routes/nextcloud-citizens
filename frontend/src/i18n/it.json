@@ -274,6 +274,14 @@
 			"unavailable": "Non è stato possibile creare il codice — chiedi all'organizzatore.",
 			"close": "Chiudi"
 		},
+		"battery": {
+			"lowTitle": "Batteria al {percent}% — questo è l'unico registratore del tavolo",
+			"lowBody": "Aggiungi ora un telefono di riserva: registra accanto a questo, così non si perde nulla se questo si spegne.",
+			"addBackup": "Aggiungi un telefono di riserva",
+			"criticalTitle": "Batteria al {percent}% — passa il tavolo",
+			"criticalBody": "Scansiona questo codice con un altro telefono. Quando mostra REGISTRAZIONE, tocca Termina qui.",
+			"showCode": "Mostra il codice di passaggio"
+		},
 		"guard": {
 			"thirdRecorderTitle": "Questo tavolo ha già {count} registratori",
 			"thirdRecorderBody": "Due telefoni stanno già registrando qui. Un terzo è permesso, ma di solito è una scansione per sbaglio.",

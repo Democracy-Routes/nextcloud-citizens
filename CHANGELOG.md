@@ -161,6 +161,14 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **A dying phone asks for a backup in time.** While recording, the table's
+  only recorder shows a quiet card at 15 % battery — "Add a backup phone",
+  which opens the same Add recorder code as the bar — and at 8 % "hand the
+  table over: scan this code with another phone; when it shows RECORDING, tap
+  Finish here". The second phone records beside the first; the first finishes
+  normally and the live captions pass on by themselves. Nothing automatic, the
+  engine untouched; phones that do not expose their battery (Safari, Firefox)
+  never see the card.
 - **Two guards against a scan by mistake.** Before a code is spent, the phone
   asks what it means (`POST /api/v1/public/capabilities/peek`, which consumes
   nothing) and, if the table already has two recorders or this phone was

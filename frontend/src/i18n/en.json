@@ -274,6 +274,14 @@
 			"unavailable": "The code could not be made — ask the organizer.",
 			"close": "Close"
 		},
+		"battery": {
+			"lowTitle": "Battery at {percent}% — this is the only recorder at this table",
+			"lowBody": "Add a backup phone now: it records beside this one, so nothing is lost if this phone dies.",
+			"addBackup": "Add a backup phone",
+			"criticalTitle": "Battery at {percent}% — hand the table over",
+			"criticalBody": "Scan this code with another phone. When it shows RECORDING, tap Finish here.",
+			"showCode": "Show handover code"
+		},
 		"guard": {
 			"thirdRecorderTitle": "This table already has {count} recorders",
 			"thirdRecorderBody": "Two phones are already recording here. A third is allowed, but it is usually a scan by mistake.",

@@ -59,6 +59,7 @@ vi.mock('../../frontend/src/recorder/useWakeLock', async () => {
 vi.mock('../../frontend/src/recorder/idb', () => ({ idb: { countFor: vi.fn().mockResolvedValue(0) } }))
 vi.mock('../../frontend/src/recorder/engine', () => ({
 	clearSynchronizedRecordings: vi.fn(),
+	readBatteryLevel: vi.fn().mockResolvedValue(undefined),
 	RecorderEngine: class {
 		state = shared.state
 		mediaStream = null

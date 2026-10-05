@@ -16,13 +16,15 @@ import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
+import BatteryHandover from './BatteryHandover.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
+import { batteryPrompt } from '../batteryPrompt'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
 import { clientLog, ship } from '../logger'
 import { useWakeLock, wakeLockHeld } from '../useWakeLock'
-import { clearSynchronizedRecordings, RecorderEngine } from '../engine'
+import { clearSynchronizedRecordings, readBatteryLevel, RecorderEngine } from '../engine'
 
 const props = defineProps<{ session: JoinResult; round: RoundInfo }>()
 const emit = defineEmits<{
@@ -62,6 +64,17 @@ const tableInfo = ref(props.session.table ?? null)
 // which recorder carries the captions while this phone is a backup
 const liveSourceLabel = ref<string | null>(null)
 const takingOver = ref(false)
+
+// A dying phone asks for a backup while there is still time to add one. The
+// battery is read here as the heartbeat reads it (Chromium only; elsewhere
+// "unknown" and the card never shows); the bar's Add recorder sheet is the
+// handover code, opened one tap closer.
+const batteryLevel = ref<number | undefined>(undefined)
+const handover = computed(() =>
+	plenary ? 'none' : batteryPrompt(batteryLevel.value, tableInfo.value?.recorders),
+)
+const bar = ref<InstanceType<typeof TableBar> | null>(null)
+let batteryTimer = 0
 
 /** This phone takes over its table's live captions. The other recorder keeps
  * recording; only its caption session ends. */
@@ -360,6 +373,11 @@ onMounted(async () => {
 			beginFinishCountdown()
 		}
 	}, 500)
+	const readBattery = async () => {
+		batteryLevel.value = await readBatteryLevel()
+	}
+	void readBattery()
+	batteryTimer = window.setInterval(() => void readBattery(), 30_000)
 	await beginRecording()
 	const stream = engine.mediaStream
 	if (stream) {
@@ -396,6 +414,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
 	window.clearInterval(clockTimer)
+	window.clearInterval(batteryTimer)
 	window.clearInterval(levelTimer)
 	window.clearInterval(roundPollTimer)
 	window.clearInterval(livePollTimer)
@@ -753,8 +772,20 @@ async function clearSynced(): Promise<void> {
 			</template>
 			</div>
 
+			<!-- the only recorder at the table, on a phone that is dying -->
+			<BatteryHandover
+				v-if="state.phase === 'recording' && handover !== 'none' && batteryLevel !== undefined"
+				:prompt="handover"
+				:level="batteryLevel"
+				@add-backup="bar?.show('ADD_RECORDER_TO_TABLE')" />
+
 			<!-- New table | Finish | Add recorder — the sides step back while recording -->
-			<TableBar v-if="state.phase === 'recording'" :session="props.session" :round-id="props.round.id" quiet>
+			<TableBar
+				v-if="state.phase === 'recording'"
+				ref="bar"
+				:session="props.session"
+				:round-id="props.round.id"
+				quiet>
 				<button v-if="!confirmFinish" class="rc-btn" @click="confirmFinish = true">
 					{{ t('recorder.recording.finishButton') }}
 				</button>

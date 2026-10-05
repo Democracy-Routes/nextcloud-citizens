@@ -28,6 +28,10 @@ const props = defineProps<{
 const { t } = useI18n()
 const open = ref<CapabilityPurpose | null>(null)
 const plenary = props.session.assembly.recording_mode === 'plenary'
+
+/** A screen can open a sheet itself — the battery card's "Add a backup phone"
+ * is the same code as the bar's Add recorder, offered one tap closer. */
+defineExpose({ show: (purpose: CapabilityPurpose) => (open.value = purpose) })
 </script>
 
 <template>
