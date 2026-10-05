@@ -106,6 +106,17 @@ not rewritten.
   its recording, one per recording, and a final transcription replaces a
   live-captions one deterministically. Live and final transcription remain
   independent switches in every combination.
+- **A table's readiness is a machine-readable answer.** `GET
+  /api/v1/rounds/{id}/readiness` (and every table in the monitor payload)
+  says READY, NEEDS_ATTENTION or BLOCKED with structured reason codes —
+  `NO_RECORDER`, `RECORDER_OFFLINE`, `MIC_UNAVAILABLE`, `LOW_STORAGE`,
+  `LOW_BATTERY`, `UPLOAD_STALLED`, `LIVE_STT_UNAVAILABLE` — each marked as a
+  blocker or a warning and naming the recorder concerned, never prose. Not
+  every problem blocks: one healthy recorder with no backup is ready, one of
+  two recorders offline needs attention, the only recorder offline is
+  blocked. Computed from the heartbeats and recordings the Live tab already
+  reads; it is what an exception-first screen and an organizer's autopilot
+  will build on.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

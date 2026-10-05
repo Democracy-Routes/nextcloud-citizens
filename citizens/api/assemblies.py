@@ -155,6 +155,31 @@ def round_monitor(round_id: str, user: CurrentUser, session: ReadDB):
     return rounds_svc.round_monitor(session, round_)
 
 
+@router.get("/rounds/{round_id}/readiness")
+def round_readiness(round_id: str, user: CurrentUser, session: ReadDB):
+    """Can each table record? READY / NEEDS_ATTENTION / BLOCKED with reason
+    codes — the monitor's judgement without its detail, for an exception-first
+    view or an organizer's autopilot."""
+    round_ = svc.get_owned_round(session, round_id, user)
+    monitor = rounds_svc.round_monitor(session, round_)
+    return {
+        "round_id": round_.id,
+        "status": round_.status,
+        **monitor["readiness"],
+        "tables": [
+            {
+                "table_id": table["table_id"],
+                "number": table["number"],
+                "color_key": table["color_key"],
+                "recorders": len(table["recorders"]),
+                "live_source_slot": table["live_source_slot"],
+                **table["readiness"],
+            }
+            for table in monitor["tables"]
+        ],
+    }
+
+
 @router.get("/assemblies/{assembly_id}/participants", response_model=list[schemas.ParticipantOut])
 def list_participants(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = svc.get_owned_assembly(session, assembly_id, user)

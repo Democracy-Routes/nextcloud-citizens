@@ -12,7 +12,9 @@ from citizens.db.models import RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
-from citizens.services import job_failures
+from citizens.services import job_failures, readiness
+from citizens.services.live_captions import LIVE_CAPTIONS
+from citizens.services.provider_config import live_stt_snapshot
 from citizens.services.table_recordings import slot_label
 
 log = get_logger(__name__)
@@ -117,6 +119,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
     heartbeat with storage_ok (brief §25).
     """
     now = utcnow()
+    # from the in-memory snapshot, never an OCS read inside this read session
+    live_stt_enabled = bool(live_stt_snapshot().get("enabled"))
     tables = []
     for table in round_.tables:
         recordings = list(
@@ -158,6 +162,25 @@ def round_monitor(session: Session, round_: Round) -> dict:
         )
         armed = bool(device["connected"] and device["status"].get("armed") is True)
         recorders = _table_recorders(session, round_, table, recordings, now)
+        live_source_slot = next(
+            (r["slot"] for r in recorders if r["recording"] and r["recording"]["live_source"]), None
+        )
+        live_source_recording = next(
+            (r["recording"]["id"] for r in recorders if r["slot"] == live_source_slot), None
+        )
+        # machine-readable "can this table record": status plus reason codes,
+        # for an exception-first UI and an organizer's autopilot
+        readiness_ = readiness.table_readiness(
+            recorders,
+            live_stt_enabled=live_stt_enabled,
+            live_source_slot=live_source_slot,
+            live_caption_reason=(
+                LIVE_CAPTIONS.status(live_source_recording).get("reason")
+                if live_source_recording
+                else None
+            ),
+            round_active=round_.status == "ACTIVE",
+        )
 
         tables.append(
             {
@@ -172,10 +195,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
                 # phone and the newest recording, as they always did
                 "recorders": recorders,
                 # which recorder's captions the room reads (None: no live source)
-                "live_source_slot": next(
-                    (r["slot"] for r in recorders if r["recording"] and r["recording"]["live_source"]),
-                    None,
-                ),
+                "live_source_slot": live_source_slot,
+                "readiness": readiness_.as_dict(),
                 "recording": None
                 if recording is None
                 else {
@@ -208,6 +229,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
         "tables_ready": sum(1 for t in tables if t["armed"]),
         "tables_total": len(tables),
         "tables": tables,
+        # READY / NEEDS_ATTENTION / BLOCKED counts and the worst of them
+        "readiness": readiness.summarize(tables),
         # Every round's status, not just this one's. The Live tab polls this
         # every few seconds but computed "which round is next" from the
         # assembly it was handed on mount, which nothing refreshed — so it

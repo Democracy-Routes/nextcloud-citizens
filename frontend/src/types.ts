@@ -232,6 +232,28 @@ export interface DeviceStatus {
 	screen_awake?: boolean
 }
 
+export type ReadinessStatus = 'READY' | 'NEEDS_ATTENTION' | 'BLOCKED'
+
+export type ReadinessCode =
+	| 'NO_RECORDER'
+	| 'RECORDER_OFFLINE'
+	| 'MIC_UNAVAILABLE'
+	| 'LOW_STORAGE'
+	| 'LOW_BATTERY'
+	| 'UPLOAD_STALLED'
+	| 'LIVE_STT_UNAVAILABLE'
+
+export interface TableReadiness {
+	status: ReadinessStatus
+	reasons: Array<{
+		code: ReadinessCode | string
+		severity: 'blocker' | 'warning'
+		/** the recorder concerned, or null for the table as a whole */
+		slot: number | null
+		data: Record<string, unknown>
+	}>
+}
+
 export interface MonitorTable {
 	table_id: string
 	number: number
@@ -260,6 +282,11 @@ export interface MonitorTable {
 		status: DeviceStatus
 		recording: { id: string; state: string } | null
 	}>
+	/** which recorder's captions the room reads; null when none */
+	live_source_slot?: number | null
+	/** Can this table record? Status plus reason codes, never prose — the
+	 * client words them. Absent from a server older than 0.7. */
+	readiness?: TableReadiness
 	/** Recordings from a phone this table has since replaced. The server ships
 	 * these so the salvaged half of a round stays visible while it finishes
 	 * transcribing — otherwise it vanished from the Live tab the moment the
@@ -450,6 +477,8 @@ export interface RoundMonitor {
 	tables_ready: number
 	tables_total: number
 	tables: MonitorTable[]
+	/** READY / NEEDS_ATTENTION / BLOCKED counts and the worst of them */
+	readiness?: { status: ReadinessStatus; ready: number; needs_attention: number; blocked: number }
 	/** Every round of the assembly, as the server has them right now. The Live
 	 * tab used to read these from the assembly prop, which nothing refreshed. */
 	rounds: { id: string; position: number; title: string; status: string }[]
