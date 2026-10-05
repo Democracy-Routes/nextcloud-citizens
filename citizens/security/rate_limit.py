@@ -49,6 +49,9 @@ JOIN_IP_LIMITER = SlidingWindowLimiter(max_events=120, window_seconds=60)
 # A joined phone making codes for the next phone: a handful a minute is a room
 # adding tables and recorders, hundreds is a script. Keyed by recorder session.
 CAPABILITY_LIMITER = SlidingWindowLimiter(max_events=20, window_seconds=60)
+# Need help from a table: one open request per table anyway, so a handful a
+# minute per phone is a nervous tapper, not a use case
+HELP_LIMITER = SlidingWindowLimiter(max_events=6, window_seconds=60)
 
 
 def token_key(token: str) -> str:

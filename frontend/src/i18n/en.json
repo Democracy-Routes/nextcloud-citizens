@@ -278,6 +278,20 @@
 			"from": "From the organizer",
 			"dismiss": "Dismiss"
 		},
+		"help": {
+			"button": "Need help",
+			"title": "WHAT DO YOU NEED?",
+			"kind": {
+				"TECHNICAL": "Technical problem",
+				"ORGANIZER": "Call the organizer",
+				"PROCESS": "Question about the process"
+			},
+			"notified": "Organizer notified",
+			"seen": "The organizer has seen it",
+			"failed": "Could not reach the server — try again.",
+			"cancel": "Cancel",
+			"dismiss": "Dismiss"
+		},
 		"battery": {
 			"lowTitle": "Battery at {percent}% — this is the only recorder at this table",
 			"lowBody": "Add a backup phone now: it records beside this one, so nothing is lost if this phone dies.",

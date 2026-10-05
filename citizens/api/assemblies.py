@@ -9,11 +9,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import Assembly, Participant, RecorderSession, Recording
+from citizens.db.models import Assembly, HelpRequest, Participant, RecorderSession, Recording
 from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.security.identity import CurrentUser
 from citizens.services import assemblies as svc
+from citizens.services import help as help_svc
 from citizens.services import invites as invite_svc
 from citizens.services import messages as messages_svc
 from citizens.services import rounds as rounds_svc
@@ -173,6 +174,16 @@ def send_message(round_id: str, data: schemas.MessageIn, user: CurrentUser, sess
 def list_messages(round_id: str, user: CurrentUser, session: ReadDB):
     round_ = svc.get_owned_round(session, round_id, user)
     return messages_svc.list_with_delivery(session, round_)
+
+
+@router.post("/help-requests/{request_id}/acknowledge")
+def acknowledge_help(request_id: str, user: CurrentUser, session: DB):
+    """The organizer has seen a table's hand. The table's phone reads this
+    on its next status poll; the row leaves the Live tab's attention list."""
+    request = session.get(HelpRequest, request_id)
+    if request is None or request.assembly.created_by != user:
+        raise HTTPException(status_code=404, detail="Help request not found")
+    return help_svc.as_dict(help_svc.acknowledge(session, request, user))
 
 
 @router.get("/rounds/{round_id}/readiness")

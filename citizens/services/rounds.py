@@ -12,6 +12,7 @@ from citizens.db.models import RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
+from citizens.services import help as help_svc
 from citizens.services import job_failures, readiness
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import live_stt_snapshot
@@ -121,6 +122,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
     now = utcnow()
     # from the in-memory snapshot, never an OCS read inside this read session
     live_stt_enabled = bool(live_stt_snapshot().get("enabled"))
+    # tables that raised their hand (services/help.py), by number
+    hands = help_svc.open_by_table(session, round_.assembly_id)
     tables = []
     for table in round_.tables:
         recordings = list(
@@ -180,6 +183,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
                 else None
             ),
             round_active=round_.status == "ACTIVE",
+            help_requested=(hands.get(table.number) or {}).get("kind"),
         )
 
         tables.append(
@@ -187,6 +191,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
                 "table_id": table.id,
                 "number": table.number,
                 "color_key": table.color_key or color_for(table.number),
+                # the table's open request for the organizer, if its hand is up
+                "help_request": hands.get(table.number),
                 "device": device,
                 "armed": armed,
                 "local_recording_safe": local_safe,

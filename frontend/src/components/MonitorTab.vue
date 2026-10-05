@@ -6,6 +6,7 @@ import {
 	mdiCellphoneRemove,
 	mdiClipboardTextOutline,
 	mdiConsoleLine,
+	mdiHandBackLeft,
 	mdiMonitorEye,
 	mdiPlay,
 	mdiRefresh,
@@ -91,6 +92,14 @@ async function sendMessage(data: Parameters<typeof api.sendMessage>[1]): Promise
 	} finally {
 		messageBusy.value = false
 	}
+}
+
+/** The organizer has seen a table's hand: the row goes calm on the next poll,
+ * the phone reads it on its own poll and says so. */
+function acknowledgeHelp(table: MonitorTable): void {
+	const request = table.help_request
+	if (!request) return
+	void run(() => api.acknowledgeHelp(request.id), `Table ${table.number}: acknowledged`)
 }
 
 function clockOf(iso: string): string {
@@ -397,9 +406,21 @@ const REASON_TEXT: Record<string, string> = {
 	LOW_BATTERY: 'battery low — ask the table for a backup phone',
 	UPLOAD_STALLED: 'upload backlog — check the venue Wi-Fi',
 	LIVE_STT_UNAVAILABLE: 'live captions off at this table',
+	HELP_REQUESTED: 'the table asks for help',
+}
+
+/** What a table's raised hand is about, in the organizer's words. */
+const HELP_KIND_TEXT: Record<string, string> = {
+	TECHNICAL: 'technical problem',
+	ORGANIZER: 'wants the organizer',
+	PROCESS: 'question about the process',
 }
 
 function reasonText(reason: { code: string; slot: number | null; data: Record<string, unknown> }): string {
+	if (reason.code === 'HELP_REQUESTED') {
+		const kind = HELP_KIND_TEXT[String(reason.data.kind)] ?? String(reason.data.kind ?? '').toLowerCase()
+		return `${REASON_TEXT.HELP_REQUESTED}${kind ? ` — ${kind}` : ''}`
+	}
 	const base = REASON_TEXT[reason.code] ?? reason.code.toLowerCase().replaceAll('_', ' ')
 	const who = reason.slot !== null && reason.slot !== undefined && (reason.slot > 1 || reason.code !== 'NO_RECORDER')
 		? ` (recorder ${String.fromCharCode(64 + reason.slot)})`
@@ -896,6 +917,16 @@ function pendingChunks(table: MonitorTable): number {
 									:icon="mdiTextBoxOutline"
 									title="Transcript"
 									@click="showTranscript(table.recording.id)" />
+								<CzButton
+									v-if="table.help_request"
+									small
+									variant="primary"
+									:icon="mdiHandBackLeft"
+									title="The table raised its hand — tell it you have seen it"
+									:disabled="busy"
+									@click="acknowledgeHelp(table)">
+									Acknowledge
+								</CzButton>
 								<CzButton
 									v-if="canReplaceDevice(table)"
 									small

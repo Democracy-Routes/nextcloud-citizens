@@ -17,6 +17,7 @@ import type {
 	Round,
 	RoundFindings,
 	RoundIn,
+	HelpRequest,
 	RoundMonitor,
 	SessionCreate,
 	SessionCreated,
@@ -148,6 +149,8 @@ export const api = {
 	startRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/start`),
 	endRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/end`),
 	roundMonitor: (roundId: string) => request<RoundMonitor>('GET', `/api/v1/rounds/${roundId}/monitor`),
+	acknowledgeHelp: (requestId: string) =>
+		request<HelpRequest>('POST', `/api/v1/help-requests/${requestId}/acknowledge`),
 	roundMessages: (roundId: string) =>
 		request<SessionMessage[]>('GET', `/api/v1/rounds/${roundId}/messages`),
 	sendMessage: (

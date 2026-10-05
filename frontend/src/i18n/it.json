@@ -278,6 +278,20 @@
 			"from": "Dall'organizzatore",
 			"dismiss": "Chiudi"
 		},
+		"help": {
+			"button": "Serve aiuto",
+			"title": "DI COSA AVETE BISOGNO?",
+			"kind": {
+				"TECHNICAL": "Problema tecnico",
+				"ORGANIZER": "Chiamare l'organizzatore",
+				"PROCESS": "Domanda sul processo"
+			},
+			"notified": "Organizzatore avvisato",
+			"seen": "L'organizzatore ha visto",
+			"failed": "Impossibile raggiungere il server — riprova.",
+			"cancel": "Annulla",
+			"dismiss": "Chiudi"
+		},
 		"battery": {
 			"lowTitle": "Batteria al {percent}% — questo è l'unico registratore del tavolo",
 			"lowBody": "Aggiungi ora un telefono di riserva: registra accanto a questo, così non si perde nulla se questo si spegne.",

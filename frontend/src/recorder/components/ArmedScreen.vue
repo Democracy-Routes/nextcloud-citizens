@@ -5,8 +5,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
-import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { recorderApi, type HelpState, type JoinResult, type RoundInfo } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
+import HelpButton from './HelpButton.vue'
 import MessageBanner from './MessageBanner.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
@@ -84,12 +85,15 @@ const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
 
 // "5 minutes left" from the organizer, riding the same poll
 const messages = useTableMessages(props.session.session_token)
+// this table's hand, as the server has it
+const help = ref<HelpState | null | undefined>(undefined)
 
 async function poll(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
 		rounds.value = status.rounds
 		messages.ingest(status)
+		help.value = status.help
 		reportAvailable.value = status.report_available ?? false
 		assemblyClosed.value = status.assembly_closed ?? false
 		offline.value = false
@@ -154,6 +158,7 @@ onBeforeUnmount(() => {
 					{{ t('recorder.table.recorders', { count: session.table.recorders }) }}
 				</p>
 			</div>
+			<div class="rc-center"><HelpButton :token="session.session_token" :help="help" /></div>
 
 			<!-- the microphone failed for the round that is currently open: say so
 			     and wait to be asked, rather than silently retrying forever -->

@@ -12,11 +12,12 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
-import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { recorderApi, type HelpState, type JoinResult, type RoundInfo } from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
 import BatteryHandover from './BatteryHandover.vue'
+import HelpButton from './HelpButton.vue'
 import MessageBanner from './MessageBanner.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
@@ -80,6 +81,8 @@ let batteryTimer = 0
 
 // "5 minutes left" from the organizer, riding the round poll below
 const messages = useTableMessages(props.session.session_token)
+// this table's hand, as the server has it
+const help = ref<HelpState | null | undefined>(undefined)
 
 /** This phone takes over its table's live captions. The other recorder keeps
  * recording; only its caption session ends. */
@@ -234,6 +237,7 @@ function watchForNextRound(): void {
 		try {
 			const status = await recorderApi.status(props.session.session_token)
 			if (status.table) tableInfo.value = status.table
+			help.value = status.help
 			reportAvailable.value = status.report_available ?? false
 			assemblyClosed.value = status.assembly_closed ?? false
 			currentRoundOpen.value =
@@ -406,6 +410,7 @@ onMounted(async () => {
 		try {
 			const status = await recorderApi.status(props.session.session_token)
 			messages.ingest(status)
+			help.value = status.help
 			const current = status.rounds.find((r) => r.id === props.round.id)
 			if (current && current.status === 'ENDED') {
 				roundEnded.value = true
@@ -544,6 +549,7 @@ async function clearSynced(): Promise<void> {
 			<span v-if="state.phase === 'recording'" class="rc-live">{{ t('recorder.recording.badge') }}</span>
 		</div>
 		<MessageBanner v-if="messages.current.value" :message="messages.current.value" @dismiss="messages.dismiss" />
+		<HelpButton v-if="!plenary" :token="session.session_token" :help="help" />
 		<!-- more than one phone records this table: say how many, and whose
 		     captions the room is reading -->
 		<p v-if="tableInfo && tableInfo.recorders > 1" class="rc-recorders">

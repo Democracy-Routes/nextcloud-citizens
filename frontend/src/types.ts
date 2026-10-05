@@ -268,9 +268,21 @@ export interface SessionMessage {
 	not_seen_by: number[]
 }
 
+/** A table's hand, up until the organizer acknowledges it. */
+export interface HelpRequest {
+	id: string
+	kind: 'TECHNICAL' | 'ORGANIZER' | 'PROCESS'
+	table_number: number
+	slot: number
+	created_at: string
+	acknowledged_at: string | null
+}
+
 export interface MonitorTable {
 	table_id: string
 	number: number
+	/** the table's open request for the organizer; absent on older servers */
+	help_request?: HelpRequest | null
 	color_key?: TableColor | string
 	device: { connected: boolean; seconds_since_contact: number | null; status: DeviceStatus }
 	armed: boolean

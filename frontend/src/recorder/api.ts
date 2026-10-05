@@ -122,9 +122,23 @@ export interface PhoneMessage {
 	created_at: string
 }
 
+export type HelpKind = 'TECHNICAL' | 'ORGANIZER' | 'PROCESS'
+
+/** This table's hand, up or just acknowledged (services/help.py). */
+export interface HelpState {
+	id: string
+	kind: HelpKind
+	table_number: number
+	slot: number
+	created_at: string
+	acknowledged_at: string | null
+}
+
 export interface RecorderStatus {
 	assembly: AssemblyInfo
 	messages?: PhoneMessage[]
+	/** null: no hand up; absent: a server older than 0.7 */
+	help?: HelpState | null
 	report_available?: boolean
 	/** the organizer closed the assembly (possibly mid-round): stop, don't advance */
 	assembly_closed?: boolean
@@ -261,6 +275,10 @@ export const recorderApi = {
 		request<CapabilityPeek>('POST', '/api/v1/public/capabilities/peek', { json: { token } }),
 
 	status: (token: string) => request<RecorderStatus>('GET', '/api/v1/public/recorder/status', { token }),
+
+	/** The table raises its hand; the Live tab shows it until acknowledged. */
+	needHelp: (token: string, kind: HelpKind) =>
+		request<HelpState>('POST', '/api/v1/public/recorder/help', { token, json: { kind } }),
 
 	/** The phone has shown the organizer's message — the Live tab's "delivered". */
 	messageSeen: (token: string, messageId: number) =>

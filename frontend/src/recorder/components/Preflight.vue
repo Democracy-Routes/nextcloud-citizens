@@ -16,7 +16,8 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
-import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { recorderApi, type HelpState, type JoinResult, type RoundInfo } from '../api'
+import HelpButton from './HelpButton.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
@@ -67,12 +68,16 @@ const tableSummaries = ref<Array<{ position: number; summary: string }>>([])
 
 let reportTimer = 0
 
+// this table's hand, as the server has it (HelpButton)
+const help = ref<HelpState | null | undefined>(undefined)
+
 // once this table is finished, watch for the report becoming available and
 // for this table's own AI summaries landing
 async function pollReport(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
 		reportAvailable.value = status.report_available ?? false
+		help.value = status.help
 		// keep the round list current — the whole point: a round recorded on
 		// another device (or by a sync that just failed) drops out of openRounds
 		if (status.rounds?.length) rounds.value = status.rounds
@@ -265,6 +270,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 		<div class="rc-header">
 			<TableBadge :number="session.table_number" :color-key="session.table_color" />
 		</div>
+		<HelpButton :token="session.session_token" :help="help" />
 
 		<div class="rc-scroll">
 		<!-- the table is done: its summaries and the report, nothing about microphones -->

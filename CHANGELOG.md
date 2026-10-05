@@ -161,6 +161,17 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **A table can raise its hand.** A quiet "Need help" button on the
+  microphone test, the waiting screen and the recording screen asks what
+  kind — technical problem, call the organizer, question about the process
+  — and the phone reads "Organizer notified". On the Live tab the table
+  stays in the attention list ("the table asks for help — technical
+  problem") with an Acknowledge button; once pressed the phone says "The
+  organizer has seen it". One open request per table (tapping again changes
+  the kind), never a blocker, rate-limited per phone. Migration 0029
+  (`help_requests`), `POST /api/v1/public/recorder/help`, `POST
+  /api/v1/help-requests/{id}/acknowledge`, readiness reason
+  `HELP_REQUESTED`; raising and acknowledging are audited.
 - **The organizer can speak to the tables.** The Live tab has a "Message the
   tables" row: 10 / 5 / 1 minutes left, Wrap up, or a written prompt — to
   every table or one of them. Presets are worded by the server in the

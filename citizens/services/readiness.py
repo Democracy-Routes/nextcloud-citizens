@@ -32,6 +32,9 @@ LOW_STORAGE = "LOW_STORAGE"
 LOW_BATTERY = "LOW_BATTERY"
 UPLOAD_STALLED = "UPLOAD_STALLED"
 LIVE_STT_UNAVAILABLE = "LIVE_STT_UNAVAILABLE"
+#: the table raised its hand (services/help.py); never a blocker — the phone
+#: may well be recording fine while somebody has a question
+HELP_REQUESTED = "HELP_REQUESTED"
 
 BLOCKER = "blocker"
 WARNING = "warning"
@@ -82,14 +85,18 @@ def table_readiness(
     live_source_slot: int | None = None,
     live_caption_reason: str | None = None,
     round_active: bool = False,
+    help_requested: str | None = None,
 ) -> TableReadiness:
     """Decide from the monitor's per-recorder entries.
 
     Each entry: {slot, connected, status: <heartbeat payload>, recording:
     {state, live_source} | None} — see services/rounds._table_recorders.
+    `help_requested` is the kind of help the table asked for, if its hand is
+    up: a warning on top of whatever else, so the table stays in view.
     """
+    hand = [Reason(HELP_REQUESTED, WARNING, None, {"kind": help_requested})] if help_requested else []
     if not recorders:
-        return TableReadiness(BLOCKED, [Reason(NO_RECORDER, BLOCKER)])
+        return TableReadiness(BLOCKED, [Reason(NO_RECORDER, BLOCKER), *hand])
 
     reasons: list[Reason] = []
     sound_slots: list[int] = []
@@ -151,6 +158,7 @@ def table_readiness(
                 LIVE_STT_UNAVAILABLE, WARNING, live_source_slot, {"reason": live_caption_reason}
             ))
 
+    reasons.extend(hand)
     if blocked:
         return TableReadiness(BLOCKED, reasons)
     return TableReadiness(NEEDS_ATTENTION if reasons else READY, reasons)

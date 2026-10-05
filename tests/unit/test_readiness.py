@@ -25,6 +25,18 @@ def test_one_healthy_recorder_with_no_backup_is_ready():
     assert result.reasons == []
 
 
+def test_a_raised_hand_keeps_a_healthy_table_in_view_without_blocking_it():
+    healthy = _recorder(storage_ok=True, battery_level=0.8, capture_ok=True)
+    result = r.table_readiness([healthy], help_requested="PROCESS")
+    assert result.status == r.NEEDS_ATTENTION
+    assert _codes(result) == [(r.HELP_REQUESTED, r.WARNING, None)]
+    assert result.reasons[0].data == {"kind": "PROCESS"}
+    # ...and rides along with a blocker rather than replacing it
+    result = r.table_readiness([], help_requested="TECHNICAL")
+    assert result.status == r.BLOCKED
+    assert _codes(result) == [(r.NO_RECORDER, r.BLOCKER, None), (r.HELP_REQUESTED, r.WARNING, None)]
+
+
 def test_no_recorder_phone_at_all_blocks():
     result = r.table_readiness([])
     assert result.status == r.BLOCKED

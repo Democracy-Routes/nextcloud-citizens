@@ -23,12 +23,14 @@ from citizens.db.session import get_db, get_read_db
 from citizens.domain.tables import color_for
 from citizens.security.rate_limit import (
     CAPABILITY_LIMITER,
+    HELP_LIMITER,
     JOIN_IP_LIMITER,
     JOIN_TOKEN_LIMITER,
     client_ip,
     token_key,
 )
 from citizens.services import capabilities as capabilities_svc
+from citizens.services import help as help_svc
 from citizens.services import invites as invites_svc
 from citizens.services import live_source, provider_config
 from citizens.services import messages as messages_svc
@@ -481,6 +483,19 @@ def message_seen(data: MessageSeenIn, recorder_session: RecorderSess, session: D
     return {"ok": True}
 
 
+class HelpIn(BaseModel):
+    kind: Literal["TECHNICAL", "ORGANIZER", "PROCESS"]
+
+
+@router.post("/recorder/help", status_code=201)
+def need_help(data: HelpIn, recorder_session: RecorderSess, session: DB):
+    """The table raises its hand. One open request per table — tapping again
+    changes what it asks for. The Live tab shows it beside the table's
+    number; the phone learns of the acknowledgement on its status poll."""
+    HELP_LIMITER.check(recorder_session.id)
+    return help_svc.as_dict(help_svc.raise_hand(session, recorder_session, data.kind))
+
+
 class LogEntry(BaseModel):
     ts: float
     level: str = Field(max_length=10)
@@ -624,6 +639,9 @@ def _assembly_state(
         # what the organizer has said to this table and the phone has not
         # shown yet ("5 minutes left"); the phone posts a receipt once shown
         "messages": messages_svc.unseen_for(session, recorder_session),
+        # this table's hand, if up — or just acknowledged, so the phone can
+        # say the organizer has seen it
+        "help": help_svc.latest_for_phone(session, recorder_session),
         "rounds": [
             {
                 "id": round_.id,
