@@ -643,6 +643,24 @@
 	justify-content: flex-end;
 }
 
+/* A table's colour beside its number — a cue for people looking for "the
+   blue table", never something to depend on. Same palette as the recorder. */
+#citizens-app .cz-tabledot {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	flex-shrink: 0;
+	vertical-align: middle;
+	background: var(--cz-border-dark);
+}
+#citizens-app .cz-tabledot--blue { background: #1565c0; }
+#citizens-app .cz-tabledot--green { background: #2d7b41; }
+#citizens-app .cz-tabledot--orange { background: #c05000; }
+#citizens-app .cz-tabledot--purple { background: #6a1b9a; }
+#citizens-app .cz-tabledot--red { background: #c62828; }
+#citizens-app .cz-tabledot--teal { background: #00796b; }
+
 /* "Sessions" / "Assemblies" headings in the sidebar list */
 #citizens-app .cz-sidebar__group {
 	margin: 10px 14px 4px;

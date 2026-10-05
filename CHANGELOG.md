@@ -36,6 +36,17 @@ not rewritten.
   duration, tables, how the tables record; Create an Assembly is the wizard as
   before. The sidebar lists standalone Sessions under their question, apart
   from assemblies, and the Rounds tab can set a round's objective.
+- **Tables have a colour, and can be added while the event runs.** Every
+  table is now *Table 7 · Blue*: the number stays the identity, the colour is
+  a cue for a room looking for "the blue table" — assigned from a six-colour
+  palette by number, repeating after six, never something anything depends
+  on (`tables.color_key`, migration 0025, existing tables coloured by their
+  number). `POST /api/v1/assemblies/{id}/tables` — *Add a table* on the QR
+  tab — adds the next number to every round at once and issues its QR code
+  without touching the codes already on the wall; two organizers adding at
+  the same moment get distinct numbers. Completeness and the report count the
+  tables that exist, not the count the assembly was created with, so a table
+  added mid-event is expected like any other.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

@@ -132,6 +132,9 @@ class Table(Base):
     round_id: Mapped[str] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"), index=True)
     number: Mapped[int] = mapped_column(Integer)
     label: Mapped[str] = mapped_column(String(100), default="")
+    # a visual cue beside the number (domain/tables.py); assigned from the
+    # number, repeats after six, and nothing depends on it for correctness
+    color_key: Mapped[str] = mapped_column(String(16), default="", server_default="")
     status: Mapped[str] = mapped_column(String(20), default="IDLE")
 
     round: Mapped[Round] = relationship(back_populates="tables")

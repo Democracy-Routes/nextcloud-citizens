@@ -82,21 +82,31 @@ def generate_invites(session: Session, assembly: Assembly) -> list[schemas.Invit
     for invite in _active_invites(session, assembly.id):
         invite.revoked_at = now
 
-    generated: list[schemas.InviteGenerated] = []
-    for number in table_numbers:
-        token = generate_token()
-        session.add(
-            RecorderInvite(
-                assembly_id=assembly.id,
-                table_number=number,
-                token_hash=hash_token(token),
-                token_encrypted=encrypt_token(token),
-                expires_at=now + timedelta(days=INVITE_LIFETIME_DAYS),
-            )
-        )
-        generated.append(_invite_card(number, token))
+    generated = [issue_invite(session, assembly, number, now=now) for number in table_numbers]
     session.flush()
     return generated
+
+
+def issue_invite(
+    session: Session, assembly: Assembly, table_number: int, now=None
+) -> schemas.InviteGenerated:
+    """One fresh invite for one table, leaving every other table's code alone.
+
+    This is what a table added mid-event gets: the sheet already on the wall
+    stays valid, and only the new table has a code to print.
+    """
+    now = now or utcnow()
+    token = generate_token()
+    session.add(
+        RecorderInvite(
+            assembly_id=assembly.id,
+            table_number=table_number,
+            token_hash=hash_token(token),
+            token_encrypted=encrypt_token(token),
+            expires_at=now + timedelta(days=INVITE_LIFETIME_DAYS),
+        )
+    )
+    return _invite_card(table_number, token)
 
 
 def invite_links(session: Session, assembly: Assembly) -> list[schemas.InviteGenerated]:

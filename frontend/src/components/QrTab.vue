@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiContentCopy, mdiPrinter, mdiQrcode, mdiRefresh, mdiCancel } from '@mdi/js'
+import { mdiContentCopy, mdiPlus, mdiPrinter, mdiQrcode, mdiRefresh, mdiCancel } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
 import { api, BASE } from '../api'
 import { downloadFromApi } from '../download'
@@ -19,7 +19,7 @@ const props = defineProps<{ assembly: AssemblyDetail; initialGenerated?: InviteG
 
 // plenary is one shared code the whole room scans, not one code per table
 const plenary = computed(() => props.assembly.recording_mode === 'plenary')
-const emit = defineEmits<{ consumed: [] }>()
+const emit = defineEmits<{ consumed: []; changed: [] }>()
 
 const invites = ref<Invite[]>([])
 // QR codes auto-generated at assembly creation arrive via initialGenerated
@@ -71,6 +71,25 @@ async function generate(): Promise<void> {
 		generated.value = await api.generateInvites(props.assembly.id)
 		await reload()
 		toast(`${generated.value.length} QR codes generated`)
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		busy.value = false
+	}
+}
+
+/** One more table, numbered next, in every round. The codes already on the
+ * wall stay valid; only the new table has a code to print. */
+async function addTable(): Promise<void> {
+	busy.value = true
+	error.value = ''
+	try {
+		const added = await api.addTable(props.assembly.id)
+		generated.value = [...generated.value.filter((g) => g.table_number !== added.number), added.invite]
+			.sort((a, b) => a.table_number - b.table_number)
+		await reload()
+		emit('changed')
+		toast(`Table ${added.number} added`)
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	} finally {
@@ -159,6 +178,9 @@ const hasActive = () => invites.value.some((i) => i.active)
 					</CzButton>
 					<CzButton v-if="generated.length" :icon="mdiPrinter" :disabled="printing" @click="printSheet">
 						{{ printing ? 'Preparing…' : 'Print' }}
+					</CzButton>
+					<CzButton v-if="!plenary" :icon="mdiPlus" :disabled="busy" title="Add the next table to every round" @click="addTable">
+						Add a table
 					</CzButton>
 					<CzButton v-if="hasActive()" variant="tertiary" :icon="mdiCancel" :disabled="busy" @click="confirmRevoke = true">
 						Revoke all

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from citizens.db.models import Assembly, Participant, Round, Table, TableAssignment
 from citizens.domain import schemas
+from citizens.domain.tables import color_for
 
 
 def get_owned_assembly(session: Session, assembly_id: str, user_id: str) -> Assembly:
@@ -62,7 +63,7 @@ def _build_round(round_in: schemas.RoundIn, position: int, table_count: int) -> 
         duration_minutes=round_in.duration_minutes,
     )
     for number in range(1, table_count + 1):
-        round_.tables.append(Table(number=number))
+        round_.tables.append(Table(number=number, color_key=color_for(number)))
     return round_
 
 
@@ -228,6 +229,7 @@ def tables_with_participants(session: Session, round_: Round) -> list[schemas.Ta
         schemas.TableOut(
             id=table.id,
             number=table.number,
+            color_key=table.color_key or color_for(table.number),
             label=table.label,
             status=table.status,
             participants=[

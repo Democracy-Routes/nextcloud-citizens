@@ -134,7 +134,8 @@ async function deleteAssembly(): Promise<void> {
 				v-else-if="tab === 'qr'"
 				:assembly="assembly"
 				:initial-generated="freshInvites"
-				@consumed="emit('invitesConsumed')" />
+				@consumed="emit('invitesConsumed')"
+				@changed="reload" />
 			<MonitorTab v-else-if="tab === 'monitor'" :assembly="assembly" @changed="reload" />
 			<AnalysisTab v-else-if="tab === 'analysis'" :assembly="assembly" />
 			<ReportTab v-else-if="tab === 'report'" :assembly="assembly" @changed="reload" />

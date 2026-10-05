@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from citizens.db.models import RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
+from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
 from citizens.services import job_failures
 
@@ -109,6 +110,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
             {
                 "table_id": table.id,
                 "number": table.number,
+                "color_key": table.color_key or color_for(table.number),
                 "device": device,
                 "armed": armed,
                 "local_recording_safe": local_safe,

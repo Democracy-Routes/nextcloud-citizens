@@ -138,7 +138,10 @@ class ParticipantOut(BaseModel):
 
 class TableOut(BaseModel):
     id: str
+    # the identity, unique within the assembly; printed on the QR sheet
     number: int
+    # a visual cue only — blue, green, orange, purple, red, teal, then blue again
+    color_key: str = ""
     label: str
     status: str
     participants: list[ParticipantOut]
@@ -160,6 +163,15 @@ class InviteGenerated(BaseModel):
     table_number: int
     url: str
     qr_svg: str
+
+
+class TableAdded(BaseModel):
+    """A table added to a running assembly or Session: its number and colour
+    (the same in every round), and the QR code that joins a phone to it."""
+
+    number: int
+    color_key: str
+    invite: InviteGenerated
 
 
 class AssemblyCreated(AssemblyDetail):

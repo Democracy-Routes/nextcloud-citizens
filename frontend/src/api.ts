@@ -21,6 +21,7 @@ import type {
 	SessionCreate,
 	SessionCreated,
 	Table,
+	TableAdded,
 	TranscriptData,
 } from './types'
 
@@ -111,6 +112,8 @@ export const api = {
 	deleteParticipant: (id: string) => request<void>('DELETE', `/api/v1/participants/${id}`),
 
 	roundTables: (roundId: string) => request<Table[]>('GET', `/api/v1/rounds/${roundId}/tables`),
+	// the next table, in every round at once, with its QR code (in this response only)
+	addTable: (assemblyId: string) => request<TableAdded>('POST', `/api/v1/assemblies/${assemblyId}/tables`),
 	randomize: (roundId: string) =>
 		request<Table[]>('POST', `/api/v1/rounds/${roundId}/assignments/randomize`),
 	copyPrevious: (roundId: string) =>

@@ -20,6 +20,7 @@ from citizens.config import get_settings
 from citizens.db.models import Assembly, RecorderSession, Recording
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
+from citizens.domain.tables import color_for
 from citizens.security.rate_limit import (
     JOIN_IP_LIMITER,
     JOIN_TOKEN_LIMITER,
@@ -513,6 +514,9 @@ def _assembly_state(
             ),
         },
         "table_number": recorder_session.table_number,
+        # the colour beside the number, the same in every round — a cue for
+        # people looking for "the blue table", never something to depend on
+        "table_color": color_for(recorder_session.table_number),
         # The organizer has asked the phones to delete their local copies. The
         # server cannot push, so it rides on this poll — which every recorder
         # already makes every few seconds.

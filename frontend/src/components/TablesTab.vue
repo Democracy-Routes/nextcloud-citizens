@@ -121,7 +121,10 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 		<div v-else class="cz-tables-grid">
 			<div v-for="table in tables" :key="table.id" class="cz-card" style="margin-bottom: 0">
 				<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
-					<h3>Table {{ table.number }}</h3>
+					<h3 class="cz-row" style="gap: 8px; flex-wrap: nowrap">
+						<span class="cz-tabledot" :class="`cz-tabledot--${table.color_key}`" role="img" :aria-label="table.color_key"></span>
+						Table {{ table.number }}
+					</h3>
 					<span class="cz-pill cz-pill--gray" style="text-transform: none">
 						{{ table.participants.length }} seated
 					</span>

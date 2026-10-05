@@ -20,6 +20,7 @@ from citizens.services import invites as invite_svc
 from citizens.services import provider_config
 from citizens.services.jobs import enqueue_job
 from citizens.services.recording_states import transition
+from citizens.services.tables import table_numbers
 from citizens.storage.durable import write_audio
 from citizens.storage.paths import chunk_path, recording_dir
 from citizens.storage.space import require_room
@@ -116,7 +117,8 @@ def assembly_complete(session: Session, assembly, analysis_enabled: bool | None 
     same minute is exactly when that starves the chunk uploads. Left at None it
     reads the (30 s cached) setting itself, so every other caller is unchanged.
     """
-    expected = set(range(1, assembly.default_table_count + 1))
+    # the rows, not default_table_count: a table added mid-event counts too
+    expected = set(table_numbers(assembly))
     if not expected or not assembly.rounds:
         return False
     completed_by_round: dict[str, set[int]] = {}
@@ -140,7 +142,7 @@ def assembly_complete(session: Session, assembly, analysis_enabled: bool | None 
 
 def assembly_progress(session: Session, assembly) -> dict:
     """Participation coverage — drives interim/final wording everywhere."""
-    expected = list(range(1, assembly.default_table_count + 1))
+    expected = table_numbers(assembly)
     rounds = list(assembly.rounds)
     rounds_by_table: dict[int, set[str]] = {}
     for recording in session.execute(

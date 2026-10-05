@@ -15,6 +15,7 @@ from citizens.db.models import (
     Transcript,
     TranscriptSegment,
 )
+from citizens.services import tables as tables_svc
 from citizens.services.recording import assembly_progress as progress
 from citizens.services.report_text import (
     TYPE_ORDER,
@@ -397,7 +398,8 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             "recording_mode": assembly.recording_mode,
             "participants": participant_count,
             "expected_participants": assembly.expected_participants,
-            "tables": assembly.default_table_count,
+            # the rows, not default_table_count: tables can be added mid-event
+            "tables": len(tables_svc.table_numbers(assembly)),
         },
         # only claim diarization when the transcripts actually carry speakers:
         # Whisper and Vosk return text without speaker separation

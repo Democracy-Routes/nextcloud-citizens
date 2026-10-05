@@ -142,12 +142,24 @@ export interface Participant {
 	notes: string
 }
 
+export type TableColor = 'blue' | 'green' | 'orange' | 'purple' | 'red' | 'teal'
+
 export interface Table {
 	id: string
 	number: number
+	/** a visual cue beside the number; derived from it, repeats after six */
+	color_key?: TableColor | string
 	label: string
 	status: string
 	participants: Participant[]
+}
+
+/** A table added while the event runs: the same number and colour in every
+ * round, and the QR code that joins a phone to it (in this response only). */
+export interface TableAdded {
+	number: number
+	color_key: TableColor | string
+	invite: InviteGenerated
 }
 
 export interface Invite {
@@ -223,6 +235,7 @@ export interface DeviceStatus {
 export interface MonitorTable {
 	table_id: string
 	number: number
+	color_key?: TableColor | string
 	device: { connected: boolean; seconds_since_contact: number | null; status: DeviceStatus }
 	armed: boolean
 	local_recording_safe: boolean

@@ -16,6 +16,7 @@ from citizens.security.identity import CurrentUser
 from citizens.services import assemblies as svc
 from citizens.services import invites as invite_svc
 from citizens.services import rounds as rounds_svc
+from citizens.services import tables as tables_svc
 from citizens.services.audit import record_audit_event
 from citizens.storage.paths import purge_assembly_storage
 
@@ -191,6 +192,16 @@ def delete_participant(participant_id: str, user: CurrentUser, session: DB):
 def round_tables(round_id: str, user: CurrentUser, session: ReadDB):
     round_ = svc.get_owned_round(session, round_id, user)
     return svc.tables_with_participants(session, round_)
+
+
+@router.post("/assemblies/{assembly_id}/tables", response_model=schemas.TableAdded, status_code=201)
+def add_table(assembly_id: str, user: CurrentUser, session: DB):
+    """Add the next table — to every round at once — while the event runs.
+
+    The QR code for the new table is in this response only; the codes already
+    on the wall stay valid."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    return tables_svc.add_table(session, assembly, actor=user)
 
 
 @router.post("/rounds/{round_id}/assignments/randomize", response_model=list[schemas.TableOut])
