@@ -17,7 +17,7 @@ from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
 from citizens.security.recorder_tokens import generate_token, hash_token
 from citizens.services import invites as invite_svc
-from citizens.services import provider_config
+from citizens.services import live_source, provider_config
 from citizens.services.jobs import enqueue_job
 from citizens.services.recording_states import transition
 from citizens.services.tables import table_numbers
@@ -214,6 +214,8 @@ def _release_silent_recording(
     recording.superseded_at = utcnow()
     transition(recording, "UPLOAD_INCOMPLETE")
     session.flush()
+    # a backup recorder still recording takes over the live captions
+    live_source.release(session, recording)
     # nothing else will ever end its caption session; see release_stalled_recording
     LIVE_CAPTIONS.finish(recording.id)
     log.warning(
@@ -385,6 +387,9 @@ def start_recording(
         round_.assembly.status = "ACTIVE"
     session.add(recording)
     session.flush()
+    # the first recorder at the table drives the live captions; a second one
+    # records beside it without feeding them (services/live_source.py)
+    live_source.assign_if_vacant(session, recording)
     log.info(
         "recording_started",
         recording_id=recording.id,
@@ -575,6 +580,8 @@ def complete_recording(session: Session, recording: Recording, total_chunks: int
 
     transition(recording, "ASSEMBLING")
     enqueue_job(session, "ASSEMBLE_AUDIO", {"recording_id": recording.id})
+    # finished recording: a sibling still recording inherits the live captions
+    live_source.release(session, recording)
     log.info("recording_completed", recording_id=recording.id, total_chunks=total_chunks)
     return {"state": recording.state, "missing_sequences": []}
 

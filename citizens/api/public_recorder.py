@@ -30,11 +30,12 @@ from citizens.security.rate_limit import (
 )
 from citizens.services import capabilities as capabilities_svc
 from citizens.services import invites as invites_svc
-from citizens.services import provider_config
+from citizens.services import live_source, provider_config
 from citizens.services import recording as rec_svc
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import data_handling_summary, live_stt_snapshot
 from citizens.services.recording import MAX_CHUNK_BYTES, RERECORDABLE_STATES
+from citizens.services.table_recordings import recording_slots, slot_label
 from citizens.storage.paths import device_log_path
 
 router = APIRouter(prefix="/public")
@@ -217,7 +218,7 @@ async def upload_chunk(
     # uploading at once made a plain redirect take 27 seconds, the organizer UI
     # stop responding, and commits (which the loop must schedule) stall until
     # waiting writers gave up with "database is locked".
-    def _persist() -> tuple[dict, str, str, dict, str]:
+    def _persist() -> tuple[dict, str, str, dict, str, bool]:
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
@@ -228,11 +229,15 @@ async def upload_chunk(
         if not outcome.get("duplicate"):
             assembly = session.get(Assembly, recording.assembly_id)
             language = assembly.language if assembly else ""
+        feed_live = recording.live_source
         session.commit()  # durable receipt before an acknowledgement can leave the server
-        return outcome, recording.id, language, stt, recording.assembly_id
+        return outcome, recording.id, language, stt, recording.assembly_id, feed_live
 
-    result, recording_id_out, language, stt, assembly_id = await run_in_threadpool(_persist)
-    if not result.get("duplicate"):
+    result, recording_id_out, language, stt, assembly_id, feed_live = await run_in_threadpool(_persist)
+    # Only the table's live source feeds the caption engine: a backup recorder's
+    # audio is kept and transcribed afterwards, but it must not open a second
+    # streaming session for the same discussion (services/live_source.py).
+    if not result.get("duplicate") and feed_live:
         # provisional live captions ride on the safety upload — failures here
         # never affect the recording (brief §51)
         LIVE_CAPTIONS.feed(
@@ -271,7 +276,7 @@ async def upload_part(
         raise HTTPException(422, "Invalid checksum")
     body = await _read_capped_body(request, multipart_audio.PART_BYTES)
 
-    def persist() -> tuple[dict, str, str]:
+    def persist() -> tuple[dict, str, str, dict, bool]:
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
@@ -279,9 +284,9 @@ async def upload_part(
                                               x_total_bytes, x_chunk_sha256, x_part_sha256, body)
         assembly = session.get(Assembly, recording.assembly_id)
         language = assembly.language if assembly else ""
-        return result, recording.assembly_id, language, stt
+        return result, recording.assembly_id, language, stt, recording.live_source
 
-    result, assembly_id, language, stt = await run_in_threadpool(persist)
+    result, assembly_id, language, stt, feed_live = await run_in_threadpool(persist)
     # Live captions feed on chunk order. The plain route feeds upload_chunk as
     # the chunk arrives; a chunk big enough to go through parts never reached
     # the caption session until finalize — so a phone whose chunks all exceed
@@ -292,8 +297,9 @@ async def upload_part(
     # real-time. Only a part not seen before: a retry (a lost ack, or the
     # client's force-resend after a finalize conflict) stores idempotently on
     # disk but would push the same audio into the caption stream a second
-    # time — mid-stream, which the decoder cannot tell from new speech.
-    if not result.get("duplicate"):
+    # time — mid-stream, which the decoder cannot tell from new speech. And only
+    # from the table's live source (see upload_chunk).
+    if not result.get("duplicate") and feed_live:
         LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id, segment=x_chunk_segment)
     return result
 
@@ -336,7 +342,36 @@ def live_transcript(recording_id: str, recorder_session: ReadingSess, session: R
     """Provisional live captions for this table's recording (may be empty or
     unavailable — that is never an error)."""
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    if recording.state == "RECORDING" and not recording.live_source:
+        # a backup recorder: its audio is kept, but another phone at the table
+        # carries the captions — say which, rather than "unavailable"
+        holder = live_source.current(session, recording.round_id, recording.table_id)
+        holder_slot = recording_slots(session, [holder]).get(holder.id, 1) if holder else None
+        return {
+            "active": False, "lines": [], "reason": "backup",
+            "live_source_slot": holder_slot,
+            "live_source_label": slot_label(holder_slot) if holder_slot else None,
+        }
     return LIVE_CAPTIONS.status(recording.id)
+
+
+class LiveSourceIn(BaseModel):
+    recording_id: str
+
+
+@router.post("/recorder/live-source")
+def promote_live_source(data: LiveSourceIn, recorder_session: RecorderSess, session: DB):
+    """This phone takes over its table's live captions. Its recording must be
+    in progress; the previous holder keeps recording and only its caption
+    session ends."""
+    recording = rec_svc.get_session_recording(session, recorder_session, data.recording_id)
+    if recording.recorder_session_id != recorder_session.id:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    demoted = live_source.promote(session, recording)
+    session.flush()
+    if demoted is not None:
+        LIVE_CAPTIONS.finish(demoted.id)
+    return {"recording_id": recording.id, "live_source": True, "slot": recorder_session.slot}
 
 
 @router.get("/recorder/recordings/{recording_id}")

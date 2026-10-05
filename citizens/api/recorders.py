@@ -18,6 +18,7 @@ from citizens.domain import schemas
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.security.identity import CurrentUser
 from citizens.services import invites as invite_svc
+from citizens.services import live_source
 from citizens.services.assemblies import get_owned_assembly, get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
@@ -85,7 +86,31 @@ def release_stalled_recording(session: Session, recording: Recording, error_code
     recording.error_code = error_code
     transition(recording, "UPLOAD_INCOMPLETE")
     session.flush()
+    # a backup recorder still recording takes over the live captions
+    live_source.release(session, recording)
     LIVE_CAPTIONS.finish(recording.id)
+
+
+@router.post("/recordings/{recording_id}/promote-live-source")
+def promote_live_source(recording_id: str, user: CurrentUser, session: DB):
+    """Make this recording the one that feeds its table's live captions.
+
+    For a table with more than one recorder phone: the organizer picks which
+    one the room reads. The previous holder keeps recording; only its caption
+    session ends."""
+    recording = session.get(Recording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    get_owned_assembly(session, recording.assembly_id, user)
+    demoted = live_source.promote(session, recording)
+    record_audit_event(
+        session, "live_source_promoted", "recording", recording.id, actor=user,
+        data={"from_recording_id": demoted.id if demoted is not None else None},
+    )
+    session.flush()
+    if demoted is not None:
+        LIVE_CAPTIONS.finish(demoted.id)
+    return {"recording_id": recording.id, "live_source": True}
 
 
 @router.post("/recordings/{recording_id}/abandon-upload")

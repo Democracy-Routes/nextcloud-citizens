@@ -23,6 +23,7 @@ from citizens.db.models.base import utcnow
 from citizens.db.session import session_scope
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.logging_setup import get_logger
+from citizens.services import live_source
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
@@ -201,6 +202,8 @@ def sweep_stalled_uploads() -> int:
             if not recording.error_code:
                 recording.error_code = "UPLOAD_TIMED_OUT"
             transition(recording, "UPLOAD_INCOMPLETE")
+            # a backup recorder still recording inherits the live captions
+            live_source.release(session, recording)
             log.warning(
                 "upload_abandoned",
                 recording_id=recording.id,

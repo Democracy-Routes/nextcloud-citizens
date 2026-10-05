@@ -75,6 +75,19 @@ not rewritten.
   tab lists a table's recorders (`recorders`), `GET
   /api/v1/rounds/{id}/tables/{table_id}/recordings` lists its recordings with
   their slot, and exports name a second recorder's file `-recorderB`.
+- **One live-caption source per table.** Every recorder uploads and every
+  recording is transcribed afterwards, but only one recording per table feeds
+  the caption engine (`recordings.live_source`, migration 0027, with a partial
+  unique index so two primaries at one table are impossible). The first
+  recorder to start takes it — a table with one phone behaves exactly as
+  before — a backup's chunks are never fed and its phone is told whose
+  captions it is watching (`reason: "backup"`), any recorder still in progress
+  can be promoted (`POST /api/v1/public/recorder/live-source` from the phone,
+  `POST /api/v1/recordings/{id}/promote-live-source` from the organizer), and
+  when the holder stops — completed, replaced, gone silent, timed out — the
+  source passes to a sibling still recording. **Plenary rooms change
+  behaviour:** N phones used to open N streaming sessions for one discussion;
+  now one does. The Live tab shows which recorder carries the captions.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

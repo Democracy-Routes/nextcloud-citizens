@@ -4,7 +4,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from citizens.db.models.base import Base, TZDateTime, new_uuid, utcnow
@@ -94,6 +94,10 @@ class Recording(Base):
     # state alone cannot express: it may legitimately be ASSEMBLING or
     # TRANSCRIBED while the replacement is already recording.
     superseded_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # the ONE recording of its table that feeds live captions while several
+    # phones record (services/live_source.py). A partial unique index on
+    # (round_id, table_id) WHERE live_source makes a second primary impossible.
+    live_source: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 

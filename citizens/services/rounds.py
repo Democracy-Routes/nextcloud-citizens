@@ -99,7 +99,12 @@ def _table_recorders(
                 "status": json.loads(recorder_session.last_status_json or "{}"),
                 "recording": None
                 if recording is None
-                else {"id": recording.id, "state": recording.state},
+                else {
+                    "id": recording.id,
+                    "state": recording.state,
+                    # whether this recorder feeds the table's live captions
+                    "live_source": recording.live_source,
+                },
             }
         )
     return recorders
@@ -152,6 +157,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
             device["connected"] and device["status"].get("storage_ok") is True
         )
         armed = bool(device["connected"] and device["status"].get("armed") is True)
+        recorders = _table_recorders(session, round_, table, recordings, now)
 
         tables.append(
             {
@@ -164,7 +170,12 @@ def round_monitor(session: Session, round_: Round) -> dict:
                 # every recorder of the table, one entry per slot (A, B, …):
                 # `device` and `recording` above keep describing the newest
                 # phone and the newest recording, as they always did
-                "recorders": _table_recorders(session, round_, table, recordings, now),
+                "recorders": recorders,
+                # which recorder's captions the room reads (None: no live source)
+                "live_source_slot": next(
+                    (r["slot"] for r in recorders if r["recording"] and r["recording"]["live_source"]),
+                    None,
+                ),
                 "recording": None
                 if recording is None
                 else {
