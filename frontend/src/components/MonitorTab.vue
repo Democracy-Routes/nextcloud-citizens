@@ -328,6 +328,66 @@ function speakerClass(speaker: string): string {
 	return `cz-convo__seg--s${((parseInt(match[1], 10) - 1) % 5) + 1}`
 }
 
+/* ---- exception-first: healthy tables collapse, problems stay in view ----
+ *
+ * Fifty green rows tell a facilitator nothing; the two that need a hand are
+ * what the screen is for. The server's readiness judgement (0.7) decides: a
+ * READY table with nothing the client itself flags is "quiet" and folds into
+ * one row, anything else stays expanded with its reasons worded here and the
+ * fix beside it. A server without readiness (older) collapses nothing. */
+
+const REASON_TEXT: Record<string, string> = {
+	NO_RECORDER: 'no phone has joined — show the table its QR code',
+	RECORDER_OFFLINE: 'phone not answering',
+	MIC_UNAVAILABLE: 'microphone not capturing — tap the phone to allow it',
+	LOW_STORAGE: 'storage low — swap or free the phone after this session',
+	LOW_BATTERY: 'battery low — ask the table for a backup phone',
+	UPLOAD_STALLED: 'upload backlog — check the venue Wi-Fi',
+	LIVE_STT_UNAVAILABLE: 'live captions off at this table',
+}
+
+function reasonText(reason: { code: string; slot: number | null; data: Record<string, unknown> }): string {
+	const base = REASON_TEXT[reason.code] ?? reason.code.toLowerCase().replaceAll('_', ' ')
+	const who = reason.slot !== null && reason.slot !== undefined && (reason.slot > 1 || reason.code !== 'NO_RECORDER')
+		? ` (recorder ${String.fromCharCode(64 + reason.slot)})`
+		: ''
+	return base + who
+}
+
+/** Nothing the server or this screen would point at. */
+function isQuiet(table: MonitorTable): boolean {
+	if (!table.readiness || table.readiness.status !== 'READY') return false
+	return !(
+		captureInterrupted(table) ||
+		lowBattery(table) ||
+		lowStorage(table) ||
+		canReplaceDevice(table) ||
+		canRetryAssembly(table) ||
+		table.superseded_recordings.length > 0
+	)
+}
+
+const showQuiet = ref(false)
+const quietTables = computed(() => (monitor.value?.tables ?? []).filter(isQuiet))
+const attentionTables = computed(() => (monitor.value?.tables ?? []).filter((t) => !isQuiet(t)))
+const visibleTables = computed(() =>
+	showQuiet.value ? (monitor.value?.tables ?? []) : attentionTables.value,
+)
+
+/** The one line at the top: all fine, or how many need a hand. */
+const health = computed(() => {
+	const m = monitor.value
+	if (!m?.readiness || !m.tables.length) return null
+	const attention = attentionTables.value.length
+	const blocked = m.tables.filter((t) => t.readiness?.status === 'BLOCKED').length
+	if (attention === 0) return { tone: 'ok', text: 'Everything is running normally.' }
+	const noun = attention === 1 ? 'table needs' : 'tables need'
+	return {
+		tone: blocked ? 'bad' : 'warn',
+		text: `${attention} ${noun} attention${blocked ? ` · ${blocked} cannot record` : ''}.`,
+	}
+})
+
 function deviceState(table: MonitorTable): { status: string; label: string } {
 	if (table.armed) return { status: 'CONNECTED', label: 'armed' }
 	// the page is alive but not on screen: iOS can stop the microphone in
@@ -488,6 +548,14 @@ function pendingChunks(table: MonitorTable): number {
 			</div>
 		</div>
 
+		<!-- exception-first: the state of the room in one line -->
+		<div v-if="health" class="cz-health" :class="`cz-health--${health.tone}`" role="status">
+			<strong>{{ health.text }}</strong>
+			<span v-if="quietTables.length && attentionTables.length" class="cz-muted">
+				{{ quietTables.length }} {{ quietTables.length === 1 ? 'table is' : 'tables are' }} fine and folded below.
+			</span>
+		</div>
+
 		<div class="cz-countbar">
 			<select v-model="roundId" style="min-width: 200px">
 				<option v-for="round in assembly.rounds" :key="round.id" :value="round.id">
@@ -583,7 +651,19 @@ function pendingChunks(table: MonitorTable): number {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-for="table in monitor.tables" :key="table.table_id">
+					<!-- healthy tables fold into one row; the ones needing a hand stay -->
+					<tr v-if="quietTables.length" class="cz-quietrow">
+						<td colspan="7">
+							<CzButton variant="tertiary" small @click="showQuiet = !showQuiet">
+								{{ quietTables.length }} {{ quietTables.length === 1 ? 'table' : 'tables' }} running normally —
+								{{ showQuiet ? 'hide' : 'show' }}
+							</CzButton>
+						</td>
+					</tr>
+					<tr
+						v-for="table in visibleTables"
+						:key="table.table_id"
+						:class="{ 'cz-row--quiet': isQuiet(table) }">
 						<td>
 							<span class="cz-posbadge">{{ table.number }}</span>
 							<!-- a table with more than one recorder phone: say so, and
@@ -595,6 +675,16 @@ function pendingChunks(table: MonitorTable): number {
 								{{ table.recorders!.length }} recorders ·
 								{{ table.recorders!.filter((r) => r.connected).map((r) => r.label).join(', ') || 'none' }} connected
 							</div>
+							<!-- the server's reasons, worded, with the fix in the row's
+							     Actions column rather than on a settings page -->
+							<ul v-if="table.readiness && table.readiness.reasons.length" class="cz-reasons">
+								<li
+									v-for="reason in table.readiness.reasons"
+									:key="reason.code + (reason.slot ?? '')"
+									:class="reason.severity === 'blocker' ? 'cz-reasons__blocker' : 'cz-reasons__warning'">
+									{{ reasonText(reason) }}
+								</li>
+							</ul>
 						</td>
 						<td><CzStatusPill :status="deviceState(table).status" :label="deviceState(table).label" /></td>
 						<td>

@@ -146,6 +146,14 @@ not rewritten.
   aggregated across tables, and when a table's phone changed mid-session the
   chart says it covers the fullest part only, because voices cannot be matched
   across parts.
+- **The Live tab is exception-first.** One line says whether the room is fine
+  — *Everything is running normally* or *2 tables need attention · 1 cannot
+  record* — healthy tables fold into a single row (show on demand), and the
+  tables that need a hand stay in view with the server's readiness reasons
+  worded (*phone not answering*, *battery low — ask the table for a backup
+  phone*, *no phone has joined — show the table its QR code*…) and the fix in
+  the same row. A table the server judged fine but whose own heartbeat says
+  otherwise is never hidden.
 - **Rounds are called Sessions where people read them.** The organizer's
   tabs, buttons and hints and the phone's strings (en, it) now say Session;
   `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in
