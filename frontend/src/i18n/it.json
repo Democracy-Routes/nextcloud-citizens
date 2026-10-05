@@ -40,6 +40,7 @@
 				"publication": "Brevi citazioni anonime possono comparire nel rapporto pubblicato (facoltativo)",
 				"confirm": "Conferma",
 				"refuse": "Questa persona non acconsente",
+				"refuseSelf": "Non acconsento",
 				"cancel": "Annulla",
 				"failed": "Impossibile raggiungere il server — riprova.",
 				"stale": "L'informativa è cambiata — rileggila per favore."
@@ -50,6 +51,7 @@
 				"refusedBody": "Questa persona non verrà registrata. Avvisate chi facilita.",
 				"another": "Aggiungi un altro partecipante"
 			},
+			"ownPhone": "Registrati dal tuo telefono",
 			"link": "Partecipanti: {count} · Aggiungi",
 			"linkNone": "Nessun partecipante registrato · Aggiungi",
 			"linkRequired": "Registra un partecipante prima di registrare"
@@ -298,6 +300,8 @@
 			"addTableTitle": "NUOVO TAVOLO",
 			"addRecorderTitle": "AGGIUNGI REGISTRATORE",
 			"addTableHint": "Il telefono che scansiona questo codice diventa il registratore del prossimo tavolo.",
+			"registerTitle": "REGISTRATI DAL TUO TELEFONO",
+			"registerHint": "Scansiona con il tuo telefono per leggere l'informativa e registrarti a questo tavolo. Tutti al tavolo possono usare questo codice.",
 			"addRecorderHint": "Il telefono che scansiona questo codice registra anche questo tavolo, accanto a questo.",
 			"qrAlt": "Codice QR per il prossimo telefono",
 			"expiresIn": "Questo codice vale ancora per {minutes} minuti. | Questo codice vale ancora per {minutes} minuto. | Questo codice vale ancora per {minutes} minuti.",
@@ -309,6 +313,32 @@
 		"message": {
 			"from": "Dall'organizzatore",
 			"dismiss": "Chiudi"
+		},
+		"register": {
+			"title": "Registrati al Tavolo {number}",
+			"lead": "Hai scansionato il codice di questo tavolo. Leggi l'informativa, poi registrati: il tuo nome resta associato a questo tavolo.",
+			"button": "Registrati",
+			"formTitle": "La tua registrazione",
+			"formLead": "Tavolo {number}. È richiesto solo il nome.",
+			"invalidTitle": "Questo codice non funziona più",
+			"invalidBody": "Chiedi al tavolo un nuovo codice, oppure registrati sul telefono del tavolo."
+		},
+		"participant": {
+			"title": "Ciao, {name}",
+			"registeredAt": "Sei registrato al Tavolo {number}.",
+			"consentTitle": "IL TUO CONSENSO",
+			"recording": "Registrazione della discussione",
+			"transcription": "Trascrizione della registrazione",
+			"analysis": "Analisi della trascrizione assistita da IA",
+			"publication": "Brevi citazioni anonime nel rapporto",
+			"withdraw": "Per vedere, cancellare o revocare quanto hai dato, contatta {contact}.",
+			"withdrawNoContact": "Per vedere, cancellare o revocare quanto hai dato, contatta {controller}.",
+			"reportPending": "Il rapporto comparirà qui quando l'organizzatore lo pubblicherà. Conserva questa pagina.",
+			"reportReady": "Il rapporto è stato pubblicato.",
+			"viewReport": "Vedi il rapporto",
+			"goneTitle": "Questa registrazione non è più disponibile",
+			"goneBody": "Potrebbe essere scaduta, oppure l'organizzatore l'ha cancellata su tua richiesta.",
+			"forget": "Chiudi"
 		},
 		"help": {
 			"button": "Serve aiuto",

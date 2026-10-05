@@ -161,6 +161,18 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **…or on their own phone, and keep a page.** The notice screen also offers
+  "Register on your own phone": a `REGISTER_PARTICIPANT` code scoped to the
+  assembly and the table, reusable by the whole table for three hours, that
+  opens `recorder.html#/register/<token>` — the same notice, the same form,
+  the table known from the code, method `SELF_PHONE` — and the table phone's
+  roster picks the person up on its next refresh. Registering hands the
+  person's phone a bearer (`participant_sessions`, 180 days) for their own
+  page: where they are registered, what they consented to, whom to contact
+  to withdraw, and the published report (`GET /public/participant/status`,
+  `/report`, `/report.pdf`) once the organizer publishes it. Migration 0031;
+  `POST /public/register/notice`, `POST /public/register` under the join
+  rate limits; the code never makes a recorder.
 - **Participants register on the table's phone.** The notice screen shows
   the server-rendered notice, the people already registered at this table
   (✓ consented / did not consent) and "Add a participant": one person at a

@@ -36,7 +36,40 @@ export interface AssemblyInfo {
 	recording_mode: 'orchestrated' | 'independent' | 'plenary'
 }
 
-export type CapabilityPurpose = 'ADD_RECORDER_TO_TABLE' | 'ADD_TABLE'
+export type CapabilityPurpose = 'ADD_RECORDER_TO_TABLE' | 'ADD_TABLE' | 'REGISTER_PARTICIPANT'
+
+/** What a registration code is for, read on the participant's own phone. */
+export interface RegisterNotice extends ConsentNotice {
+	assembly: AssemblyInfo
+	table_number: number
+	color_key: string
+}
+
+export interface SelfRegisterResult {
+	participant_token: string
+	participant: { id: string; label: string; name: string }
+	consent: { method: string; recording: boolean }
+	table_number: number
+	color_key: string
+}
+
+/** A participant's own page (services/consent.py participant_status). */
+export interface ParticipantStatus {
+	assembly: AssemblyInfo
+	participant: { label: string; name: string }
+	table_number: number | null
+	color_key: string | null
+	consent: {
+		recording: boolean
+		transcription: boolean
+		analysis: boolean
+		publication: boolean
+		confirmed_at: string
+	} | null
+	report_available: boolean
+	contact: string
+	controller: string
+}
 
 /** What scanning a code made this phone — decided by the code, never here. */
 export interface Joined {
@@ -290,6 +323,18 @@ async function request<T>(
 	return (await response.json()) as T
 }
 
+/** A PDF behind a bearer. The URL is identical for every assembly — only the
+ * token says which one — so a cached copy would be another session's report.
+ * The server sends no-store; this is the second lock on that door. */
+async function pdfOf(path: string, token: string): Promise<Blob> {
+	const response = await fetch(appBase() + path, {
+		headers: { Authorization: `Bearer ${token}` },
+		cache: 'no-store',
+	})
+	if (!response.ok) throw new RecorderApiError(response.status, `HTTP ${response.status}`)
+	return response.blob()
+}
+
 export const recorderApi = {
 	partStatus: (token: string, recordingId: string, seq: number) =>
 		request<{ part_bytes: number; complete: boolean; chunk_sha256: string | null;
@@ -324,6 +369,20 @@ export const recorderApi = {
 	/** One person registers at this table on the shared phone. */
 	registerParticipant: (token: string, act: ConsentActIn) =>
 		request<RegisterResult>('POST', '/api/v1/public/recorder/participants', { token, json: act }),
+
+	/** A registration code's event, table and notice — on the person's own phone. */
+	registerNotice: (token: string) =>
+		request<RegisterNotice>('POST', '/api/v1/public/register/notice', { json: { token } }),
+
+	/** Register at the code's table from one's own phone; returns the page's bearer. */
+	registerSelf: (token: string, act: ConsentActIn) =>
+		request<SelfRegisterResult>('POST', '/api/v1/public/register', { json: { ...act, token } }),
+
+	participantStatus: (token: string) =>
+		request<ParticipantStatus>('GET', '/api/v1/public/participant/status', { token }),
+
+	participantReport: (token: string) =>
+		request<PublishedReport>('GET', '/api/v1/public/participant/report', { token }),
 
 	/** The table raises its hand; the Live tab shows it until acknowledged. */
 	needHelp: (token: string, kind: HelpKind) =>
@@ -442,15 +501,8 @@ export const recorderApi = {
 	report: (token: string) =>
 		request<PublishedReport>('GET', '/api/v1/public/recorder/report', { token }),
 
-	async reportPdf(token: string): Promise<Blob> {
-		const response = await fetch(appBase() + '/api/v1/public/recorder/report.pdf', {
-			headers: { Authorization: `Bearer ${token}` },
-			// This URL is identical for every assembly — only the bearer token
-			// says which one — so a cached copy is another session's report.
-			// The server sends no-store; this is the second lock on that door.
-			cache: 'no-store',
-		})
-		if (!response.ok) throw new RecorderApiError(response.status, `HTTP ${response.status}`)
-		return response.blob()
-	},
+	reportPdf: (token: string) => pdfOf('/api/v1/public/recorder/report.pdf', token),
+
+	/** The same report, through a participant's own bearer. */
+	participantReportPdf: (token: string) => pdfOf('/api/v1/public/participant/report.pdf', token),
 }

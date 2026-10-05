@@ -40,6 +40,7 @@
 				"publication": "Short anonymous quotations may appear in the published report (optional)",
 				"confirm": "Confirm",
 				"refuse": "This person does not consent",
+				"refuseSelf": "I do not consent",
 				"cancel": "Cancel",
 				"failed": "Could not reach the server — try again.",
 				"stale": "The notice has changed — please read it again."
@@ -50,6 +51,7 @@
 				"refusedBody": "This person will not be recorded. Please tell the facilitator.",
 				"another": "Add another participant"
 			},
+			"ownPhone": "Register on your own phone",
 			"link": "Participants: {count} · Add",
 			"linkNone": "No participants registered · Add",
 			"linkRequired": "Register a participant before recording"
@@ -299,6 +301,8 @@
 			"addRecorderTitle": "ADD RECORDER",
 			"addTableHint": "The phone that scans this code becomes the recorder of the next table.",
 			"addRecorderHint": "The phone that scans this code records this table too, beside this one.",
+			"registerTitle": "REGISTER ON YOUR OWN PHONE",
+			"registerHint": "Scan with your own phone to read the notice and register at this table. Everyone at the table can use this code.",
 			"qrAlt": "QR code for the next phone",
 			"expiresIn": "This code works for {minutes} more minutes. | This code works for {minutes} more minute. | This code works for {minutes} more minutes.",
 			"expired": "This code has expired.",
@@ -309,6 +313,32 @@
 		"message": {
 			"from": "From the organizer",
 			"dismiss": "Dismiss"
+		},
+		"register": {
+			"title": "Register at Table {number}",
+			"lead": "You scanned this table's code. Read the notice, then register — your name stays with this table.",
+			"button": "Register",
+			"formTitle": "Your registration",
+			"formLead": "Table {number}. Only your name is required.",
+			"invalidTitle": "This code no longer works",
+			"invalidBody": "Ask the table for a fresh code, or register on the table's phone."
+		},
+		"participant": {
+			"title": "Hello, {name}",
+			"registeredAt": "You are registered at Table {number}.",
+			"consentTitle": "YOUR CONSENT",
+			"recording": "Recording of the discussion",
+			"transcription": "Transcription of the recording",
+			"analysis": "AI-assisted analysis of the transcript",
+			"publication": "Short anonymous quotations in the report",
+			"withdraw": "To see, erase or withdraw what you gave, contact {contact}.",
+			"withdrawNoContact": "To see, erase or withdraw what you gave, contact {controller}.",
+			"reportPending": "The report will appear here when the organizer publishes it. Keep this page.",
+			"reportReady": "The report has been published.",
+			"viewReport": "View the report",
+			"goneTitle": "This registration is no longer available",
+			"goneBody": "It may have expired, or the organizer erased it at your request.",
+			"forget": "Close"
 		},
 		"help": {
 			"button": "Need help",

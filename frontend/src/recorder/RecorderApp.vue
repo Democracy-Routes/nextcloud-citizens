@@ -20,7 +20,9 @@ import ArmedScreen from './components/ArmedScreen.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
 import ConfirmJoinScreen from './components/ConfirmJoinScreen.vue'
 import JoinedScreen from './components/JoinedScreen.vue'
+import ParticipantPage from './components/ParticipantPage.vue'
 import Preflight from './components/Preflight.vue'
+import RegisterPage from './components/RegisterPage.vue'
 import RecordingScreen from './components/RecordingScreen.vue'
 import RecoverySync from './components/RecoverySync.vue'
 import ReportScreen from './components/ReportScreen.vue'
@@ -42,6 +44,8 @@ type Screen =
 	| 'armed'
 	| 'recording'
 	| 'report'
+	| 'register'
+	| 'participant'
 	| 'error'
 
 const { t } = useI18n()
@@ -325,7 +329,67 @@ async function cancelGuardedJoin(): Promise<void> {
 	screen.value = 'no-invite'
 }
 
+/* ---- a person's own phone (0.7 consent) ----
+ * recorder.html#/register/<token> is the table's registration code scanned by
+ * a participant; registering hands this browser a bearer for the person's
+ * page, kept under its own key so a table phone and a person's phone never
+ * confuse each other's sessions. */
+const PARTICIPANT_KEY = 'citizens-participant-session'
+const registerToken = ref<string | null>(null)
+const participantToken = ref<string | null>(null)
+
+function participantLoad(): string | null {
+	try {
+		return localStorage.getItem(PARTICIPANT_KEY)
+	} catch {
+		return null
+	}
+}
+
+function participantRegistered(token: string): void {
+	participantToken.value = token
+	try {
+		localStorage.setItem(PARTICIPANT_KEY, token)
+	} catch {
+		/* private mode: the page lasts until reload */
+	}
+	// the code's token leaves the visible URL; a reload lands on the page
+	history.replaceState(null, '', window.location.pathname + window.location.search + '#/participant')
+	screen.value = 'participant'
+}
+
+function forgetParticipant(): void {
+	participantToken.value = null
+	try {
+		localStorage.removeItem(PARTICIPANT_KEY)
+	} catch {
+		/* ignore */
+	}
+	history.replaceState(null, '', window.location.pathname + window.location.search)
+	screen.value = 'no-invite'
+}
+
+/** The registration and participant routes, before any join is attempted. */
+function participantFromHash(): boolean {
+	const register = window.location.hash.match(/#\/register\/(.+)$/)
+	if (register && !capturing.value) {
+		registerToken.value = decodeURIComponent(register[1])
+		screen.value = 'register'
+		return true
+	}
+	if (/#\/participant$/.test(window.location.hash) || (!window.location.hash && !sessionLoad())) {
+		const stored = participantLoad()
+		if (stored) {
+			participantToken.value = stored
+			screen.value = 'participant'
+			return true
+		}
+	}
+	return false
+}
+
 async function joinFromHash(): Promise<boolean> {
+	if (participantFromHash()) return true
 	// A QR opened in this same tab can be a fragment-only navigation: Vue
 	// remains mounted. Do not tear down a live microphone to switch sessions.
 	const match = window.location.hash.match(/#\/join\/(.+)$/)
@@ -557,8 +621,22 @@ function sessionStorageClear(): void {
 
 		<ReportScreen
 			v-else-if="screen === 'report' && session"
-			:session="session"
+			:token="session.session_token"
+			:assembly-name="session.assembly.name"
+			:table-number="session.table_number"
 			@back="screen = orchestrated ? 'armed' : 'preflight'" />
+
+		<!-- a person's own phone: registering through the table's code, then
+		     their page (where they are, their consent, the report when out) -->
+		<RegisterPage
+			v-else-if="screen === 'register' && registerToken"
+			:token="registerToken"
+			@registered="participantRegistered" />
+
+		<ParticipantPage
+			v-else-if="screen === 'participant' && participantToken"
+			:token="participantToken"
+			@forget="forgetParticipant" />
 
 		<RecordingScreen
 			v-else-if="screen === 'recording' && session && selectedRound"

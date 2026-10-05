@@ -51,6 +51,11 @@ log = get_logger(__name__)
 JOIN_TABLE = invite_svc.JOIN_TABLE
 ADD_RECORDER_TO_TABLE = "ADD_RECORDER_TO_TABLE"
 ADD_TABLE = "ADD_TABLE"
+#: a participant registers at this table on their own phone (0.7 consent):
+#: scoped to assembly + table, reusable by the whole table, never joins
+REGISTER_PARTICIPANT = "REGISTER_PARTICIPANT"
+#: a registration code lives as long as a session, not a walk across the room
+REGISTRATION_TTL = timedelta(hours=3)
 #: The purposes a joined phone may make a code for.
 ACTION_PURPOSES = (ADD_RECORDER_TO_TABLE, ADD_TABLE)
 
@@ -113,7 +118,7 @@ def create_capability(
     round_id: str | None = None,
 ) -> CapabilityCard:
     """A joined phone makes a code for the next phone. Server-checked throughout."""
-    if purpose not in ACTION_PURPOSES:
+    if purpose not in ACTION_PURPOSES and purpose != REGISTER_PARTICIPANT:
         raise HTTPException(status_code=422, detail="Unknown capability")
     assembly = session.get(Assembly, recorder_session.assembly_id)
     if assembly is None:
@@ -131,16 +136,20 @@ def create_capability(
 
     now = utcnow()
     token = generate_token()
-    table_number = recorder_session.table_number if purpose == ADD_RECORDER_TO_TABLE else None
+    registration = purpose == REGISTER_PARTICIPANT
+    table_number = (
+        recorder_session.table_number if purpose in (ADD_RECORDER_TO_TABLE, REGISTER_PARTICIPANT) else None
+    )
     invite = RecorderInvite(
         assembly_id=assembly.id,
         purpose=purpose,
         table_number=table_number,
         round_id=round_id,
-        single_use=True,
+        # a whole table scans the registration code; the others are one-shot
+        single_use=not registration,
         token_hash=hash_token(token),
         token_encrypted=encrypt_token(token),
-        expires_at=now + CAPABILITY_TTL,
+        expires_at=now + (REGISTRATION_TTL if registration else CAPABILITY_TTL),
         created_by_session_id=recorder_session.id,
     )
     session.add(invite)
@@ -161,7 +170,11 @@ def create_capability(
         invite_id=invite.id, purpose=purpose, assembly_id=assembly.id,
         table_number=table_number, by_session=recorder_session.id,
     )
-    url = invite_svc.recorder_join_url(token)
+    url = (
+        invite_svc.participant_register_url(token)
+        if registration
+        else invite_svc.recorder_join_url(token)
+    )
     return CapabilityCard(
         invite_id=invite.id,
         purpose=purpose,
@@ -189,6 +202,12 @@ def join_with_token(session: Session, token: str) -> Joined:
             log.info("capability_refused", invite_id=invite.id, purpose=invite.purpose,
                      reason="revoked" if invite.revoked_at is not None else "expired")
         raise HTTPException(status_code=401, detail="Invalid or revoked invite")
+
+    if invite.purpose == REGISTER_PARTICIPANT:
+        # a registration code never makes a recorder; its own route handles it
+        raise HTTPException(
+            status_code=409, detail="This code registers a participant — open it on your own phone"
+        )
 
     if invite.purpose == JOIN_TABLE:
         if invite.table_number is None:

@@ -15,6 +15,7 @@ start_recording, never only in the UI.
 """
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -25,6 +26,8 @@ from citizens.db.models import (
     ConsentNotice,
     Participant,
     ParticipantConsent,
+    ParticipantSession,
+    RecorderInvite,
     RecorderSession,
     Recording,
     Round,
@@ -32,6 +35,9 @@ from citizens.db.models import (
     TableAssignment,
 )
 from citizens.db.models.base import utcnow
+from citizens.domain.tables import color_for
+from citizens.security.recorder_tokens import generate_token, hash_token
+from citizens.services import invites as invite_svc
 from citizens.services.audit import record_audit_event
 from citizens.services.consent_notice import Notice, render_notice
 from citizens.services.provider_config import config_snapshot
@@ -284,6 +290,85 @@ def guard_recording(session: Session, assembly: Assembly, table_number: int) -> 
                 "message": "Register at least one participant who consents to recording first",
             },
         )
+
+
+#: a participant's page outlives the event: the report may come weeks later
+PARTICIPANT_SESSION_LIFETIME = timedelta(days=180)
+
+
+def registration_code(session: Session, token: str) -> tuple[RecorderInvite, Assembly]:
+    """The REGISTER_PARTICIPANT code behind a token, or 401/409."""
+    invite = invite_svc.find_by_token(session, token)
+    if invite is None or invite.revoked_at is not None or invite_svc.is_expired(invite):
+        raise HTTPException(status_code=401, detail="Invalid or expired registration code")
+    if invite.purpose != "REGISTER_PARTICIPANT" or invite.table_number is None:
+        raise HTTPException(status_code=409, detail="This code does not register a participant")
+    assembly = session.get(Assembly, invite.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    if assembly.closed_at is not None:
+        raise HTTPException(status_code=409, detail="This assembly has been closed by the organizer")
+    return invite, assembly
+
+
+def register_by_code(
+    session: Session, token: str, act: ConsentAct, notice: Notice | None = None
+) -> tuple[Participant, ParticipantConsent, ParticipantSession, str, RecorderInvite]:
+    """A person registers on their own phone through the table's code: the
+    same record as on the shared phone, method SELF_PHONE, the table known
+    from the code — and a bearer for their page."""
+    invite, assembly = registration_code(session, token)
+    participant, consent = register(
+        session, assembly, act, method="SELF_PHONE", table_number=invite.table_number, notice=notice
+    )
+    invite.last_used_at = utcnow()
+    bearer = generate_token()
+    participant_session = ParticipantSession(
+        participant_id=participant.id,
+        assembly_id=assembly.id,
+        token_hash=hash_token(bearer),
+        expires_at=utcnow() + PARTICIPANT_SESSION_LIFETIME,
+    )
+    session.add(participant_session)
+    session.flush()
+    return participant, consent, participant_session, bearer, invite
+
+
+def participant_by_bearer(session: Session, bearer: str) -> ParticipantSession:
+    participant_session = session.execute(
+        select(ParticipantSession).where(ParticipantSession.token_hash == hash_token(bearer))
+    ).scalar_one_or_none()
+    if participant_session is None or participant_session.expires_at < utcnow():
+        raise HTTPException(status_code=401, detail="Participant session invalid or expired")
+    return participant_session
+
+
+def participant_status(
+    session: Session, participant_session: ParticipantSession, report_available: bool
+) -> dict:
+    """What a person's own page shows: where they are registered, their
+    consent, whether the report is out, and whom to contact to withdraw."""
+    participant = session.get(Participant, participant_session.participant_id)
+    assembly = session.get(Assembly, participant_session.assembly_id)
+    if participant is None or assembly is None:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    latest = latest_consents(session, assembly.id).get(participant.id)
+    snapshot = config_snapshot()
+    return {
+        "assembly": {"id": assembly.id, "name": assembly.name, "language": assembly.language,
+                     "kind": assembly.kind},
+        "participant": {"label": participant.label, "name": participant.name},
+        "table_number": participant.registered_table_number,
+        "color_key": (
+            color_for(participant.registered_table_number)
+            if participant.registered_table_number is not None
+            else None
+        ),
+        "consent": consent_dict(latest),
+        "report_available": report_available,
+        "contact": snapshot.consent_contact,
+        "controller": snapshot.consent_controller or snapshot.organization_name,
+    }
 
 
 def participants_with_consent(session: Session, assembly: Assembly) -> list[dict]:

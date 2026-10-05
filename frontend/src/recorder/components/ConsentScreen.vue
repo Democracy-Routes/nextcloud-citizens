@@ -9,17 +9,21 @@
  * hears it and whether it is somebody else's service, how long the recording
  * is kept, their rights, the legal basis — in the assembly's language and
  * hashed exactly as shown. Each person then registers one at a time on this
- * phone: name (email optional), the ticks, Confirm. A refusal is recorded
- * too. The record is individual; nothing here is one tick for the table.
+ * phone (ConsentForm), or scans the table's registration code and does it on
+ * their own (RegisterPage): both land on the same roster here. A refusal is
+ * recorded too. The record is individual; nothing here is one tick for the
+ * table.
  *
  * 'required' assemblies continue only once one person here has consented
  * (the server enforces the same rule where recording starts); 'optional'
  * ones continue at once. A server older than 0.7 has no notice endpoint:
  * the screen then falls back to the table-level text it always showed.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { recorderApi, type ConsentNotice, type DataHandling, type TableConsent } from '../api'
+import CapabilityQr from './CapabilityQr.vue'
+import ConsentForm, { type ConsentFormValue } from './ConsentForm.vue'
 import TableBadge from './TableBadge.vue'
 
 const props = defineProps<{
@@ -40,68 +44,57 @@ const busy = ref(false)
 const failed = ref('')
 const added = ref<{ name: string; consented: boolean } | null>(null)
 const table = ref<TableConsent | null>(null)
+const ownPhone = ref(false)
+let roster = 0
 
 /** Somebody at the table objects (legacy screen only). Consent that offers
  * only one button is not consent. */
 const declined = ref(false)
 
-const form = ref({
-	name: '',
-	email: '',
-	read: false,
-	recording: false,
-	transcription: false,
-	analysis: false,
-	publication: false,
-})
-
 async function load(): Promise<void> {
-	loading.value = true
 	try {
 		notice.value = await recorderApi.consentNotice(props.token)
 		legacy.value = false
 	} catch {
-		legacy.value = true // a server older than 0.7, or a blink: the old text
+		if (!notice.value) legacy.value = true // a server older than 0.7, or a blink: the old text
 	} finally {
 		loading.value = false
 	}
 }
-onMounted(load)
+onMounted(() => {
+	void load()
+	// people registering on their own phones appear here as they do
+	roster = window.setInterval(() => {
+		if (view.value === 'notice') void load()
+	}, 10_000)
+})
+onBeforeUnmount(() => window.clearInterval(roster))
 
 const consenting = computed(
 	() => notice.value?.participants.filter((p) => p.recording_consent).length ?? 0,
 )
 const required = computed(() => notice.value?.mode === 'required')
 const canContinue = computed(() => legacy.value || !required.value || consenting.value > 0)
-const canConfirm = computed(
-	() => form.value.name.trim().length > 0 && form.value.read && form.value.recording,
-)
 
 function startForm(): void {
-	form.value = {
-		name: '', email: '', read: false, recording: false,
-		transcription: false, analysis: false, publication: false,
-	}
 	failed.value = ''
 	view.value = 'form'
 }
 
-async function submit(refuse = false): Promise<void> {
+async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 	if (!notice.value || busy.value) return
-	const name = form.value.name.trim()
-	if (!name) return
 	busy.value = true
 	failed.value = ''
 	try {
 		const result = await recorderApi.registerParticipant(props.token, {
-			name,
-			email: form.value.email.trim(),
+			name: value.name,
+			email: value.email,
 			notice_hash: notice.value.hash,
-			notice_read: refuse ? form.value.read : true,
-			recording_consent: refuse ? false : form.value.recording,
-			transcription_consent: refuse ? false : form.value.transcription,
-			analysis_consent: refuse ? false : form.value.analysis,
-			publication_consent: refuse ? false : form.value.publication,
+			notice_read: refuse ? value.read : true,
+			recording_consent: refuse ? false : value.recording,
+			transcription_consent: refuse ? false : value.transcription,
+			analysis_consent: refuse ? false : value.analysis,
+			publication_consent: refuse ? false : value.publication,
 		})
 		table.value = result.table
 		added.value = { name: result.participant.name, consented: result.can_record }
@@ -116,10 +109,9 @@ async function submit(refuse = false): Promise<void> {
 		view.value = 'added'
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err)
-		failed.value = /NOTICE_CHANGED|notice has changed/i.test(message)
-			? t('recorder.consent.form.stale')
-			: t('recorder.consent.form.failed')
-		if (/NOTICE_CHANGED|notice has changed/i.test(message)) await load()
+		const stale = /NOTICE_CHANGED|notice has changed/i.test(message)
+		failed.value = stale ? t('recorder.consent.form.stale') : t('recorder.consent.form.failed')
+		if (stale) await load()
 	} finally {
 		busy.value = false
 	}
@@ -165,31 +157,12 @@ const retention = computed(() => {
 		<div v-if="view === 'form' && notice" class="rc-pad">
 			<h1>{{ t('recorder.consent.form.title') }}</h1>
 			<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.lead') }}</p>
-			<label class="rc-field">
-				<span>{{ t('recorder.consent.form.name') }}</span>
-				<input v-model="form.name" type="text" autocomplete="off" maxlength="200" data-test="name" />
-			</label>
-			<label class="rc-field">
-				<span>{{ t('recorder.consent.form.email') }}</span>
-				<input v-model="form.email" type="email" autocomplete="off" maxlength="200" data-test="email" />
-			</label>
-			<div class="rc-ticks">
-				<label class="rc-tick"><input v-model="form.read" type="checkbox" data-test="read" /><span>{{ t('recorder.consent.form.read') }}</span></label>
-				<label class="rc-tick"><input v-model="form.recording" type="checkbox" data-test="recording" /><span>{{ t('recorder.consent.form.recording') }}</span></label>
-				<label class="rc-tick"><input v-model="form.transcription" type="checkbox" data-test="transcription" /><span>{{ t('recorder.consent.form.transcription') }}</span></label>
-				<label class="rc-tick"><input v-model="form.analysis" type="checkbox" data-test="analysis" /><span>{{ t('recorder.consent.form.analysis') }}</span></label>
-				<label class="rc-tick"><input v-model="form.publication" type="checkbox" data-test="publication" /><span>{{ t('recorder.consent.form.publication') }}</span></label>
-			</div>
-			<p v-if="failed" class="rc-alert">{{ failed }}</p>
-			<button class="rc-btn rc-primary" :disabled="!canConfirm || busy" data-test="confirm" @click="submit(false)">
-				{{ t('recorder.consent.form.confirm') }}
-			</button>
-			<button class="rc-btn" :disabled="!form.name.trim() || busy" data-test="refuse" @click="submit(true)">
-				{{ t('recorder.consent.form.refuse') }}
-			</button>
-			<button class="rc-btn rc-subtle" :disabled="busy" @click="view = 'notice'">
-				{{ t('recorder.consent.form.cancel') }}
-			</button>
+			<ConsentForm
+				:busy="busy"
+				:failed="failed"
+				@confirm="(value) => submit(value, false)"
+				@refuse="(value) => submit(value, true)"
+				@cancel="view = 'notice'" />
 		</div>
 
 		<!-- one person done -->
@@ -245,6 +218,9 @@ const retention = computed(() => {
 				<button class="rc-btn" style="margin-top: 16px" data-test="add" @click="startForm">
 					{{ t('recorder.consent.add') }}
 				</button>
+				<button class="rc-btn rc-subtle" data-test="own-phone" @click="ownPhone = true">
+					{{ t('recorder.consent.ownPhone') }}
+				</button>
 				<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
 					{{ t('recorder.consent.continue') }}
 				</button>
@@ -270,6 +246,18 @@ const retention = computed(() => {
 				</button>
 			</template>
 		</div>
+
+		<!-- the table's registration code, for people's own phones -->
+		<div v-if="ownPhone" class="rc-sheet-scrim" @click.self="ownPhone = false">
+			<div class="rc-sheet" role="dialog" aria-modal="true">
+				<CapabilityQr
+					:token="token"
+					purpose="REGISTER_PARTICIPANT"
+					:table-number="tableNumber"
+					:color-key="colorKey"
+					@close="ownPhone = false" />
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -283,17 +271,6 @@ const retention = computed(() => {
 	margin: 8px 0 0;
 }
 .rc-consent__head { margin: 4px 0 10px; }
-.rc-notice {
-	margin: 14px 0 0;
-	padding: 12px 14px;
-	border: 1px solid var(--rc-border);
-	border-radius: 12px;
-	background: var(--rc-surface);
-	font-size: 0.9375rem;
-	line-height: 1.5;
-}
-.rc-notice p { margin: 0; }
-.rc-notice p + p { margin-top: 8px; }
 .rc-consent__roster-title {
 	font-size: 0.75rem;
 	letter-spacing: 0.1em;
@@ -323,40 +300,4 @@ const retention = computed(() => {
 }
 .rc-consent li + li { margin-top: 10px; }
 .rc-consent__ask { margin: 20px 0 18px; }
-.rc-field {
-	display: block;
-	margin: 16px 0 0;
-}
-.rc-field span {
-	display: block;
-	font-size: 0.8125rem;
-	color: var(--rc-muted);
-	margin-bottom: 4px;
-}
-.rc-field input {
-	width: 100%;
-	box-sizing: border-box;
-	font: inherit;
-	font-size: 1.0625rem;
-	padding: 12px 14px;
-	border: 1px solid var(--rc-border);
-	border-radius: 12px;
-	background: var(--rc-surface);
-	color: inherit;
-}
-.rc-ticks { margin: 18px 0 8px; }
-.rc-tick {
-	display: flex;
-	align-items: flex-start;
-	gap: 12px;
-	padding: 10px 0;
-	border-bottom: 1px solid var(--rc-border);
-	line-height: 1.4;
-}
-.rc-tick input {
-	width: 24px;
-	height: 24px;
-	flex: 0 0 auto;
-	margin: 0;
-}
 </style>

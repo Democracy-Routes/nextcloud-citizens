@@ -44,6 +44,13 @@ def recorder_join_url(token: str) -> str:
     return f"{recorder_page_url()}#/join/{token}"
 
 
+def participant_register_url(token: str) -> str:
+    """The URL a participant's own phone opens to register at a table
+    (REGISTER_PARTICIPANT code): the same page, a different route, so the
+    recorder app lands on the registration page rather than trying to join."""
+    return f"{recorder_page_url()}#/register/{token}"
+
+
 def qr_svg(url: str) -> str:
     """A QR code as a STANDALONE SVG document.
 

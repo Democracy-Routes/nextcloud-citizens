@@ -71,16 +71,28 @@ onBeforeUnmount(() => window.clearInterval(ticker))
 <template>
 	<div class="rc-card rc-center rc-capability">
 		<p class="rc-eyebrow" style="margin-bottom: 4px">
-			{{ purpose === 'ADD_TABLE' ? t('recorder.table.addTableTitle') : t('recorder.table.addRecorderTitle') }}
+			{{
+				purpose === 'ADD_TABLE'
+					? t('recorder.table.addTableTitle')
+					: purpose === 'REGISTER_PARTICIPANT'
+						? t('recorder.table.registerTitle')
+						: t('recorder.table.addRecorderTitle')
+			}}
 		</p>
-		<TableBadge v-if="purpose === 'ADD_RECORDER_TO_TABLE'" :number="tableNumber" :color-key="colorKey" />
+		<TableBadge v-if="purpose !== 'ADD_TABLE'" :number="tableNumber" :color-key="colorKey" />
 
 		<template v-if="qrSrc && !expired">
 			<div class="rc-qr-card">
 				<img class="rc-qr" :src="qrSrc" :alt="t('recorder.table.qrAlt')" />
 			</div>
 			<p class="rc-muted" style="font-size: 0.845rem; margin: 0">
-				{{ purpose === 'ADD_TABLE' ? t('recorder.table.addTableHint') : t('recorder.table.addRecorderHint') }}
+				{{
+					purpose === 'ADD_TABLE'
+						? t('recorder.table.addTableHint')
+						: purpose === 'REGISTER_PARTICIPANT'
+							? t('recorder.table.registerHint')
+							: t('recorder.table.addRecorderHint')
+				}}
 			</p>
 			<p class="rc-muted" style="font-size: 0.8rem; margin: 6px 0 0">
 				{{ t('recorder.table.expiresIn', { minutes: remainingMinutes }, remainingMinutes) }}

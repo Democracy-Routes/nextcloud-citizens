@@ -63,3 +63,21 @@ class ParticipantConsent(Base):
     confirmed_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     withdrawn_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+
+
+class ParticipantSession(Base):
+    """A person who registered on their own phone: the bearer behind their
+    page (where they are registered, their consent, the published report)."""
+
+    __tablename__ = "participant_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    participant_id: Mapped[str] = mapped_column(
+        ForeignKey("participants.id", ondelete="CASCADE"), index=True
+    )
+    assembly_id: Mapped[str] = mapped_column(ForeignKey("assemblies.id", ondelete="CASCADE"))
+    # only the SHA-256 of the bearer is stored
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(TZDateTime())
+    last_seen_at: Mapped[datetime | None] = mapped_column(TZDateTime())

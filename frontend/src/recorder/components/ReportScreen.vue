@@ -6,16 +6,22 @@ import { mdiDownloadOutline, mdiFileDocumentOutline } from '@mdi/js'
 import { onMounted, ref } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { TYPE_LABELS, groupByType, roundHeading } from '../../labels'
-import { recorderApi, type JoinResult, type PublishedReport } from '../api'
+import { recorderApi, type PublishedReport } from '../api'
 import { downloadBlob } from '../../download'
 
 /*
  * The assembly report as published by the organizer (approved findings and
  * AI summaries only). Participants can read it at the table and download the
- * PDF to keep.
+ * PDF to keep — and, since 0.7, on their own phone after registering there
+ * (`participant`: the bearer is a participant's, the routes its own).
  */
 
-const props = defineProps<{ session: JoinResult }>()
+const props = defineProps<{
+	token: string
+	assemblyName: string
+	tableNumber: number
+	participant?: boolean
+}>()
 const emit = defineEmits<{ back: [] }>()
 
 const { t } = useI18n()
@@ -27,7 +33,9 @@ const downloadNote = ref('')
 
 onMounted(async () => {
 	try {
-		report.value = await recorderApi.report(props.session.session_token)
+		report.value = props.participant
+			? await recorderApi.participantReport(props.token)
+			: await recorderApi.report(props.token)
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	}
@@ -36,11 +44,10 @@ onMounted(async () => {
 async function downloadPdf(): Promise<void> {
 	downloading.value = true
 	try {
-		const blob = await recorderApi.reportPdf(props.session.session_token)
-		downloadBlob(
-			blob,
-			`${props.session.assembly.name.slice(0, 40).replace(/ /g, '-')}-report.pdf`,
-		)
+		const blob = props.participant
+			? await recorderApi.participantReportPdf(props.token)
+			: await recorderApi.reportPdf(props.token)
+		downloadBlob(blob, `${props.assemblyName.slice(0, 40).replace(/ /g, '-')}-report.pdf`)
 		downloadNote.value = t('recorder.report.pdfSaved')
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -53,7 +60,7 @@ async function downloadPdf(): Promise<void> {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
+			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: tableNumber }) }}</span>
 		</div>
 
 		<div class="rc-scroll">

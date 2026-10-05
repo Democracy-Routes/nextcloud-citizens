@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 
 from citizens.api.downloads import download_headers
 from citizens.config import get_settings
-from citizens.db.models import Assembly, RecorderSession, Recording
+from citizens.db.models import Assembly, ParticipantSession, RecorderSession, Recording
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.domain.tables import color_for
@@ -121,7 +121,7 @@ def peek_capability(data: JoinIn, request: Request, session: ReadDB):
 
 
 class CapabilityIn(BaseModel):
-    purpose: Literal["ADD_RECORDER_TO_TABLE", "ADD_TABLE"]
+    purpose: Literal["ADD_RECORDER_TO_TABLE", "ADD_TABLE", "REGISTER_PARTICIPANT"]
     # the Session this is being done in, when the phone knows it
     round_id: str | None = None
 
@@ -397,10 +397,13 @@ def recording_status(recording_id: str, recorder_session: RecorderSess, session:
 
 
 def _published_report(session: Session, recorder_session: RecorderSession) -> tuple:
+    return _published_report_of(session, session.get(Assembly, recorder_session.assembly_id))
+
+
+def _published_report_of(session: Session, assembly: Assembly | None) -> tuple:
     from citizens.services.lifecycle import frozen_report
     from citizens.services.report import build_report
 
-    assembly = session.get(Assembly, recorder_session.assembly_id)
     if assembly is None or not _report_available(session, assembly):
         raise HTTPException(status_code=404, detail="No published report for this assembly")
     # once the session was closed, participants read the frozen version — a
@@ -547,6 +550,114 @@ def register_participant(data: ParticipantRegisterIn, recorder_session: Recorder
         "can_record": consent.recording_consent,
         "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
     }
+
+
+# ---- registration on the participant's own phone (0.7 consent) ----
+#
+# The table's notice screen shows a REGISTER_PARTICIPANT code; a person scans
+# it and registers here, on their own phone, with the table known from the
+# code. The token travels in the body like /join's, under /join's limits; the
+# result is a bearer for the person's own page (status, the published report).
+
+
+class RegisterNoticeIn(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/register/notice")
+def register_notice(data: RegisterNoticeIn, request: Request, session: ReadDB):
+    """What a registration code is for — the event, the table, the notice —
+    before anyone types a name. Consumes nothing."""
+    JOIN_TOKEN_LIMITER.check(token_key(data.token))
+    JOIN_IP_LIMITER.check(client_ip(request))
+    invite, assembly = consent_svc.registration_code(session, data.token)
+    return {
+        **consent_svc.notice_for(assembly).as_dict(),
+        "mode": assembly.participant_consent,
+        "assembly": {"id": assembly.id, "name": assembly.name, "language": assembly.language,
+                     "kind": assembly.kind},
+        "table_number": invite.table_number,
+        "color_key": color_for(invite.table_number),
+    }
+
+
+class RegisterIn(ParticipantRegisterIn):
+    token: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/register", status_code=201)
+def register_self(data: RegisterIn, request: Request, session: DB):
+    """One person registers at the code's table from their own phone: the
+    same record as on the shared phone (method SELF_PHONE), plus a bearer for
+    their page. The notice is read outside the transaction's hot path (an
+    in-memory snapshot) and must match what they read."""
+    JOIN_TOKEN_LIMITER.check(token_key(data.token))
+    JOIN_IP_LIMITER.check(client_ip(request))
+    participant, consent, _, bearer, invite = consent_svc.register_by_code(
+        session,
+        data.token,
+        consent_svc.ConsentAct(
+            name=data.name,
+            email=data.email,
+            notice_hash=data.notice_hash,
+            notice_read=data.notice_read,
+            recording_consent=data.recording_consent,
+            transcription_consent=data.transcription_consent,
+            analysis_consent=data.analysis_consent,
+            publication_consent=data.publication_consent,
+        ),
+    )
+    return {
+        "participant_token": bearer,
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "consent": consent_svc.consent_dict(consent),
+        "table_number": invite.table_number,
+        "color_key": color_for(invite.table_number),
+    }
+
+
+def get_participant_session(session: ReadDB, authorization: Annotated[str, Header()] = ""):
+    scheme, _, bearer = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not bearer:
+        raise HTTPException(status_code=401, detail="Missing participant token")
+    return consent_svc.participant_by_bearer(session, bearer.strip())
+
+
+ParticipantSess = Annotated[ParticipantSession, Depends(get_participant_session)]
+
+
+@router.get("/participant/status")
+def participant_status(participant_session: ParticipantSess, session: ReadDB):
+    """The person's own page: where they registered, their consent, whether
+    the report is out, whom to contact to withdraw."""
+    assembly = session.get(Assembly, participant_session.assembly_id)
+    available = assembly is not None and _report_available(session, assembly)
+    return consent_svc.participant_status(session, participant_session, available)
+
+
+@router.get("/participant/report")
+def participant_report(participant_session: ParticipantSess, session: ReadDB):
+    """The published report, the same payload the table phones read."""
+    _, report = _published_report_of(session, session.get(Assembly, participant_session.assembly_id))
+    return report
+
+
+@router.get("/participant/report.pdf")
+def participant_report_pdf(participant_session: ParticipantSess, session: ReadDB):
+    from fastapi.responses import Response
+
+    from citizens.services.branding import logo_path, organization_name
+    from citizens.services.report_pdf import render_pdf
+
+    assembly, report = _published_report_of(
+        session, session.get(Assembly, participant_session.assembly_id)
+    )
+    filename = f"{assembly.name[:40].replace(' ', '-')}-report.pdf"
+    return Response(
+        render_pdf(report, logo_path(), organization_name()),
+        media_type="application/pdf",
+        headers=download_headers(filename),
+    )
 
 
 class HelpIn(BaseModel):
