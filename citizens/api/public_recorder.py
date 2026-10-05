@@ -85,7 +85,7 @@ def join(data: JoinIn, request: Request, session: DB):
     JOIN_TOKEN_LIMITER.check(token_key(data.token))
     JOIN_IP_LIMITER.check(client_ip(request))
     # Both of these can refresh a 30-second cache by calling Nextcloud over
-    # OCS. Read them BEFORE the first statement: create_session_from_invite
+    # OCS. Read them BEFORE the first statement: join_with_token
     # opens the write transaction, and SQLite's single writer slot must not be
     # held across an HTTPS round-trip while the room is scanning QR codes.
     handling = data_handling_summary()

@@ -136,6 +136,13 @@ you *watch* the failure modes recover:
   tab, or let the automatic takeover do it after two minutes of silence. The
   half already recorded is transcribed and analysed with the rest; the round
   reads as one discussion. You rehearsed this in the dress round.
+- [ ] A table that matters can have a **second recorder phone** from the
+  start: on the table's phone tap *Add Recorder to this Table* and scan the
+  code with the second phone (it joins as Recorder B). Both record; only one
+  feeds the live captions; if either dies the other carries on. A table that
+  turns up unplanned is added from any joined phone with *Add new Table*, or
+  from the QR tab's *Add a table* — it gets the next number, a colour and its
+  own printed code.
 
 ## After — in this order
 

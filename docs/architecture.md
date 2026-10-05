@@ -325,3 +325,77 @@ that must never wobble — so the bridge is:
   recorder code uses a bare `session_id` to mean a Session.
 
 `citizens/domain/vocabulary.py` states the mapping once.
+
+## Standalone Sessions (0.7)
+
+"Record now" and "Start a Session" create a Session with no assembly to name
+or configure: `services/sessions.py` builds a container `Assembly(kind=
+"session")` named after the question, one round, its tables and QR codes, and
+for Record now returns Table 1's join link in independent mode so the phone
+that opens it records at once. The container exists because every storage
+path, ownership check, retention sweep, device-audio purge, export and report
+is keyed by `assembly_id`; the organizer UI lists it under "Sessions", never as
+an assembly, and nothing new asks the caller for one. Rounds carry an optional
+`objective` ("produce three concrete proposals") beside the `question`; it
+reaches the phone, the analysis prompts and the reports, and is NULL on every
+pre-0.7 round.
+
+## Tables: number, colour, growth (0.7)
+
+A `Table` row is per round; the table the room knows is the **number**, the
+same in every round, printed on the QR sheet and carried by every phone and
+recording. Beside it a **colour** (`tables.color_key`, from a six-colour
+palette by number, repeating after six) is a cue for a room looking for "the
+blue table" and never something correctness depends on. `services/tables.
+add_table()` adds the next number to every round at once and issues its code
+without touching the codes on the wall; numbers are allocated max+1 under
+SQLite's writer lock with the (round, number) unique constraint as backstop.
+`default_table_count` only seeds rounds added later — completeness and the
+report count the rows that exist.
+
+## Capabilities: the first phone decides (0.7)
+
+A phone that already joined makes the QR code for the next phone, and the code
+carries its meaning: `ADD_RECORDER_TO_TABLE` (the scanner joins this table as
+another recorder) or `ADD_TABLE` (the next table is created and the scanner is
+its first recorder). The scanner never chooses. Both share the row, hashing,
+vault, rate limit, brute-force protection and `#/join` route with the printed
+table codes (`recorder_invites.purpose`; `services/capabilities.py`); they
+live fifteen minutes and are single-use — the first scan claims `consumed_at`
+with a conditional UPDATE under the writer lock, the second gets 410 — while
+printed table codes stay reusable so a replacement phone still rescans the
+poster. Creation and consumption are audited by invite id, never by token. A
+future stable physical-table code is simply a reusable `JOIN_TABLE` row with
+no round, which nothing here forecloses.
+
+## Several recorders per table, one live source (0.7)
+
+`recorder_sessions.slot` numbers a table's recorders: the table's own code is
+slot 1 (a replacement that rescans it too — same role), an added recorder gets
+the next number, and slots are never reused. The one-recording-per-table guard
+holds **per slot**, so recorders in different slots record side by side while
+every recovery path (own-recording reclaim, "record the rest", silent-device
+takeover, the 409) is unchanged within a slot. `services/table_recordings.py`
+is the home of "every recording of this table"; the analysis merges recordings
+that overlap in time (as plenary always did) and concatenates ones that follow
+each other, deciding by time rather than by how the recording came to exist.
+
+Only one recording per table feeds the live captions: `recordings.live_source`
+with a partial unique index (`services/live_source.py`). The first recorder to
+start takes it, a backup's chunks are stored but never handed to the caption
+engine (its `/live` poll says whose captions it is watching), any recorder
+still in progress can be promoted from its phone or by the organizer, and
+every path that stops a recording passes the source to a sibling still
+recording. Plenary rooms therefore open one streaming session, not N.
+
+## Table readiness (0.7)
+
+`services/readiness.py` turns what the monitor already knows — heartbeat age,
+the heartbeat payload, each recorder's recording, the live source — into
+READY / NEEDS_ATTENTION / BLOCKED with structured reason codes
+(`NO_RECORDER`, `RECORDER_OFFLINE`, `MIC_UNAVAILABLE`, `LOW_STORAGE`,
+`LOW_BATTERY`, `UPLOAD_STALLED`, `LIVE_STT_UNAVAILABLE`), each a blocker or a
+warning naming the recorder concerned. Not every problem blocks: one healthy
+recorder with no backup is READY; the only recorder offline is BLOCKED. It is
+on every table in the monitor payload and at `GET /rounds/{id}/readiness`, and
+is what an exception-first screen and an organizer's autopilot build on.

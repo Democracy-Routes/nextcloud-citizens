@@ -157,6 +157,28 @@ Nothing is stuck. The audio is kept, so **Re-transcribe** on any table's row in
 the Files tab transcribes it properly from the stored audio and re-runs the
 analysis — that works even with Final transcription switched off.
 
+### Several recorder phones at one table
+
+Since 0.7 a table may have more than one recorder phone. On any joined phone,
+**Add Recorder to this Table** shows a QR code; the phone that scans it joins
+the same table as Recorder B and records beside Recorder A. Both recordings
+are kept, transcribed and analysed as one table; if one phone dies the other
+is unaffected, and a replacement for the dead one still rescans the table's
+printed code as before. **Add new Table** on any joined phone shows a code
+that creates the next table — numbered and coloured, in every session, with
+its own printed code on the QR tab — and makes the scanning phone its first
+recorder. These codes live fifteen minutes and work once; the printed table
+codes are unchanged. The QR tab's **Add a table** does the same from the
+organizer's screen.
+
+Only one phone per table feeds the live captions (the first to start). A
+backup phone's caption panel says whose captions the room is reading and can
+take them over; the Live tab shows which recorder carries them and the
+organizer can promote another (`POST /api/v1/recordings/{id}/promote-live-
+source`). When the carrying phone stops — finished, replaced, silent — the
+captions pass to a phone still recording. A plenary room, whose phones all
+used to open their own caption session, now opens one.
+
 ### Running Vosk yourself
 
 Vosk needs **a separate model per language**, but one server can hold several:
