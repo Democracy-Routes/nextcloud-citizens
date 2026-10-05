@@ -23,7 +23,9 @@ const emit = defineEmits<{ recordNow: []; startSession: []; createAssembly: [] }
 	<div class="cz-page cz-home">
 		<h2 class="cz-home__title">Citizens</h2>
 		<p class="cz-home__hint cz-muted">
-			Record a discussion, run a Session at one or more tables, or organize a whole assembly.
+			One discussion, or a programme of several with the same people? Everything underneath —
+			tables, QR codes, live view, transcripts, report — is the same, and a Session can become an
+			Assembly later.
 		</p>
 
 		<div v-if="error" class="cz-error">{{ error }}</div>
@@ -40,17 +42,17 @@ const emit = defineEmits<{ recordNow: []; startSession: []; createAssembly: [] }
 			<button class="cz-home__action cz-home__action--primary" :disabled="recording" @click="emit('recordNow')">
 				<SvgIcon :path="mdiMicrophone" :size="28" />
 				<span class="cz-home__action-name">{{ recording ? 'Preparing…' : 'Record now' }}</span>
-				<span class="cz-home__action-hint">One table, this phone. Start recording in seconds.</span>
+				<span class="cz-home__action-hint">This phone, one table, no set-up. Recording in seconds.</span>
 			</button>
 			<button class="cz-home__action" @click="emit('startSession')">
 				<SvgIcon :path="mdiPlayCircleOutline" :size="28" />
 				<span class="cz-home__action-name">Start a Session</span>
-				<span class="cz-home__action-hint">A question, an objective, one or more tables with QR codes.</span>
+				<span class="cz-home__action-hint">One discussion at several tables, once. A question, QR codes, you start and end it.</span>
 			</button>
 			<button class="cz-home__action" @click="emit('createAssembly')">
 				<SvgIcon :path="mdiAccountGroup" :size="28" />
 				<span class="cz-home__action-name">Create an Assembly</span>
-				<span class="cz-home__action-hint">An organized event: participants, several rounds, a full report.</span>
+				<span class="cz-home__action-hint">An event: several sessions, the same participants, one report across them.</span>
 			</button>
 		</div>
 

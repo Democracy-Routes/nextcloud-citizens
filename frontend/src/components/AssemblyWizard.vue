@@ -79,6 +79,10 @@ async function submit(): Promise<void> {
 <template>
 	<div class="cz-page" style="max-width: 720px">
 		<h2>Create assembly</h2>
+		<p class="cz-muted" style="margin: 4px 0 0">
+			An event made of several sessions with the same group of people: participants, seating, one
+			report across the sessions.
+		</p>
 		<div class="cz-row" style="margin: 14px 0 20px; gap: 0">
 			<div
 				v-for="(label, index) in ['Basics', 'Sessions']"

@@ -242,6 +242,18 @@ class SessionOut(BaseModel):
     recording_count: int = 0
 
 
+class PromoteSessionIn(BaseModel):
+    """A standalone Session becomes an Assembly: the event needs a name."""
+
+    name: str = Field(min_length=1, max_length=200)
+
+
+class PromotedOut(BaseModel):
+    container_id: str
+    kind: str
+    name: str
+
+
 class RecordNowIn(BaseModel):
     language: Language = "en"
 

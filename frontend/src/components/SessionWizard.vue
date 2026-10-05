@@ -54,7 +54,8 @@ async function submit(): Promise<void> {
 	<div class="cz-page" style="max-width: 720px">
 		<h2>Start a Session</h2>
 		<p class="cz-muted" style="margin: 4px 0 16px">
-			One discussion, at one or more tables. You can add tables and recorder phones while it runs.
+			One discussion, at one or more tables, once. Add tables and recorder phones while it runs; if
+			you later want a second session, the Session becomes an Assembly.
 		</p>
 
 		<div v-if="error" class="cz-error">{{ error }}</div>

@@ -73,6 +73,28 @@ const saveEdit = () =>
 		editingId.value = ''
 	})
 
+/* A standalone Session growing into an Assembly.
+ *
+ * The only real difference between the two is one discussion versus a
+ * programme of several with the same people; everything else (tables, codes,
+ * recordings, report) is already here. So "Add another session" on a Session
+ * asks for the event's name, promotes the container, and adds the session —
+ * choosing "Start a Session" first is never a mistake. */
+const standalone = computed(() => props.assembly.kind === 'session')
+const promoting = ref(false)
+const eventName = ref(props.assembly.name)
+
+const promoteAndAdd = () =>
+	run(async () => {
+		await api.promoteSession(props.assembly.rounds[0].id, eventName.value.trim())
+		await api.addRound(props.assembly.id, {
+			title: `Round ${props.assembly.rounds.length + 1}`,
+			question: '',
+			duration_minutes: 30,
+		})
+		promoting.value = false
+	})
+
 const move = (roundId: string, position: number) => run(() => api.updateRound(roundId, { position }))
 const remove = () =>
 	run(async () => {
@@ -156,7 +178,28 @@ const add = () =>
 					</div>
 				</template>
 			</div>
-			<CzButton :icon="mdiPlus" :disabled="busy" @click="add">Add session</CzButton>
+			<!-- a Session has one discussion; a second one makes it an Assembly -->
+			<template v-if="standalone">
+				<div v-if="promoting" class="cz-card">
+					<h3 style="margin-top: 0">Add another session</h3>
+					<p class="cz-muted" style="margin: 4px 0 12px; font-size: 0.875rem">
+						A Session is one discussion. With a second one this becomes an Assembly — an event of
+						several sessions with the same people — and gets a name.
+					</p>
+					<div class="cz-field">
+						<label for="cz-event-name">Event name</label>
+						<input id="cz-event-name" v-model="eventName" type="text" maxlength="200" />
+					</div>
+					<div class="cz-row" style="justify-content: flex-end">
+						<CzButton variant="tertiary" small :disabled="busy" @click="promoting = false">Cancel</CzButton>
+						<CzButton variant="primary" small :disabled="busy || !eventName.trim()" @click="promoteAndAdd">
+							Make it an Assembly and add a session
+						</CzButton>
+					</div>
+				</div>
+				<CzButton v-else :icon="mdiPlus" :disabled="busy" @click="promoting = true">Add another session</CzButton>
+			</template>
+			<CzButton v-else :icon="mdiPlus" :disabled="busy" @click="add">Add session</CzButton>
 		</template>
 
 		<CzConfirm

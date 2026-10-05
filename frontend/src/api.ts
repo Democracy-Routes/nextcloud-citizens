@@ -93,6 +93,12 @@ export const api = {
 	createSession: (data: SessionCreate) => request<SessionCreated>('POST', '/api/v1/sessions', data),
 	recordNow: (data: { language: string }) =>
 		request<RecordNowOut>('POST', '/api/v1/sessions/record-now', data),
+	// a standalone Session becomes an Assembly (an event of several sessions),
+	// keeping everything it already has
+	promoteSession: (sessionId: string, name: string) =>
+		request<{ container_id: string; kind: string; name: string }>(
+			'POST', `/api/v1/sessions/${sessionId}/promote`, { name },
+		),
 	updateAssembly: (id: string, data: AssemblyUpdate) =>
 		request<AssemblyDetail>('PUT', `/api/v1/assemblies/${id}`, data),
 	deleteAssembly: (id: string) => request<void>('DELETE', `/api/v1/assemblies/${id}`),

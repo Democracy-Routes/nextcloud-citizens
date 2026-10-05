@@ -33,6 +33,14 @@ def list_sessions(user: CurrentUser, session: ReadDB):
     return sessions_svc.list_sessions(session, user)
 
 
+@router.post("/sessions/{session_id}/promote", response_model=schemas.PromotedOut)
+def promote_session(session_id: str, data: schemas.PromoteSessionIn, user: CurrentUser, session: DB):
+    """A standalone Session becomes an Assembly (an event of several sessions),
+    keeping everything it already has. Idempotent for an assembly."""
+    round_ = get_owned_round(session, session_id, user)
+    return sessions_svc.promote_to_assembly(session, round_, data.name, actor=user)
+
+
 @router.get("/sessions/{session_id}", response_model=schemas.SessionOut)
 def get_session(session_id: str, user: CurrentUser, session: ReadDB):
     """A Session by its id — the same id every `/rounds/{id}` route accepts."""

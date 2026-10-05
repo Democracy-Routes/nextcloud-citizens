@@ -138,6 +138,53 @@ def test_a_session_is_private_to_whoever_started_it(client):
     assert body["container_id"] not in {a["id"] for a in listed}
 
 
+def test_a_session_grows_into_an_assembly_keeping_everything(client):
+    body = client.post(
+        "/api/v1/sessions",
+        json={"question": "How should mobility improve?", "table_count": 2, "recording_mode": "independent"},
+    ).json()
+    joined = _join(client, body["invites"][0]["url"])
+    started = client.post(
+        "/api/v1/public/recorder/start",
+        json={"round_id": body["session_id"], "mime_type": "audio/webm"},
+        headers={"Authorization": f"Bearer {joined['session_token']}"},
+    )
+    assert started.status_code == 201
+
+    promoted = client.post(f"/api/v1/sessions/{body['session_id']}/promote", json={"name": "Milan Mobility"})
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json() == {
+        "container_id": body["container_id"], "kind": "assembly", "name": "Milan Mobility",
+    }
+
+    detail = client.get(f"/api/v1/assemblies/{body['container_id']}").json()
+    assert detail["kind"] == "assembly" and detail["name"] == "Milan Mobility"
+    assert [r["id"] for r in detail["rounds"]] == [body["session_id"]]
+    assert detail["rounds"][0]["recording_count"] == 1
+    assert detail["rounds"][0]["question"] == "How should mobility improve?"
+    invites = client.get(f"/api/v1/assemblies/{body['container_id']}/invites").json()
+    assert [i["table_number"] for i in invites] == [1, 2]
+    assert client.get(f"/api/v1/sessions/{body['session_id']}").json()["standalone"] is False
+    # the sidebar now lists it among the assemblies
+    [row] = [a for a in client.get("/api/v1/assemblies").json() if a["id"] == body["container_id"]]
+    assert row["kind"] == "assembly"
+    # a second session can be added as to any assembly, with the same tables
+    second = client.post(
+        f"/api/v1/assemblies/{body['container_id']}/rounds", json={"title": "Proposals"}
+    ).json()
+    tables = client.get(f"/api/v1/rounds/{second['id']}/tables").json()
+    assert [t["number"] for t in tables] == [1, 2]
+
+    # promoting again changes nothing
+    again = client.post(f"/api/v1/sessions/{body['session_id']}/promote", json={"name": "Other"})
+    assert again.json()["name"] == "Milan Mobility"
+    other = client.post(
+        f"/api/v1/sessions/{body['session_id']}/promote", json={"name": "X"},
+        headers={"X-Test-User": "someone-else"},
+    )
+    assert other.status_code == 404
+
+
 def test_migration_treats_every_earlier_row_as_an_assembly_without_an_objective(client, settings_env):
     """Downgrading to 0023 and back is what a pre-0.7 database looks like to 0024:
     rows with no `kind` column become assemblies, rounds have no objective."""

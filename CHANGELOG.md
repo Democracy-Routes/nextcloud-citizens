@@ -130,6 +130,14 @@ not rewritten.
   intent-carrying QR as a sheet over the screen instead of pushing content
   around; while recording the sides step back and Finish keeps its weight.
   Plenary rooms keep only the middle (their one shared code stays where it is).
+- **Home says what the difference is, and a Session can grow into an
+  Assembly.** The three cards explain themselves — *this phone, one table, no
+  set-up* / *one discussion at several tables, once* / *an event: several
+  sessions, the same participants, one report* — because underneath a Session
+  is an assembly with one round. On a Session's Sessions tab, *Add another
+  session* asks for the event's name and turns it into an Assembly (`POST
+  /api/v1/sessions/{id}/promote`), keeping its tables, codes, recordings and
+  report; choosing *Start a Session* first is never a mistake.
 - **Rounds are called Sessions where people read them.** The organizer's
   tabs, buttons and hints and the phone's strings (en, it) now say Session;
   `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in

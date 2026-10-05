@@ -140,6 +140,30 @@ def created_payload(created: StandaloneSession) -> schemas.SessionCreated:
     )
 
 
+def promote_to_assembly(
+    session: Session, round_: Round, name: str, actor: str | None = None
+) -> schemas.PromotedOut:
+    """A standalone Session grows into an Assembly: the moment a second session
+    is wanted, the container stops being hidden and becomes the event.
+
+    Nothing else changes — the round, its tables, invites, recordings, reports
+    and files already live in the container — so choosing "Start a Session"
+    first is never a mistake. Idempotent: an assembly stays as it is.
+    """
+    container = round_.assembly
+    if container.kind != SESSION_KIND:
+        return schemas.PromotedOut(container_id=container.id, kind=container.kind, name=container.name)
+    container.kind = ASSEMBLY_KIND
+    container.name = " ".join(name.split())[:200] or container.name
+    session.flush()
+    record_audit_event(
+        session, "session_promoted", "assembly", container.id, actor=actor,
+        data={"round_id": round_.id, "name": container.name},
+    )
+    log.info("session_promoted", container_id=container.id, round_id=round_.id)
+    return schemas.PromotedOut(container_id=container.id, kind=container.kind, name=container.name)
+
+
 def session_detail(session: Session, round_: Round) -> schemas.SessionOut:
     """A round in product vocabulary (domain/vocabulary.py)."""
     recording_count = session.execute(
