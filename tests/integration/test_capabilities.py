@@ -207,6 +207,34 @@ def test_what_a_phone_may_not_make(client):
     assert closed.status_code == 409
 
 
+def test_a_phone_can_ask_what_a_code_means_without_spending_it(client):
+    assembly = _assembly(client)
+    phone_a = _join(client, assembly["invites"][0]["url"]).json()
+    _join(client, _capability(client, _auth(phone_a), "ADD_RECORDER_TO_TABLE")["url"], ip="10.5.2.1")
+    card = _capability(client, _auth(phone_a), "ADD_RECORDER_TO_TABLE")
+
+    def _peek(token, ip):
+        response = client.post(
+            "/api/v1/public/capabilities/peek", json={"token": token}, headers={"X-Forwarded-For": ip}
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    assert _peek(_token(card["url"]), "10.5.2.2") == {
+        "valid": True, "purpose": "ADD_RECORDER_TO_TABLE", "table_number": 1, "color_key": "blue",
+        "recorders": 2, "assembly_id": assembly["id"],
+    }
+    # peeking consumed nothing: the code still joins, once
+    assert _join(client, card["url"], ip="10.5.2.3").status_code == 200
+    assert _peek(_token(card["url"]), "10.5.2.4") == {"valid": False, "reason": "consumed"}
+    assert _peek("x" * 40, "10.5.2.5") == {"valid": False, "reason": "invalid"}
+    # a printed table code peeks as what it is
+    table_code = _peek(_token(assembly["invites"][1]["url"]), "10.5.2.6")
+    assert (table_code["purpose"], table_code["table_number"], table_code["recorders"]) == (
+        "JOIN_TABLE", 2, 0,
+    )
+
+
 def test_creation_and_consumption_are_audited_without_the_token(client):
     assembly = _assembly(client, tables=1, rounds=1)
     phone_a = _join(client, assembly["invites"][0]["url"]).json()

@@ -161,6 +161,13 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **Two guards against a scan by mistake.** Before a code is spent, the phone
+  asks what it means (`POST /api/v1/public/capabilities/peek`, which consumes
+  nothing) and, if the table already has two recorders or this phone was
+  recording another table, asks first — "This table already has 2 recorders"
+  / "This phone was recording Table 3" with Join or Cancel/Keep. The server
+  allows both cases; the question is only against accidents, and Cancel never
+  uses the code.
 - **Rounds are called Sessions where people read them.** The organizer's
   tabs, buttons and hints and the phone's strings (en, it) now say Session;
   `GET /api/v1/sessions` and `GET /api/v1/sessions/{id}` read a Session in

@@ -11,6 +11,7 @@ import { decideOnStatusFailure } from './errors'
 import { hasUnfinishedAudio, purgeLocalAudio, type PurgeOutcome } from './purge'
 import ArmedScreen from './components/ArmedScreen.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
+import ConfirmJoinScreen from './components/ConfirmJoinScreen.vue'
 import JoinedScreen from './components/JoinedScreen.vue'
 import Preflight from './components/Preflight.vue'
 import RecordingScreen from './components/RecordingScreen.vue'
@@ -27,6 +28,7 @@ type Screen =
 	| 'offline'
 	| 'purged'
 	| 'recovery'
+	| 'confirm-join'
 	| 'joined'
 	| 'consent'
 	| 'preflight'
@@ -263,32 +265,91 @@ function joinHashChanged(): void {
 	void joinFromHash()
 }
 
+/** A guard against an accident, asked BEFORE the code is spent: a third
+ * recorder at a table that already has two, or a phone that was recording one
+ * table scanning a code for another. Cancel never consumes the code. */
+const pendingGuard = ref<{
+	kind: 'third-recorder' | 'switch-table'
+	token: string
+	tableNumber: number
+	colorKey: string | null
+	recorders: number
+	previousTable: number
+} | null>(null)
+
+async function guardBeforeJoin(token: string): Promise<boolean> {
+	try {
+		const peek = await recorderApi.peekCapability(token)
+		if (!peek.valid || peek.table_number === null) return false
+		const stored = sessionLoad()
+		const previousTable = stored && stored.assembly.id === peek.assembly_id ? stored.table_number : null
+		const kind =
+			previousTable !== null && previousTable !== peek.table_number
+				? 'switch-table'
+				: peek.purpose === 'ADD_RECORDER_TO_TABLE' && peek.recorders >= 2
+					? 'third-recorder'
+					: null
+		if (!kind) return false
+		pendingGuard.value = {
+			kind, token, tableNumber: peek.table_number, colorKey: peek.color_key,
+			recorders: peek.recorders, previousTable: previousTable ?? 0,
+		}
+		return true
+	} catch {
+		return false // the join itself will say what is wrong
+	}
+}
+
+async function confirmGuardedJoin(): Promise<void> {
+	const guard = pendingGuard.value
+	pendingGuard.value = null
+	if (guard) await joinToken(guard.token)
+}
+
+async function cancelGuardedJoin(): Promise<void> {
+	pendingGuard.value = null
+	history.replaceState(null, '', window.location.pathname + window.location.search)
+	const stored = sessionLoad()
+	if (stored && (await resumeStoredSession(stored))) return
+	screen.value = 'no-invite'
+}
+
 async function joinFromHash(): Promise<boolean> {
 	// A QR opened in this same tab can be a fragment-only navigation: Vue
 	// remains mounted. Do not tear down a live microphone to switch sessions.
 	const match = window.location.hash.match(/#\/join\/(.+)$/)
 	if (match && !capturing.value && !joinInProgress) {
-		joinInProgress = true
+		const token = decodeURIComponent(match[1])
 		screen.value = 'joining'
-		try {
-			const joined = await joinWithRetry(decodeURIComponent(match[1]))
-			sessionStore(joined)
-			skippedRecovery.clear()
-			pendingJoined.value =
-				joined.joined && joined.joined.purpose !== 'JOIN_TABLE' ? joined.joined : null
-			// remove the invite secret from the visible URL (brief §14)
-			history.replaceState(null, '', window.location.pathname + window.location.search)
-			await enterWithSession(joined)
+		if (await guardBeforeJoin(token)) {
+			screen.value = 'confirm-join'
 			return true
-		} catch (err) {
-			error.value = err instanceof Error ? err.message : String(err)
-			screen.value = 'error'
-			return true
-		} finally {
-			joinInProgress = false
 		}
+		await joinToken(token)
+		return true
 	}
 	return false
+}
+
+async function joinToken(token: string): Promise<void> {
+	if (joinInProgress) return
+	joinInProgress = true
+	screen.value = 'joining'
+	try {
+		const joined = await joinWithRetry(token)
+		sessionStore(joined)
+		skippedRecovery.clear()
+		pendingJoined.value =
+			joined.joined && joined.joined.purpose !== 'JOIN_TABLE' ? joined.joined : null
+		// remove the invite secret from the visible URL (brief §14)
+		history.replaceState(null, '', window.location.pathname + window.location.search)
+		await enterWithSession(joined)
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+		screen.value = 'error'
+	} finally {
+		joinInProgress = false
+	}
 }
 
 onMounted(async () => {
@@ -442,6 +503,16 @@ function sessionStorageClear(): void {
 			:session="session"
 			:recording="recoveryRecording"
 			@done="finishRecovery" />
+
+		<ConfirmJoinScreen
+			v-else-if="screen === 'confirm-join' && pendingGuard"
+			:kind="pendingGuard.kind"
+			:table-number="pendingGuard.tableNumber"
+			:color-key="pendingGuard.colorKey"
+			:recorders="pendingGuard.recorders"
+			:previous-table="pendingGuard.previousTable"
+			@join="confirmGuardedJoin"
+			@cancel="cancelGuardedJoin" />
 
 		<JoinedScreen
 			v-else-if="screen === 'joined' && pendingJoined"

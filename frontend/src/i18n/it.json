@@ -274,6 +274,15 @@
 			"unavailable": "Non è stato possibile creare il codice — chiedi all'organizzatore.",
 			"close": "Chiudi"
 		},
+		"guard": {
+			"thirdRecorderTitle": "Questo tavolo ha già {count} registratori",
+			"thirdRecorderBody": "Due telefoni stanno già registrando qui. Un terzo è permesso, ma di solito è una scansione per sbaglio.",
+			"switchTableTitle": "Questo telefono stava registrando il Tavolo {from}",
+			"switchTableBody": "Il codice scansionato appartiene a un altro tavolo. Unisciti solo se questo telefono deve davvero spostarsi.",
+			"join": "Unisciti al Tavolo {number}",
+			"keepTable": "Resta al Tavolo {number}",
+			"cancel": "Annulla"
+		},
 		"joined": {
 			"asRecorder": "Ti unisci come Registratore {label}",
 			"newTable": "Questo telefono è il registratore del nuovo tavolo",

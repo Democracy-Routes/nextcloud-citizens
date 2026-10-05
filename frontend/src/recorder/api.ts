@@ -59,6 +59,19 @@ export interface TableInfo {
 	live_source_label: string | null
 }
 
+/** What a code means, read without consuming it. */
+export type CapabilityPeek =
+	| { valid: false; reason: 'invalid' | 'consumed' }
+	| {
+		valid: true
+		purpose: 'JOIN_TABLE' | CapabilityPurpose
+		table_number: number | null
+		color_key: string | null
+		/** recorder phones the table already has */
+		recorders: number
+		assembly_id: string
+	}
+
 /** A code this phone made for the next phone (services/capabilities.py). */
 export interface CapabilityCard {
 	purpose: CapabilityPurpose
@@ -229,6 +242,11 @@ export const recorderApi = {
 				token, headers: { 'X-Chunk-Segment': String(segment) },
 			}),
 	join: (token: string) => request<JoinResult>('POST', '/api/v1/public/join', { json: { token } }),
+
+	/** What a code would do if scanned, without scanning it — so the phone can
+	 * warn about an accident before a single-use code is spent. */
+	peekCapability: (token: string) =>
+		request<CapabilityPeek>('POST', '/api/v1/public/capabilities/peek', { json: { token } }),
 
 	status: (token: string) => request<RecorderStatus>('GET', '/api/v1/public/recorder/status', { token }),
 

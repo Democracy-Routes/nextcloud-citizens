@@ -274,6 +274,15 @@
 			"unavailable": "The code could not be made — ask the organizer.",
 			"close": "Close"
 		},
+		"guard": {
+			"thirdRecorderTitle": "This table already has {count} recorders",
+			"thirdRecorderBody": "Two phones are already recording here. A third is allowed, but it is usually a scan by mistake.",
+			"switchTableTitle": "This phone was recording Table {from}",
+			"switchTableBody": "The code you scanned belongs to another table. Join it only if this phone is meant to move.",
+			"join": "Join Table {number}",
+			"keepTable": "Keep Table {number}",
+			"cancel": "Cancel"
+		},
 		"joined": {
 			"asRecorder": "You join as Recorder {label}",
 			"newTable": "This phone is the recorder of the new table",

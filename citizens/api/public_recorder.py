@@ -104,6 +104,17 @@ def join(data: JoinIn, request: Request, session: DB):
     }
 
 
+@router.post("/capabilities/peek")
+def peek_capability(data: JoinIn, request: Request, session: ReadDB):
+    """What a code would do if scanned, without scanning it: the phone warns
+    about an accident (a third recorder, a phone switching tables) and lets
+    the person cancel before a single-use code is spent. Same rate limits as
+    /join; the token travels in the body, never in the path."""
+    JOIN_TOKEN_LIMITER.check(token_key(data.token))
+    JOIN_IP_LIMITER.check(client_ip(request))
+    return capabilities_svc.peek(session, data.token)
+
+
 class CapabilityIn(BaseModel):
     purpose: Literal["ADD_RECORDER_TO_TABLE", "ADD_TABLE"]
     # the Session this is being done in, when the phone knows it

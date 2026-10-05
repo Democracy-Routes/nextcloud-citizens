@@ -263,6 +263,47 @@ def join_with_token(session: Session, token: str) -> Joined:
     )
 
 
+def peek(session: Session, token: str) -> dict:
+    """What a code would do if scanned — read without consuming anything.
+
+    The phone asks this before joining so it can warn about an accident (a
+    third recorder at a table, a phone that was recording another table) and
+    let the person cancel without spending a single-use code. Says only what
+    the code's own screen already shows; a dead code is reported as such.
+    """
+    invite = invite_svc.find_by_token(session, token)
+    if invite is None or invite.revoked_at is not None or invite_svc.is_expired(invite):
+        return {"valid": False, "reason": "invalid"}
+    if invite.single_use and invite.consumed_at is not None:
+        return {"valid": False, "reason": "consumed"}
+    table_number = invite.table_number
+    recorders = (
+        recorder_count(session, invite.assembly_id, table_number) if table_number is not None else 0
+    )
+    return {
+        "valid": True,
+        "purpose": invite.purpose,
+        "table_number": table_number,
+        "color_key": color_for(table_number) if table_number is not None else None,
+        "recorders": recorders,
+        "assembly_id": invite.assembly_id,
+    }
+
+
+def recorder_count(session: Session, assembly_id: str, table_number: int) -> int:
+    """How many recorder slots a table has phones in (sessions not revoked)."""
+    return int(
+        session.execute(
+            select(func.count(func.distinct(RecorderSession.slot))).where(
+                RecorderSession.assembly_id == assembly_id,
+                RecorderSession.table_number == table_number,
+                RecorderSession.revoked_at.is_(None),
+            )
+        ).scalar_one()
+        or 0
+    )
+
+
 def next_slot(session: Session, assembly_id: str, table_number: int) -> int:
     """The next recorder slot at a table. Slots are never reused — a revoked or
     expired recorder keeps its number, so recordings stay attributable."""
