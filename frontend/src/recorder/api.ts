@@ -109,6 +109,8 @@ export interface JoinResult {
 	rounds: RoundInfo[]
 	/** The organizer has asked the phones to delete their local copies. */
 	purge_local_audio?: boolean
+	/** the assembly's consent rule and this table's roster count (0.7) */
+	consent?: TableConsent
 }
 
 /** What the organizer said to this table and the phone has not shown yet. */
@@ -134,9 +136,48 @@ export interface HelpState {
 	acknowledged_at: string | null
 }
 
+/** The assembly's consent rule and where this table stands under it. */
+export interface TableConsent {
+	mode: 'required' | 'optional'
+	registered: number
+	consenting: number
+	can_record: boolean
+}
+
+/** The notice as the server rendered it, hashed as shown, with this table's
+ * roster (names only, never email). */
+export interface ConsentNotice {
+	version: string
+	language: string
+	hash: string
+	paragraphs: string[]
+	mode: 'required' | 'optional'
+	participants: Array<{ label: string; name: string; recording_consent: boolean }>
+}
+
+export interface ConsentActIn {
+	name: string
+	email: string
+	notice_hash: string
+	notice_read: boolean
+	recording_consent: boolean
+	transcription_consent: boolean
+	analysis_consent: boolean
+	publication_consent: boolean
+}
+
+export interface RegisterResult {
+	participant: { id: string; label: string; name: string }
+	consent: { method: string; recording: boolean }
+	can_record: boolean
+	table: TableConsent
+}
+
 export interface RecorderStatus {
 	assembly: AssemblyInfo
 	messages?: PhoneMessage[]
+	/** absent from a server older than 0.7 */
+	consent?: TableConsent
 	/** null: no hand up; absent: a server older than 0.7 */
 	help?: HelpState | null
 	report_available?: boolean
@@ -275,6 +316,14 @@ export const recorderApi = {
 		request<CapabilityPeek>('POST', '/api/v1/public/capabilities/peek', { json: { token } }),
 
 	status: (token: string) => request<RecorderStatus>('GET', '/api/v1/public/recorder/status', { token }),
+
+	/** The notice people read before registering, and who already has. */
+	consentNotice: (token: string) =>
+		request<ConsentNotice>('GET', '/api/v1/public/recorder/consent-notice', { token }),
+
+	/** One person registers at this table on the shared phone. */
+	registerParticipant: (token: string, act: ConsentActIn) =>
+		request<RegisterResult>('POST', '/api/v1/public/recorder/participants', { token, json: act }),
 
 	/** The table raises its hand; the Live tab shows it until acknowledged. */
 	needHelp: (token: string, kind: HelpKind) =>

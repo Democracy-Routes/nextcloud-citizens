@@ -20,7 +20,39 @@
 			"declinedTitle": "Questo tavolo non registrerà",
 			"declinedBody": "Avvisate l'organizzatore. Non è stato registrato nulla e la discussione può comunque proseguire senza questo telefono.",
 			"declinedBack": "Torna indietro",
-			"engineFallback": "un motore di trascrizione"
+			"engineFallback": "un motore di trascrizione",
+			"registeredTitle": "Partecipanti a questo tavolo",
+			"none": "Nessuno si è ancora registrato.",
+			"add": "Aggiungi un partecipante",
+			"continue": "Tutti aggiunti — continua",
+			"requiredHint": "Almeno una persona deve registrarsi e acconsentire alla registrazione prima che questo tavolo possa registrare.",
+			"consented": "Ha acconsentito",
+			"refusedNote": "Non ha acconsentito",
+			"form": {
+				"title": "Registra un partecipante",
+				"lead": "Una persona alla volta. Passate il telefono.",
+				"name": "Nome (obbligatorio)",
+				"email": "Email (facoltativa)",
+				"read": "Ho letto l'informativa qui sopra",
+				"recording": "Acconsento alla registrazione di questa discussione",
+				"transcription": "Acconsento alla trascrizione della registrazione",
+				"analysis": "Acconsento all'analisi della trascrizione assistita da IA",
+				"publication": "Brevi citazioni anonime possono comparire nel rapporto pubblicato (facoltativo)",
+				"confirm": "Conferma",
+				"refuse": "Questa persona non acconsente",
+				"cancel": "Annulla",
+				"failed": "Impossibile raggiungere il server — riprova.",
+				"stale": "L'informativa è cambiata — rileggila per favore."
+			},
+			"added": {
+				"title": "Partecipante aggiunto",
+				"refused": "Rifiuto registrato",
+				"refusedBody": "Questa persona non verrà registrata. Avvisate chi facilita.",
+				"another": "Aggiungi un altro partecipante"
+			},
+			"link": "Partecipanti: {count} · Aggiungi",
+			"linkNone": "Nessun partecipante registrato · Aggiungi",
+			"linkRequired": "Registra un partecipante prima di registrare"
 		},
 		"offline": {
 			"title": "Impossibile raggiungere l'assemblea",

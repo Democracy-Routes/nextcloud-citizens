@@ -80,11 +80,13 @@ export async function newPhone(browser: Browser, token: string): Promise<Phone> 
 
 	async function join(): Promise<void> {
 		await page.goto(`/recorder.html?chunkms=${CHUNK_MS}#/join/${encodeURIComponent(token)}`)
-		// Consent is shown once per device and every phone here is a fresh
-		// context, so it will appear — but waitFor, not isVisible: isVisible()
-		// answers immediately and ignores a timeout, which races the app's
-		// first render and silently skips the click.
-		const agree = page.getByRole('button', { name: /Everyone at this table agrees/ })
+		// The notice screen is shown once per device and every phone here is a
+		// fresh context, so it will appear — but waitFor, not isVisible:
+		// isVisible() answers immediately and ignores a timeout, which races
+		// the app's first render and silently skips the click. Assemblies made
+		// here are 'optional' (the API default), so "Everyone added — continue"
+		// is enabled without registering anyone.
+		const agree = page.getByRole('button', { name: /continue/ })
 		await agree.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined)
 		if (await agree.isVisible()) await agree.click()
 		await expect(page.getByText('Microphone test')).toBeVisible({ timeout: 20_000 })

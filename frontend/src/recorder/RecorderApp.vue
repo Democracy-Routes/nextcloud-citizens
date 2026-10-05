@@ -4,7 +4,14 @@
 import { mdiAlertCircleOutline, mdiCheckCircle, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SvgIcon from '../components/ui/SvgIcon.vue'
-import { recorderApi, RecorderApiError, type Joined, type JoinResult, type RoundInfo } from './api'
+import {
+	recorderApi,
+	RecorderApiError,
+	type Joined,
+	type JoinResult,
+	type RoundInfo,
+	type TableConsent,
+} from './api'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../i18n'
 import { decideOnStatusFailure } from './errors'
@@ -210,12 +217,16 @@ function consentGiven(): boolean {
 	}
 }
 
-function acceptConsent(): void {
+function acceptConsent(table: TableConsent | null = null): void {
 	try {
 		if (session.value) window.localStorage.setItem(CONSENT_KEY, session.value.assembly.id)
 	} catch {
 		/* not being able to remember is fine; showing it twice is not a failure */
 	}
+	// the roster as the screen left it, so the next screen's "Participants: 3"
+	// is right without another round-trip (registration is per person, and
+	// the screen stays reachable from there for a late arrival)
+	if (session.value && table) session.value = { ...session.value, consent: table }
 	screen.value = 'preflight'
 }
 
@@ -521,8 +532,10 @@ function sessionStorageClear(): void {
 
 		<ConsentScreen
 			v-else-if="screen === 'consent' && session"
+			:token="session.session_token"
 			:handling="session.data_handling ?? null"
 			:table-number="session.table_number"
+			:color-key="session.table_color"
 			@accept="acceptConsent" />
 
 		<Preflight
@@ -530,6 +543,7 @@ function sessionStorageClear(): void {
 			:session="session"
 			@ready="screen = 'armed'"
 			@start="startRound"
+			@participants="screen = 'consent'"
 			@report="screen = 'report'" />
 
 		<ArmedScreen
@@ -538,6 +552,7 @@ function sessionStorageClear(): void {
 			:blocked-round-id="startFailedRoundId"
 			@start="startRound"
 			@back="screen = 'preflight'"
+			@participants="screen = 'consent'"
 			@report="screen = 'report'" />
 
 		<ReportScreen

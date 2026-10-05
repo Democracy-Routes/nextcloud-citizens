@@ -161,6 +161,18 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **Participants register on the table's phone.** The notice screen shows
+  the server-rendered notice, the people already registered at this table
+  (✓ consented / did not consent) and "Add a participant": one person at a
+  time — name, optional email, "I have read the notice", the recording /
+  transcription / analysis ticks and the optional anonymous-quotation one —
+  Confirm, or "This person does not consent", then "Participant added → Add
+  another / Everyone added — continue". A required table cannot continue
+  until someone has consented and says why; an optional one continues at
+  once. "Participants: 3 · Add" under the table's number on the microphone
+  test and the waiting screen brings a late arrival back to it. A server
+  without the notice endpoint still gets the table-level text. English and
+  Italian.
 - **Individual consent is recorded at the table (server side).** The notice
   people read is rendered by the server from settings (new: `consent_controller`,
   `consent_contact`) and the live data-handling facts, in the assembly's

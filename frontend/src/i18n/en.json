@@ -20,7 +20,39 @@
 			"declinedTitle": "This table will not record",
 			"declinedBody": "Please tell the facilitator. Nothing has been recorded, and the discussion can still go ahead without this phone.",
 			"declinedBack": "Go back",
-			"engineFallback": "a transcription engine"
+			"engineFallback": "a transcription engine",
+			"registeredTitle": "Participants at this table",
+			"none": "Nobody has registered yet.",
+			"add": "Add a participant",
+			"continue": "Everyone added — continue",
+			"requiredHint": "At least one person must register and consent to recording before this table can record.",
+			"consented": "Consented",
+			"refusedNote": "Did not consent",
+			"form": {
+				"title": "Register a participant",
+				"lead": "One person at a time. Pass the phone around.",
+				"name": "Name (required)",
+				"email": "Email (optional)",
+				"read": "I have read the notice above",
+				"recording": "I consent to the recording of this discussion",
+				"transcription": "I consent to the recording being transcribed",
+				"analysis": "I consent to AI-assisted analysis of the transcript",
+				"publication": "Short anonymous quotations may appear in the published report (optional)",
+				"confirm": "Confirm",
+				"refuse": "This person does not consent",
+				"cancel": "Cancel",
+				"failed": "Could not reach the server — try again.",
+				"stale": "The notice has changed — please read it again."
+			},
+			"added": {
+				"title": "Participant added",
+				"refused": "Refusal recorded",
+				"refusedBody": "This person will not be recorded. Please tell the facilitator.",
+				"another": "Add another participant"
+			},
+			"link": "Participants: {count} · Add",
+			"linkNone": "No participants registered · Add",
+			"linkRequired": "Register a participant before recording"
 		},
 		"offline": {
 			"title": "Cannot reach the assembly",

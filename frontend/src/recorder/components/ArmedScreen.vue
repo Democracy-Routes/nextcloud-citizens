@@ -5,10 +5,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
-import { recorderApi, type HelpState, type JoinResult, type RoundInfo } from '../api'
+import { recorderApi, type HelpState, type JoinResult, type RoundInfo, type TableConsent } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
 import HelpButton from './HelpButton.vue'
 import MessageBanner from './MessageBanner.vue'
+import ParticipantsLine from './ParticipantsLine.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
@@ -28,7 +29,7 @@ const props = defineProps<{
 	 * or the table is stuck in a five-second failure loop with no way out */
 	blockedRoundId?: string | null
 }>()
-const emit = defineEmits<{ start: [round: RoundInfo]; back: []; report: [] }>()
+const emit = defineEmits<{ start: [round: RoundInfo]; back: []; report: []; participants: [] }>()
 
 const rounds = ref<RoundInfo[]>(props.session.rounds)
 const offline = ref(false)
@@ -87,6 +88,8 @@ const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
 const messages = useTableMessages(props.session.session_token)
 // this table's hand, as the server has it
 const help = ref<HelpState | null | undefined>(undefined)
+// who registered at this table (the notice screen stays reachable from here)
+const consent = ref<TableConsent | null | undefined>(props.session.consent)
 
 async function poll(): Promise<void> {
 	try {
@@ -94,6 +97,7 @@ async function poll(): Promise<void> {
 		rounds.value = status.rounds
 		messages.ingest(status)
 		help.value = status.help
+		if (status.consent) consent.value = status.consent
 		reportAvailable.value = status.report_available ?? false
 		assemblyClosed.value = status.assembly_closed ?? false
 		offline.value = false
@@ -159,6 +163,7 @@ onBeforeUnmount(() => {
 				</p>
 			</div>
 			<div class="rc-center"><HelpButton :token="session.session_token" :help="help" /></div>
+			<div class="rc-center"><ParticipantsLine :consent="consent" @open="emit('participants')" /></div>
 
 			<!-- the microphone failed for the round that is currently open: say so
 			     and wait to be asked, rather than silently retrying forever -->

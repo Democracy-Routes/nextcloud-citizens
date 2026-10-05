@@ -16,8 +16,9 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
-import { recorderApi, type HelpState, type JoinResult, type RoundInfo } from '../api'
+import { recorderApi, type HelpState, type JoinResult, type RoundInfo, type TableConsent } from '../api'
 import HelpButton from './HelpButton.vue'
+import ParticipantsLine from './ParticipantsLine.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
@@ -27,7 +28,7 @@ import { pickMimeType } from '../engine'
 import { idb } from '../idb'
 
 const props = defineProps<{ session: JoinResult }>()
-const emit = defineEmits<{ ready: []; start: [round: RoundInfo]; report: [] }>()
+const emit = defineEmits<{ ready: []; start: [round: RoundInfo]; report: []; participants: [] }>()
 
 const { t } = useI18n()
 
@@ -70,6 +71,9 @@ let reportTimer = 0
 
 // this table's hand, as the server has it (HelpButton)
 const help = ref<HelpState | null | undefined>(undefined)
+// who registered at this table, as the join (or the notice screen) left it;
+// refreshed by the status poll once the table is finished
+const consent = ref<TableConsent | null | undefined>(props.session.consent)
 
 // once this table is finished, watch for the report becoming available and
 // for this table's own AI summaries landing
@@ -78,6 +82,7 @@ async function pollReport(): Promise<void> {
 		const status = await recorderApi.status(props.session.session_token)
 		reportAvailable.value = status.report_available ?? false
 		help.value = status.help
+		if (status.consent) consent.value = status.consent
 		// keep the round list current — the whole point: a round recorded on
 		// another device (or by a sync that just failed) drops out of openRounds
 		if (status.rounds?.length) rounds.value = status.rounds
@@ -271,6 +276,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 			<TableBadge :number="session.table_number" :color-key="session.table_color" />
 		</div>
 		<HelpButton :token="session.session_token" :help="help" />
+		<ParticipantsLine :consent="consent" @open="emit('participants')" />
 
 		<div class="rc-scroll">
 		<!-- the table is done: its summaries and the report, nothing about microphones -->
