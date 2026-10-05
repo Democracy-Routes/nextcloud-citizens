@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from citizens.config import get_settings
 from citizens.db.models import (
     Assembly,
+    ConsentNotice,
     Participant,
     RecorderSession,
     Recording,
@@ -27,6 +28,7 @@ from citizens.db.models.base import utcnow
 from citizens.db.models.findings import Finding, FindingEvidence
 from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
+from citizens.services import consent as consent_svc
 from citizens.services import job_failures
 from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
@@ -42,7 +44,20 @@ from citizens.storage.paths import (
 
 log = get_logger(__name__)
 
-EXPORT_FORMAT_VERSION = 1
+# 2 (0.7): participants carry email, source, registered_table_number and
+# their consent act; consent-notices/<hash>.txt holds the texts people read
+EXPORT_FORMAT_VERSION = 2
+
+
+def _consent_json(consent) -> dict | None:
+    """A consent act for the manifest, datetimes as ISO strings."""
+    data = consent_svc.consent_dict(consent)
+    if data is None:
+        return None
+    for key in ("confirmed_at", "withdrawn_at"):
+        if data[key] is not None:
+            data[key] = data[key].isoformat()
+    return data
 
 
 def _storage_root() -> Path:
@@ -484,6 +499,8 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
     recordings = _recordings(session, assembly)
     slots = recording_slots(session, recordings)
     report = build_report(session, assembly, include_drafts=True)
+    latest_consents = consent_svc.latest_consents(session, assembly.id)
+    notice_hashes = {c.notice_hash for c in latest_consents.values()}
 
     manifest = {
         "format_version": EXPORT_FORMAT_VERSION,
@@ -517,8 +534,20 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
             }
             for round_ in assembly.rounds
         ],
+        # format 2: email, where a person registered, and their consent act
+        # (method, notice version + hash, the ticks, when) — the notice texts
+        # themselves are in consent-notices/<hash>.txt
         "participants": [
-            {"id": p.id, "label": p.label, "name": p.name, "notes": p.notes}
+            {
+                "id": p.id,
+                "label": p.label,
+                "name": p.name,
+                "email": p.email,
+                "notes": p.notes,
+                "source": p.source,
+                "registered_table_number": p.registered_table_number,
+                "consent": _consent_json(latest_consents.get(p.id)),
+            }
             for p in session.execute(
                 select(Participant).where(Participant.assembly_id == assembly.id)
             ).scalars()
@@ -549,6 +578,10 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("manifest.json", json.dumps(manifest, indent=1))
         archive.writestr("README.txt", _README)
+        for notice in session.execute(
+            select(ConsentNotice).where(ConsentNotice.hash.in_(notice_hashes))
+        ).scalars():
+            archive.writestr(f"consent-notices/{notice.hash}.txt", notice.text)
         archive.writestr("report.json", json.dumps(report, indent=1))
         archive.writestr("report.md", render_markdown(report))
         try:
@@ -594,7 +627,10 @@ _README = """Nextcloud Citizens — session export
 ===================================
 
 manifest.json   assembly, rounds, tables, participants and recording metadata
-                (format_version tells an importer how to read this archive)
+                (format_version tells an importer how to read this archive;
+                from 2, each participant carries the consent act recorded at
+                the table: method, notice version and hash, the ticks, when)
+consent-notices/<hash>.txt  the exact notice text people read, one per hash
 audio/          one canonical audio file per table and round, named
                 <assembly>-round<N>-table<M>.<ext>; missing when the audio was
                 deleted (see audio_deleted_at in the manifest)

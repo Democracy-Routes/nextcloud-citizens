@@ -45,6 +45,7 @@ def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate
         analysis_instructions=data.analysis_instructions,
         auto_purge_device_audio=data.auto_purge_device_audio,
         redact_names=data.redact_names,
+        participant_consent=data.participant_consent,
         created_by=user_id,
     )
     for position, round_in in enumerate(data.rounds, start=1):

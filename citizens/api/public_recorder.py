@@ -26,10 +26,12 @@ from citizens.security.rate_limit import (
     HELP_LIMITER,
     JOIN_IP_LIMITER,
     JOIN_TOKEN_LIMITER,
+    PARTICIPANT_LIMITER,
     client_ip,
     token_key,
 )
 from citizens.services import capabilities as capabilities_svc
+from citizens.services import consent as consent_svc
 from citizens.services import help as help_svc
 from citizens.services import invites as invites_svc
 from citizens.services import live_source, provider_config
@@ -483,6 +485,70 @@ def message_seen(data: MessageSeenIn, recorder_session: RecorderSess, session: D
     return {"ok": True}
 
 
+@router.get("/recorder/consent-notice")
+def consent_notice(recorder_session: ReadingSess, session: ReadDB):
+    """The notice people read before registering, rendered by the server and
+    hashed as shown, with this table's roster (names, never email) and the
+    assembly's rule (required / optional)."""
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    notice = consent_svc.notice_for(assembly)
+    return {
+        **notice.as_dict(),
+        "mode": assembly.participant_consent,
+        "participants": consent_svc.table_roster(session, assembly.id, recorder_session.table_number),
+    }
+
+
+class ParticipantRegisterIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(default="", max_length=200)
+    notice_hash: str = Field(min_length=64, max_length=64)
+    notice_read: bool = False
+    recording_consent: bool = False
+    transcription_consent: bool = False
+    analysis_consent: bool = False
+    publication_consent: bool = False
+
+
+@router.post("/recorder/participants", status_code=201)
+def register_participant(data: ParticipantRegisterIn, recorder_session: RecorderSess, session: DB):
+    """One person registers at this table on the shared phone: name, the
+    notice they read (by hash), what they consent to. Stored as given — a
+    refusal is a record too — and the answer says whether the table may
+    record now under the assembly's rule."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    if assembly.closed_at is not None:
+        raise HTTPException(status_code=409, detail="This assembly has been closed by the organizer")
+    participant, consent = consent_svc.register(
+        session,
+        assembly,
+        consent_svc.ConsentAct(
+            name=data.name,
+            email=data.email,
+            notice_hash=data.notice_hash,
+            notice_read=data.notice_read,
+            recording_consent=data.recording_consent,
+            transcription_consent=data.transcription_consent,
+            analysis_consent=data.analysis_consent,
+            publication_consent=data.publication_consent,
+        ),
+        method="TABLE_DEVICE",
+        table_number=recorder_session.table_number,
+        recorder_session=recorder_session,
+    )
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "consent": consent_svc.consent_dict(consent),
+        "can_record": consent.recording_consent,
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
+
+
 class HelpIn(BaseModel):
     kind: Literal["TECHNICAL", "ORGANIZER", "PROCESS"]
 
@@ -642,6 +708,9 @@ def _assembly_state(
         # this table's hand, if up — or just acknowledged, so the phone can
         # say the organizer has seen it
         "help": help_svc.latest_for_phone(session, recorder_session),
+        # the assembly's consent rule and where this table stands under it,
+        # so the phone can gate without a second call
+        "consent": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
         "rounds": [
             {
                 "id": round_.id,

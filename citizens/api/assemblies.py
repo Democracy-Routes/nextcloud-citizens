@@ -14,6 +14,7 @@ from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.security.identity import CurrentUser
 from citizens.services import assemblies as svc
+from citizens.services import consent as consent_svc
 from citizens.services import help as help_svc
 from citizens.services import invites as invite_svc
 from citizens.services import messages as messages_svc
@@ -214,7 +215,7 @@ def round_readiness(round_id: str, user: CurrentUser, session: ReadDB):
 @router.get("/assemblies/{assembly_id}/participants", response_model=list[schemas.ParticipantOut])
 def list_participants(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = svc.get_owned_assembly(session, assembly_id, user)
-    return assembly.participants
+    return consent_svc.participants_with_consent(session, assembly)
 
 
 @router.post(

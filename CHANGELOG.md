@@ -161,6 +161,23 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **Individual consent is recorded at the table (server side).** The notice
+  people read is rendered by the server from settings (new: `consent_controller`,
+  `consent_contact`) and the live data-handling facts, in the assembly's
+  language, and hashed exactly as shown; each person who registers on the
+  table's phone gets a `participants` row (`source`, the table they
+  registered at) and a `participant_consents` row — method, notice version
+  and hash, four explicit ticks, the server's timestamp. A refusal is stored
+  too. An assembly set to `participant_consent: required` records a table
+  only once one registered person there has consented (409
+  `PARTICIPANT_CONSENT_REQUIRED` from `/public/recorder/start`); `optional`
+  blocks nothing, and is the API default so older clients keep working —
+  the organizer's wizard sends `required` for an organized assembly,
+  standalone Sessions are `optional`. Migration 0030;
+  `GET /public/recorder/consent-notice`, `POST /public/recorder/participants`;
+  the organizer's participant list carries each person's consent; the
+  export (format 2) carries email, source and consent, plus the notice texts
+  under `consent-notices/`; registration is audited without names.
 - **Print event kit.** Beside Print on the QR tab: one A5 card per table —
   the number large, a band in the table's colour, its QR code and the join
   link in full — two per sheet with a cut line, then the programme (every

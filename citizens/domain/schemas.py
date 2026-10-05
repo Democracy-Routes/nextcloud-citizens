@@ -63,6 +63,11 @@ class AssemblyCreate(BaseModel):
     analysis_instructions: str = Field(default="", max_length=4000)
     auto_purge_device_audio: bool = True
     redact_names: str = Field(default="", max_length=2000)
+    # 'required': a table records only once one registered person there has
+    # consented (services/consent.py). The organizer's wizard sends 'required'
+    # for an organized assembly; the API default stays 'optional' so clients
+    # and scripts from before 0.7 keep working unchanged.
+    participant_consent: Literal["required", "optional"] = "optional"
     rounds: list[RoundIn] = []
 
 
@@ -79,6 +84,7 @@ class AssemblyUpdate(BaseModel):
     redact_names: str | None = Field(default=None, max_length=2000)
     # null follows the instance default; 0 keeps audio indefinitely
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    participant_consent: Literal["required", "optional"] | None = None
 
 
 class AssemblyOut(BaseModel):
@@ -102,6 +108,7 @@ class AssemblyOut(BaseModel):
     closed_at: datetime | None
     audio_retention_days: int | None = None
     audio_purged_at: datetime | None = None
+    participant_consent: str = "optional"
     created_by: str
     created_at: datetime
 
@@ -126,6 +133,22 @@ class CsvImportIn(BaseModel):
     csv: str
 
 
+class ParticipantConsentOut(BaseModel):
+    """A person's newest consent act, as recorded at the table."""
+
+    method: str
+    notice_version: str
+    notice_hash: str
+    notice_language: str
+    notice_read: bool
+    recording: bool
+    transcription: bool
+    analysis: bool
+    publication: bool
+    confirmed_at: datetime
+    withdrawn_at: datetime | None = None
+
+
 class ParticipantOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -134,6 +157,10 @@ class ParticipantOut(BaseModel):
     name: str
     email: str
     notes: str
+    # ORGANIZER, TABLE_DEVICE or SELF_PHONE — where the row came from
+    source: str = "ORGANIZER"
+    registered_table_number: int | None = None
+    consent: ParticipantConsentOut | None = None
 
 
 class TableOut(BaseModel):

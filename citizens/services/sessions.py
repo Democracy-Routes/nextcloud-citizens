@@ -78,6 +78,8 @@ def create_standalone_session(
         language=data.language,
         recording_mode=data.recording_mode,
         default_table_count=table_count,
+        # a spontaneous Session offers registration but blocks nothing
+        participant_consent="optional",
         created_by=user_id,
     )
     round_in = schemas.RoundIn(

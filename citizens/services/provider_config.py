@@ -52,6 +52,11 @@ class ConfigSnapshot:
     analysis_ready: bool = False
     live_stt: dict = field(default_factory=lambda: dict(EMPTY_LIVE_STT))
     organization_name: str = ""
+    # who is the data controller on the consent notice, and how to reach them
+    # (services/consent_notice.py); the controller falls back to the
+    # organization name when empty
+    consent_controller: str = ""
+    consent_contact: str = ""
     refreshed_at: float = 0.0
     # False: the refresh failed and these are defaults (or the previous values)
     ok: bool = False
@@ -127,6 +132,8 @@ def refresh_config_snapshot() -> ConfigSnapshot:
                 analysis_ready=analysis_enabled and bool(store.get_value("analysis_api_key")),
                 live_stt=_read_live_stt(store),
                 organization_name=get_setting(store, "organization_name"),
+                consent_controller=get_setting(store, "consent_controller"),
+                consent_contact=get_setting(store, "consent_contact"),
                 refreshed_at=time.monotonic(),
                 ok=True,
                 store_id=id(store),
@@ -142,6 +149,8 @@ def refresh_config_snapshot() -> ConfigSnapshot:
                 analysis_ready=previous.analysis_ready if previous else False,
                 live_stt=previous.live_stt if previous else dict(EMPTY_LIVE_STT),
                 organization_name=previous.organization_name if previous else "",
+                consent_controller=previous.consent_controller if previous else "",
+                consent_contact=previous.consent_contact if previous else "",
                 refreshed_at=time.monotonic(),
                 ok=False,
                 store_id=previous.store_id if previous else 0,
@@ -392,6 +401,10 @@ DEFAULTS = {
     "analysis_extra_instructions": "",
     # shown with the logo on PDF report headers/footers
     "organization_name": "",
+    # the consent notice: who is responsible for the data (empty: the
+    # organization name) and how to reach them to exercise GDPR rights
+    "consent_controller": "",
+    "consent_contact": "",
     # days to keep raw audio after an assembly is CLOSED; 0 keeps it
     # indefinitely. Transcripts, findings and reports are never affected — only
     # the recordings. Individual assemblies can override this.
@@ -499,6 +512,8 @@ def providers_summary(store: ConfigStore) -> dict:
     return {
         "organization_name": get_setting(store, "organization_name"),
         "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
+        "consent_controller": get_setting(store, "consent_controller"),
+        "consent_contact": get_setting(store, "consent_contact"),
         "stt": {
             "provider": get_setting(store, "stt_provider"),
             "live_enabled": get_setting(store, "stt_live_enabled") == "1",

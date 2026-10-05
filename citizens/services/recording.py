@@ -364,6 +364,13 @@ def start_recording(
             status_code=409, detail="The facilitator has not started this round yet"
         )
 
+    # an assembly that requires individual consent records a table only once
+    # one registered person there has consented (services/consent.py) — the
+    # rule lives here, where recording starts, not only on the phone
+    from citizens.services import consent as consent_svc
+
+    consent_svc.guard_recording(session, round_.assembly, recorder_session.table_number)
+
     # Plenary is the whole room recorded by many phones at once: several
     # concurrent recordings on the one table are the point, not an accident, so
     # none of the one-per-table guard below applies. Every other mode keeps it.

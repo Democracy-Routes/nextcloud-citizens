@@ -177,7 +177,7 @@ def test_session_export_zip_is_portable(client, tmp_path):
     assert any(name.startswith("audio/") for name in names), names
 
     manifest = json.loads(archive.read("manifest.json"))
-    assert manifest["format_version"] == 1
+    assert manifest["format_version"] == 2
     assert manifest["assembly"]["name"] == "TEST Export"
     assert manifest["recordings"][0]["sha256"]
     assert manifest["recordings"][0]["audio_file"].startswith("audio/")

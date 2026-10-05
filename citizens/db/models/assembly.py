@@ -72,6 +72,13 @@ class Assembly(Base):
     # analysis model. Free text, one per line or comma-separated: the organizer
     # knows who is in the room, and a guess would mangle ordinary words.
     redact_names: Mapped[str] = mapped_column(Text, default="")
+    # 'required': a table records only once one registered person there has
+    # consented (services/consent.py); 'optional': the notice is shown and
+    # registration offered, nothing is blocked. Organized assemblies start
+    # 'required', spontaneous Sessions 'optional'.
+    participant_consent: Mapped[str] = mapped_column(
+        String(16), default="optional", server_default="optional"
+    )
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 
@@ -155,6 +162,16 @@ class Participant(Base):
     name: Mapped[str] = mapped_column(String(200), default="")
     email: Mapped[str] = mapped_column(String(200), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
+    # ORGANIZER (the list, the CSV) or registered at a table phone: TABLE_DEVICE
+    # on the shared phone, SELF_PHONE through the table's registration code
+    source: Mapped[str] = mapped_column(String(16), default="ORGANIZER", server_default="ORGANIZER")
+    # where a table-phone registration happened — the table is then known
+    # without anyone typing it; the round is the one being set up at the time
+    registered_table_number: Mapped[int | None] = mapped_column(Integer)
+    registered_round_id: Mapped[str | None] = mapped_column(
+        ForeignKey("rounds.id", ondelete="SET NULL")
+    )
+    registered_session_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
 
     assembly: Mapped[Assembly] = relationship(back_populates="participants")

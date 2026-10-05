@@ -52,6 +52,9 @@ CAPABILITY_LIMITER = SlidingWindowLimiter(max_events=20, window_seconds=60)
 # Need help from a table: one open request per table anyway, so a handful a
 # minute per phone is a nervous tapper, not a use case
 HELP_LIMITER = SlidingWindowLimiter(max_events=6, window_seconds=60)
+# participants registered from one phone: a table of ten passing the phone
+# around takes minutes, not seconds
+PARTICIPANT_LIMITER = SlidingWindowLimiter(max_events=20, window_seconds=60)
 
 
 def token_key(token: str) -> str:
