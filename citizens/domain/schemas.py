@@ -242,6 +242,34 @@ class SessionOut(BaseModel):
     recording_count: int = 0
 
 
+class MessageIn(BaseModel):
+    """What the organizer says to the tables. Presets (TIME_LEFT with
+    minutes, WRAP_UP) are worded by the server in the assembly's language;
+    PROMPT and CUSTOM carry their own text."""
+
+    kind: Literal["TIME_LEFT", "WRAP_UP", "PROMPT", "CUSTOM"]
+    text: str | None = Field(default=None, max_length=300)
+    minutes: int | None = Field(default=None, ge=1, le=600)
+    target_table_number: int | None = Field(default=None, ge=1)
+    sound: bool = False
+
+
+class MessageOut(BaseModel):
+    id: int
+    kind: str
+    text: str
+    sound: bool
+    created_at: datetime
+    created_by: str | None = None
+    target_table_number: int | None = None
+    seen_by: list[int] = []
+    not_seen_by: list[int] = []
+
+
+class MessageSeenIn(BaseModel):
+    message_id: int = Field(ge=1)
+
+
 class PromoteSessionIn(BaseModel):
     """A standalone Session becomes an Assembly: the event needs a name."""
 

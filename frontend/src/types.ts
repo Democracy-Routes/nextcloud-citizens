@@ -254,6 +254,20 @@ export interface TableReadiness {
 	}>
 }
 
+/** What the organizer said to the tables of a session, and who has shown it. */
+export interface SessionMessage {
+	id: number
+	kind: 'TIME_LEFT' | 'WRAP_UP' | 'PROMPT' | 'CUSTOM'
+	text: string
+	sound: boolean
+	created_at: string
+	created_by: string | null
+	/** null: every table */
+	target_table_number: number | null
+	seen_by: number[]
+	not_seen_by: number[]
+}
+
 export interface MonitorTable {
 	table_id: string
 	number: number

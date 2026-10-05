@@ -31,6 +31,7 @@ from citizens.security.rate_limit import (
 from citizens.services import capabilities as capabilities_svc
 from citizens.services import invites as invites_svc
 from citizens.services import live_source, provider_config
+from citizens.services import messages as messages_svc
 from citizens.services import recording as rec_svc
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import data_handling_summary, live_stt_snapshot
@@ -467,6 +468,19 @@ def heartbeat(data: HeartbeatIn, recorder_session: RecorderSess, session: DB):
     return {"ok": True}
 
 
+class MessageSeenIn(BaseModel):
+    message_id: int = Field(ge=1)
+
+
+@router.post("/recorder/messages/seen")
+def message_seen(data: MessageSeenIn, recorder_session: RecorderSess, session: DB):
+    """The phone has shown the organizer's message: its receipt, read by the
+    Live tab as "delivered 9/10". Separate from the heartbeat so the recorder
+    engine, which owns the heartbeat, stays untouched."""
+    messages_svc.mark_seen(session, recorder_session, data.message_id)
+    return {"ok": True}
+
+
 class LogEntry(BaseModel):
     ts: float
     level: str = Field(max_length=10)
@@ -607,6 +621,9 @@ def _assembly_state(
         # server cannot push, so it rides on this poll — which every recorder
         # already makes every few seconds.
         "purge_local_audio": assembly.device_audio_purge_requested_at is not None,
+        # what the organizer has said to this table and the phone has not
+        # shown yet ("5 minutes left"); the phone posts a receipt once shown
+        "messages": messages_svc.unseen_for(session, recorder_session),
         "rounds": [
             {
                 "id": round_.id,

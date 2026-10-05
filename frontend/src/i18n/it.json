@@ -274,6 +274,10 @@
 			"unavailable": "Non è stato possibile creare il codice — chiedi all'organizzatore.",
 			"close": "Chiudi"
 		},
+		"message": {
+			"from": "Dall'organizzatore",
+			"dismiss": "Chiudi"
+		},
 		"battery": {
 			"lowTitle": "Batteria al {percent}% — questo è l'unico registratore del tavolo",
 			"lowBody": "Aggiungi ora un telefono di riserva: registra accanto a questo, così non si perde nulla se questo si spegne.",

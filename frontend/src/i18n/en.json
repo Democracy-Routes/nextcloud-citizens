@@ -274,6 +274,10 @@
 			"unavailable": "The code could not be made — ask the organizer.",
 			"close": "Close"
 		},
+		"message": {
+			"from": "From the organizer",
+			"dismiss": "Dismiss"
+		},
 		"battery": {
 			"lowTitle": "Battery at {percent}% — this is the only recorder at this table",
 			"lowBody": "Add a backup phone now: it records beside this one, so nothing is lost if this phone dies.",

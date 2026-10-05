@@ -677,6 +677,31 @@
 #citizens-app .cz-health--ok { border-color: var(--cz-green); color: var(--cz-green); }
 #citizens-app .cz-health--warn { border-color: var(--cz-amber); color: var(--cz-amber); }
 #citizens-app .cz-health--bad { border-color: var(--cz-danger); color: var(--cz-danger); }
+/* Live tab: the facilitator's voice to the tables, and whether it arrived */
+#citizens-app .cz-broadcast {
+	margin: 0 0 12px;
+	padding: 10px 14px;
+	border-radius: var(--cz-radius);
+	border: 1px solid var(--cz-border);
+	background: var(--cz-bg);
+}
+#citizens-app .cz-broadcast__row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 6px;
+}
+#citizens-app .cz-broadcast__target { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+#citizens-app .cz-broadcast__log {
+	list-style: none;
+	margin: 4px 0 0;
+	padding: 0;
+	font-size: 0.82rem;
+	line-height: 1.5;
+}
+#citizens-app .cz-broadcast__delivery { margin-left: 8px; color: var(--cz-green); font-weight: 600; }
+#citizens-app .cz-broadcast__delivery--partial { color: var(--cz-amber); }
 #citizens-app .cz-quietrow td { padding: 6px 10px; background: var(--cz-bg-dark); }
 #citizens-app .cz-row--quiet td { opacity: 0.75; }
 #citizens-app .cz-reasons {

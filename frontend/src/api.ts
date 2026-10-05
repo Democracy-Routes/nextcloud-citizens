@@ -20,6 +20,7 @@ import type {
 	RoundMonitor,
 	SessionCreate,
 	SessionCreated,
+	SessionMessage,
 	Table,
 	TableAdded,
 	TranscriptData,
@@ -147,6 +148,18 @@ export const api = {
 	startRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/start`),
 	endRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/end`),
 	roundMonitor: (roundId: string) => request<RoundMonitor>('GET', `/api/v1/rounds/${roundId}/monitor`),
+	roundMessages: (roundId: string) =>
+		request<SessionMessage[]>('GET', `/api/v1/rounds/${roundId}/messages`),
+	sendMessage: (
+		roundId: string,
+		data: {
+			kind: SessionMessage['kind']
+			text?: string
+			minutes?: number
+			target_table_number?: number | null
+			sound?: boolean
+		},
+	) => request<SessionMessage>('POST', `/api/v1/rounds/${roundId}/messages`, data),
 	roundFindings: (roundId: string) =>
 		request<RoundFindings>('GET', `/api/v1/rounds/${roundId}/findings`),
 	updateFinding: (findingId: string, payload: { status?: string; title?: string; summary?: string }) =>

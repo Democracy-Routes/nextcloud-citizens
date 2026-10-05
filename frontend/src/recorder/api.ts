@@ -111,8 +111,20 @@ export interface JoinResult {
 	purge_local_audio?: boolean
 }
 
+/** What the organizer said to this table and the phone has not shown yet. */
+export interface PhoneMessage {
+	id: number
+	kind: 'TIME_LEFT' | 'WRAP_UP' | 'PROMPT' | 'CUSTOM'
+	/** already in the assembly's language */
+	text: string
+	/** the phone may vibrate once */
+	sound: boolean
+	created_at: string
+}
+
 export interface RecorderStatus {
 	assembly: AssemblyInfo
+	messages?: PhoneMessage[]
 	report_available?: boolean
 	/** the organizer closed the assembly (possibly mid-round): stop, don't advance */
 	assembly_closed?: boolean
@@ -249,6 +261,13 @@ export const recorderApi = {
 		request<CapabilityPeek>('POST', '/api/v1/public/capabilities/peek', { json: { token } }),
 
 	status: (token: string) => request<RecorderStatus>('GET', '/api/v1/public/recorder/status', { token }),
+
+	/** The phone has shown the organizer's message — the Live tab's "delivered". */
+	messageSeen: (token: string, messageId: number) =>
+		request<{ ok: boolean }>('POST', '/api/v1/public/recorder/messages/seen', {
+			token,
+			json: { message_id: messageId },
+		}),
 
 	start: (token: string, roundId: string, mimeType: string) =>
 		request<{ recording_id: string; state: string }>('POST', '/api/v1/public/recorder/start', {

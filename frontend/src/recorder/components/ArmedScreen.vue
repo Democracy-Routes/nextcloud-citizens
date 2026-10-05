@@ -7,10 +7,12 @@ import { mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { recorderApi, type JoinResult, type RoundInfo } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
+import MessageBanner from './MessageBanner.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
 import { idb } from '../idb'
+import { useTableMessages } from '../useTableMessages'
 import { useWakeLock, wakeLockHeld } from '../useWakeLock'
 
 /*
@@ -80,10 +82,14 @@ const continuableRound = computed(
  * the shape a replaced phone leaves behind until the table is released. */
 const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
 
+// "5 minutes left" from the organizer, riding the same poll
+const messages = useTableMessages(props.session.session_token)
+
 async function poll(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
 		rounds.value = status.rounds
+		messages.ingest(status)
 		reportAvailable.value = status.report_available ?? false
 		assemblyClosed.value = status.assembly_closed ?? false
 		offline.value = false
@@ -137,6 +143,7 @@ onBeforeUnmount(() => {
 
 <template>
 	<div class="rc-fill">
+		<MessageBanner v-if="messages.current.value" :message="messages.current.value" @dismiss="messages.dismiss" />
 		<div class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 16px; padding-bottom: 8px">
 				<p class="rc-eyebrow">{{ session.assembly.name }}</p>

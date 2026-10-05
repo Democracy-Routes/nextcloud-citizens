@@ -19,7 +19,7 @@ import { describeError } from '../errors'
 import { relativeAge, timestamp } from '../format'
 import { LIVE_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
-import type { AssemblyDetail, MonitorTable, RoundMonitor, TranscriptData } from '../types'
+import type { AssemblyDetail, MonitorTable, RoundMonitor, SessionMessage, TranscriptData } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
@@ -58,7 +58,60 @@ async function poll(): Promise<void> {
 	// be what tells the rest of the app — otherwise the header pill, the
 	// sidebar and the Rounds tab stay on whatever they last heard
 	if (previous && previous !== monitor.value.status) emit('changed')
+	void loadMessages()
 }
+
+/* ---- the facilitator's voice: "5 minutes left" to every table, or one ----
+ * A message rides the phones' status poll; each phone reports when it has
+ * shown it, which is the "delivered 9/10" here. Nothing stops a recording. */
+const messages = ref<SessionMessage[]>([])
+const messagesOpen = ref(false)
+const messageText = ref('')
+const messageTarget = ref<number | null>(null)
+const messageBusy = ref(false)
+
+async function loadMessages(): Promise<void> {
+	if (!roundId.value) return
+	try {
+		messages.value = await api.roundMessages(roundId.value)
+	} catch {
+		/* an older server, or a blink: the row simply shows what it last had */
+	}
+}
+
+async function sendMessage(data: Parameters<typeof api.sendMessage>[1]): Promise<void> {
+	if (!roundId.value || messageBusy.value) return
+	messageBusy.value = true
+	try {
+		await api.sendMessage(roundId.value, { ...data, target_table_number: messageTarget.value })
+		messageText.value = ''
+		await loadMessages()
+	} catch (err) {
+		error.value = describeError(err).message
+	} finally {
+		messageBusy.value = false
+	}
+}
+
+function clockOf(iso: string): string {
+	return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function sendCustom(): void {
+	const text = messageText.value.trim()
+	if (text) void sendMessage({ kind: 'CUSTOM', text })
+}
+
+function deliveryText(message: SessionMessage): string {
+	const total = message.seen_by.length + message.not_seen_by.length
+	if (!total) return 'no table in this session'
+	const missing = message.not_seen_by.length
+	if (!missing) return `Delivered ${total}/${total}`
+	const names = message.not_seen_by.map((n) => `Table ${n}`).join(', ')
+	return `Delivered ${message.seen_by.length}/${total} · ${names} not yet`
+}
+
+const recentMessages = computed(() => messages.value.slice(0, 3))
 
 // keeps polling while hidden: this is the live view, and a facilitator
 // switching to another tab for ten seconds should not come back to stale data
@@ -556,6 +609,59 @@ function pendingChunks(table: MonitorTable): number {
 			<span v-if="quietTables.length && attentionTables.length" class="cz-muted">
 				{{ quietTables.length }} {{ quietTables.length === 1 ? 'table is' : 'tables are' }} fine and folded below.
 			</span>
+		</div>
+
+		<!-- the facilitator's voice to the tables -->
+		<div v-if="monitor && monitor.status === 'ACTIVE'" class="cz-broadcast">
+			<div class="cz-broadcast__row">
+				<strong>Message the tables</strong>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'TIME_LEFT', minutes: 10 })">
+					10 min left
+				</CzButton>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'TIME_LEFT', minutes: 5 })">
+					5 min left
+				</CzButton>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'TIME_LEFT', minutes: 1 })">
+					1 min left
+				</CzButton>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'WRAP_UP', sound: true })">
+					Wrap up
+				</CzButton>
+				<CzButton variant="tertiary" small @click="messagesOpen = !messagesOpen">
+					{{ messagesOpen ? 'Less' : 'Write a message' }}
+				</CzButton>
+				<label class="cz-broadcast__target">
+					to
+					<select v-model="messageTarget">
+						<option :value="null">all tables</option>
+						<option v-for="table in monitor.tables" :key="table.number" :value="table.number">
+							Table {{ table.number }}
+						</option>
+					</select>
+				</label>
+			</div>
+			<form v-if="messagesOpen" class="cz-broadcast__row" @submit.prevent="sendCustom">
+				<input
+					v-model="messageText"
+					type="text"
+					maxlength="300"
+					placeholder="A prompt or an instruction for the tables"
+					aria-label="Message to the tables"
+					style="flex: 1; min-width: 220px" />
+				<CzButton variant="primary" small type="submit" :disabled="messageBusy || !messageText.trim()">
+					Send
+				</CzButton>
+			</form>
+			<ul v-if="recentMessages.length" class="cz-broadcast__log">
+				<li v-for="message in recentMessages" :key="message.id">
+					<span class="cz-muted">{{ clockOf(message.created_at) }}</span>
+					<span v-if="message.target_table_number" class="cz-muted"> · Table {{ message.target_table_number }}</span>
+					— {{ message.text }}
+					<span class="cz-broadcast__delivery" :class="{ 'cz-broadcast__delivery--partial': message.not_seen_by.length }">
+						{{ deliveryText(message) }}
+					</span>
+				</li>
+			</ul>
 		</div>
 
 		<div class="cz-countbar">

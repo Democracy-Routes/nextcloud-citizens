@@ -54,6 +54,9 @@ class RecorderSession(Base):
     # latest device-reported health (heartbeat payload), for the live dashboard
     last_status_json: Mapped[str] = mapped_column(Text, default="{}")
     last_status_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # the newest organizer message this phone has shown (session_messages.id):
+    # the Live tab's "delivered 9/10" reads from here
+    last_seen_message_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class Recording(Base):

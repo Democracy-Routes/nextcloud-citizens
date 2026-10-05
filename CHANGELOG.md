@@ -161,6 +161,17 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **The organizer can speak to the tables.** The Live tab has a "Message the
+  tables" row: 10 / 5 / 1 minutes left, Wrap up, or a written prompt — to
+  every table or one of them. Presets are worded by the server in the
+  assembly's language ("5 minuti rimasti"); the message rides the status
+  poll every phone already makes and shows as a banner — big for six
+  seconds, then one line, then gone — never over the Finish button and never
+  touching capture. Each phone reports when it has shown it, so the row
+  reads "Delivered 9/10 · Table 7 not yet". Migration 0028
+  (`session_messages`, `recorder_sessions.last_seen_message_id`),
+  `POST/GET /api/v1/rounds/{id}/messages`, `POST
+  /api/v1/public/recorder/messages/seen`; sends are audited.
 - **A dying phone asks for a backup in time.** While recording, the table's
   only recorder shows a quiet card at 15 % battery — "Add a backup phone",
   which opens the same Add recorder code as the bar — and at 8 % "hand the

@@ -15,6 +15,7 @@ from citizens.domain import schemas
 from citizens.security.identity import CurrentUser
 from citizens.services import assemblies as svc
 from citizens.services import invites as invite_svc
+from citizens.services import messages as messages_svc
 from citizens.services import rounds as rounds_svc
 from citizens.services import tables as tables_svc
 from citizens.services.audit import record_audit_event
@@ -153,6 +154,25 @@ def end_round(round_id: str, user: CurrentUser, session: DB):
 def round_monitor(round_id: str, user: CurrentUser, session: ReadDB):
     round_ = svc.get_owned_round(session, round_id, user)
     return rounds_svc.round_monitor(session, round_)
+
+
+@router.post("/rounds/{round_id}/messages", response_model=schemas.MessageOut, status_code=201)
+def send_message(round_id: str, data: schemas.MessageIn, user: CurrentUser, session: DB):
+    """Say something to every table of this session, or to one: "5 minutes
+    left", "wrap up", a prompt. Rides the phones' status poll; the phones
+    report receipt, which GET below shows as delivered / not yet."""
+    round_ = svc.get_owned_round(session, round_id, user)
+    message = messages_svc.post_message(
+        session, round_, actor=user, kind=data.kind, text=data.text, minutes=data.minutes,
+        target_table_number=data.target_table_number, sound=data.sound,
+    )
+    return messages_svc.list_with_delivery(session, round_, limit=1)[0] | {"id": message.id}
+
+
+@router.get("/rounds/{round_id}/messages", response_model=list[schemas.MessageOut])
+def list_messages(round_id: str, user: CurrentUser, session: ReadDB):
+    round_ = svc.get_owned_round(session, round_id, user)
+    return messages_svc.list_with_delivery(session, round_)
 
 
 @router.get("/rounds/{round_id}/readiness")

@@ -17,9 +17,11 @@ import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '..
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
 import BatteryHandover from './BatteryHandover.vue'
+import MessageBanner from './MessageBanner.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
 import { batteryPrompt } from '../batteryPrompt'
+import { useTableMessages } from '../useTableMessages'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
 import { clientLog, ship } from '../logger'
@@ -75,6 +77,9 @@ const handover = computed(() =>
 )
 const bar = ref<InstanceType<typeof TableBar> | null>(null)
 let batteryTimer = 0
+
+// "5 minutes left" from the organizer, riding the round poll below
+const messages = useTableMessages(props.session.session_token)
 
 /** This phone takes over its table's live captions. The other recorder keeps
  * recording; only its caption session ends. */
@@ -400,6 +405,7 @@ onMounted(async () => {
 		if (state.phase !== 'recording') return
 		try {
 			const status = await recorderApi.status(props.session.session_token)
+			messages.ingest(status)
 			const current = status.rounds.find((r) => r.id === props.round.id)
 			if (current && current.status === 'ENDED') {
 				roundEnded.value = true
@@ -537,6 +543,7 @@ async function clearSynced(): Promise<void> {
 			<TableBadge :number="session.table_number" :color-key="tableInfo?.color_key ?? session.table_color" />
 			<span v-if="state.phase === 'recording'" class="rc-live">{{ t('recorder.recording.badge') }}</span>
 		</div>
+		<MessageBanner v-if="messages.current.value" :message="messages.current.value" @dismiss="messages.dismiss" />
 		<!-- more than one phone records this table: say how many, and whose
 		     captions the room is reading -->
 		<p v-if="tableInfo && tableInfo.recorders > 1" class="rc-recorders">
