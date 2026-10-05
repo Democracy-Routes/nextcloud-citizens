@@ -97,6 +97,15 @@ not rewritten.
   *Recorders: 2 · Live captions: Recorder A*; a backup phone's caption panel
   says whose captions the room is reading and offers to show them here
   instead. All of it is translated (en, it) like the rest of the recorder.
+- **A transcript states where it came from.** `GET /recordings/{id}/transcript`
+  and the Files tab carry a `provenance` block — `source_type` (`live` or
+  `final`), provider, model, language, recording, the recorder phone (slot A,
+  B…), when it was made, and `canonical: true` — and the report's methodology
+  names the speech-to-text engines that produced the text. The rule is
+  stated rather than inferred: the transcript row is the canonical record of
+  its recording, one per recording, and a final transcription replaces a
+  live-captions one deterministically. Live and final transcription remain
+  independent switches in every combination.
 
 - **A ten-table rehearsal can be run against an instance we do not
   administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from

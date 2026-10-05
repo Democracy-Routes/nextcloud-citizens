@@ -232,11 +232,35 @@ def _methodology_note(session: Session, assembly: Assembly) -> str:
     """The standing note, plus whatever was unusual about THIS assembly."""
     language = assembly.language
     parts = [text(language, "methodology_note")]
+    engines = _transcript_engines(session, assembly)
+    if engines:
+        parts.append(text(language, "transcript_engines", engines=engines))
     if _has_live_transcript(session, assembly):
         parts.append(text(language, "live_transcript_note"))
     if _has_replaced_device(session, assembly):
         parts.append(text(language, "device_replaced_note"))
     return " ".join(parts)
+
+
+def _transcript_engines(session: Session, assembly: Assembly) -> str:
+    """The providers and models that produced this assembly's transcripts —
+    "deepgram nova-3, vosk vosk-model-small-it-0.22" — so the report states its
+    provenance rather than leaving a reader to guess."""
+    rows = session.execute(
+        select(Transcript.provider, Transcript.model, Transcript.source)
+        .join(Recording, Recording.id == Transcript.recording_id)
+        .where(Recording.assembly_id == assembly.id)
+        .distinct()
+    ).all()
+    names = sorted(
+        {
+            " ".join(part for part in (provider, model) if part)
+            + (f" ({text(assembly.language, 'source_live')})" if source == "live" else "")
+            for provider, model, source in rows
+            if provider or model
+        }
+    )
+    return ", ".join(names)
 
 
 def _has_replaced_device(session: Session, assembly: Assembly) -> bool:

@@ -239,6 +239,30 @@ def store_transcript(
     return transcript
 
 
+def transcript_provenance(transcript: Transcript) -> dict:
+    """Where this transcript came from, stated explicitly.
+
+    `source_type` is "final" (the finished audio, transcribed by a batch
+    provider) or "live" (the round's live captions, adopted when final
+    transcription is off). The Transcript row IS the canonical record of its
+    recording — one per recording, and `store_transcript` replaces it when a
+    final transcription lands over a live one — so `canonical` is always true
+    here; it exists so a reader never has to infer the rule. A live-caption
+    file may also exist beside a final transcript (see the API), as the
+    provisional record it was.
+    """
+    return {
+        "source_type": transcript.source,
+        "provider": transcript.provider,
+        "model": transcript.model,
+        "language": transcript.language,
+        "recording_id": transcript.recording_id,
+        # ISO text, not a datetime: this payload is also written into exports
+        "created_at": transcript.created_at.isoformat() if transcript.created_at else None,
+        "canonical": True,
+    }
+
+
 def transcript_payload(transcript: Transcript) -> dict:
     return {
         "transcript_id": transcript.id,
@@ -247,6 +271,7 @@ def transcript_payload(transcript: Transcript) -> dict:
         "model": transcript.model,
         "language": transcript.language,
         "source": transcript.source,
+        "provenance": transcript_provenance(transcript),
         "segments": [
             {
                 "id": segment.id,

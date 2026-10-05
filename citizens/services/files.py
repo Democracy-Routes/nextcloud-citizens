@@ -32,7 +32,7 @@ from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
 from citizens.services.table_recordings import recording_slots, slot_label
-from citizens.services.transcription import transcript_payload
+from citizens.services.transcription import transcript_payload, transcript_provenance
 from citizens.storage.exports import build_target
 from citizens.storage.paths import (
     live_caption_path,
@@ -81,12 +81,12 @@ def list_files(session: Session, assembly: Assembly) -> dict:
     # source too, so the tab can mark a captions-derived transcript and offer
     # to replace it with a real one
     transcribed = {
-        recording_id: source
-        for recording_id, source in session.execute(
-            select(Transcript.recording_id, Transcript.source).where(
+        transcript.recording_id: transcript
+        for transcript in session.execute(
+            select(Transcript).where(
                 Transcript.recording_id.in_([r.id for r in recordings] or [""])
             )
-        )
+        ).scalars()
     }
     by_round: dict[str, list[dict]] = {}
     total_bytes = 0
@@ -132,7 +132,15 @@ def list_files(session: Session, assembly: Assembly) -> dict:
                     recording.audio_deleted_at.isoformat() if recording.audio_deleted_at else None
                 ),
                 "has_transcript": recording.id in transcribed,
-                "transcript_source": transcribed.get(recording.id, ""),
+                "transcript_source": (
+                    transcribed[recording.id].source if recording.id in transcribed else ""
+                ),
+                # where the transcript came from, stated rather than inferred
+                "transcript_provenance": (
+                    transcript_provenance(transcribed[recording.id])
+                    if recording.id in transcribed
+                    else None
+                ),
                 "can_retranscribe": path is not None,
                 # WHY a table failed, not just that it did. A bare orange pill
                 # told the organizer nothing they could act on — and the states

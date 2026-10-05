@@ -89,6 +89,8 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "“Mentioned at N tables” describes how many discussion tables raised a topic; "
             "it is not a measure of participant support."
         ),
+        "transcript_engines": "Speech-to-text: {engines}.",
+        "source_live": "live captions",
         "live_transcript_note": (
             "This assembly's transcripts come from the live captions produced while "
             "the tables were speaking, not from a separate transcription of the "
@@ -187,6 +189,8 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "«Menzionato in N tavoli» indica in quanti tavoli di discussione è emerso "
             "un tema; non è una misura del sostegno dei partecipanti."
         ),
+        "transcript_engines": "Trascrizione automatica: {engines}.",
+        "source_live": "sottotitoli in tempo reale",
         "live_transcript_note": (
             "Le trascrizioni di questa assemblea provengono dai sottotitoli in tempo "
             "reale prodotti mentre i tavoli parlavano, non da una trascrizione separata "

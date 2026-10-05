@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from citizens.config import get_settings
 from citizens.db.models import Recording, Transcript
 from citizens.db.session import get_db
 from citizens.jobs.handlers import TRANSCRIPTION_ATTEMPTS
@@ -16,7 +17,9 @@ from citizens.services.assemblies import get_owned_assembly
 from citizens.services.files import canonical_path
 from citizens.services.jobs import enqueue_job
 from citizens.services.recording_states import transition
+from citizens.services.table_recordings import recording_slots, slot_label
 from citizens.services.transcription import transcript_payload
+from citizens.storage.paths import live_caption_path
 
 router = APIRouter()
 
@@ -39,7 +42,18 @@ def get_transcript(recording_id: str, user: CurrentUser, session: DB):
     ).scalar_one_or_none()
     if transcript is None:
         raise HTTPException(status_code=404, detail=f"No transcript yet (recording is {recording.state})")
-    return transcript_payload(transcript)
+    payload = transcript_payload(transcript)
+    # which of the table's phones made the audio, and whether the round's live
+    # captions also exist on disk as the provisional record they were
+    slot = recording_slots(session, [recording]).get(recording.id, 1)
+    payload["provenance"].update(
+        recorder_slot=slot,
+        recorder_label=slot_label(slot),
+        live_captions_available=live_caption_path(
+            get_settings().app_persistent_storage, recording.assembly_id, recording.id
+        ).exists(),
+    )
+    return payload
 
 
 #: States a recording can be re-transcribed from. The second group is already
