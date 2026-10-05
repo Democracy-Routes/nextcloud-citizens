@@ -71,12 +71,14 @@ onBeforeUnmount(() => window.clearInterval(poll))
 
 			<div class="rc-card" style="margin-top: 16px; text-align: left">
 				<p class="rc-eyebrow" style="margin-bottom: 6px">{{ t('recorder.participant.consentTitle') }}</p>
-				<ul v-if="status.consent" class="rc-consent-summary" data-test="consent">
-					<li :class="status.consent.recording ? 'rc-yes' : 'rc-no'">{{ t('recorder.participant.recording') }}</li>
-					<li :class="status.consent.transcription ? 'rc-yes' : 'rc-no'">{{ t('recorder.participant.transcription') }}</li>
-					<li :class="status.consent.analysis ? 'rc-yes' : 'rc-no'">{{ t('recorder.participant.analysis') }}</li>
-					<li :class="status.consent.publication ? 'rc-yes' : 'rc-no'">{{ t('recorder.participant.publication') }}</li>
-				</ul>
+				<!-- one acceptance was signed, so one line says what it covered -->
+				<p
+					v-if="status.consent"
+					class="rc-consent-line"
+					:class="status.consent.recording ? 'rc-yes' : 'rc-no'"
+					data-test="consent">
+					{{ status.consent.recording ? t('recorder.participant.consentedAll') : t('recorder.participant.refusedAll') }}
+				</p>
 				<p class="rc-muted" style="font-size: 0.8125rem; margin: 10px 0 0">
 					{{
 						status.contact
@@ -104,10 +106,9 @@ onBeforeUnmount(() => window.clearInterval(poll))
 <style scoped>
 .rc-pad { padding: 6px 2px calc(12px + env(safe-area-inset-bottom, 0px)); }
 .rc-lead { font-size: 1.02rem; line-height: 1.5; margin: 8px 0 0; }
-.rc-consent-summary { list-style: none; margin: 0; padding: 0; }
-.rc-consent-summary li { padding: 6px 0; border-bottom: 1px solid var(--rc-border); }
-.rc-consent-summary li::before { content: '✓ '; font-weight: 700; }
-.rc-consent-summary .rc-no::before { content: '✗ '; }
+.rc-consent-line { margin: 0; line-height: 1.45; font-weight: 600; }
+.rc-consent-line::before { content: '✓ '; }
+.rc-consent-line.rc-no::before { content: '✗ '; }
 .rc-yes { color: #1e6b3a; }
 .rc-no { color: #8c1d18; }
 </style>

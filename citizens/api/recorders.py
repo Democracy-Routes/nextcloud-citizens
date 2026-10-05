@@ -279,7 +279,7 @@ def event_kit_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
 
     from citizens.services.branding import logo_path, organization_name
     from citizens.services.event_kit import render_event_kit
-    from citizens.services.provider_config import data_handling_summary
+    from citizens.services.provider_config import data_handling_summary, organization_data
 
     assembly = get_owned_assembly(session, assembly_id, user)
     cards = invite_svc.invite_links(session, assembly)
@@ -297,7 +297,8 @@ def event_kit_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
     if assembly.audio_retention_days is not None:
         handling = {**handling, "audio_retention_days": assembly.audio_retention_days}
     pdf = render_event_kit(
-        assembly.name, assembly.language, cards, rounds, handling, logo_path(), organization_name()
+        assembly.name, assembly.language, cards, rounds, handling, logo_path(), organization_name(),
+        organization=organization_data(), auto_purge=bool(assembly.auto_purge_device_audio),
     )
     filename = f"{assembly.name[:40].replace(' ', '-')}-event-kit.pdf"
     return Response(pdf, media_type="application/pdf", headers=download_headers(filename))

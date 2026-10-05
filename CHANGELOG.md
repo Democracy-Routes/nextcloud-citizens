@@ -161,6 +161,21 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **One complete notice, one acceptance.** The consent notice now follows
+  the paper form section by section — who is responsible (legal name,
+  address, contact, data-protection contact), what is collected, why and on
+  which legal basis, how it works (the phone's local copy and whether it is
+  cleared at closing, the **transcription and analysis providers selected in
+  Settings by name**, pseudonyms, human review, quotations), where the data
+  is kept and who receives it, how long, every GDPR right and the
+  supervisory authority (the Garante for Italian assemblies), and the
+  acceptance sentence itself. Participants tick **one box** — recording,
+  transcription, analysis and anonymous quotations together — or refuse;
+  the stored record still carries the four flags. Notice version
+  `2026-10.2`; the printed event kit prints the same text; Settings →
+  General gains an **Organization data** card (controller, address, email,
+  DPO, hosting, authority) whose blanks are simply left out of the notice.
+  `docs/consent-form.md` and `docs/privacy.md` follow.
 - **The organizer's side of consent.** Settings → General gains a "Privacy
   notice" card (data controller — defaults to the organization name — and
   contact), which the notice names and the participant's page points to.

@@ -71,7 +71,8 @@ def test_registration_is_stored_as_given_with_the_notice_and_seats_the_person(cl
     notice = _notice(client, table1)
     assert notice["mode"] == "required" and notice["participants"] == []
     assert notice["version"] and len(notice["hash"]) == 64
-    assert any("responsible for the data" in p for p in notice["paragraphs"])
+    assert any("responsible for your data" in p for p in notice["paragraphs"])
+    assert notice["acceptance"] == notice["paragraphs"][-1]
 
     # a required assembly: no consenting person, no recording — and the Live
     # tab says so before anyone tries

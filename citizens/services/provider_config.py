@@ -57,6 +57,8 @@ class ConfigSnapshot:
     # organization name when empty
     consent_controller: str = ""
     consent_contact: str = ""
+    # the rest of the organization data the notice prints (see DEFAULTS)
+    organization: dict = field(default_factory=dict)
     refreshed_at: float = 0.0
     # False: the refresh failed and these are defaults (or the previous values)
     ok: bool = False
@@ -101,14 +103,76 @@ def _read_data_handling(store: "ConfigStore") -> dict:
     base_url = get_setting(store, "analysis_base_url")
     return {
         "stt_provider": provider,
+        # the names the consent notice prints — the selected engine and the
+        # analysis service behind the configured endpoint, so the admin panel
+        # and what participants read agree by construction
+        "stt_provider_label": STT_PROVIDER_LABELS.get(provider, provider or ""),
         "stt_configured": bool(store.get_value(f"{provider}_api_key"))
         or provider in ("vosk", "whisper"),
         "stt_hosted": stt_is_hosted(store, provider),
         "analysis_enabled": analysis_on,
         # a self-hosted analysis endpoint keeps transcripts on-premises
         "analysis_hosted": analysis_on and not _is_local_endpoint(base_url),
+        "analysis_provider_label": analysis_provider_label(base_url),
         "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
     }
+
+
+STT_PROVIDER_LABELS = {
+    "vosk": "Vosk",
+    "whisper": "Whisper",
+    "mistral": "Mistral AI",
+    "deepgram": "Deepgram",
+}
+
+_ANALYSIS_HOSTS = {
+    "api.mistral.ai": "Mistral AI",
+    "api.openai.com": "OpenAI",
+    "api.anthropic.com": "Anthropic",
+    "generativelanguage.googleapis.com": "Google",
+    "api.groq.com": "Groq",
+    "openrouter.ai": "OpenRouter",
+}
+
+
+def analysis_provider_label(base_url: str | None) -> str:
+    """Who runs the analysis model, from the configured endpoint: a known
+    hosted service by name, a local endpoint as the organisation's own
+    server, anything else by its hostname."""
+    from urllib.parse import urlparse
+
+    host = (urlparse(base_url or "").hostname or "").lower()
+    if not host:
+        return ""
+    if _is_local_endpoint(base_url or ""):
+        return "local"
+    return _ANALYSIS_HOSTS.get(host, host)
+
+
+ORGANIZATION_KEYS = (
+    "organization_name",
+    "consent_controller",
+    "consent_contact",
+    "org_address",
+    "org_dpo",
+    "org_hosting",
+    "org_authority",
+)
+
+
+def _read_organization(store: "ConfigStore") -> dict:
+    """The organization data the consent notice and the event kit print."""
+    return {key: get_setting(store, key) for key in ORGANIZATION_KEYS}
+
+
+def organization_data() -> dict:
+    """From memory, like every other snapshot read."""
+    snapshot = config_snapshot()
+    data = dict(snapshot.organization)
+    data.setdefault("organization_name", snapshot.organization_name)
+    data.setdefault("consent_controller", snapshot.consent_controller)
+    data.setdefault("consent_contact", snapshot.consent_contact)
+    return data
 
 
 def refresh_config_snapshot() -> ConfigSnapshot:
@@ -134,6 +198,7 @@ def refresh_config_snapshot() -> ConfigSnapshot:
                 organization_name=get_setting(store, "organization_name"),
                 consent_controller=get_setting(store, "consent_controller"),
                 consent_contact=get_setting(store, "consent_contact"),
+                organization=_read_organization(store),
                 refreshed_at=time.monotonic(),
                 ok=True,
                 store_id=id(store),
@@ -151,6 +216,7 @@ def refresh_config_snapshot() -> ConfigSnapshot:
                 organization_name=previous.organization_name if previous else "",
                 consent_controller=previous.consent_controller if previous else "",
                 consent_contact=previous.consent_contact if previous else "",
+                organization=dict(previous.organization) if previous else {},
                 refreshed_at=time.monotonic(),
                 ok=False,
                 store_id=previous.store_id if previous else 0,
@@ -401,10 +467,16 @@ DEFAULTS = {
     "analysis_extra_instructions": "",
     # shown with the logo on PDF report headers/footers
     "organization_name": "",
-    # the consent notice: who is responsible for the data (empty: the
-    # organization name) and how to reach them to exercise GDPR rights
+    # Organization data for the consent notice: who is responsible for the
+    # data (empty: the organization name), how to reach them, postal address,
+    # data-protection contact, where the server is hosted, which supervisory
+    # authority a complaint goes to (empty: a default by language)
     "consent_controller": "",
     "consent_contact": "",
+    "org_address": "",
+    "org_dpo": "",
+    "org_hosting": "",
+    "org_authority": "",
     # days to keep raw audio after an assembly is CLOSED; 0 keeps it
     # indefinitely. Transcripts, findings and reports are never affected — only
     # the recordings. Individual assemblies can override this.
@@ -514,6 +586,10 @@ def providers_summary(store: ConfigStore) -> dict:
         "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
         "consent_controller": get_setting(store, "consent_controller"),
         "consent_contact": get_setting(store, "consent_contact"),
+        "org_address": get_setting(store, "org_address"),
+        "org_dpo": get_setting(store, "org_dpo"),
+        "org_hosting": get_setting(store, "org_hosting"),
+        "org_authority": get_setting(store, "org_authority"),
         "stt": {
             "provider": get_setting(store, "stt_provider"),
             "live_enabled": get_setting(store, "stt_live_enabled") == "1",

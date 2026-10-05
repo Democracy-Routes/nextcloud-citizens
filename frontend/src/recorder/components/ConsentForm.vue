@@ -2,11 +2,12 @@
 	SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 	SPDX-License-Identifier: AGPL-3.0-or-later
 
-	One person's registration: name (required), email (optional), the ticks.
-	The same form on the table's shared phone (ConsentScreen) and on a
-	person's own phone (RegisterPage); the parent sends it. Confirm needs the
-	name, "I have read the notice" and the recording tick; "This person does
-	not consent" needs only the name and records a refusal.
+	One person's registration: name (required), email (optional), one
+	acceptance. The same form on the table's shared phone (ConsentScreen) and
+	on a person's own phone (RegisterPage); the parent sends it. The box's
+	sentence is the notice's own acceptance paragraph, so what is ticked is
+	exactly what the stored hash covers; Confirm needs the name and the box.
+	"This person does not consent" needs only the name and records a refusal.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -15,25 +16,25 @@ import { useI18n } from 'vue-i18n'
 export interface ConsentFormValue {
 	name: string
 	email: string
-	read: boolean
-	recording: boolean
-	transcription: boolean
-	analysis: boolean
-	publication: boolean
+	accepted: boolean
 }
 
-defineProps<{ busy?: boolean; failed?: string; /** "I" rather than "this person" */ self?: boolean }>()
+const props = defineProps<{
+	busy?: boolean
+	failed?: string
+	/** "I" rather than "this person" */
+	self?: boolean
+	/** the notice's acceptance sentence; the catalogue's when absent */
+	acceptance?: string
+}>()
 const emit = defineEmits<{ confirm: [value: ConsentFormValue]; refuse: [value: ConsentFormValue]; cancel: [] }>()
 
 const { t } = useI18n()
 
-const form = ref<ConsentFormValue>({
-	name: '', email: '', read: false, recording: false, transcription: false, analysis: false, publication: false,
-})
+const form = ref<ConsentFormValue>({ name: '', email: '', accepted: false })
 
-const canConfirm = computed(
-	() => form.value.name.trim().length > 0 && form.value.read && form.value.recording,
-)
+const canConfirm = computed(() => form.value.name.trim().length > 0 && form.value.accepted)
+const sentence = computed(() => props.acceptance || t('recorder.consent.form.accept'))
 
 function value(): ConsentFormValue {
 	return { ...form.value, name: form.value.name.trim(), email: form.value.email.trim() }
@@ -51,11 +52,10 @@ function value(): ConsentFormValue {
 			<input v-model="form.email" type="email" autocomplete="email" maxlength="200" data-test="email" />
 		</label>
 		<div class="rc-ticks">
-			<label class="rc-tick"><input v-model="form.read" type="checkbox" data-test="read" /><span>{{ t('recorder.consent.form.read') }}</span></label>
-			<label class="rc-tick"><input v-model="form.recording" type="checkbox" data-test="recording" /><span>{{ t('recorder.consent.form.recording') }}</span></label>
-			<label class="rc-tick"><input v-model="form.transcription" type="checkbox" data-test="transcription" /><span>{{ t('recorder.consent.form.transcription') }}</span></label>
-			<label class="rc-tick"><input v-model="form.analysis" type="checkbox" data-test="analysis" /><span>{{ t('recorder.consent.form.analysis') }}</span></label>
-			<label class="rc-tick"><input v-model="form.publication" type="checkbox" data-test="publication" /><span>{{ t('recorder.consent.form.publication') }}</span></label>
+			<label class="rc-tick">
+				<input v-model="form.accepted" type="checkbox" data-test="accept" />
+				<span>{{ sentence }}</span>
+			</label>
 		</div>
 		<p v-if="failed" class="rc-alert">{{ failed }}</p>
 		<button class="rc-btn rc-primary" :disabled="!canConfirm || busy" data-test="confirm" @click="emit('confirm', value())">

@@ -23,9 +23,11 @@ vi.mock('../../frontend/src/recorder/api', () => ({
 	},
 }))
 
+const ACCEPT = 'By registering you declare that you have read this notice and you consent to everything in it.'
 const NOTICE = {
-	version: '2026-10', language: 'en', hash: 'a'.repeat(64),
-	paragraphs: ['Comune is recording this discussion and is responsible for the data.', 'Legal basis: consent.'],
+	version: '2026-10.2', language: 'en', hash: 'a'.repeat(64),
+	paragraphs: ['Comune is recording this discussion and is responsible for the data.', ACCEPT],
+	acceptance: ACCEPT,
 	mode: 'required', participants: [],
 }
 
@@ -66,20 +68,21 @@ describe('the notice screen', () => {
 		expect(wrapper.text()).toContain('Register a participant')
 		expect(wrapper.find('[data-test="confirm"]').attributes('disabled')).toBeDefined()
 		await wrapper.find('[data-test="name"]').setValue('  Anna ')
-		await wrapper.find('[data-test="read"]').setValue(true)
-		await wrapper.find('[data-test="recording"]').setValue(true)
-		await wrapper.find('[data-test="transcription"]').setValue(true)
-		await wrapper.find('[data-test="analysis"]').setValue(true)
+		// one box, worded by the notice itself
+		expect(wrapper.find('.rc-tick').text()).toBe(ACCEPT)
+		expect(wrapper.find('[data-test="confirm"]').attributes('disabled')).toBeDefined()
+		await wrapper.find('[data-test="accept"]').setValue(true)
 		expect(wrapper.find('[data-test="confirm"]').attributes('disabled')).toBeUndefined()
 		registerParticipant.mockResolvedValue(
 			registered('Anna', true, { mode: 'required', registered: 1, consenting: 1, can_record: true }),
 		)
 		await wrapper.find('[data-test="confirm"]').trigger('click')
 		await flushPromises()
+		// the one acceptance covers every recorded flag
 		expect(registerParticipant).toHaveBeenCalledWith('tok', {
 			name: 'Anna', email: '', notice_hash: 'a'.repeat(64), notice_read: true,
 			recording_consent: true, transcription_consent: true, analysis_consent: true,
-			publication_consent: false,
+			publication_consent: true,
 		})
 		expect(wrapper.text()).toContain('Participant added')
 		expect(wrapper.text()).toContain('Anna')
@@ -109,6 +112,7 @@ describe('the notice screen', () => {
 		await flushPromises()
 		expect(registerParticipant.mock.calls[0][1]).toMatchObject({
 			name: 'Bruno', recording_consent: false, transcription_consent: false, analysis_consent: false,
+			publication_consent: false,
 		})
 		expect(wrapper.text()).toContain('Refusal recorded')
 		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeDefined()

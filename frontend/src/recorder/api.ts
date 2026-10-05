@@ -184,6 +184,9 @@ export interface ConsentNotice {
 	language: string
 	hash: string
 	paragraphs: string[]
+	/** the sentence the one acceptance box carries (the last paragraph);
+	 * absent from a 0.7.0 server, where the catalogue's sentence is used */
+	acceptance?: string
 	mode: 'required' | 'optional'
 	participants: Array<{ label: string; name: string; recording_consent: boolean }>
 }

@@ -19,6 +19,7 @@ stored SVG. The kit only ever needs (table_number, url) for a code.
 from pathlib import Path
 
 from citizens.domain.tables import color_for
+from citizens.services.consent_notice import render_notice
 from citizens.services.qr_sheet import QR_MM, _qr_png, _SheetPDF
 from citizens.services.report_pdf import INK, MUTED
 from citizens.services.report_text import normalize_language
@@ -44,22 +45,6 @@ _TEXT = {
         "duration": "{minutes} minutes",
         "no_sessions": "No sessions have been planned yet.",
         "notice": "Before we record",
-        "notice_intro": (
-            "This discussion is recorded with the phone on the table. The recording is "
-            "transcribed and analysed to produce the assembly's report. Names are replaced "
-            "by pseudonyms before any text leaves the server."
-        ),
-        "stt_hosted": "Transcription engine: {provider} — a hosted service outside this server.",
-        "stt_local": "Transcription engine: {provider} — running on this server.",
-        "analysis_hosted": "Analysis: a hosted AI service reads the pseudonymised transcript.",
-        "analysis_local": "Analysis: an AI model running on this server reads the transcript.",
-        "analysis_off": "Analysis: none — only the transcript is produced.",
-        "retention": "Audio is kept for {days} days after the event, then deleted.",
-        "retention_none": "Audio is deleted as soon as the transcript is ready.",
-        "consent": (
-            "Taking part in the recorded discussion is voluntary. Anyone who prefers not to be "
-            "recorded can say so to the facilitator before the session starts."
-        ),
         "kit": "Event kit",
     },
     "it": {
@@ -72,62 +57,14 @@ _TEXT = {
         "duration": "{minutes} minuti",
         "no_sessions": "Nessuna sessione è ancora stata pianificata.",
         "notice": "Prima di registrare",
-        "notice_intro": (
-            "Questa discussione viene registrata con il telefono sul tavolo. La registrazione "
-            "viene trascritta e analizzata per produrre il rapporto dell'assemblea. I nomi "
-            "vengono sostituiti da pseudonimi prima che qualsiasi testo lasci il server."
-        ),
-        "stt_hosted": "Motore di trascrizione: {provider} — un servizio esterno a questo server.",
-        "stt_local": "Motore di trascrizione: {provider} — in esecuzione su questo server.",
-        "analysis_hosted": "Analisi: un servizio di IA esterno legge la trascrizione pseudonimizzata.",
-        "analysis_local": "Analisi: un modello di IA su questo server legge la trascrizione.",
-        "analysis_off": "Analisi: nessuna — viene prodotta solo la trascrizione.",
-        "retention": "L'audio viene conservato per {days} giorni dopo l'evento, poi cancellato.",
-        "retention_none": "L'audio viene cancellato appena la trascrizione è pronta.",
-        "consent": (
-            "Partecipare alla discussione registrata è volontario. Chi preferisce non essere "
-            "registrato può dirlo a chi facilita prima dell'inizio della sessione."
-        ),
         "kit": "Kit dell'evento",
     },
 }
-
-_PROVIDER_NAMES = {
-    "vosk": "Vosk",
-    "whisper": "Whisper",
-    "openai": "OpenAI",
-    "deepgram": "Deepgram",
-    "assemblyai": "AssemblyAI",
-    "speechmatics": "Speechmatics",
-    "azure": "Azure Speech",
-    "google": "Google Speech",
-}
-
 
 def _t(language: str | None, key: str, **fmt) -> str:
     strings = _TEXT.get(normalize_language(language), _TEXT["en"])
     template = strings.get(key) or _TEXT["en"][key]
     return template.format(**fmt) if fmt else template
-
-
-def notice_lines(language: str | None, handling: dict) -> list[str]:
-    """The recording notice as sentences — the facts the phone shows, on paper."""
-    provider = handling.get("stt_provider") or ""
-    provider_name = _PROVIDER_NAMES.get(provider, provider or "—")
-    lines = [_t(language, "notice_intro")]
-    lines.append(
-        _t(language, "stt_hosted" if handling.get("stt_hosted") else "stt_local", provider=provider_name)
-    )
-    if not handling.get("analysis_enabled"):
-        lines.append(_t(language, "analysis_off"))
-    elif handling.get("analysis_hosted"):
-        lines.append(_t(language, "analysis_hosted"))
-    else:
-        lines.append(_t(language, "analysis_local"))
-    days = int(handling.get("audio_retention_days") or 0)
-    lines.append(_t(language, "retention", days=days) if days > 0 else _t(language, "retention_none"))
-    lines.append(_t(language, "consent"))
-    return lines
 
 
 def _card(pdf: _SheetPDF, y: float, h: float, number: int, url: str, language: str | None,
@@ -179,10 +116,14 @@ def render_event_kit(
     handling: dict,
     logo_path: Path | None = None,
     organization_name: str = "",
+    organization: dict | None = None,
+    auto_purge: bool = True,
 ) -> bytes:
     """`cards` are InviteGenerated (table_number + url); `rounds` dicts with
     position, title, question, objective, duration_minutes; `handling` is
-    data_handling_summary() read by the caller, never here."""
+    data_handling_summary() and `organization` organization_data(), both read
+    by the caller, never here. The notice page is the consent notice itself
+    (services/consent_notice.py), so paper and phone say the same thing."""
     heading = " · ".join(part for part in (organization_name, assembly_name) if part)
     pdf = _SheetPDF(footer_text=f"{heading or assembly_name} — {_t(language, 'kit')}")
     half = (pdf.h - pdf.t_margin - pdf.b_margin - 6) / 2
@@ -239,7 +180,11 @@ def render_event_kit(
     _heading(pdf, _t(language, "notice"))
     pdf.set_font(pdf.family, "", 11)
     pdf.set_text_color(*INK)
-    for line in notice_lines(language, handling):
+    notice = render_notice(
+        language, handling, organization_name=organization_name,
+        organization=organization, auto_purge=auto_purge,
+    )
+    for line in notice.paragraphs:
         pdf.multi_cell(0, 6.5, line, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(2)
     pdf.set_auto_page_break(auto=False)

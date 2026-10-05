@@ -40,7 +40,7 @@ from citizens.security.recorder_tokens import generate_token, hash_token
 from citizens.services import invites as invite_svc
 from citizens.services.audit import record_audit_event
 from citizens.services.consent_notice import Notice, render_notice
-from citizens.services.provider_config import config_snapshot
+from citizens.services.provider_config import config_snapshot, organization_data
 from citizens.services.recording import RERECORDABLE_STATES
 
 CONSENT_REQUIRED_CODE = "PARTICIPANT_CONSENT_REQUIRED"
@@ -70,9 +70,8 @@ def notice_for(assembly: Assembly) -> Notice:
     return render_notice(
         assembly.language,
         handling,
-        controller=snapshot.consent_controller,
-        contact=snapshot.consent_contact,
-        organization_name=snapshot.organization_name,
+        organization=organization_data(),
+        auto_purge=bool(assembly.auto_purge_device_audio),
     )
 
 
@@ -394,7 +393,7 @@ def participant_status(
         ),
         "consent": consent_dict(latest),
         "report_available": report_available,
-        "contact": snapshot.consent_contact,
+        "contact": snapshot.consent_contact or organization_data().get("org_dpo", ""),
         "controller": snapshot.consent_controller or snapshot.organization_name,
     }
 

@@ -46,15 +46,16 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 	busy.value = true
 	failed.value = ''
 	try {
+		const yes = !refuse && value.accepted
 		const result = await recorderApi.registerSelf(props.token, {
 			name: value.name,
 			email: value.email,
 			notice_hash: notice.value.hash,
-			notice_read: refuse ? value.read : true,
-			recording_consent: refuse ? false : value.recording,
-			transcription_consent: refuse ? false : value.transcription,
-			analysis_consent: refuse ? false : value.analysis,
-			publication_consent: refuse ? false : value.publication,
+			notice_read: true,
+			recording_consent: yes,
+			transcription_consent: yes,
+			analysis_consent: yes,
+			publication_consent: yes,
 		})
 		emit('registered', result.participant_token)
 	} catch (err) {
@@ -92,6 +93,7 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 				self
 				:busy="busy"
 				:failed="failed"
+				:acceptance="notice.acceptance"
 				@confirm="(value) => submit(value, false)"
 				@refuse="(value) => submit(value, true)"
 				@cancel="view = 'notice'" />

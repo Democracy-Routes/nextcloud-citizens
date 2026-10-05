@@ -53,13 +53,12 @@ describe('RegisterPage', () => {
 		expect(wrapper.find('[data-test="notice"]').text()).toContain('responsible for the data')
 		await wrapper.find('[data-test="register"]').trigger('click')
 		await wrapper.find('[data-test="name"]').setValue('Giulia')
-		await wrapper.find('[data-test="read"]').setValue(true)
-		await wrapper.find('[data-test="recording"]').setValue(true)
+		await wrapper.find('[data-test="accept"]').setValue(true)
 		expect(wrapper.find('[data-test="refuse"]').text()).toBe('I do not consent')
 		await wrapper.find('[data-test="confirm"]').trigger('click')
 		await flushPromises()
 		expect(registerSelf).toHaveBeenCalledWith('code', expect.objectContaining({
-			name: 'Giulia', notice_hash: 'b'.repeat(64), recording_consent: true,
+			name: 'Giulia', notice_hash: 'b'.repeat(64), recording_consent: true, publication_consent: true,
 		}))
 		expect(wrapper.emitted('registered')?.[0]).toEqual(['ptok'])
 	})
@@ -85,8 +84,8 @@ describe('ParticipantPage', () => {
 		await flushPromises()
 		expect(wrapper.text()).toContain('Hello, Giulia')
 		expect(wrapper.text()).toContain('You are registered at Table 7.')
-		const ticks = wrapper.findAll('[data-test="consent"] li')
-		expect(ticks.map((li) => li.classes().includes('rc-yes'))).toEqual([true, true, false, false])
+		expect(wrapper.find('[data-test="consent"]').classes()).toContain('rc-yes')
+		expect(wrapper.find('[data-test="consent"]').text()).toContain('You consented to the recording')
 		expect(wrapper.text()).toContain('contact privacy@example.org')
 		expect(wrapper.text()).toContain('The report will appear here when the organizer publishes it.')
 		expect(wrapper.find('[data-test="report"]').exists()).toBe(false)

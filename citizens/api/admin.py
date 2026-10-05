@@ -134,6 +134,10 @@ class ProvidersUpdate(BaseModel):
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
     consent_controller: str | None = Field(default=None, max_length=200)
     consent_contact: str | None = Field(default=None, max_length=300)
+    org_address: str | None = Field(default=None, max_length=300)
+    org_dpo: str | None = Field(default=None, max_length=300)
+    org_hosting: str | None = Field(default=None, max_length=300)
+    org_authority: str | None = Field(default=None, max_length=300)
 
 
 # provider endpoints are used for outbound requests from inside the Nextcloud

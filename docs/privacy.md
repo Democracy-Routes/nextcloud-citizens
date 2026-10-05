@@ -130,12 +130,18 @@ controller and contact) and the live data-handling facts, in the assembly's
 language, and hashed exactly as shown; the text behind every hash is kept
 (`consent_notices`). Each person registers one at a time — on the table's
 phone, or on their own phone through a registration code the table shows —
-giving a name (required), an email (optional) and explicit ticks: notice read,
-recording, transcription, AI analysis, and optionally short anonymous
-quotations in the report. The record (`participant_consents`: who, where,
-method, notice version and hash, the ticks, the server's timestamp) is stored
-as given; a refusal is a record too. Registration is audited without name or
-email.
+giving a name (required), an email (optional) and **one explicit
+acceptance** whose sentence is the notice's own last paragraph: recording,
+transcription, AI-assisted analysis and short anonymous quotations in the
+report, all together — there is no partial consent, and "This person does
+not consent" records a refusal. The record (`participant_consents`: who,
+where, method, notice version and hash, the four flags the acceptance
+covers, the server's timestamp) is stored as given. Registration is audited
+without name or email. The notice names the transcription and analysis
+providers selected in Settings and prints the organization data entered
+there (controller, address, contact, data-protection contact, hosting,
+supervisory authority) — blank fields are left out, never shown as
+placeholders.
 
 An assembly set to *Consent at the table: required* (the default for an
 organized assembly) records a table only once one registered person there

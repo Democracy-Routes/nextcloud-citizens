@@ -13,10 +13,13 @@ advice: have counsel read it if the organizer is a public body, and adapt the
 recipients if you use a self-hosted engine (then nothing leaves your server).
 
 **Since 0.7 the phone produces the same record.** The notice on each table's
-phone is rendered by the server from the same facts (plus the data controller
-and contact set in Settings) and each person registers against it
-individually — on the table's phone, or on their own through the table's
-registration code — with the same ticks as below. The record is kept with the
+phone is rendered by the server from the same facts plus the organization
+data entered in Settings → General (controller, address, contact, data-
+protection contact, hosting, supervisory authority — the bracketed fields
+below), naming the transcription and analysis providers actually selected;
+each person registers against it individually — on the table's phone, or on
+their own through the table's registration code — with the one acceptance
+box below. The record is kept with the
 assembly and exported; see [privacy.md](privacy.md). This paper form remains
 the fallback for people without a phone, for a table whose phone is busy
 recording, and for organizers who want a signature on paper.
@@ -98,13 +101,12 @@ recording and transcript on request. You may lodge a complaint with the
 supervisory authority (in Italy: Garante per la protezione dei dati
 personali, www.garanteprivacy.it).
 
-**Consent** — tick each box you agree with:
+**Consent** — tick one box:
 
-☐ I consent to the audio recording and transcription of the discussion at my
-  table, and to its AI-assisted analysis as described above.
-
-☐ I consent to short anonymous quotations from my table being included in
-  the assembly's report, which may be published.
+☐ I have read this notice and I consent to the audio recording of the
+  discussion at my table, to its transcription and AI-assisted analysis, and
+  to short anonymous quotations from my table in the assembly's report, which
+  may be published.
 
 ☐ I do **not** consent. (Tell the organizer: you will be seated at a table
   that is not recorded, or the phone at your table will not record.)
@@ -175,12 +177,11 @@ sessione comporta, su richiesta, l'eliminazione della registrazione e della
 trascrizione del tuo tavolo. Puoi proporre reclamo al Garante per la
 protezione dei dati personali (www.garanteprivacy.it).
 
-**Consenso** — barra le caselle con cui sei d'accordo:
+**Consenso** — barra una casella:
 
-☐ Acconsento alla registrazione audio e alla trascrizione della discussione
-  al mio tavolo e alla sua analisi assistita dall'IA come descritto sopra.
-
-☐ Acconsento all'inserimento di brevi citazioni anonime dal mio tavolo nel
+☐ Ho letto questa informativa e acconsento alla registrazione audio della
+  discussione al mio tavolo, alla sua trascrizione e analisi assistita
+  dall'IA, e all'inserimento di brevi citazioni anonime dal mio tavolo nel
   rapporto dell'assemblea, che potrà essere pubblicato.
 
 ☐ **Non** acconsento. (Avvisa l'organizzatore: sarai assegnato a un tavolo

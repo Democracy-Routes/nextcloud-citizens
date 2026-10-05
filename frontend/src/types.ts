@@ -358,9 +358,13 @@ export type SttProvider = 'mistral' | 'deepgram' | 'whisper' | 'vosk'
 export interface ProvidersSummary {
 	organization_name: string
 	audio_retention_days: number
-	/** the consent notice's data controller and contact (0.7) */
+	/** the organization data the consent notice prints (0.7) */
 	consent_controller?: string
 	consent_contact?: string
+	org_address?: string
+	org_dpo?: string
+	org_hosting?: string
+	org_authority?: string
 	stt: {
 		provider: SttProvider
 		live_enabled: boolean
