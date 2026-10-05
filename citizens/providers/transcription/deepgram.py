@@ -39,6 +39,10 @@ def transcribe_file(
     }
     if language:
         params["language"] = language
+    else:
+        # no language forced (Record now): let Deepgram say what it heard;
+        # normalize() keeps `detected_language` as the transcript's language
+        params["detect_language"] = "true"
     content_type = (mime_type or "audio/webm").split(";")[0].strip()
 
     try:

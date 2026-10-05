@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
+import { setLocale } from '../../i18n'
 import { recorderApi, type HelpState, type JoinResult, type RoundInfo, type TableConsent } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
 import HelpButton from './HelpButton.vue'
@@ -98,6 +99,7 @@ async function poll(): Promise<void> {
 		messages.ingest(status)
 		help.value = status.help
 		if (status.consent) consent.value = status.consent
+		if (status.assembly?.language) setLocale(status.assembly.language)
 		reportAvailable.value = status.report_available ?? false
 		assemblyClosed.value = status.assembly_closed ?? false
 		offline.value = false

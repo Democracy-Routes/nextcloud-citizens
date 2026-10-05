@@ -75,6 +75,10 @@ async function saveDetails(): Promise<void> {
 			// never sent once recording has begun, so a stale form cannot
 			// change it behind the guard
 			...(recordingHasBegun.value ? {} : { language: draft.value.language }),
+			// a language chosen by hand ends Record now's detection
+			...(props.assembly.language_auto && draft.value.language !== props.assembly.language
+				? { language_auto: false }
+				: {}),
 		})
 		editingDetails.value = false
 		emit('changed')
@@ -216,6 +220,11 @@ const nextStep = computed<NextStep | null>(() => {
 						<option value="fr">Français</option>
 						<option value="es">Español</option>
 					</select>
+					<span v-if="assembly.language_auto && !recordingHasBegun" class="cz-muted" style="font-size: 0.78rem">
+						Detected from the recording: this Session was started with Record now, so the
+						first transcript decides the language of the analysis and the report. Choosing
+						one here fixes it instead.
+					</span>
 					<span v-if="recordingHasBegun" class="cz-muted" style="font-size: 0.78rem">
 						Locked: this assembly has started recording. The language decides how
 						audio is transcribed, so changing it now would leave one assembly with

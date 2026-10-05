@@ -12,6 +12,7 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
+import { setLocale } from '../../i18n'
 import { recorderApi, type HelpState, type JoinResult, type RoundInfo } from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
@@ -238,6 +239,7 @@ function watchForNextRound(): void {
 			const status = await recorderApi.status(props.session.session_token)
 			if (status.table) tableInfo.value = status.table
 			help.value = status.help
+			if (status.assembly?.language) setLocale(status.assembly.language)
 			reportAvailable.value = status.report_available ?? false
 			assemblyClosed.value = status.assembly_closed ?? false
 			currentRoundOpen.value =

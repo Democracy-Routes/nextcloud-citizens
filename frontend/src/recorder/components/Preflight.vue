@@ -16,6 +16,7 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
+import { setLocale } from '../../i18n'
 import { recorderApi, type HelpState, type JoinResult, type RoundInfo, type TableConsent } from '../api'
 import HelpButton from './HelpButton.vue'
 import ParticipantsLine from './ParticipantsLine.vue'
@@ -83,6 +84,8 @@ async function pollReport(): Promise<void> {
 		reportAvailable.value = status.report_available ?? false
 		help.value = status.help
 		if (status.consent) consent.value = status.consent
+		// Record now learns the room's language from its first transcript
+		if (status.assembly?.language) setLocale(status.assembly.language)
 		// keep the round list current — the whole point: a round recorded on
 		// another device (or by a sync that just failed) drops out of openRounds
 		if (status.rounds?.length) rounds.value = status.rounds

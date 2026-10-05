@@ -45,6 +45,35 @@ DEEPGRAM_RAW = {
 }
 
 
+def test_deepgram_detects_the_language_only_when_none_is_forced(monkeypatch, tmp_path):
+    """Record now sends no language: Deepgram is asked to detect it. A chosen
+    language is forced and detection is not requested."""
+    import httpx
+
+    captured: list[dict] = []
+
+    class _Response:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"results": {"channels": [{"detected_language": "it", "alternatives": [{"transcript": "",
+                                                                                            "words": []}]}]}}
+
+    def fake_post(url, params=None, **kwargs):
+        captured.append(dict(params or {}))
+        return _Response()
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    audio = tmp_path / "a.webm"
+    audio.write_bytes(b"\x1a\x45\xdf\xa3")
+    detected = deepgram.transcribe_file("key", audio, "audio/webm", "")
+    assert captured[-1].get("detect_language") == "true" and "language" not in captured[-1]
+    assert detected.language == "it"
+    deepgram.transcribe_file("key", audio, "audio/webm", "en")
+    assert captured[-1].get("language") == "en" and "detect_language" not in captured[-1]
+
+
 def test_deepgram_normalization_utterances_and_speakers():
     result = deepgram.normalize(DEEPGRAM_RAW, model="nova-3", requested_language="en")
     assert result.provider == "deepgram"

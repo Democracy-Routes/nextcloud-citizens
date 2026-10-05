@@ -85,6 +85,8 @@ class AssemblyUpdate(BaseModel):
     # null follows the instance default; 0 keeps audio indefinitely
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
     participant_consent: Literal["required", "optional"] | None = None
+    # false when the organizer picks the language by hand on a Record-now session
+    language_auto: bool | None = None
 
 
 class AssemblyOut(BaseModel):
@@ -109,6 +111,8 @@ class AssemblyOut(BaseModel):
     audio_retention_days: int | None = None
     audio_purged_at: datetime | None = None
     participant_consent: str = "optional"
+    # the language is being detected from the recording (Record now)
+    language_auto: bool = False
     created_by: str
     created_at: datetime
 

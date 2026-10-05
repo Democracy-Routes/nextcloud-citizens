@@ -5,6 +5,7 @@ the normalized transcript (brief §30–§33)."""
 
 import json
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
@@ -22,6 +23,7 @@ from citizens.providers.transcription.base import (
     TranscriptionError,
 )
 from citizens.services import provider_config
+from citizens.services.audit import record_audit_event
 
 log = get_logger(__name__)
 
@@ -122,6 +124,12 @@ def transcribe_recording(
     # `assembly` usable afterwards)
     session.commit()
     provider = provider_config.get_setting(store, "stt_provider")
+    # Record now never asked which language the table speaks: let an engine
+    # that can detect it do so, and keep the guess only for Vosk, which must
+    # pick a model up front
+    detect = bool(assembly and assembly.language_auto) and provider in DETECTING_PROVIDERS
+    if detect:
+        language = ""
 
     log.info(
         "stt_started",
@@ -174,6 +182,8 @@ def transcribe_recording(
     else:
         raise TranscriptionError(f"Unknown STT provider {provider}", permanent=True)
 
+    if assembly is not None and assembly.language_auto:
+        adopt_detected_language(session, assembly, normalized.language, recording)
     transcript = store_transcript(session, recording, normalized)
     log.info(
         "stt_completed",
@@ -182,6 +192,43 @@ def transcribe_recording(
         segments=len(normalized.segments),
     )
     return transcript
+
+
+#: engines that return the language they heard when none is forced
+DETECTING_PROVIDERS = ("deepgram", "mistral", "whisper")
+
+
+def adopt_detected_language(
+    session: Session, assembly: Assembly, detected: str | None, recording: Recording
+) -> bool:
+    """The first final transcript of a Record-now session decides its language.
+
+    Only a language the app knows (schemas.Language), only when it differs,
+    and only while the assembly has no transcript yet — later tables never
+    flip it back, so the report stays in one language. Analysis prompts and
+    report wording read `assembly.language`, so everything downstream follows.
+    """
+    from citizens.domain.schemas import Language
+
+    code = (detected or "").strip().lower().replace("_", "-").split("-")[0]
+    if not code or code == assembly.language or code not in Language.__args__:
+        return False
+    already = session.execute(
+        select(func.count())
+        .select_from(Transcript)
+        .join(Recording, Transcript.recording_id == Recording.id)
+        .where(Recording.assembly_id == assembly.id)
+    ).scalar_one()
+    if already:
+        return False
+    previous = assembly.language
+    assembly.language = code
+    record_audit_event(
+        session, "language_detected", "assembly", assembly.id,
+        data={"from": previous, "to": code, "recording_id": recording.id},
+    )
+    log.info("language_detected", assembly_id=assembly.id, previous=previous, detected=code)
+    return True
 
 
 def store_transcript(

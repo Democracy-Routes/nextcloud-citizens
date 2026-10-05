@@ -29,6 +29,8 @@ export interface Assembly {
 	kind?: 'assembly' | 'session'
 	/** the consent rule at the tables (0.7); absent from an older server */
 	participant_consent?: ConsentMode
+	/** Record now: the language follows the first transcript until chosen by hand */
+	language_auto?: boolean
 	name: string
 	description: string
 	language: string
@@ -130,6 +132,7 @@ export interface AssemblyUpdate {
 	redact_names?: string
 	audio_retention_days?: number | null
 	participant_consent?: ConsentMode
+	language_auto?: boolean
 }
 
 /** 'required': a table records only once one registered person there has

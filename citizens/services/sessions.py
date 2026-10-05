@@ -121,6 +121,9 @@ def record_now(session: Session, user_id: str, language: str = "en") -> schemas.
     )
     created = create_standalone_session(session, user_id, data)
     created.container.name = _record_now_name(utcnow())
+    # nobody chose this language — the UI's is a guess until the first
+    # transcript says what was actually spoken
+    created.container.language_auto = True
     [card] = created.invites
     return schemas.RecordNowOut(
         session_id=created.session_id,
