@@ -218,6 +218,33 @@ def list_participants(assembly_id: str, user: CurrentUser, session: ReadDB):
     return consent_svc.participants_with_consent(session, assembly)
 
 
+@router.get("/assemblies/{assembly_id}/consent-register.csv")
+def consent_register_csv(assembly_id: str, user: CurrentUser, session: ReadDB):
+    """The consent register as an auditor asks for it: one row per person
+    with what they accepted, against which notice, when, by which method."""
+    from fastapi.responses import Response
+
+    from citizens.api.downloads import download_headers
+
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    body = consent_svc.consent_register_csv(session, assembly)
+    filename = f"{assembly.name[:40].replace(' ', '-')}-consent-register.csv"
+    return Response(body, media_type="text/csv; charset=utf-8", headers=download_headers(filename))
+
+
+@router.get("/assemblies/{assembly_id}/consent-register.pdf")
+def consent_register_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
+    from fastapi.responses import Response
+
+    from citizens.api.downloads import download_headers
+    from citizens.services.branding import organization_name
+
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    body = consent_svc.consent_register_pdf(session, assembly, organization_name())
+    filename = f"{assembly.name[:40].replace(' ', '-')}-consent-register.pdf"
+    return Response(body, media_type="application/pdf", headers=download_headers(filename))
+
+
 @router.post(
     "/assemblies/{assembly_id}/participants",
     response_model=list[schemas.ParticipantOut],

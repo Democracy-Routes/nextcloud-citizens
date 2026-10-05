@@ -278,7 +278,8 @@ const STATE_CLASS: Record<CheckState, string> = {
 		<div class="rc-header">
 			<TableBadge :number="session.table_number" :color-key="session.table_color" />
 		</div>
-		<HelpButton :token="session.session_token" :help="help" />
+		<!-- a hand to raise only where there is an organizer to see it -->
+		<HelpButton v-if="session.assembly.kind !== 'session'" :token="session.session_token" :help="help" />
 		<ParticipantsLine :consent="consent" @open="emit('participants')" />
 
 		<div class="rc-scroll">

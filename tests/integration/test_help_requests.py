@@ -80,6 +80,17 @@ def test_a_hand_goes_up_reaches_the_live_tab_and_comes_down_when_acknowledged(cl
     assert coffee.status_code == 422
 
 
+def test_a_spontaneous_session_has_nobody_to_call(client):
+    made = client.post("/api/v1/sessions", json={"question": "Q", "recording_mode": "independent"}).json()
+    token = re.search(r"#/join/(.+)$", made["invites"][0]["url"]).group(1)
+    joined = client.post("/api/v1/public/join", json={"token": token},
+                         headers={"X-Forwarded-For": "10.8.3.1"}).json()
+    headers = {"Authorization": f"Bearer {joined['session_token']}"}
+    refused = client.post("/api/v1/public/recorder/help", json={"kind": "TECHNICAL"}, headers=headers)
+    assert refused.status_code == 409, refused.text
+    assert _status(client, headers)["help"] is None
+
+
 def test_help_requests_stay_inside_their_event(client):
     assembly = _assembly(client)
     table1 = _phone(client, assembly, 0, "10.8.1.1")

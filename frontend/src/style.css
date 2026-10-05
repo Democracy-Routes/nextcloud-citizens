@@ -677,6 +677,17 @@
 #citizens-app .cz-health--ok { border-color: var(--cz-green); color: var(--cz-green); }
 #citizens-app .cz-health--warn { border-color: var(--cz-amber); color: var(--cz-amber); }
 #citizens-app .cz-health--bad { border-color: var(--cz-danger); color: var(--cz-danger); }
+/* Live tab, advanced diagnostics: one line of facts per recorder */
+#citizens-app .cz-diag {
+	list-style: none;
+	margin: 4px 0 0;
+	padding: 0;
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 0.72rem;
+	line-height: 1.5;
+	color: var(--cz-muted);
+}
+
 /* Participants tab: the consent act recorded at the table */
 #citizens-app .cz-consent { white-space: nowrap; font-size: 0.82rem; }
 #citizens-app .cz-consent--yes { color: var(--cz-green); font-weight: 600; }

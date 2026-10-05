@@ -194,6 +194,12 @@
 			"resumedAfter": "Recording resumed — {seconds} s of the session were not captured.",
 			"screenLockHint": "This phone may switch its screen off by itself — set auto-lock to Never in the phone's settings until the session ends.",
 			"badge": "RECORDING",
+			"startedBanner": "● Recording started",
+			"sounds": "Sounds",
+			"soundsNormal": "Normal",
+			"soundsQuiet": "Quiet",
+			"soundsOff": "Off",
+			"soundsHint": "Start, stop and message cues everyone at the table can hear.",
 			"timerRecording": "recording",
 			"timerInterrupted": "interrupted",
 			"timerStopping": "stopping…",
@@ -304,6 +310,8 @@
 			"expired": "This code has expired.",
 			"newCode": "Make a new code",
 			"unavailable": "The code could not be made — ask the organizer.",
+			"copyLink": "Copy link",
+			"copied": "Link copied",
 			"close": "Close"
 		},
 		"message": {

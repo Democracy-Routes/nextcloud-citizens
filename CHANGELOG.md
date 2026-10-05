@@ -161,6 +161,33 @@ not rewritten.
   recording this table" and points at the Live tab. The engine's terms
   (superseded, DEVICE_SILENT, part1 in file names) stay in the device log,
   the diagnostics and the export's file names, where they belong.
+- **Record now follows the language that was spoken.** A Record-now session
+  asks the engine to detect the language (Whisper, Mistral, Deepgram; Vosk
+  keeps its model) and the first final transcript decides it once — analysis
+  and the report come out in the language people spoke, the phones follow.
+  Sessions and assemblies whose language was chosen stay as chosen;
+  choosing one by hand on the Overview tab ends the detection.
+- **Settings open from memory and save only what changed.** Opening Settings
+  no longer reads every field through Nextcloud; saving writes only the
+  fields you changed.
+- **Need help only where there is an organizer.** The button is gone from
+  spontaneous Sessions and Record now (the server refuses too).
+- **The link beside every code.** New table, Add recorder and Register codes
+  show their link with Copy link, for a desktop that cannot scan a screen.
+- **The table hears the recording start.** A rising two-note cue and a
+  "● Recording started" banner when recording begins, a falling one at
+  Finish, the rising one again when the microphone comes back, a soft chime
+  with an organizer's message — Normal / Quiet / Off on the phone's tech
+  sheet (assemblies start Normal, spontaneous sessions Quiet). Generated
+  with WebAudio; the recorder engine is untouched.
+- **Consent register export.** Participants tab → "Consent register (CSV /
+  PDF)": one row per recorded consent — label, name, email, source, table,
+  method, notice version and hash, the four flags, timestamps — and, in the
+  PDF, the notice texts referenced, so the register stands on its own.
+- **Advanced diagnostics on the Live tab.** A toggle shows one line of
+  heartbeat facts per recorder (battery, free storage, chunks pending,
+  heartbeat age, wake lock, foreground, capture, recording state); off by
+  default — the normal view keeps wording the problems.
 - **One complete notice, one acceptance.** The consent notice now follows
   the paper form section by section — who is responsible (legal name,
   address, contact, data-protection contact), what is collected, why and on

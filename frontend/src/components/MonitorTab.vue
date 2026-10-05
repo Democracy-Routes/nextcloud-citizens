@@ -443,6 +443,45 @@ function isQuiet(table: MonitorTable): boolean {
 }
 
 const showQuiet = ref(false)
+
+/* ---- advanced diagnostics: the numbers behind a pill, on demand ----
+ * Battery, storage, upload backlog, heartbeat age, wake lock, capture — every
+ * recorder's heartbeat already arrives in the monitor payload; the normal view
+ * words it, this shows it. A per-browser toggle, off by default. */
+const ADVANCED_KEY = 'citizens-live-advanced'
+const advanced = ref(false)
+try {
+	advanced.value = localStorage.getItem(ADVANCED_KEY) === '1'
+} catch {
+	/* private mode */
+}
+function toggleAdvanced(): void {
+	advanced.value = !advanced.value
+	try {
+		localStorage.setItem(ADVANCED_KEY, advanced.value ? '1' : '0')
+	} catch {
+		/* ignore */
+	}
+}
+
+type RecorderEntry = NonNullable<MonitorTable['recorders']>[number]
+
+/** One line of facts per recorder, dashes where the phone said nothing. */
+function recorderFacts(recorder: RecorderEntry): string {
+	const s = recorder.status ?? {}
+	const pct = typeof s.battery_level === 'number' ? `${Math.round(s.battery_level * 100)}%` : '—'
+	const storage = typeof s.storage_free_mb === 'number' ? `${Math.round(s.storage_free_mb)} MB free` : '—'
+	const pending =
+		typeof s.local_chunks === 'number' && typeof s.acked_chunks === 'number'
+			? `${Math.max(0, s.local_chunks - s.acked_chunks)} chunks pending`
+			: '—'
+	const age = recorder.seconds_since_contact === null ? 'never heard' : `heartbeat ${recorder.seconds_since_contact}s ago`
+	const screen = s.screen_awake === true ? 'screen awake' : s.screen_awake === false ? 'screen may lock' : '—'
+	const visible = s.visible === false ? 'in background' : s.visible === true ? 'foreground' : '—'
+	const capture = s.capture_ok === false ? 'capture interrupted' : s.capture_ok === true ? 'capturing' : '—'
+	const rec = recorder.recording ? recorder.recording.state : 'no recording'
+	return `battery ${pct} · ${storage} · ${pending} · ${age} · ${screen} · ${visible} · ${capture} · ${rec}`
+}
 const quietTables = computed(() => (monitor.value?.tables ?? []).filter(isQuiet))
 const attentionTables = computed(() => (monitor.value?.tables ?? []).filter((t) => !isQuiet(t)))
 const visibleTables = computed(() =>
@@ -631,6 +670,11 @@ function pendingChunks(table: MonitorTable): number {
 			<span v-if="quietTables.length && attentionTables.length" class="cz-muted">
 				{{ quietTables.length }} {{ quietTables.length === 1 ? 'table is' : 'tables are' }} fine and folded below.
 			</span>
+			<span style="margin-left: auto">
+				<CzButton variant="tertiary" small data-test="advanced" @click="toggleAdvanced">
+					{{ advanced ? 'Hide diagnostics' : 'Advanced diagnostics' }}
+				</CzButton>
+			</span>
 		</div>
 
 		<!-- the facilitator's voice to the tables -->
@@ -805,6 +849,12 @@ function pendingChunks(table: MonitorTable): number {
 								{{ table.recorders!.length }} recorders ·
 								{{ table.recorders!.filter((r) => r.connected).map((r) => r.label).join(', ') || 'none' }} connected
 							</div>
+							<!-- advanced: the heartbeat facts behind the pills, per recorder -->
+							<ul v-if="advanced && table.recorders?.length" class="cz-diag" data-test="diagnostics">
+								<li v-for="recorder in table.recorders" :key="recorder.slot">
+									<strong>{{ recorder.label }}</strong> {{ recorderFacts(recorder) }}
+								</li>
+							</ul>
 							<!-- the server's reasons, worded, with the fix in the row's
 							     Actions column rather than on a settings page -->
 							<ul v-if="table.readiness && table.readiness.reasons.length" class="cz-reasons">

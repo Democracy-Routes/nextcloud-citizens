@@ -23,6 +23,7 @@ import MessageBanner from './MessageBanner.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
 import { batteryPrompt } from '../batteryPrompt'
+import { play, setSoundLevel, soundLevel, type SoundLevel } from '../sounds'
 import { useTableMessages } from '../useTableMessages'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
@@ -84,6 +85,31 @@ let batteryTimer = 0
 const messages = useTableMessages(props.session.session_token)
 // this table's hand, as the server has it
 const help = ref<HelpState | null | undefined>(undefined)
+
+// Cues the table hears: recording started / stopped / resumed. A spontaneous
+// session defaults to quiet, an assembly to normal; the tech sheet changes it.
+const sounds = ref<SoundLevel>(soundLevel(props.session.assembly.kind === 'session' ? 'quiet' : 'normal'))
+function chooseSounds(level: SoundLevel): void {
+	sounds.value = level
+	setSoundLevel(level)
+	if (level !== 'off') play('message', level)
+}
+// "● Recording started", shown for a couple of seconds with the start cue
+const startedBanner = ref(false)
+let bannerTimer = 0
+function announceStart(): void {
+	play('start', sounds.value)
+	startedBanner.value = true
+	window.clearTimeout(bannerTimer)
+	bannerTimer = window.setTimeout(() => (startedBanner.value = false), 2500)
+}
+// the microphone came back after an interruption: the same rising tone
+watch(
+	() => state.captureInterrupted,
+	(interrupted, before) => {
+		if (before && !interrupted && state.phase === 'recording') play('resume', sounds.value)
+	},
+)
 
 /** This phone takes over its table's live captions. The other recorder keeps
  * recording; only its caption session ends. */
@@ -479,6 +505,7 @@ async function finishRecording(): Promise<void> {
 	confirmFinish.value = false
 	roundEnded.value = false
 	window.clearTimeout(reprieveTimer)
+	play('stop', sounds.value)
 	await engine.finish()
 }
 
@@ -502,6 +529,7 @@ async function beginRecording(): Promise<void> {
 			props.session.assembly.id,
 			props.session.table_number,
 		)
+		announceStart()
 	} catch (error) {
 		startError.value = error instanceof Error ? error.message : String(error)
 		// A microphone problem is the phone's owner to fix; anything else — the
@@ -550,8 +578,15 @@ async function clearSynced(): Promise<void> {
 			<TableBadge :number="session.table_number" :color-key="tableInfo?.color_key ?? session.table_color" />
 			<span v-if="state.phase === 'recording'" class="rc-live">{{ t('recorder.recording.badge') }}</span>
 		</div>
+		<!-- with the start cue: everyone at the table hears and sees the moment -->
+		<p v-if="startedBanner" class="rc-started" role="status" data-test="started">
+			{{ t('recorder.recording.startedBanner') }}
+		</p>
 		<MessageBanner v-if="messages.current.value" :message="messages.current.value" @dismiss="messages.dismiss" />
-		<HelpButton v-if="!plenary" :token="session.session_token" :help="help" />
+		<HelpButton
+			v-if="!plenary && session.assembly.kind !== 'session'"
+			:token="session.session_token"
+			:help="help" />
 		<!-- more than one phone records this table: say how many, and whose
 		     captions the room is reading -->
 		<p v-if="tableInfo && tableInfo.recorders > 1" class="rc-recorders">
@@ -654,6 +689,22 @@ async function clearSynced(): Promise<void> {
 			</button>
 
 			<div v-if="techOpen" class="rc-card" style="padding: 8px 18px">
+				<!-- the table's cues, a per-phone choice -->
+				<div class="rc-status-row">
+					<span class="rc-status-row__label">{{ t('recorder.recording.sounds') }}</span>
+					<span class="rc-sounds" role="group" :aria-label="t('recorder.recording.soundsHint')">
+						<button
+							v-for="level in (['normal', 'quiet', 'off'] as const)"
+							:key="level"
+							type="button"
+							class="rc-sounds__opt"
+							:class="{ 'rc-sounds__opt--on': sounds === level }"
+							:data-test="`sounds-${level}`"
+							@click="chooseSounds(level)">
+							{{ t(`recorder.recording.sounds${level.charAt(0).toUpperCase() + level.slice(1)}`) }}
+						</button>
+					</span>
+				</div>
 				<div class="rc-status-row">
 					<span class="rc-status-row__label">
 						<SvgIcon :path="mdiDatabaseOutline" :size="19" style="color: var(--rc-muted)" />

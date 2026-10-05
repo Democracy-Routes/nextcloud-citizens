@@ -5,11 +5,13 @@ import {
 	mdiAccountGroup,
 	mdiAccountPlus,
 	mdiDeleteOutline,
+	mdiDownloadOutline,
 	mdiFileDelimitedOutline,
 	mdiPlaylistPlus,
 } from '@mdi/js'
 import { onMounted, ref } from 'vue'
-import { api } from '../api'
+import { api, BASE } from '../api'
+import { downloadFromApi } from '../download'
 import { describeError, type UiError } from '../errors'
 import { useAsyncAction } from '../composables/useAsyncAction'
 import type { Participant } from '../types'
@@ -24,6 +26,14 @@ const props = defineProps<{ assemblyId: string }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const participants = ref<Participant[]>([])
+
+async function exportRegister(kind: 'csv' | 'pdf'): Promise<void> {
+	try {
+		await downloadFromApi(`${BASE}/api/v1/assemblies/${props.assemblyId}/consent-register.${kind}`)
+	} catch (err) {
+		toast(describeError(err).message, 'error')
+	}
+}
 
 /** Where a person registered: "Table 7 (table phone)" / "(own phone)". */
 function sourceText(participant: Participant): string {
@@ -139,6 +149,19 @@ function initials(participant: Participant): string {
 					<span style="flex: 1"></span>
 					<CzButton small :icon="mdiFileDelimitedOutline" @click="showCsv = !showCsv">CSV import</CzButton>
 					<CzButton small :icon="mdiPlaylistPlus" :disabled="busy" @click="prefill">Prefill 50 anonymous</CzButton>
+					<!-- the register an auditor asks for: who accepted what, against
+					     which notice, when, by which method -->
+					<CzButton
+						v-if="participants.some((p) => p.consent)"
+						small
+						:icon="mdiDownloadOutline"
+						title="Consent register — one row per recorded consent, with the notice texts"
+						@click="exportRegister('csv')">
+						Consent register (CSV)
+					</CzButton>
+					<CzButton v-if="participants.some((p) => p.consent)" small :icon="mdiDownloadOutline" @click="exportRegister('pdf')">
+						PDF
+					</CzButton>
 				</div>
 				<div v-if="showCsv" style="margin-top: 14px">
 					<p class="cz-muted" style="font-size: 0.8125rem">

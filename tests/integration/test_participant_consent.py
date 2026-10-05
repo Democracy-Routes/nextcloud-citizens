@@ -199,6 +199,33 @@ def test_the_export_carries_the_record_and_the_notice_text(client):
     assert archive.read(f"consent-notices/{notice['hash']}.txt").decode() == "\n".join(notice["paragraphs"])
 
 
+def test_the_consent_register_exports_what_was_signed(client):
+    assembly = _assembly(client, consent="optional")
+    table1 = _phone(client, assembly, 0, "10.9.5.1")
+    notice = _notice(client, table1)
+    _register(client, table1, "Gaia", notice["hash"], email="g@example.org")
+    _register(client, table1, "Hugo", notice["hash"], recording_consent=False,
+              transcription_consent=False, analysis_consent=False)
+    client.post(f"/api/v1/assemblies/{assembly['id']}/participants",
+                json={"participants": [{"label": "P900", "name": "From the list"}]})
+
+    csv_body = client.get(f"/api/v1/assemblies/{assembly['id']}/consent-register.csv")
+    assert csv_body.status_code == 200 and csv_body.headers["content-type"].startswith("text/csv")
+    lines = csv_body.text.strip().splitlines()
+    assert lines[0].startswith("label,name,email,source,table,method,notice_version,notice_hash,recording")
+    assert len(lines) == 3  # two records; the list-only person signed nothing
+    gaia = next(line for line in lines if "Gaia" in line)
+    assert "Gaia,g@example.org,TABLE_DEVICE,1,TABLE_DEVICE" in gaia and ",yes,yes,yes," in gaia
+    assert any("Hugo" in line and ",no,no,no,no," in line for line in lines)
+    assert notice["hash"] in csv_body.text
+
+    pdf = client.get(f"/api/v1/assemblies/{assembly['id']}/consent-register.pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    # somebody else's register is not ours to read
+    assert client.get(f"/api/v1/assemblies/{assembly['id']}/consent-register.csv",
+                      headers={"X-Test-User": "someone-else"}).status_code == 404
+
+
 def test_deleting_the_person_erases_the_record(client):
     assembly = _assembly(client, consent="optional")
     table1 = _phone(client, assembly, 0, "10.9.4.1")

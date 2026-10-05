@@ -670,6 +670,11 @@ def need_help(data: HelpIn, recorder_session: RecorderSess, session: DB):
     changes what it asks for. The Live tab shows it beside the table's
     number; the phone learns of the acknowledgement on its status poll."""
     HELP_LIMITER.check(recorder_session.id)
+    # a spontaneous Session has no organizer walking the room: the phone
+    # hides the button, and the server keeps the rule
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is not None and assembly.kind == "session":
+        raise HTTPException(status_code=409, detail="A Session has no organizer to call")
     return help_svc.as_dict(help_svc.raise_hand(session, recorder_session, data.kind))
 
 

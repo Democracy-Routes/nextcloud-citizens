@@ -194,6 +194,12 @@
 			"resumedAfter": "Registrazione ripresa — {seconds} s della sessione non sono stati registrati.",
 			"screenLockHint": "Questo telefono potrebbe spegnere lo schermo da solo — impostate il blocco automatico su Mai nelle impostazioni del telefono fino alla fine della sessione.",
 			"badge": "REGISTRAZIONE",
+			"startedBanner": "● Registrazione avviata",
+			"sounds": "Suoni",
+			"soundsNormal": "Normale",
+			"soundsQuiet": "Discreto",
+			"soundsOff": "Spenti",
+			"soundsHint": "Segnali di avvio, stop e messaggio che tutti al tavolo possono sentire.",
 			"timerRecording": "in registrazione",
 			"timerInterrupted": "interrotta",
 			"timerStopping": "in chiusura…",
@@ -304,6 +310,8 @@
 			"expired": "Questo codice è scaduto.",
 			"newCode": "Crea un nuovo codice",
 			"unavailable": "Non è stato possibile creare il codice — chiedi all'organizzatore.",
+			"copyLink": "Copia il link",
+			"copied": "Link copiato",
 			"close": "Chiudi"
 		},
 		"message": {

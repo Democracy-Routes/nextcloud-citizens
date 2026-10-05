@@ -587,6 +587,41 @@ body {
 	padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
 }
 .rc-capability { margin-top: 0; }
+/* "● Recording started", with the start cue */
+.rc-started {
+	margin: 0 16px 6px;
+	padding: 6px 12px;
+	border-radius: 999px;
+	background: #fdecea;
+	color: #8c1d18;
+	font-weight: 700;
+	font-size: 0.875rem;
+	text-align: center;
+}
+/* the table's cues: Normal / Quiet / Off */
+.rc-sounds { display: inline-flex; gap: 4px; }
+.rc-sounds__opt {
+	background: transparent;
+	border: 1px solid var(--rc-border);
+	border-radius: 999px;
+	color: var(--rc-muted);
+	font: inherit;
+	font-size: 0.8125rem;
+	min-height: 32px;
+	padding: 2px 10px;
+	cursor: pointer;
+}
+.rc-sounds__opt--on { background: var(--rc-blue); border-color: var(--rc-blue); color: #fff; }
+/* the link under a code, for a desktop that cannot scan a screen */
+.rc-capability__url {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 0.7rem;
+	line-height: 1.4;
+	color: var(--rc-muted);
+	word-break: break-all;
+	user-select: all;
+	margin: 10px 0 0;
+}
 
 /* ================= add-a-device QR (plenary) ================= */
 

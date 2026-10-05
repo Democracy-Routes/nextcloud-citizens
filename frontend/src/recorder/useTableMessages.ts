@@ -10,6 +10,7 @@
  */
 import { ref } from 'vue'
 import { recorderApi, type PhoneMessage, type RecorderStatus } from './api'
+import { play } from './sounds'
 
 export function useTableMessages(token: string) {
 	const current = ref<PhoneMessage | null>(null)
@@ -22,6 +23,8 @@ export function useTableMessages(token: string) {
 		newestSeen = newest.id
 		current.value = newest
 		if (newest.sound) {
+			// a soft chime and a buzz, under the phone's sound setting
+			play('message')
 			try {
 				navigator.vibrate?.(200)
 			} catch {

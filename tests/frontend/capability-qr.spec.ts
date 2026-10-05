@@ -48,6 +48,14 @@ describe('the capability card', () => {
 		expect(wrapper.find('img.rc-qr').attributes('src')).toMatch(/^data:image\/svg\+xml;base64,/)
 		expect(wrapper.text()).toContain('records this table too')
 		expect(wrapper.text()).toContain('15 more minutes')
+		// the link itself, for a desktop that cannot scan a screen
+		expect(wrapper.find('[data-test="url"]').text()).toBe('https://nc.example/recorder.html#/join/tok')
+		const writeText = vi.fn().mockResolvedValue(undefined)
+		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+		await wrapper.find('[data-test="copy"]').trigger('click')
+		await flushPromises()
+		expect(writeText).toHaveBeenCalledWith('https://nc.example/recorder.html#/join/tok')
+		expect(wrapper.find('[data-test="copy"]').text()).toBe('Link copied')
 	})
 
 	it('names a new table as the intent, with no table badge', async () => {

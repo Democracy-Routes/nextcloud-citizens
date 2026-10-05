@@ -32,7 +32,29 @@ const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 
 const qrSrc = ref('')
+// the same link the QR encodes, for a desktop that cannot scan a screen
+const url = ref('')
+const copied = ref(false)
 const expiresAt = ref<number | null>(null)
+
+async function copyLink(): Promise<void> {
+	try {
+		await navigator.clipboard.writeText(url.value)
+		copied.value = true
+		window.setTimeout(() => (copied.value = false), 2500)
+	} catch {
+		// no clipboard (http, an old browser): select the text so a long press
+		// or Ctrl+C does it
+		const node = document.querySelector<HTMLElement>('.rc-capability__url')
+		if (node && window.getSelection) {
+			const range = document.createRange()
+			range.selectNodeContents(node)
+			const selection = window.getSelection()
+			selection?.removeAllRanges()
+			selection?.addRange(range)
+		}
+	}
+}
 const unavailable = ref(false)
 const loading = ref(true)
 const now = ref(Date.now())
@@ -52,6 +74,7 @@ async function make(): Promise<void> {
 		const card = await recorderApi.createCapability(props.token, props.purpose, props.roundId)
 		// data URI, not v-html: an image cannot execute script
 		qrSrc.value = `data:image/svg+xml;base64,${btoa(card.qr_svg)}`
+		url.value = card.url
 		expiresAt.value = Date.parse(card.expires_at)
 		now.value = Date.now()
 	} catch {
@@ -97,6 +120,11 @@ onBeforeUnmount(() => window.clearInterval(ticker))
 			<p class="rc-muted" style="font-size: 0.8rem; margin: 6px 0 0">
 				{{ t('recorder.table.expiresIn', { minutes: remainingMinutes }, remainingMinutes) }}
 			</p>
+			<!-- the link itself: on a desktop nobody scans the screen -->
+			<p class="rc-capability__url" data-test="url">{{ url }}</p>
+			<button type="button" class="rc-btn rc-subtle" style="margin-top: 4px" data-test="copy" @click="copyLink">
+				{{ copied ? t('recorder.table.copied') : t('recorder.table.copyLink') }}
+			</button>
 		</template>
 		<template v-else-if="expired">
 			<p class="rc-muted" style="font-size: 0.875rem; margin: 0">{{ t('recorder.table.expired') }}</p>

@@ -416,6 +416,112 @@ def participants_with_consent(session: Session, assembly: Assembly) -> list[dict
     ]
 
 
+REGISTER_COLUMNS = (
+    "label", "name", "email", "source", "table", "method", "notice_version", "notice_hash",
+    "recording", "transcription", "analysis", "publication", "confirmed_at", "withdrawn_at",
+)
+
+
+def consent_register_rows(session: Session, assembly: Assembly) -> list[dict]:
+    """One row per person who has a consent record — the register an
+    authority or an auditor asks for. People from the organizer's list with
+    no record are left out: they signed nothing here."""
+    rows = []
+    for person in participants_with_consent(session, assembly):
+        consent = person["consent"]
+        if consent is None:
+            continue
+        rows.append(
+            {
+                "label": person["label"],
+                "name": person["name"],
+                "email": person["email"],
+                "source": person["source"],
+                "table": person["registered_table_number"] or "",
+                "method": consent["method"],
+                "notice_version": consent["notice_version"],
+                "notice_hash": consent["notice_hash"],
+                "recording": "yes" if consent["recording"] else "no",
+                "transcription": "yes" if consent["transcription"] else "no",
+                "analysis": "yes" if consent["analysis"] else "no",
+                "publication": "yes" if consent["publication"] else "no",
+                "confirmed_at": consent["confirmed_at"].isoformat() if consent["confirmed_at"] else "",
+                "withdrawn_at": consent["withdrawn_at"].isoformat() if consent["withdrawn_at"] else "",
+            }
+        )
+    return rows
+
+
+def consent_register_csv(session: Session, assembly: Assembly) -> str:
+    import csv
+    import io
+
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=REGISTER_COLUMNS)
+    writer.writeheader()
+    for row in consent_register_rows(session, assembly):
+        writer.writerow(row)
+    return out.getvalue()
+
+
+def consent_register_pdf(session: Session, assembly: Assembly, organization_name: str = "") -> bytes:
+    """A printable register: the assembly, one line per person, and the
+    notice texts referenced, so the paper is complete on its own."""
+    from citizens.services.qr_sheet import _SheetPDF
+    from citizens.services.report_pdf import INK, MUTED
+
+    rows = consent_register_rows(session, assembly)
+    heading = " · ".join(part for part in (organization_name, assembly.name) if part)
+    pdf = _SheetPDF(footer_text=f"{heading or assembly.name} — consent register")
+    pdf.set_auto_page_break(auto=True, margin=12)
+    pdf.add_page()
+    pdf.set_font(pdf.family, "B", 16)
+    pdf.set_text_color(*INK)
+    pdf.cell(0, 10, "Consent register", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(pdf.family, "", 9)
+    pdf.set_text_color(*MUTED)
+    exported = utcnow().isoformat(timespec="minutes")
+    pdf.cell(0, 5, f"{assembly.name} · {len(rows)} records · exported {exported}",
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    for row in rows:
+        pdf.set_font(pdf.family, "B", 10)
+        pdf.set_text_color(*INK)
+        verdict = "consented" if row["recording"] == "yes" else "did not consent"
+        where = f" · Table {row['table']}" if row["table"] else ""
+        title = f"{row['label']} · {row['name'] or '—'}{where} — {verdict}"
+        pdf.cell(0, 6, title, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(pdf.family, "", 8.5)
+        pdf.set_text_color(*MUTED)
+        detail = (
+            f"{row['method']} · {row['confirmed_at']} · notice {row['notice_version']} "
+            f"({row['notice_hash'][:12]}…) · recording {row['recording']}, transcription "
+            f"{row['transcription']}, analysis {row['analysis']}, quotations {row['publication']}"
+        )
+        if row["email"]:
+            detail = f"{row['email']} · " + detail
+        if row["withdrawn_at"]:
+            detail += f" · withdrawn {row['withdrawn_at']}"
+        pdf.multi_cell(0, 4.5, detail, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+    if not rows:
+        pdf.set_font(pdf.family, "", 11)
+        pdf.cell(0, 8, "No consent has been recorded for this assembly.", new_x="LMARGIN", new_y="NEXT")
+    # the texts people read, once per hash, so the register stands alone
+    hashes = sorted({row["notice_hash"] for row in rows})
+    for notice in session.execute(select(ConsentNotice).where(ConsentNotice.hash.in_(hashes))).scalars():
+        pdf.add_page()
+        pdf.set_font(pdf.family, "B", 12)
+        pdf.set_text_color(*INK)
+        pdf.cell(0, 8, f"Notice {notice.version} · {notice.language} · {notice.hash[:12]}…",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(pdf.family, "", 9.5)
+        for paragraph in notice.text.split("\n"):
+            pdf.multi_cell(0, 5, paragraph, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1.5)
+    return bytes(pdf.output())
+
+
 def consent_counts(session: Session, assembly_id: str) -> dict:
     """For the report's methodology note: how many registered at a table, and
     how many of those consented to recording."""

@@ -164,7 +164,9 @@ onBeforeUnmount(() => {
 					{{ t('recorder.table.recorders', { count: session.table.recorders }) }}
 				</p>
 			</div>
-			<div class="rc-center"><HelpButton :token="session.session_token" :help="help" /></div>
+			<div v-if="session.assembly.kind !== 'session'" class="rc-center">
+				<HelpButton :token="session.session_token" :help="help" />
+			</div>
 			<div class="rc-center"><ParticipantsLine :consent="consent" @open="emit('participants')" /></div>
 
 			<!-- the microphone failed for the round that is currently open: say so
