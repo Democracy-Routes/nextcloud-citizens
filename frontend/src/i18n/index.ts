@@ -21,11 +21,16 @@ export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
 
 export const DEFAULT_LOCALE: SupportedLocale = 'en'
 
+/** The shared catalogue per language: recorder, errors, states… The
+ * organizer UI's strings (`organizer.*`) live in ./organizer and are merged in
+ * by the organizer entry only, so the phones' bundle does not carry them. */
+export const catalogues = { en, it }
+
 export const i18n = createI18n({
 	legacy: false,
 	locale: DEFAULT_LOCALE,
 	fallbackLocale: DEFAULT_LOCALE,
-	messages: { en, it },
+	messages: catalogues,
 })
 
 /** Narrow anything — a BCP-47 tag, an assembly's language — to a locale we

@@ -1,0 +1,174 @@
+{
+	"page": {
+		"title": "Impostazioni voce e IA",
+		"lead": "Le chiavi API sono salvate cifrate in Nextcloud e non arrivano mai ai browser o ai telefoni dei tavoli.",
+		"saving": "Salvataggio…",
+		"save": "Salva le impostazioni",
+		"saved": "Salvato",
+		"unsaved": "Ci sono modifiche non salvate. Salvare applica tutte le impostazioni di tutte le schede, non solo quella visualizzata.",
+		"settingsSaved": "Impostazioni salvate"
+	},
+	"tabs": {
+		"audio": "Audio",
+		"ai": "Analisi IA",
+		"general": "Generale"
+	},
+	"providers": {
+		"mistral": "Mistral (Voxtral)",
+		"deepgram": "Deepgram",
+		"whisper": "Whisper (compatibile con OpenAI)",
+		"vosk": "Vosk (offline)"
+	},
+	"captionNote": {
+		"deepgram": "I sottotitoli in diretta sono trasmessi in streaming nativo e includono l'etichetta di chi parla.",
+		"mistral": "I sottotitoli in diretta usano Voxtral Realtime; l'output in tempo reale non ha etichette di chi parla.",
+		"whisper": "I sottotitoli in diretta sono prodotti da finestre scorrevoli di 20 secondi, quindi una riga può essere rivista quando arriva altro audio.",
+		"vosk": "I sottotitoli in diretta sono trasmessi in streaming nativo dal tuo server Vosk, senza punteggiatura né etichette di chi parla."
+	},
+	"audio": {
+		"title": "Trascrizione",
+		"selectedService": "Servizio selezionato:",
+		"selectedHint": "— i campi sotto lo configurano.",
+		"provisional": "I sottotitoli sono provvisori — la trascrizione definitiva viene sempre prodotta dalla registrazione completa dopo la sessione.",
+		"test": "Prova",
+		"keyConfigured": "configurata — {hint} (scrivi per sostituirla)",
+		"pasteKey": "Incolla la chiave API",
+		"liveHead": "Trascrizione in diretta (sottotitoli provvisori)",
+		"finalHead": "Trascrizione finale (definitiva)",
+		"liveModelAria": "Modello di trascrizione in diretta",
+		"finalModelAria": "Modello di trascrizione finale",
+		"finalHint": "Usato per la trascrizione definitiva dopo ogni sessione.",
+		"maxLive": "Numero massimo di sessioni di sottotitoli in diretta contemporanee",
+		"maxFinal": "Numero massimo di trascrizioni finali contemporanee",
+		"maxLiveHint": "Vale per tutto il server; una sessione per ogni telefono che registra. I telefoni oltre il limite continuano comunque a registrare — i loro sottotitoli attendono uno slot libero.",
+		"maxFinalHint": "Vale per tutto il server, con un proprio pool — un evento in diretta molto attivo non lo blocca mai.",
+		"mistral": {
+			"key": "Chiave API Mistral",
+			"liveHint": "Voxtral Realtime. Fatturato separatamente dalla trascrizione finale."
+		},
+		"deepgram": {
+			"key": "Chiave API Deepgram",
+			"liveHint": "Trasmette in streaming nativo e include l'etichetta di chi parla.",
+			"endpoint": "Endpoint dei sottotitoli in diretta",
+			"endpointHint": "Funziona qualsiasi server che parli il protocollo di streaming di Deepgram — per esempio un WhisperLiveKit autogestito, che mantiene i sottotitoli sulla tua infrastruttura."
+		},
+		"whisper": {
+			"baseUrl": "URL di base dell'endpoint",
+			"baseUrlHint": "Qualsiasi endpoint di trascrizione compatibile con OpenAI: OpenAI stesso, oppure un server gestito da te (Speaches, whisper.cpp, LocalAI, vLLM, WhisperX). Con un server proprio l'audio non lascia mai la tua infrastruttura.",
+			"sameAsFinal": "come il finale",
+			"liveHint": "Facoltativo — i sottotitoli ritrascrivono una finestra scorrevole ogni pochi secondi, quindi un modello più piccolo tiene il passo a un costo minore. Vuoto riusa il modello finale.",
+			"finalHint": "Un nome che contiene «diarize» (per esempio gpt-4o-transcribe-diarize) viene richiesto in modalità diarizzata e restituisce l'etichetta di chi parla.",
+			"key": "Chiave API (facoltativa)",
+			"keyHint": "Richiesta da OpenAI; la maggior parte dei server autogestiti non ne ha bisogno.",
+			"noDiarizationTitle": "Nessuna separazione di chi parla.",
+			"noDiarization": "Whisper standard restituisce il testo con i tempi ma non indica chi ha parlato, quindi le trascrizioni e le citazioni nel report compaiono senza l'etichetta di chi parla. I server che aggiungono la diarizzazione (basati su WhisperX, o il modello diarizzante di OpenAI) vengono usati automaticamente quando la forniscono."
+		},
+		"vosk": {
+			"url": "URL del server Vosk",
+			"urlHint": "Un'istanza di vosk-server gestita da te (per esempio l'immagine alphacep/kaldi-en sulla porta 2700). Nessuna chiave API, nessun internet: l'audio non lascia mai la tua rete.",
+			"perLanguage": "Modello per ogni lingua",
+			"perLanguageHint": "Vosk richiede un proprio modello per ogni lingua, e un server ne può contenere diversi. La lingua scelta per un'assemblea determina il modello usato. Scrivi il {name} del modello — cambiare modello significa modificare questo nome. Lascia vuota una lingua finché non ti serve; scarica un modello con {command}.",
+			"perLanguageName": "nome",
+			"language": "Lingua",
+			"notConfigured": "non configurato",
+			"sameAsLive": "come la diretta",
+			"liveModelFor": "Modello dei sottotitoli in diretta per {language}",
+			"finalModelFor": "Modello della trascrizione finale per {language}",
+			"blankHint": "Un modello finale vuoto riusa quello in diretta. Una lingua lasciata completamente vuota ricade sul modello con cui il server è partito, quindi una tabella compilata solo in parte non impedisce mai che una registrazione venga trascritta.",
+			"label": "Etichetta del modello (facoltativa)",
+			"labelHint": "Registrata insieme alla trascrizione come riferimento, e usata come modello solo per una lingua senza una riga qui sopra.",
+			"plainTitle": "Offline, ma con un risultato più semplice.",
+			"plain": "Vosk restituisce testo in minuscolo senza punteggiatura e non separa chi parla. È la scelta giusta quando nulla può uscire dalla sede; Deepgram o un server Whisper diarizzante danno un resoconto dell'assemblea molto più leggibile."
+		},
+		"modes": {
+			"both": "I tavoli vedono i sottotitoli mentre parlano, e ogni registrazione viene trascritta di nuovo in seguito a partire dall'audio completo. La trascrizione finale è il verbale ed è quella letta dall'analisi.",
+			"finalOnly": "Nessun sottotitolo durante la sessione. Ogni registrazione viene trascritta dopo il caricamento, e quella trascrizione è il verbale.",
+			"liveOnlyTitle": "I sottotitoli sono il verbale.",
+			"liveOnly": "Nulla viene trascritto una seconda volta, quindi l'analisi legge quanto è stato catturato in diretta — più rapido e molto più economico, ma i sottotitoli possono perdere il parlato che il motore non è riuscito a seguire. L'audio viene conservato, quindi ogni tavolo può essere trascritto correttamente in seguito dalla sua scheda File.",
+			"noneTitle": "Non verrà trascritto nulla.",
+			"none": "Le registrazioni vengono salvate come solo audio: nessuna trascrizione, nessuna analisi e un report vuoto. Seleziona almeno una casella a meno che tu non voglia soltanto l'audio."
+		}
+	},
+	"ai": {
+		"title": "Analisi IA",
+		"lead": "Funziona qualsiasi endpoint compatibile con OpenAI: Mistral (predefinito), Ollama Cloud, un server Ollama remoto, vLLM…",
+		"auto": "Esegui l'analisi automaticamente dopo che ogni tavolo è stato trascritto",
+		"baseUrl": "URL di base",
+		"model": "Modello",
+		"key": "Chiave API",
+		"extra": "Istruzioni aggiuntive per l'analisi (facoltative)",
+		"extraPlaceholder": "Per esempio: concentrati sui temi di trasporti e abitazione. Usa un italiano formale. Considera «PUMS» come il piano di mobilità della città.",
+		"extraHint": "Aggiunto ai prompt integrati per l'analisi del tavolo e della sessione. Il formato dell'output e i link alle prove obbligatori non possono essere sovrascritti.",
+		"showPrompts": "Mostra i prompt integrati a cui vengono aggiunte le tue istruzioni",
+		"hidePrompts": "Nascondi i prompt integrati",
+		"tablePrompt": "ANALISI DEL TAVOLO (di sola lettura)",
+		"roundPrompt": "AGGREGAZIONE DELLA SESSIONE (di sola lettura)"
+	},
+	"facilitator": {
+		"title": "Facilitatore IA",
+		"lead": "Una voce discreta accanto a ogni tavolo durante una sessione: una breve domanda o un promemoria quando il tempo finisce, la sala resta in silenzio, la discussione divaga oppure — dove il motore etichetta chi parla — una voce prevale sulle altre. Arriva prima al telefono del facilitatore e ai telefoni del tavolo solo quando nessun telefono del facilitatore è collegato. Ogni assemblea può scegliere il proprio livello; questo è quello predefinito.",
+		"level": "Livello predefinito per le nuove assemblee",
+		"levels": {
+			"off": "Spento",
+			"light": "Leggero (2 per sessione)",
+			"normal": "Normale (4)",
+			"active": "Attivo (8)"
+		},
+		"baseUrl": "URL di base (vuoto: l'endpoint dell'analisi)",
+		"model": "Modello (vuoto: il modello dell'analisi)",
+		"key": "Chiave API (vuota: la chiave dell'analisi)",
+		"showThresholds": "Soglie…",
+		"hideThresholds": "Nascondi le soglie",
+		"interval": "Minuti tra due richiami a un tavolo",
+		"dominance": "Una voce sopra questa quota conta come prevalente (%)",
+		"silence": "Secondi di silenzio prima di una domanda aperta"
+	},
+	"retention": {
+		"title": "Conservazione dell'audio",
+		"lead": "Elimina l'audio originale di un'assemblea dopo questo numero di giorni da quando è stata {closed}. Le trascrizioni, le analisi e i report non vengono mai eliminati da questa impostazione — solo le registrazioni. Le singole assemblee possono sovrascriverla, e gli organizzatori possono sempre eliminare l'audio prima dalla scheda File.",
+		"closed": "chiusa",
+		"days": "Giorni di conservazione dell'audio dopo la chiusura",
+		"deletedAfter": "L'audio viene eliminato {days} giorni dopo la chiusura di un'assemblea. I telefoni dei tavoli ne vengono informati prima di registrare.",
+		"keptForever": "L'audio viene conservato finché qualcuno non lo elimina. I telefoni dei tavoli ne vengono informati prima di registrare."
+	},
+	"org": {
+		"title": "Dati dell'organizzazione",
+		"lead": "L'informativa che le persone leggono prima di registrarsi a un tavolo è scritta dal server a partire da questi campi e dai dati di trattamento effettivi (i fornitori di trascrizione e analisi selezionati, la conservazione, la copia locale sui telefoni), nella lingua dell'assemblea; ogni consenso è salvato con l'hash del testo mostrato. I campi vuoti vengono semplicemente omessi dall'informativa. I medesimi dati compilano il kit evento stampato e il modulo di carta.",
+		"controller": "Titolare del trattamento (nome legale)",
+		"controllerPlaceholder": "Chi organizza",
+		"controllerHint": "Chi è responsabile dei dati. Vuoto: il nome dell'organizzazione.",
+		"address": "Indirizzo postale",
+		"contact": "Contatto per le richieste sui dati (email)",
+		"dpo": "Responsabile della protezione dei dati (DPO)",
+		"dpoPlaceholder": "Nome · dpo@example.org",
+		"hosting": "Fornitore di hosting e paese",
+		"hostingPlaceholder": "Hetzner, Germania (UE)",
+		"hostingHint": "Dove funziona questo server — «Dove sono conservati i tuoi dati» nell'informativa.",
+		"authority": "Autorità di controllo",
+		"authorityHint": "A chi va un reclamo. Vuoto: il Garante italiano per le assemblee in Italia, «l'autorità per la protezione dei dati del tuo paese» altrimenti."
+	},
+	"branding": {
+		"title": "Organizzazione",
+		"lead": "Il nome e il logo compaiono nell'intestazione e nel piè di pagina dei report PDF. Logo: PNG o JPEG, fino a 1 MB.",
+		"name": "Nome dell'organizzazione",
+		"logoAlt": "Logo dell'organizzazione",
+		"replaceLogo": "Sostituisci il logo",
+		"uploadLogo": "Carica il logo",
+		"remove": "Rimuovi",
+		"tooLarge": "Il logo deve essere di 1 MB o inferiore",
+		"logoSaved": "Logo salvato — comparirà nei report PDF",
+		"logoRemoved": "Logo rimosso"
+	},
+	"ui": {
+		"loading": "Caricamento"
+	},
+	"format": {
+		"secondsAgo": "{n}s fa",
+		"minutesAgo": "{n}m fa",
+		"hoursAgo": "{n}h fa",
+		"daysAgo": "{n}g fa",
+		"kb": "{n} KB",
+		"mb": "{n} MB",
+		"gb": "{n} GB"
+	}
+}

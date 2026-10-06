@@ -14,6 +14,7 @@ import {
 	mdiTextSearch,
 } from '@mdi/js'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../api'
 import { downloadFromApi } from '../download'
 import { describeError } from '../errors'
@@ -31,6 +32,7 @@ import CzStatusPill from './ui/CzStatusPill.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
+const { t } = useI18n()
 
 const listing = ref<FilesListing | null>(null)
 const error = ref('')
@@ -74,8 +76,8 @@ async function purgeDeviceAudio(): Promise<void> {
 		purgeCoverage.value = result
 		toast(
 			result.devices === 0
-				? 'No table phones have connected to this assembly'
-				: `Asked ${result.devices} table phone(s) to clear their copy`,
+				? t('organizer.live.files.toast.purgeNone')
+				: t('organizer.live.files.toast.purgeAsked', { count: result.devices }, result.devices),
 		)
 	} catch (err) {
 		error.value = describeError(err).message
@@ -140,7 +142,7 @@ async function retryAssembly(entry: FileEntry): Promise<void> {
 	busy.value = true
 	try {
 		await api.retryAssembly(entry.recording_id)
-		toast(`Assembling table ${entry.table_number} again`)
+		toast(t('organizer.live.files.toast.assembling', { number: entry.table_number }))
 		await reload()
 	} catch (err) {
 		error.value = describeError(err).message
@@ -156,7 +158,7 @@ async function retranscribe(): Promise<void> {
 	busy.value = true
 	try {
 		await api.requestTranscription(entry.recording_id)
-		toast('Transcribing again from the stored audio — this can take a few minutes')
+		toast(t('organizer.live.files.toast.retranscribing'))
 		await reload()
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -174,8 +176,8 @@ async function deleteTranscript(): Promise<void> {
 		const result = await api.deleteRecordingTranscript(entry.recording_id)
 		toast(
 			result.retranscribable
-				? 'Transcript deleted — this recording can be transcribed again'
-				: 'Transcript deleted',
+				? t('organizer.live.files.toast.transcriptDeletedRetranscribable')
+				: t('organizer.live.files.toast.transcriptDeleted'),
 		)
 		await reload()
 	} catch (err) {
@@ -190,7 +192,7 @@ async function deleteAllTranscripts(): Promise<void> {
 	busy.value = true
 	try {
 		const result = await api.deleteAssemblyTranscripts(props.assembly.id)
-		toast(`${result.transcripts} transcripts deleted`)
+		toast(t('organizer.live.files.toast.transcriptsDeleted', { count: result.transcripts }, result.transcripts))
 		await reload()
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -203,8 +205,11 @@ async function deleteAllTranscripts(): Promise<void> {
  * "All — of recorded audio will be permanently deleted". */
 const deleteAllMessage = computed(() => {
 	const total = listing.value?.totals.audio_bytes ?? 0
-	const scale = total > 0 ? `All ${bytes(total)} of recorded audio` : 'All recorded audio'
-	return `${scale} will be permanently deleted and cannot be recovered. Transcripts, findings and the report are kept. Download or export first if you need a copy.`
+	const scale =
+		total > 0
+			? t('organizer.live.files.confirmAllAudio.scaleBytes', { size: bytes(total) })
+			: t('organizer.live.files.confirmAllAudio.scaleAll')
+	return t('organizer.live.files.confirmAllAudio.message', { scale })
 })
 
 /** Fetched rather than window.open'd: a popup blocker swallows the new tab
@@ -231,7 +236,7 @@ async function deleteOne(): Promise<void> {
 	busy.value = true
 	try {
 		const result = await api.deleteRecordingAudio(entry.recording_id)
-		toast(`Audio deleted — ${bytes(result.freed_bytes)} freed`)
+		toast(t('organizer.live.files.toast.audioDeleted', { size: bytes(result.freed_bytes) }))
 		await reload()
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -245,7 +250,13 @@ async function deleteAll(): Promise<void> {
 	busy.value = true
 	try {
 		const result = await api.deleteAssemblyAudio(props.assembly.id)
-		toast(`${result.recordings} recordings cleared — ${bytes(result.freed_bytes)} freed`)
+		toast(
+			t(
+				'organizer.live.files.toast.recordingsCleared',
+				{ count: result.recordings, size: bytes(result.freed_bytes) },
+				result.recordings,
+			),
+		)
 		await reload()
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -272,12 +283,12 @@ async function deleteAll(): Promise<void> {
 			<div class="cz-card">
 				<div class="cz-row cz-row--spread">
 					<div style="flex: 1; min-width: 240px">
-						<h3>Audio files &amp; exports</h3>
+						<h3>{{ t('organizer.live.files.header.title') }}</h3>
 						<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
-							{{ listing.totals.recordings }} recordings ·
+							{{ t('organizer.live.files.header.recordings', { count: listing.totals.recordings }, listing.totals.recordings) }} ·
 							{{ bytes(listing.totals.audio_bytes) }}
 							<template v-if="listing.totals.audio_deleted">
-								· {{ listing.totals.audio_deleted }} with audio deleted
+								{{ t('organizer.live.files.header.audioDeleted', { count: listing.totals.audio_deleted }) }}
 							</template>
 						</p>
 					</div>
@@ -286,27 +297,27 @@ async function deleteAll(): Promise<void> {
 							:icon="mdiFolderZipOutline"
 							:disabled="!hasAudio"
 							@click="download(`/api/v1/assemblies/${assembly.id}/audio.zip`)">
-							Download all audio
+							{{ t('organizer.live.files.header.downloadAll') }}
 						</CzButton>
 						<CzButton
 							variant="primary"
 							:icon="mdiPackageVariantClosed"
 							@click="download(`/api/v1/assemblies/${assembly.id}/export.zip`)">
-							Export full session
+							{{ t('organizer.live.files.header.exportFull') }}
 						</CzButton>
 						<CzButton
 							variant="danger"
 							:icon="mdiDeleteOutline"
 							:disabled="busy || !hasAudio"
 							@click="confirmAll = true">
-							Delete all audio
+							{{ t('organizer.live.files.header.deleteAllAudio') }}
 						</CzButton>
 						<CzButton
 							variant="danger"
 							:icon="mdiTextBoxRemoveOutline"
 							:disabled="busy || !hasTranscripts"
 							@click="confirmAllTranscripts = true">
-							Delete all transcripts
+							{{ t('organizer.live.files.header.deleteAllTranscripts') }}
 						</CzButton>
 						<!-- the audio on the PHONES, which no server-side deletion
 						     reaches — only offered once the session is closed, since
@@ -317,7 +328,7 @@ async function deleteAll(): Promise<void> {
 							:icon="mdiCellphoneRemove"
 							:disabled="busy"
 							@click="confirmPurge = true">
-							Clear audio from the table phones
+							{{ t('organizer.live.files.header.purge') }}
 						</CzButton>
 					</div>
 				</div>
@@ -325,19 +336,17 @@ async function deleteAll(): Promise<void> {
 				     of the building simply never receives the request -->
 				<p v-if="coverage" class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
 					<template v-if="listing?.device_audio?.purge_requested_at && !purgeCoverage">
-						The phones were asked to clear this assembly's audio when the session
-						was closed.
+						{{ t('organizer.live.files.coverage.askedOnClose') }}
 					</template>
-					<strong>{{ coverage.cleared }} of {{ coverage.devices }}</strong>
-					recorder sessions last reported no local recordings.
+					<strong>{{ t('organizer.live.files.coverage.cleared', { cleared: coverage.cleared, devices: coverage.devices }) }}</strong>
+					{{ t('organizer.live.files.coverage.reported') }}
 					<template v-if="coverage.still_holding">
-						{{ coverage.still_holding }} still hold audio.
+						{{ t('organizer.live.files.coverage.stillHolding', { count: coverage.still_holding }) }}
 					</template>
 					<template v-if="coverage.unknown">
-						{{ coverage.unknown }} have not reported a local recording count.
+						{{ t('organizer.live.files.coverage.unknown', { count: coverage.unknown }) }}
 					</template>
-					These counts include older sessions. Joining again can count the same
-					phone more than once; expired or revoked sessions may need manual cleanup.
+					{{ t('organizer.live.files.coverage.note') }}
 				</p>
 
 				<p
@@ -345,24 +354,19 @@ async function deleteAll(): Promise<void> {
 					class="cz-error"
 					style="margin: 12px 0 0; font-size: 0.845rem"
 					role="alert">
-					{{ listing.totals.kept_past_retention }} recording(s) were kept past the
-					retention period because no transcript exists for them — for those, the
-					audio is the only record of the discussion. Retry transcription, or
-					delete them deliberately.
+					{{ t('organizer.live.files.keptPastRetention', { count: listing.totals.kept_past_retention }, listing.totals.kept_past_retention) }}
 				</p>
 
 				<p class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
-					The full session export bundles metadata, audio, transcripts and the report —
-					enough to move this assembly to another server. Deleting audio keeps transcripts,
-					findings and the report.
+					{{ t('organizer.live.files.exportHint') }}
 				</p>
 			</div>
 
 			<CzEmptyState
 				v-if="listing.totals.recordings === 0"
 				:icon="mdiMusicNoteOutline"
-				title="No recordings yet"
-				hint="Audio files appear here as soon as the tables record and synchronize." />
+				:title="t('organizer.live.files.empty.title')"
+				:hint="t('organizer.live.files.empty.hint')" />
 
 			<div v-for="round in listing.rounds" :key="round.id">
 				<div v-if="round.tables.length" class="cz-card">
@@ -372,8 +376,8 @@ async function deleteAll(): Promise<void> {
 					<table class="cz-table">
 						<thead>
 							<tr>
-								<th>Table</th><th>Duration</th><th>Size</th><th>State</th>
-								<th>Transcript</th><th style="text-align: right">Actions</th>
+								<th>{{ t('organizer.live.files.columns.table') }}</th><th>{{ t('organizer.live.files.columns.duration') }}</th><th>{{ t('organizer.live.files.columns.size') }}</th><th>{{ t('organizer.live.files.columns.state') }}</th>
+								<th>{{ t('organizer.live.files.columns.transcript') }}</th><th style="text-align: right">{{ t('organizer.live.files.columns.actions') }}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -382,7 +386,7 @@ async function deleteAll(): Promise<void> {
 								<td>{{ duration(entry.duration_seconds) }}</td>
 								<td>
 									<template v-if="entry.audio_deleted_at">
-										<span class="cz-muted">audio deleted</span>
+										<span class="cz-muted">{{ t('organizer.live.files.audioDeleted') }}</span>
 									</template>
 									<template v-else>{{ bytes(entry.size_bytes) }}</template>
 								</td>
@@ -398,8 +402,8 @@ async function deleteAll(): Promise<void> {
 										v-if="entry.transcript_source === 'live'"
 										class="cz-muted"
 										style="font-size: 0.72rem; margin-left: 6px"
-										title="From the live captions, not a transcription of the finished audio">
-										live
+										:title="t('organizer.live.files.liveTitle')">
+										{{ t('organizer.live.files.live') }}
 									</span>
 								</td>
 								<td style="text-align: right">
@@ -409,44 +413,44 @@ async function deleteAll(): Promise<void> {
 											:icon="mdiDownloadOutline"
 											:disabled="!entry.audio_available"
 											@click="download(`/api/v1/recordings/${entry.recording_id}/audio`)">
-											Download
+											{{ t('organizer.live.files.actions.download') }}
 										</CzButton>
 										<CzButton
 											small
 											variant="tertiary"
 											:icon="mdiDeleteOutline"
-											title="Delete audio"
+											:title="t('organizer.live.files.actions.deleteAudioTitle')"
 											:disabled="busy || !entry.audio_available"
 											@click="confirmOne = entry">
-											Audio
+											{{ t('organizer.live.files.actions.audio') }}
 										</CzButton>
 										<CzButton
 											v-if="entry.can_retry_assembly"
 											small
 											variant="tertiary"
 											:icon="mdiRefresh"
-											title="Try assembling the audio again"
+											:title="t('organizer.live.files.actions.retryTitle')"
 											:disabled="busy"
 											@click="retryAssembly(entry)">
-											Retry
+											{{ t('organizer.live.files.actions.retry') }}
 										</CzButton>
 										<CzButton
 											small
 											variant="tertiary"
 											:icon="mdiTextSearch"
-											title="Transcribe again from the stored audio"
+											:title="t('organizer.live.files.actions.retranscribeTitle')"
 											:disabled="busy || !entry.audio_available"
 											@click="confirmRetranscribe = entry">
-											Re-transcribe
+											{{ t('organizer.live.files.actions.retranscribe') }}
 										</CzButton>
 										<CzButton
 											small
 											variant="tertiary"
 											:icon="mdiTextBoxRemoveOutline"
-											title="Delete transcript"
+											:title="t('organizer.live.files.actions.deleteTranscriptTitle')"
 											:disabled="busy || !entry.has_transcript"
 											@click="confirmTranscript = entry">
-											Transcript
+											{{ t('organizer.live.files.actions.transcript') }}
 										</CzButton>
 									</div>
 								</td>
@@ -459,54 +463,64 @@ async function deleteAll(): Promise<void> {
 
 		<CzConfirm
 			v-if="confirmRetranscribe"
-			title="Transcribe this table again?"
-			:message="`Table ${confirmRetranscribe.table_number} will be transcribed again from its stored audio${confirmRetranscribe.transcript_source === 'live' ? ', replacing the transcript taken from the live captions' : ', replacing the current transcript'}. Quotes inside existing findings refer to the old text, so they are marked as removed, and the analysis runs again. The audio is not touched.`"
-			confirm-label="Transcribe again"
+			:title="t('organizer.live.files.confirmRetranscribe.title')"
+			:message="t('organizer.live.files.confirmRetranscribe.message', {
+				number: confirmRetranscribe.table_number,
+				replacing: confirmRetranscribe.transcript_source === 'live'
+					? t('organizer.live.files.confirmRetranscribe.replacingLive')
+					: t('organizer.live.files.confirmRetranscribe.replacingCurrent'),
+			})"
+			:confirm-label="t('organizer.live.files.confirmRetranscribe.confirm')"
 			tone="default"
 			@confirm="retranscribe"
 			@cancel="confirmRetranscribe = null" />
 
 		<CzConfirm
 			v-if="confirmOne"
-			title="Delete this table's audio?"
-			:message="`The audio of table ${confirmOne.table_number} will be permanently deleted and cannot be recovered. Its transcript, findings and the report are kept — but the recording can never be transcribed again.`"
-			confirm-label="Delete audio"
+			:title="t('organizer.live.files.confirmDeleteAudio.title')"
+			:message="t('organizer.live.files.confirmDeleteAudio.message', { number: confirmOne.table_number })"
+			:confirm-label="t('organizer.live.files.confirmDeleteAudio.confirm')"
 			tone="danger"
 			@confirm="deleteOne"
 			@cancel="confirmOne = null" />
 
 		<CzConfirm
 			v-if="confirmTranscript"
-			title="Delete this table's transcript?"
-			:message="`The verbatim text of table ${confirmTranscript.table_number} will be permanently erased — including the quotes shown inside findings and in the published report. The findings and AI summaries stay. ${confirmTranscript.can_retranscribe ? 'The audio is still here, so this recording can be transcribed again.' : 'Its audio is already deleted, so the transcript cannot be recreated.'}`"
-			confirm-label="Delete transcript"
+			:title="t('organizer.live.files.confirmDeleteTranscript.title')"
+			:message="t('organizer.live.files.confirmDeleteTranscript.message', {
+				number: confirmTranscript.table_number,
+				audioNote: confirmTranscript.can_retranscribe
+					? t('organizer.live.files.confirmDeleteTranscript.audioStillHere')
+					: t('organizer.live.files.confirmDeleteTranscript.audioGone'),
+			})"
+			:confirm-label="t('organizer.live.files.confirmDeleteTranscript.confirm')"
 			tone="danger"
 			@confirm="deleteTranscript"
 			@cancel="confirmTranscript = null" />
 
 		<CzConfirm
 			v-if="confirmPurge"
-			title="Clear this assembly's audio from the table phones?"
-			message="Each phone still holds the audio it recorded. This asks them to delete it — but only the parts the server has already confirmed, so nothing can be lost. It reaches phones whose recorder is still open; one that was closed and taken away will clear itself if it is opened again."
-			confirm-label="Clear the phones"
+			:title="t('organizer.live.files.confirmPurge.title')"
+			:message="t('organizer.live.files.confirmPurge.message')"
+			:confirm-label="t('organizer.live.files.confirmPurge.confirm')"
 			tone="danger"
 			@confirm="purgeDeviceAudio"
 			@cancel="confirmPurge = false" />
 
 		<CzConfirm
 			v-if="confirmAllTranscripts"
-			title="Delete all transcripts of this session?"
-			message="Every table's verbatim text will be permanently erased, including the quotes inside findings and in the published report. Findings and AI summaries stay. Tables whose audio is still here can be transcribed again."
-			confirm-label="Delete all transcripts"
+			:title="t('organizer.live.files.confirmAllTranscripts.title')"
+			:message="t('organizer.live.files.confirmAllTranscripts.message')"
+			:confirm-label="t('organizer.live.files.confirmAllTranscripts.confirm')"
 			tone="danger"
 			@confirm="deleteAllTranscripts"
 			@cancel="confirmAllTranscripts = false" />
 
 		<CzConfirm
 			v-if="confirmAll && listing"
-			title="Delete all audio of this session?"
+			:title="t('organizer.live.files.confirmAllAudio.title')"
 			:message="deleteAllMessage"
-			confirm-label="Delete all audio"
+			:confirm-label="t('organizer.live.files.confirmAllAudio.confirm')"
 			tone="danger"
 			@confirm="deleteAll"
 			@cancel="confirmAll = false" />

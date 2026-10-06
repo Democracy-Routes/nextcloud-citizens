@@ -1,0 +1,174 @@
+{
+	"page": {
+		"title": "Speech & AI settings",
+		"lead": "API keys are stored encrypted in Nextcloud and never reach browsers or table phones.",
+		"saving": "Saving…",
+		"save": "Save settings",
+		"saved": "Saved",
+		"unsaved": "You have unsaved changes. Saving applies every setting on every tab, not only this one.",
+		"settingsSaved": "Settings saved"
+	},
+	"tabs": {
+		"audio": "Audio",
+		"ai": "AI analysis",
+		"general": "General"
+	},
+	"providers": {
+		"mistral": "Mistral (Voxtral)",
+		"deepgram": "Deepgram",
+		"whisper": "Whisper (OpenAI-compatible)",
+		"vosk": "Vosk (offline)"
+	},
+	"captionNote": {
+		"deepgram": "Live captions stream natively and carry speaker labels.",
+		"mistral": "Live captions use Voxtral Realtime; realtime output has no speaker labels.",
+		"whisper": "Live captions are produced from rolling 20-second windows, so a line may be revised as more audio arrives.",
+		"vosk": "Live captions stream natively from your Vosk server, without punctuation or speaker labels."
+	},
+	"audio": {
+		"title": "Transcription",
+		"selectedService": "Selected service:",
+		"selectedHint": "— the fields below configure it.",
+		"provisional": "Captions are provisional — the canonical transcript is always produced from the complete recording after the session.",
+		"test": "Test",
+		"keyConfigured": "configured — {hint} (type to replace)",
+		"pasteKey": "Paste API key",
+		"liveHead": "Live transcription (provisional captions)",
+		"finalHead": "Final transcription (canonical)",
+		"liveModelAria": "Live transcription model",
+		"finalModelAria": "Final transcription model",
+		"finalHint": "Used for the canonical transcript after each session.",
+		"maxLive": "Max concurrent live caption sessions",
+		"maxFinal": "Max concurrent final transcriptions",
+		"maxLiveHint": "Server-wide; one session per recording phone. Phones past the cap keep recording — their captions wait for a free slot.",
+		"maxFinalHint": "Server-wide, its own pool — a busy live event never blocks it.",
+		"mistral": {
+			"key": "Mistral API key",
+			"liveHint": "Voxtral Realtime. Billed separately from the final transcription."
+		},
+		"deepgram": {
+			"key": "Deepgram API key",
+			"liveHint": "Streams natively and carries speaker labels.",
+			"endpoint": "Live caption endpoint",
+			"endpointHint": "Any server speaking Deepgram's streaming protocol works here — for example a self-hosted WhisperLiveKit, which keeps captions on your own infrastructure."
+		},
+		"whisper": {
+			"baseUrl": "Endpoint base URL",
+			"baseUrlHint": "Any OpenAI-compatible transcription endpoint: OpenAI itself, or a server you run (Speaches, whisper.cpp, LocalAI, vLLM, WhisperX). With your own server the audio never leaves your infrastructure.",
+			"sameAsFinal": "same as final",
+			"liveHint": "Optional — captions re-transcribe a rolling window every few seconds, so a smaller model keeps up more cheaply. Empty reuses the final model.",
+			"finalHint": "A name containing “diarize” (e.g. gpt-4o-transcribe-diarize) is requested in diarized mode and returns speaker labels.",
+			"key": "API key (optional)",
+			"keyHint": "Required by OpenAI; most self-hosted servers need none.",
+			"noDiarizationTitle": "No speaker separation.",
+			"noDiarization": "Standard Whisper returns text with timestamps but does not say who spoke, so transcripts and report quotes appear without speaker labels. Servers that add diarization (WhisperX-based, or OpenAI's diarizing model) are used automatically when they provide it."
+		},
+		"vosk": {
+			"url": "Vosk server URL",
+			"urlHint": "A vosk-server instance you run (for example the alphacep/kaldi-en image on port 2700). No API key, no internet: audio never leaves your network.",
+			"perLanguage": "Model for each language",
+			"perLanguageHint": "Vosk needs its own model per language, and one server holds several. The language you choose for an assembly picks the model. Type the model {name} — switching model is editing this name. Leave a language empty until you need it; download a model with {command}.",
+			"perLanguageName": "name",
+			"language": "Language",
+			"notConfigured": "not configured",
+			"sameAsLive": "same as live",
+			"liveModelFor": "Live caption model for {language}",
+			"finalModelFor": "Final transcript model for {language}",
+			"blankHint": "A blank final model reuses the live one. A language left entirely blank falls back to whatever model the server started with, so a half-filled table never stops a recording being transcribed.",
+			"label": "Model label (optional)",
+			"labelHint": "Recorded with the transcript for reference, and used as the model only for a language with no row above.",
+			"plainTitle": "Offline, but plainer output.",
+			"plain": "Vosk returns lower-case text without punctuation and does not separate speakers. It is the right choice when nothing may leave the premises; Deepgram or a diarizing Whisper server give a far more readable assembly record."
+		},
+		"modes": {
+			"both": "Tables see captions while they talk, and each recording is transcribed again afterwards from the complete audio. The final transcript is the record and the one the analysis reads.",
+			"finalOnly": "No captions during the session. Each recording is transcribed after it is uploaded, and that transcript is the record.",
+			"liveOnlyTitle": "The captions are the record.",
+			"liveOnly": "Nothing is transcribed a second time, so the analysis reads what was captured live — quicker and much cheaper, but captions can miss speech the engine could not keep up with. The audio is kept, so any table can be transcribed properly later from its Files tab.",
+			"noneTitle": "Nothing will be transcribed.",
+			"none": "Recordings are stored as audio and nothing else: no transcript, no analysis, and an empty report. Tick at least one box unless you only want the audio."
+		}
+	},
+	"ai": {
+		"title": "AI analysis",
+		"lead": "Any OpenAI-compatible endpoint works: Mistral (default), Ollama Cloud, a remote Ollama server, vLLM…",
+		"auto": "Run analysis automatically after each table is transcribed",
+		"baseUrl": "Base URL",
+		"model": "Model",
+		"key": "API key",
+		"extra": "Additional analysis instructions (optional)",
+		"extraPlaceholder": "E.g. Focus on transport and housing topics. Use formal Italian. Treat 'PUMS' as the city's mobility plan.",
+		"extraHint": "Appended to the built-in prompts for table and session analysis. The output format and the mandatory evidence links cannot be overridden.",
+		"showPrompts": "Show the built-in prompts your instructions are appended to",
+		"hidePrompts": "Hide built-in prompts",
+		"tablePrompt": "TABLE ANALYSIS (read-only)",
+		"roundPrompt": "SESSION AGGREGATION (read-only)"
+	},
+	"facilitator": {
+		"title": "AI facilitator",
+		"lead": "A quiet voice beside each table during a session: one short question or reminder when time runs out, the room goes silent, the discussion drifts or — where the engine labels speakers — one voice dominates. It reaches the facilitator's own phone first and the table's phones only when no facilitator phone is connected. Each assembly can pick its own level; this is the default.",
+		"level": "Default level for new assemblies",
+		"levels": {
+			"off": "Off",
+			"light": "Light (2 per session)",
+			"normal": "Normal (4)",
+			"active": "Active (8)"
+		},
+		"baseUrl": "Base URL (blank: the analysis endpoint)",
+		"model": "Model (blank: the analysis model)",
+		"key": "API key (blank: the analysis key)",
+		"showThresholds": "Thresholds…",
+		"hideThresholds": "Hide thresholds",
+		"interval": "Minutes between two nudges at a table",
+		"dominance": "One voice above this share counts as dominating (%)",
+		"silence": "Seconds of silence before an open question"
+	},
+	"retention": {
+		"title": "Audio retention",
+		"lead": "Delete the raw audio of an assembly this many days after it is {closed}. Transcripts, findings and reports are never removed by this — only the recordings. Individual assemblies can override it, and organizers can always delete audio sooner from the Files tab.",
+		"closed": "closed",
+		"days": "Days to keep audio after closing",
+		"deletedAfter": "Audio is deleted {days} days after an assembly is closed. Table phones are told this before recording.",
+		"keptForever": "Audio is kept until someone deletes it. Table phones are told this before recording."
+	},
+	"org": {
+		"title": "Organization data",
+		"lead": "The notice people read before registering at a table is written by the server from these fields and the live data-handling facts (the selected transcription and analysis providers, retention, the phones' local copy), in the assembly's language; every consent is stored with the hash of the text as shown. Blank fields are simply left out of the notice. The same data fills the printed event kit and the paper form.",
+		"controller": "Data controller (legal name)",
+		"controllerPlaceholder": "The organiser",
+		"controllerHint": "Who is responsible for the data. Empty: the organization name.",
+		"address": "Postal address",
+		"contact": "Contact for data requests (email)",
+		"dpo": "Data protection contact (DPO)",
+		"dpoPlaceholder": "Name · dpo@example.org",
+		"hosting": "Hosting provider and country",
+		"hostingPlaceholder": "Hetzner, Germany (EU)",
+		"hostingHint": "Where this server runs — \"Where your data is kept\" in the notice.",
+		"authority": "Supervisory authority",
+		"authorityHint": "Where a complaint goes. Empty: the Italian Garante for Italian assemblies, \"the data protection authority of your country\" otherwise."
+	},
+	"branding": {
+		"title": "Organization",
+		"lead": "Name and logo appear on the header and footer of PDF reports. Logo: PNG or JPEG, up to 1 MB.",
+		"name": "Organization name",
+		"logoAlt": "Organization logo",
+		"replaceLogo": "Replace logo",
+		"uploadLogo": "Upload logo",
+		"remove": "Remove",
+		"tooLarge": "Logo must be 1 MB or smaller",
+		"logoSaved": "Logo saved — it will appear on PDF reports",
+		"logoRemoved": "Logo removed"
+	},
+	"ui": {
+		"loading": "Loading"
+	},
+	"format": {
+		"secondsAgo": "{n}s ago",
+		"minutesAgo": "{n}m ago",
+		"hoursAgo": "{n}h ago",
+		"daysAgo": "{n}d ago",
+		"kb": "{n} KB",
+		"mb": "{n} MB",
+		"gb": "{n} GB"
+	}
+}

@@ -4,6 +4,7 @@
 import { roundHeading } from '../labels'
 import { mdiContentCopy, mdiShuffleVariant, mdiTableFurniture } from '@mdi/js'
 import { onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { describeError, type UiError } from '../errors'
 import type { AssemblyDetail, Table } from '../types'
@@ -11,6 +12,8 @@ import CzButton from './ui/CzButton.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
 import CzError from './ui/CzError.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
 
@@ -75,7 +78,11 @@ async function remix(): Promise<void> {
 	})
 	if (ok && outcome) {
 		const o = outcome as { seated: number; repeated_pairs: number }
-		remixNote.value = `${o.seated} seated · ${o.repeated_pairs} ${o.repeated_pairs === 1 ? 'pair' : 'pairs'} who already sat together`
+		remixNote.value = t(
+			'organizer.setup.tables.remixNote',
+			{ seated: o.seated, pairs: o.repeated_pairs },
+			o.repeated_pairs,
+		)
 	}
 }
 /** Move a participant, and put the dropdown back if the server refuses.
@@ -109,16 +116,16 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 					{{ roundHeading(round.position, round.title) }}
 				</option>
 			</select>
-			<select v-model="remixGoal" data-test="remix-goal" title="How to seat people for this session">
-				<option value="new_people">Meet new people</option>
-				<option value="random">Random</option>
-				<option value="continuity">Keep previous seating</option>
+			<select v-model="remixGoal" data-test="remix-goal" :title="t('organizer.setup.tables.goalTitle')">
+				<option value="new_people">{{ t('organizer.setup.tables.goal.newPeople') }}</option>
+				<option value="random">{{ t('organizer.setup.tables.goal.random') }}</option>
+				<option value="continuity">{{ t('organizer.setup.tables.goal.continuity') }}</option>
 			</select>
 			<CzButton variant="primary" small :icon="mdiShuffleVariant" :disabled="busy || !roundId" data-test="remix" @click="remix">
-				Remix
+				{{ t('organizer.setup.tables.remix') }}
 			</CzButton>
 			<CzButton small :icon="mdiContentCopy" :disabled="busy || !roundId" @click="copyPrevious">
-				Copy previous session
+				{{ t('organizer.setup.tables.copyPrevious') }}
 			</CzButton>
 			<span v-if="remixNote" class="cz-muted" style="font-size: 0.8125rem" data-test="remix-note">{{ remixNote }}</span>
 		</div>
@@ -128,18 +135,16 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 		<CzEmptyState
 			v-else-if="tables.length === 0"
 			:icon="mdiTableFurniture"
-			title="No tables in this session"
-			hint="Tables are created with the round, from the assembly's table count. If that
-			      count was zero this round has no tables and no QR codes, and adding another
-			      round will not help — the assembly needs to be created again." />
+			:title="t('organizer.setup.tables.emptyTitle')"
+			:hint="t('organizer.setup.tables.emptyHint')" />
 
 		<CzEmptyState
 			v-else-if="!hasAssignments()"
 			:icon="mdiShuffleVariant"
-			title="Nobody is seated yet"
-			hint="Randomly assign all participants to tables, or copy the previous session's seating.">
+			:title="t('organizer.setup.tables.unseatedTitle')"
+			:hint="t('organizer.setup.tables.unseatedHint')">
 			<CzButton variant="primary" :icon="mdiShuffleVariant" :disabled="busy" @click="randomize">
-				Random assignment
+				{{ t('organizer.setup.tables.randomize') }}
 			</CzButton>
 		</CzEmptyState>
 
@@ -148,13 +153,13 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 				<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
 					<h3 class="cz-row" style="gap: 8px; flex-wrap: nowrap">
 						<span class="cz-tabledot" :class="`cz-tabledot--${table.color_key}`" role="img" :aria-label="table.color_key"></span>
-						Table {{ table.number }}
+						{{ t('organizer.setup.tables.table', { number: table.number }) }}
 					</h3>
 					<span class="cz-pill cz-pill--gray" style="text-transform: none">
-						{{ table.participants.length }} seated
+						{{ t('organizer.setup.tables.seated', { count: table.participants.length }) }}
 					</span>
 				</div>
-				<p v-if="table.participants.length === 0" class="cz-muted" style="font-size: 0.8125rem">Empty</p>
+				<p v-if="table.participants.length === 0" class="cz-muted" style="font-size: 0.8125rem">{{ t('organizer.setup.tables.empty') }}</p>
 				<div
 					v-for="participant in table.participants"
 					:key="participant.id"
@@ -166,7 +171,7 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 					</span>
 					<select
 						:value="table.id"
-						title="Move to table"
+						:title="t('organizer.setup.tables.moveTo')"
 						style="padding: 3px 6px; font-size: 0.8125rem"
 						@change="
 							move(
@@ -176,7 +181,7 @@ const hasAssignments = () => tables.value.some((t) => t.participants.length > 0)
 								table.id,
 							)
 						">
-						<option v-for="target in tables" :key="target.id" :value="target.id">T{{ target.number }}</option>
+						<option v-for="target in tables" :key="target.id" :value="target.id">{{ t('organizer.setup.tables.tableShort', { number: target.number }) }}</option>
 					</select>
 				</div>
 			</div>

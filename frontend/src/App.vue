@@ -3,6 +3,7 @@
 <script setup lang="ts">
 import { mdiChevronLeft, mdiChevronRight, mdiCog, mdiHomeOutline, mdiMenu } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { describeError, type UiError } from './errors'
 import { api, ApiError } from './api'
 import AssemblyDetail from './components/AssemblyDetail.vue'
@@ -22,6 +23,8 @@ type View =
 	| { name: 'create-session' }
 	| { name: 'detail'; id: string }
 	| { name: 'settings' }
+
+const { t, te } = useI18n()
 
 const assemblies = ref<Assembly[]>([])
 const loaded = ref(false)
@@ -60,6 +63,13 @@ const freshInvites = ref<{ assemblyId: string; invites: InviteGenerated[] } | nu
 
 const STATUS_TONE: Record<string, string> = {
 	DRAFT: 'gray', READY: 'blue', ACTIVE: 'red', PROCESSING: 'amber', REVIEW: 'blue', COMPLETE: 'green',
+}
+
+/** The state behind a sidebar dot, in words — the shared `state.*` catalogue
+ * CzStatusPill reads, with the humanized enum as the fallback. */
+function statusLabel(status: string): string {
+	const key = `state.${status}`
+	return te(key) ? t(key) : status.replaceAll('_', ' ').toLowerCase()
 }
 
 const selectedId = computed(() => (view.value.name === 'detail' ? view.value.id : ''))
@@ -176,10 +186,10 @@ async function recordNow(): Promise<void> {
 <template>
 	<aside class="cz-sidebar" :class="{ 'cz-sidebar--open': sidebarOpen, 'cz-sidebar--collapsed': sidebarCollapsed }">
 		<div class="cz-sidebar__top">
-			<CzButton variant="primary" :icon="mdiHomeOutline" wide @click="goHome">Home</CzButton>
+			<CzButton variant="primary" :icon="mdiHomeOutline" wide @click="goHome">{{ t('organizer.shell.app.home') }}</CzButton>
 		</div>
 		<nav class="cz-sidebar__list">
-			<p v-if="sessions.length" class="cz-sidebar__group">Sessions</p>
+			<p v-if="sessions.length" class="cz-sidebar__group">{{ t('organizer.shell.app.sessions') }}</p>
 			<button
 				v-for="session in sessions"
 				:key="session.id"
@@ -190,16 +200,16 @@ async function recordNow(): Promise<void> {
 					class="cz-dot"
 					:class="`cz-dot--${STATUS_TONE[session.status] ?? 'gray'}`"
 					role="img"
-					:aria-label="session.status.replaceAll('_', ' ').toLowerCase()"
-					:title="session.status.replaceAll('_', ' ').toLowerCase()"></span>
+					:aria-label="statusLabel(session.status)"
+					:title="statusLabel(session.status)"></span>
 				<span class="cz-navitem__body">
 					<span class="cz-navitem__name">{{ session.name }}</span>
 					<span class="cz-navitem__meta">
-						Session · {{ session.default_table_count }} {{ session.default_table_count === 1 ? 'table' : 'tables' }}
+						{{ t('organizer.shell.app.sessionMeta', { count: session.default_table_count }, session.default_table_count) }}
 					</span>
 				</span>
 			</button>
-			<p v-if="events.length && sessions.length" class="cz-sidebar__group">Assemblies</p>
+			<p v-if="events.length && sessions.length" class="cz-sidebar__group">{{ t('organizer.shell.app.assemblies') }}</p>
 			<button
 				v-for="assembly in events"
 				:key="assembly.id"
@@ -211,12 +221,12 @@ async function recordNow(): Promise<void> {
 					class="cz-dot"
 					:class="`cz-dot--${STATUS_TONE[assembly.status] ?? 'gray'}`"
 					role="img"
-					:aria-label="assembly.status.replaceAll('_', ' ').toLowerCase()"
-					:title="assembly.status.replaceAll('_', ' ').toLowerCase()"></span>
+					:aria-label="statusLabel(assembly.status)"
+					:title="statusLabel(assembly.status)"></span>
 				<span class="cz-navitem__body">
 					<span class="cz-navitem__name">{{ assembly.name }}</span>
 					<span class="cz-navitem__meta">
-						{{ assembly.expected_participants }} participants · {{ assembly.default_table_count }} tables
+						{{ t('organizer.shell.app.assemblyMeta', { participants: assembly.expected_participants, tables: assembly.default_table_count }) }}
 					</span>
 				</span>
 			</button>
@@ -227,7 +237,7 @@ async function recordNow(): Promise<void> {
 				v-else-if="loaded && assemblies.length === 0"
 				class="cz-muted"
 				style="padding: 12px; font-size: 0.8125rem">
-				No sessions or assemblies yet.
+				{{ t('organizer.shell.app.empty') }}
 			</p>
 		</nav>
 		<div v-if="isAdmin" class="cz-sidebar__bottom">
@@ -236,7 +246,7 @@ async function recordNow(): Promise<void> {
 				:class="{ 'cz-navitem--active': view.name === 'settings' }"
 				@click="openSettings">
 				<SvgIcon :path="mdiCog" :size="18" />
-				<span class="cz-navitem__body"><span class="cz-navitem__name">Settings</span></span>
+				<span class="cz-navitem__body"><span class="cz-navitem__name">{{ t('organizer.shell.app.settings') }}</span></span>
 			</button>
 		</div>
 	</aside>
@@ -247,13 +257,13 @@ async function recordNow(): Promise<void> {
 		<button
 			class="cz-sidebar-toggle"
 			:class="{ 'cz-sidebar-toggle--collapsed': sidebarCollapsed }"
-			:aria-label="sidebarCollapsed ? 'Show the list' : 'Hide the list'"
-			:title="sidebarCollapsed ? 'Show the list' : 'Hide the list'"
+			:aria-label="sidebarCollapsed ? t('organizer.shell.app.showList') : t('organizer.shell.app.hideList')"
+			:title="sidebarCollapsed ? t('organizer.shell.app.showList') : t('organizer.shell.app.hideList')"
 			@click="toggleSidebar">
 			<SvgIcon :path="sidebarCollapsed ? mdiChevronRight : mdiChevronLeft" :size="20" />
 		</button>
 		<div class="cz-mobilebar">
-			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">Sessions</CzButton>
+			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">{{ t('organizer.shell.app.sessions') }}</CzButton>
 		</div>
 
 		<HomeView

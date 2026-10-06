@@ -1,0 +1,251 @@
+{
+	"labels": {
+		"type": {
+			"proposal": "Proposal",
+			"agreement": "Point of consensus",
+			"disagreement": "Point of divergence",
+			"concern": "Concern",
+			"question": "Open question",
+			"minority_position": "Minority position",
+			"new_idea": "Emerging idea"
+		},
+		"typePlural": {
+			"proposal": "Proposals",
+			"agreement": "Points of consensus",
+			"disagreement": "Points of divergence",
+			"concern": "Concerns raised",
+			"question": "Open questions",
+			"minority_position": "Minority positions",
+			"new_idea": "Emerging ideas"
+		},
+		"otherFindings": "Other findings",
+		"round": "Round {position}",
+		"roundTitled": "Round {position} — {title}"
+	},
+	"analysis": {
+		"pausedWhileEditing": "Paused while you edit",
+		"filterStatus": "Filter by review status",
+		"filterType": "Filter by finding type",
+		"filters": {
+			"all": "All findings",
+			"draft": "Needs review",
+			"approved": "Approved",
+			"rejected": "Rejected"
+		},
+		"allTypes": "All types",
+		"approveDrafts": "Approve {count} drafts | Approve {count} draft | Approve {count} drafts",
+		"rerun": "Re-run analysis",
+		"run": "Run analysis",
+		"noSessionsTitle": "This assembly has no sessions yet",
+		"noSessionsHint": "Add a session on the Sessions tab; findings appear here once its tables have been analyzed.",
+		"inProgress": "Analysis in progress",
+		"running": "{count} running",
+		"queued": "{count} queued",
+		"waitingRetry": "{count} waiting to retry",
+		"cancelPending": "Cancel pending analysis",
+		"table": "Table {number}",
+		"failed": "Analysis failed",
+		"failedFor": "for {count} table(s):",
+		"clusteringFailed": "Cross-table clustering failed",
+		"rerunClustering": "Re-run clustering only",
+		"notConfiguredTitle": "AI analysis is not configured",
+		"notConfiguredHint": "An administrator needs to add an analysis API key (Mistral, Ollama Cloud, or any OpenAI-compatible endpoint) in Settings. Analysis then runs automatically after each table is transcribed.",
+		"inProgressTitle": "Analysis in progress…",
+		"noFindingsTitle": "No findings yet",
+		"inProgressHint": "Tables are being analyzed — findings appear here automatically.",
+		"noFindingsHint": "Findings appear automatically after tables are recorded and transcribed, or run the analysis manually.",
+		"runNow": "Run analysis now",
+		"noMatchTitle": "No findings match this filter",
+		"noMatchHint": "Change the filters above to see the rest of this session's findings.",
+		"comparison": {
+			"title": "Speaking balance across tables",
+			"intro": "Each line measures one table on its own — voices are detected, not identified, and talk-time is an estimate, not a measure of influence.",
+			"colTable": "Table",
+			"colVoices": "Voices",
+			"colLargest": "Largest share",
+			"colSmallest": "Smallest share",
+			"colRatio": "Ratio",
+			"recorderChanged": "recorder changed"
+		},
+		"acrossTables": "Across all tables",
+		"aggregatedFrom": "— aggregated from {count} table(s)",
+		"crossTableNote": "Cross-table findings are regenerated every time a table finishes its analysis, reviews included — review them after the last table.",
+		"aiSummary": "AI SUMMARY",
+		"analyzedNoFindings": "Analyzed — no substantive findings for the session question in this discussion.",
+		"footer": "AI findings are drafts until a human approves them; summaries are AI-generated neutral descriptions. Every finding cites transcript evidence; “mentioned at N tables” is never a measure of participant support.",
+		"toast": {
+			"approved": "{count} finding(s) approved",
+			"nothingToAnalyze": "Nothing to analyze — no table has a transcript ready yet",
+			"queued": "Analysis queued for {count} table(s)",
+			"cancelledRunning": "{cancelled} pending job(s) cancelled; {running} already running will finish",
+			"cancelled": "{count} pending job(s) cancelled",
+			"reclusterQueued": "Cross-table clustering queued",
+			"reclusterAlready": "Clustering is already queued"
+		},
+		"confirmApprove": {
+			"title": "Approve every draft finding?",
+			"message": "{count} draft finding(s) in this session will be marked approved and included in the report. Rejected findings are left alone, and you can still edit or reject any of them afterwards.",
+			"confirm": "Approve all drafts"
+		},
+		"confirmRerun": {
+			"title": "Run the analysis again?",
+			"messageReviewed": "Every finding of this session — including the {count} you have already approved or edited — is replaced by a freshly generated set. Reviews done so far will have to be redone.",
+			"messageDrafts": "Every draft finding for this session is replaced with freshly generated ones.",
+			"confirm": "Run analysis again"
+		},
+		"confirmRecluster": {
+			"title": "Run the cross-table clustering again?",
+			"message": "The {count} cross-table finding(s) you have already approved or edited are replaced by a freshly generated set, along with the drafts. Table findings are not touched.",
+			"confirm": "Run clustering again"
+		},
+		"replaceWord": "replace"
+	},
+	"report": {
+		"toast": {
+			"closed": "Session closed — the final report is ready",
+			"reopened": "Session reopened — tables can record again",
+			"unpublished": "Report is no longer visible on table phones",
+			"published": "Report published — table phones can now view and download it",
+			"synthesisQueued": "Synthesis queued — it appears here in a minute or two",
+			"refreshed": "The published version now matches the current report",
+			"downloadFailed": "The report could not be downloaded — check the pop-up blocker"
+		},
+		"finalTitle": "Final report · closed {date}",
+		"finalHint": "The session is closed: tables can no longer record, and this is the definitive report. Participants keep reading this version even if you reopen — approve more findings and press Update to push them.",
+		"allDoneTitle": "All {count} tables have finished.",
+		"allDoneHint": "Close the session to create the final report and enable the downloads.",
+		"interimTitle": "Interim report — {complete} of {expected} tables have completed all sessions",
+		"interimHint": "This is a preview of an assembly still in progress. Closing the session creates the final report and enables the downloads — you can reopen later.",
+		"close": "Close session & create final report",
+		"updating": "Updating…",
+		"updatePublished": "Update the published version",
+		"reopen": "Reopen session",
+		"synthesis": {
+			"title": "How the discussion developed",
+			"haveLead": "A chapter across the sessions, written from their summaries and approved cross-table findings",
+			"haveTail": "It is remade at closing once every session's analysis is in.",
+			"none": "Once at least two sessions have a summary, the analysis model writes how the discussion moved from the first session to the last. It happens by itself at closing; generate it earlier here.",
+			"queued": "Queued…",
+			"again": "Generate again",
+			"generate": "Generate synthesis",
+			"carried": "Carried from one session to the next"
+		},
+		"includeDrafts": "Include unreviewed drafts (clearly marked)",
+		"preparing": "Preparing…",
+		"pdf": "PDF",
+		"markdown": "Markdown",
+		"json": "JSON",
+		"downloadsLocked": "Downloads become available once the session is closed.",
+		"publishedTitle": "Published to table phones",
+		"unpublishedTitle": "Not yet published to table phones",
+		"publishedHint": "Recording phones can view this report and download the PDF (approved findings and AI summaries only — drafts stay private).",
+		"unpublishedHint": "Publishing lets the recording phones view this report and download the PDF. Only approved findings and AI summaries are shared.",
+		"unpublish": "Unpublish",
+		"publish": "Publish report to tables",
+		"emptyTitle": "Nothing to report yet",
+		"emptyHintDrafts": "No findings exist yet — record tables and run the analysis first.",
+		"emptyHintApproved": "No approved findings yet. Approve findings in the Analysis tab, or include drafts to preview.",
+		"assemblyReport": "{name} — Assembly Report",
+		"participants": "{count} participants",
+		"tables": "{count} tables",
+		"acrossTables": "Across all tables",
+		"draftPill": "DRAFT — not reviewed",
+		"mentionedAt": "Mentioned at {count} table(s)",
+		"speaker": "Speaker",
+		"evidenceRemoved": "Evidence removed with the transcript",
+		"table": "Table {number}",
+		"aiSummary": "AI SUMMARY",
+		"looksRight": "✓ {count} looks right",
+		"flaggedMissing": "· ⚠ {count} flagged something missing",
+		"confirmClose": {
+			"title": "Close the session and create the final report?",
+			"missingTables": "Tables {tables} never recorded — they will not appear in the final report. ",
+			"body": "Tables can no longer record after closing, and the report becomes final. You can reopen the session later if a late table needs to record.",
+			"confirm": "Close session"
+		},
+		"confirmUnpublish": {
+			"title": "Stop sharing the report with the tables?",
+			"message": "Every table phone currently reading the report loses access to it immediately. You can publish it again at any time.",
+			"confirm": "Unpublish"
+		},
+		"confirmReopen": {
+			"title": "Reopen this session?",
+			"message": "Tables can record again and the report stops being final. Participants keep reading the version that was frozen when the session closed, until you close it again.",
+			"confirm": "Reopen session"
+		},
+		"confirmPublish": {
+			"title": "Publish report to table phones?",
+			"message": "Every table's recording phone will be able to view this report and download the PDF. Only approved findings and AI summaries are included — unreviewed drafts stay private. You can unpublish at any time.",
+			"confirm": "Publish"
+		}
+	},
+	"finding": {
+		"title": "Title",
+		"summary": "Summary",
+		"cancel": "Cancel",
+		"saveApprove": "Save & approve",
+		"mentionedAt": "Mentioned at {count} table(s)",
+		"support": "support: {support}",
+		"approve": "Approve",
+		"reject": "Reject",
+		"edit": "Edit",
+		"excerpts": "{count} evidence excerpt(s)",
+		"speaker": "SPEAKER",
+		"status": {
+			"DRAFT": "draft",
+			"APPROVED": "approved",
+			"EDITED_AND_APPROVED": "edited and approved",
+			"REJECTED": "rejected"
+		},
+		"toast": {
+			"edited": "Finding edited and approved",
+			"approved": "Finding approved",
+			"rejected": "Finding rejected"
+		}
+	},
+	"speaking": {
+		"eyebrow": "SPEAKING BALANCE",
+		"caveat": "The phone recording this table changed during the session; voices cannot be matched across the parts, so this covers the fullest part only.",
+		"ariaLabel": "Share of speaking time per detected voice",
+		"voice": "Voice {label}",
+		"others": "Others",
+		"note": "Detected voices, not identified by name — from the clearest single recording. An estimate of talk-time, not of participation or influence."
+	},
+	"failure": {
+		"retrying": "Retrying automatically — attempt {attempt} of {max}.",
+		"retryingNext": "Retrying automatically — attempt {attempt} of {max}, next in {seconds} s.",
+		"reason": {
+			"PROVIDER_AUTH": "The provider rejected the API key or this model (HTTP 401/403). Check the key, the plan and the model name in Settings, then run it again.",
+			"PROVIDER_RATE_LIMIT": "The provider is rate-limiting requests (HTTP 429). The job waits and retries by itself — do not start another run.",
+			"PROVIDER_TIMEOUT": "The provider did not answer in time. The job retries by itself; if it keeps failing, the provider is slow or unreachable.",
+			"PROVIDER_HTTP": "The provider returned an error. The job retries by itself unless the provider rejected the request outright.",
+			"SCHEMA_INVALID": "The model answered, but not in the required format, three times in a row. Run it again; if it repeats, try another model.",
+			"NOT_CONFIGURED": "No provider is configured for this step — add the key or endpoint in Settings.",
+			"NO_TRANSCRIPT": "There is no transcript to analyse. Transcribe the recording first.",
+			"AUDIO_MISSING": "The audio file is missing on the server, so it cannot be transcribed again.",
+			"RERUN_EMPTY": "The new analysis came back with no findings for a table that already had some, so the previous findings were kept. Nothing was lost; run the analysis again if you wanted them replaced.",
+			"CANCELLED": "Cancelled by an organizer. Run it again when ready.",
+			"UNKNOWN": "It failed for a reason the app did not recognise; the detail below is what the server recorded."
+		},
+		"code": {
+			"STORAGE_FULL": "The server ran out of space while assembling this recording. The uploaded audio is still here — free some space, then try again.",
+			"CHUNKS_GONE": "Parts of the upload are missing from storage, so the audio cannot be rebuilt. This table needs to record the session again.",
+			"CHUNK_CORRUPTED": "A piece of the upload failed its checksum, so the audio cannot be trusted. This table needs to record the session again.",
+			"AUDIO_DELETED": "The audio was deleted while it was being assembled.",
+			"UPLOAD_TIMED_OUT": "The phone stopped uploading and did not come back. Whatever reached the server is kept; the table can record again.",
+			"UPLOAD_ABANDONED": "Waiting for this upload was stopped by an organizer. The audio already received is kept.",
+			"RATE_LIMITED": "The provider is rate-limiting requests (HTTP 429). The job waits and retries by itself — do not start another run.",
+			"LIVE_CAPTIONS_MISSING": "Final transcription is off and the caption session never wrote a transcript. Re-transcribe from the stored audio.",
+			"LIVE_CAPTIONS_UNREADABLE": "Final transcription is off and the caption file could not be read. Re-transcribe from the stored audio.",
+			"LIVE_CAPTIONS_EMPTY": "Final transcription is off and the captions contained no text. Re-transcribe from the stored audio.",
+			"DEVICE_SILENT": "The phone went silent mid-session and the table was released. Whatever reached the server is kept.",
+			"ROUND_CONTINUED": "The table finished early while the session was still open, then carried on: this is the first part of the session, the rest is in the recording below it."
+		},
+		"state": {
+			"AUDIO_INVALID": "The uploaded audio could not be validated.",
+			"TRANSCRIPTION_FAILED": "The transcription provider did not return a transcript. The audio is untouched, so this can be tried again.",
+			"ANALYSIS_FAILED": "The AI analysis did not complete. The transcript is untouched, so this can be run again.",
+			"UPLOAD_INCOMPLETE": "Not all of the recording reached the server."
+		}
+	}
+}

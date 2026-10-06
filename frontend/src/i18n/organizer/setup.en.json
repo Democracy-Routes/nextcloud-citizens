@@ -1,0 +1,188 @@
+{
+	"overview": {
+		"nextStep": "Next step",
+		"next": {
+			"liveText": "Session {position} is live — watch table health and recordings.",
+			"liveAction": "Open Live view",
+			"roundsText": "Start by defining the discussion sessions and their questions.",
+			"roundsAction": "Add sessions",
+			"participantsText": "Add participants — anonymous labels like P001 are enough.",
+			"participantsAction": "Add participants",
+			"qrText": "Generate the recorder QR codes and print one per table.",
+			"qrAction": "Generate QR codes",
+			"readyText": "Everything is prepared. Start a session from the Live view when the discussion begins."
+		},
+		"stats": {
+			"participants": "Participants",
+			"tables": "Tables",
+			"sessionsHeld": "Sessions held",
+			"activeQr": "Active QR codes"
+		},
+		"details": {
+			"title": "Assembly details",
+			"edit": "Edit",
+			"add": "Add",
+			"name": "Name",
+			"description": "Description",
+			"language": "Language",
+			"languageDetected": "Detected from the recording: this Session was started with Record now, so the first transcript decides the language of the analysis and the report. Choosing one here fixes it instead.",
+			"languageLocked": "Locked: this assembly has started recording. The language decides how audio is transcribed, so changing it now would leave one assembly with transcripts in two languages.",
+			"autoPurge": "Clear the audio off the table phones when the session is closed",
+			"autoPurgeHint": "Every phone keeps a copy of its table's audio so that recording survives a bad network. This asks them to delete it once the assembly is finished — which matters most when participants used their own devices. A phone only ever deletes audio the server has already confirmed, so this cannot remove a last copy. Turn it off to keep the phones' copies until you have downloaded the export.",
+			"consent": "Consent at the table",
+			"consentRequired": "Required — a table records only once one person registered there has consented",
+			"consentOptional": "Optional — the notice is shown and registration offered, nothing is blocked",
+			"consentHint": "Each person registers individually on the table's phone or their own (name, optional email, explicit ticks against the notice the server renders). The record — who, what, which notice — is kept with the assembly and exported. Required is the setting for an organized assembly; Optional suits a spontaneous session.",
+			"aiFacilitator": "AI facilitator",
+			"aiLevel": {
+				"default": "Default from Settings ({level})",
+				"off": "Off",
+				"light": "Light — at most two nudges per session",
+				"normal": "Normal — at most four",
+				"active": "Active — at most eight"
+			},
+			"aiHint": "One short question or reminder on the table's phones when time runs out, the room goes silent or the discussion drifts — to the facilitator's own phone first when one is connected, and only then to the table. Each table can switch it off from its phone; the Live tab can pause it.",
+			"aiNotConfigured": "Not set up on this server yet (Settings → AI).",
+			"redactNames": "Names to keep out of the AI analysis",
+			"redactPlaceholder": "Anna, Simone, Alessandro",
+			"redactHint": "Speaker labels are already anonymous, but people say each other's names out loud and the transcript records what was said. Names listed here — and any imported participant's name — are replaced with “Person A”, “Person B” before the transcript is sent to the analysis service. The transcript kept on this server is unchanged, so quotes in the report still show what was actually said. This does not affect the audio sent for transcription: use a self-hosted engine if that matters.",
+			"cancel": "Cancel",
+			"save": "Save",
+			"noDescription": "No description. The name and language shown in the header are edited here."
+		},
+		"languages": {
+			"en": "English",
+			"it": "Italiano",
+			"de": "Deutsch",
+			"fr": "Français",
+			"es": "Español"
+		},
+		"instructions": {
+			"title": "AI analysis instructions",
+			"placeholder": "E.g. This assembly is about urban mobility. 'PUMS' means the city's mobility plan.",
+			"empty": "Optional context given to the AI when analyzing this assembly — topic, local glossary, focus areas."
+		},
+		"sessions": {
+			"title": "Sessions",
+			"liveView": "Live view",
+			"none": "No sessions defined yet.",
+			"untitled": "Untitled session",
+			"noQuestion": "No question set",
+			"minutes": "{minutes} min"
+		},
+		"danger": {
+			"title": "Danger zone",
+			"body": "Deleting this assembly permanently removes every session, recording, transcript, finding and report. There is no undo and no backup.",
+			"delete": "Delete this assembly"
+		}
+	},
+	"rounds": {
+		"deleteNoRecordings": "The session and its tables will be deleted. It has no recordings.",
+		"deleteWithRecordings": "The session, its tables and its {count} recordings will be permanently deleted, including the audio. | The session, its tables and its {count} recording will be permanently deleted, including the audio. | The session, its tables and its {count} recordings will be permanently deleted, including the audio.",
+		"emptyTitle": "No sessions yet",
+		"emptyHint": "Each session is one discussion with its own question, objective and duration.",
+		"addFirst": "Add the first session",
+		"title": "Title",
+		"duration": "Duration (min)",
+		"question": "Question / prompt",
+		"objective": "Objective (optional)",
+		"objectivePlaceholder": "Produce three concrete proposals.",
+		"cancel": "Cancel",
+		"save": "Save session",
+		"untitled": "Untitled session",
+		"noQuestion": "No question set yet.",
+		"minutes": "{minutes} min",
+		"objectiveLine": "Objective: {objective}",
+		"moveUp": "Move up",
+		"moveDown": "Move down",
+		"edit": "Edit",
+		"delete": "Delete",
+		"endBeforeDelete": "End the session before deleting it",
+		"promote": {
+			"title": "Add another session",
+			"body": "A Session is one discussion. With a second one this becomes an Assembly — an event of several sessions with the same people — and gets a name.",
+			"eventName": "Event name",
+			"confirm": "Make it an Assembly and add a session",
+			"addAnother": "Add another session"
+		},
+		"add": "Add session",
+		"confirmTitle": "Delete session?",
+		"confirmLabel": "Delete session"
+	},
+	"participants": {
+		"copyFailed": "Copy failed — select the link and copy it by hand",
+		"source": {
+			"table": "Table {number}",
+			"ownPhone": "own phone",
+			"tablePhone": "table phone",
+			"paper": "paper"
+		},
+		"consentTitle": {
+			"none": "No consent recorded",
+			"recording": "recording",
+			"transcription": "transcription",
+			"analysis": "analysis",
+			"quotations": "quotations",
+			"yes": "yes",
+			"no": "no",
+			"summary": "{ticks} — notice {version} ({hash}), {at}"
+		},
+		"imported": "{count} participants imported | {count} participant imported | {count} participants imported",
+		"labelPlaceholder": "Label (e.g. P001)",
+		"namePlaceholder": "Name (optional)",
+		"add": "Add",
+		"csvImport": "CSV import",
+		"prefill": "Prefill 50 anonymous",
+		"registerTitle": "Consent register — one row per recorded consent, with the notice texts",
+		"registerCsv": "Consent register (CSV)",
+		"registerPdf": "PDF",
+		"csvHintBefore": "Header",
+		"csvHintAfter": "— names and emails are optional. Anonymous labels are enough.",
+		"import": "Import participants",
+		"registration": {
+			"title": "Pre-registration link",
+			"body": "Send this before the event: people read the notice and register at home. At the door, \"Find your name\" on any table's phone seats them. One link for the whole assembly, valid 30 days, revoked with the table codes.",
+			"counts": "{total} registered ahead · {seated} seated.",
+			"copied": "Link copied",
+			"copy": "Copy link",
+			"create": "Create the link",
+			"qrLabel": "Pre-registration QR code"
+		},
+		"emptyTitle": "No participants yet",
+		"emptyHint": "Participants can stay fully anonymous — use “Prefill 50 anonymous” to generate P001…P050 in one click.",
+		"count": "{count} participants | {count} participant | {count} participants",
+		"columns": {
+			"label": "Label",
+			"name": "Name",
+			"email": "Email",
+			"consent": "Consent"
+		},
+		"consented": "✓ consented",
+		"refused": "✗ refused",
+		"remove": "Remove",
+		"removeTitle": "Remove participant?",
+		"removeMessage": "{who} will be removed from this assembly.",
+		"removeLabel": "Remove"
+	},
+	"tables": {
+		"remixNote": "{seated} seated · {pairs} pairs who already sat together | {seated} seated · {pairs} pair who already sat together | {seated} seated · {pairs} pairs who already sat together",
+		"goalTitle": "How to seat people for this session",
+		"goal": {
+			"newPeople": "Meet new people",
+			"random": "Random",
+			"continuity": "Keep previous seating"
+		},
+		"remix": "Remix",
+		"copyPrevious": "Copy previous session",
+		"emptyTitle": "No tables in this session",
+		"emptyHint": "Tables are created with the session, from the assembly's table count. If that count was zero this session has no tables and no QR codes, and adding another session will not help — the assembly needs to be created again.",
+		"unseatedTitle": "Nobody is seated yet",
+		"unseatedHint": "Randomly assign all participants to tables, or copy the previous session's seating.",
+		"randomize": "Random assignment",
+		"table": "Table {number}",
+		"seated": "{count} seated",
+		"empty": "Empty",
+		"moveTo": "Move to table",
+		"tableShort": "T{number}"
+	}
+}

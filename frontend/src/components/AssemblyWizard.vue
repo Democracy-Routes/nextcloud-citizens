@@ -3,11 +3,22 @@
 <script setup lang="ts">
 import { mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiPlus } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import type { InviteGenerated, RoundIn } from '../types'
 import CzButton from './ui/CzButton.vue'
 
 const emit = defineEmits<{ cancel: []; created: [id: string, invites: InviteGenerated[]] }>()
+
+const { t } = useI18n()
+
+// computed, not a module constant, so the labels follow a locale change
+const steps = computed(() => [
+	t('organizer.shell.assemblyWizard.stepBasics'),
+	t('organizer.shell.assemblyWizard.stepSessions'),
+])
+// option values are the server's language codes; the names are endonyms
+const LANGUAGES = ['en', 'it', 'de', 'fr', 'es'] as const
 
 const step = ref(1)
 const error = ref('')
@@ -81,15 +92,14 @@ async function submit(): Promise<void> {
 
 <template>
 	<div class="cz-page" style="max-width: 720px">
-		<h2>Create assembly</h2>
+		<h2>{{ t('organizer.shell.assemblyWizard.title') }}</h2>
 		<p class="cz-muted" style="margin: 4px 0 0">
-			An event made of several sessions with the same group of people: participants, seating, one
-			report across the sessions.
+			{{ t('organizer.shell.assemblyWizard.intro') }}
 		</p>
 		<div class="cz-row" style="margin: 14px 0 20px; gap: 0">
 			<div
-				v-for="(label, index) in ['Basics', 'Sessions']"
-				:key="label"
+				v-for="(label, index) in steps"
+				:key="index"
 				class="cz-row"
 				style="gap: 8px; flex-wrap: nowrap">
 				<span
@@ -106,84 +116,77 @@ async function submit(): Promise<void> {
 
 		<div v-if="step === 1" class="cz-card">
 			<div class="cz-field">
-				<label>Assembly name</label>
-				<input v-model="name" type="text" placeholder="Bologna Mobility Assembly" />
+				<label>{{ t('organizer.shell.assemblyWizard.name') }}</label>
+				<input v-model="name" type="text" :placeholder="t('organizer.shell.assemblyWizard.namePlaceholder')" />
 			</div>
 			<div class="cz-field">
-				<label>Description (optional)</label>
+				<label>{{ t('organizer.shell.assemblyWizard.description') }}</label>
 				<textarea v-model="description" rows="2"></textarea>
 			</div>
 			<div class="cz-field">
-				<label>Recording mode</label>
+				<label>{{ t('organizer.shell.assemblyWizard.recordingMode') }}</label>
 				<div class="cz-row">
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': recordingMode === 'orchestrated' }" style="flex: 1; min-width: 240px; align-items: flex-start; flex-direction: column; gap: 4px">
 						<span style="display: flex; align-items: center; gap: 8px">
 							<input v-model="recordingMode" type="radio" value="orchestrated" />
-							Live event (orchestrated)
+							{{ t('organizer.shell.assemblyWizard.orchestrated') }}
 						</span>
 						<span class="cz-muted" style="font-weight: 400; font-size: 0.78rem">
-							You start and end each session for all tables at once; phones record simultaneously.
+							{{ t('organizer.shell.assemblyWizard.orchestratedHint') }}
 						</span>
 					</label>
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': recordingMode === 'independent' }" style="flex: 1; min-width: 240px; align-items: flex-start; flex-direction: column; gap: 4px">
 						<span style="display: flex; align-items: center; gap: 8px">
 							<input v-model="recordingMode" type="radio" value="independent" />
-							Independent tables
+							{{ t('organizer.shell.assemblyWizard.independent') }}
 						</span>
 						<span class="cz-muted" style="font-weight: 400; font-size: 0.78rem">
-							Each table records the shared questions on its own schedule — even days apart.
+							{{ t('organizer.shell.assemblyWizard.independentHint') }}
 						</span>
 					</label>
 					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': recordingMode === 'plenary' }" style="flex: 1; min-width: 240px; align-items: flex-start; flex-direction: column; gap: 4px">
 						<span style="display: flex; align-items: center; gap: 8px">
 							<input v-model="recordingMode" type="radio" value="plenary" />
-							One shared recorder (plenary)
+							{{ t('organizer.shell.assemblyWizard.plenary') }}
 						</span>
 						<span class="cz-muted" style="font-weight: 400; font-size: 0.78rem">
-							The whole room is one discussion. Any number of phones scan one code and
-							record it together from different spots; the recordings are merged into a
-							single transcript. Also for a personal in-person meeting recorder.
+							{{ t('organizer.shell.assemblyWizard.plenaryHint') }}
 						</span>
 					</label>
 				</div>
 			</div>
 			<div class="cz-field">
-				<label>AI analysis instructions for this assembly (optional)</label>
+				<label>{{ t('organizer.shell.assemblyWizard.analysis') }}</label>
 				<textarea
 					v-model="analysisInstructions"
 					rows="2"
-					placeholder="E.g. This assembly is about urban mobility. 'PUMS' means the city's mobility plan."></textarea>
+					:placeholder="t('organizer.shell.assemblyWizard.analysisPlaceholder')"></textarea>
 				<span class="cz-muted" style="font-size: 0.78rem">
-					Given to the AI when analyzing this assembly's discussions — topic context,
-					local glossary, focus areas.
+					{{ t('organizer.shell.assemblyWizard.analysisHint') }}
 				</span>
 			</div>
 			<div class="cz-fieldgrid">
 				<div class="cz-field">
-					<label>Language</label>
+					<label>{{ t('organizer.shell.assemblyWizard.language') }}</label>
 					<select v-model="language">
-						<option value="en">English</option>
-						<option value="it">Italiano</option>
-						<option value="de">Deutsch</option>
-						<option value="fr">Français</option>
-						<option value="es">Español</option>
+						<option v-for="code in LANGUAGES" :key="code" :value="code">{{ t(`organizer.shell.languages.${code}`) }}</option>
 					</select>
 				</div>
 				<div class="cz-field">
-					<label>Expected participants</label>
+					<label>{{ t('organizer.shell.assemblyWizard.expectedParticipants') }}</label>
 					<input v-model.number="expectedParticipants" type="number" min="0" max="10000" />
 				</div>
 				<div v-if="recordingMode !== 'plenary'" class="cz-field">
-					<label>Number of tables</label>
+					<label>{{ t('organizer.shell.assemblyWizard.tableCount') }}</label>
 					<input v-model.number="tableCount" type="number" min="1" max="200" />
 					<span v-if="tableCount < 1" style="font-size: 0.78rem; color: var(--cz-orange)">
-						At least one table — each one gets a QR code, and phones join by scanning it.
+						{{ t('organizer.shell.assemblyWizard.tableCountWarning') }}
 					</span>
 				</div>
 			</div>
 			<div class="cz-row" style="justify-content: flex-end; margin-top: 8px">
-				<CzButton variant="tertiary" @click="emit('cancel')">Cancel</CzButton>
-				<CzButton variant="primary" :disabled="!basicsValid" @click="step = 2">Continue</CzButton>
+				<CzButton variant="tertiary" @click="emit('cancel')">{{ t('organizer.shell.assemblyWizard.cancel') }}</CzButton>
+				<CzButton variant="primary" :disabled="!basicsValid" @click="step = 2">{{ t('organizer.shell.assemblyWizard.continue') }}</CzButton>
 			</div>
 		</div>
 
@@ -192,7 +195,7 @@ async function submit(): Promise<void> {
 				<div class="cz-row cz-row--spread" style="margin-bottom: 10px">
 					<div class="cz-row" style="flex-wrap: nowrap">
 						<span class="cz-posbadge">{{ index + 1 }}</span>
-						<strong>Session {{ index + 1 }}</strong>
+						<strong>{{ t('organizer.shell.assemblyWizard.sessionNumber', { position: index + 1 }) }}</strong>
 					</div>
 					<div class="cz-row" style="flex-wrap: nowrap">
 						<CzButton small variant="tertiary" :icon="mdiChevronUp" :disabled="index === 0" @click="moveRound(index, -1)" />
@@ -202,27 +205,27 @@ async function submit(): Promise<void> {
 				</div>
 				<div class="cz-fieldgrid">
 					<div class="cz-field">
-						<label>Title</label>
+						<label>{{ t('organizer.shell.assemblyWizard.sessionTitle') }}</label>
 						<input v-model="round.title" type="text" />
 					</div>
 					<div class="cz-field" style="max-width: 180px">
-						<label>Duration (minutes)</label>
+						<label>{{ t('organizer.shell.assemblyWizard.duration') }}</label>
 						<input v-model.number="round.duration_minutes" type="number" min="1" max="600" />
 					</div>
 				</div>
 				<div class="cz-field" style="margin-bottom: 0">
-					<label>Question / prompt</label>
+					<label>{{ t('organizer.shell.assemblyWizard.question') }}</label>
 					<textarea
 						v-model="round.question"
 						rows="2"
-						placeholder="What mobility problems do people experience?"></textarea>
+						:placeholder="t('organizer.shell.assemblyWizard.questionPlaceholder')"></textarea>
 				</div>
 			</div>
-			<CzButton :icon="mdiPlus" @click="addRound">Add session</CzButton>
+			<CzButton :icon="mdiPlus" @click="addRound">{{ t('organizer.shell.assemblyWizard.addSession') }}</CzButton>
 			<div class="cz-row" style="justify-content: flex-end; margin-top: 20px">
-				<CzButton variant="tertiary" @click="step = 1">Back</CzButton>
+				<CzButton variant="tertiary" @click="step = 1">{{ t('organizer.shell.assemblyWizard.back') }}</CzButton>
 				<CzButton variant="primary" :disabled="saving || !basicsValid" @click="submit">
-					{{ saving ? 'Creating…' : 'Create assembly' }}
+					{{ saving ? t('organizer.shell.assemblyWizard.creating') : t('organizer.shell.assemblyWizard.create') }}
 				</CzButton>
 			</div>
 		</template>

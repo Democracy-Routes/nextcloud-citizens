@@ -1,0 +1,282 @@
+{
+	"monitor": {
+		"tableN": "Table {number}",
+		"toast": {
+			"acknowledged": "Table {number}: acknowledged",
+			"aiPaused": "Table {number}: AI facilitator paused",
+			"aiResumed": "Table {number}: AI facilitator resumed",
+			"extended": "Session extended by {minutes} minutes",
+			"started": "Session started — armed tables are now recording",
+			"ended": "Session ended",
+			"transcriptionQueued": "Transcription queued",
+			"assembling": "Table {number}: assembling the audio that reached the server",
+			"releasedAssembling": "Table {number} released — its recording so far is being transcribed",
+			"releasedEmpty": "Table {number} released — it had not uploaded any audio yet"
+		},
+		"delivery": {
+			"none": "no table in this session",
+			"all": "Delivered {total}/{total}",
+			"partial": "Delivered {seen}/{total} · {names} not yet"
+		},
+		"author": {
+			"ai": "AI",
+			"facilitator": "Facilitator"
+		},
+		"reasons": {
+			"NO_RECORDER": "no phone has joined — show the table its QR code",
+			"RECORDER_OFFLINE": "phone not answering",
+			"MIC_UNAVAILABLE": "microphone not capturing — tap the phone to allow it",
+			"LOW_STORAGE": "storage low — swap or free the phone after this session",
+			"LOW_BATTERY": "battery low — ask the table for a backup phone",
+			"UPLOAD_STALLED": "upload backlog — check the venue Wi-Fi",
+			"LIVE_STT_UNAVAILABLE": "live captions off at this table",
+			"HELP_REQUESTED": "the table asks for help",
+			"PARTICIPANT_CONSENT_MISSING": "nobody at the table has consented yet — register a participant on the table phone",
+			"recorderSuffix": "(recorder {letter})"
+		},
+		"helpKinds": {
+			"TECHNICAL": "technical problem",
+			"ORGANIZER": "wants the organizer",
+			"PROCESS": "question about the process"
+		},
+		"facts": {
+			"line": "battery {pct} · {storage} · {pending} · {age} · {screen} · {visible} · {capture} · {rec}",
+			"mbFree": "{mb} MB free",
+			"chunksPending": "{count} chunks pending",
+			"neverHeard": "never heard",
+			"heartbeat": "heartbeat {seconds}s ago",
+			"screenAwake": "screen awake",
+			"screenMayLock": "screen may lock",
+			"background": "in background",
+			"foreground": "foreground",
+			"captureInterrupted": "capture interrupted",
+			"capturing": "capturing",
+			"noRecording": "no recording"
+		},
+		"health": {
+			"ok": "Everything is running normally.",
+			"attention": "{count} table needs attention{blocked}. | {count} tables need attention{blocked}.",
+			"cannotRecord": "· {count} cannot record",
+			"quietFolded": "{count} table is fine and folded below. | {count} tables are fine and folded below."
+		},
+		"advanced": {
+			"show": "Advanced diagnostics",
+			"hide": "Hide diagnostics"
+		},
+		"device": {
+			"armed": "armed",
+			"background": "in background",
+			"connected": "connected",
+			"none": "no device"
+		},
+		"prior": {
+			"continued": "earlier part — the table continued",
+			"rejoined": "earlier part — the phone reconnected",
+			"silent": "earlier part — the phone went silent",
+			"handedOver": "earlier part — the phone was handed over"
+		},
+		"nextStep": {
+			"finished": "This session has finished.",
+			"autoStart": "Armed tables will start recording Session {position} automatically.",
+			"start": "Start Session {position}",
+			"allDone": "All sessions are done.",
+			"allDoneHint": "Review the findings in the Analysis tab, then publish the report to the table phones from the Report tab."
+		},
+		"broadcast": {
+			"title": "Message the tables",
+			"minLeft": "{minutes} min left",
+			"wrapUp": "Wrap up",
+			"less": "Less",
+			"write": "Write a message",
+			"to": "to",
+			"allTables": "all tables",
+			"placeholder": "A prompt or an instruction for the tables",
+			"ariaLabel": "Message to the tables",
+			"send": "Send"
+		},
+		"ai": {
+			"title": "AI facilitator",
+			"nudges": "{count} nudge this session | {count} nudges this session",
+			"nothingYet": "nothing said yet",
+			"show": "Show",
+			"less": "Less",
+			"dismissed": "dismissed by the facilitator",
+			"sentOn": "sent on by the facilitator",
+			"onFacilitatorPhone": "on the facilitator's phone",
+			"toTable": "to the table"
+		},
+		"countbar": {
+			"tablesReady": "{ready}/{total} tables ready",
+			"timeUp": "Time is up — ending in {seconds}s",
+			"extend": "Extend {minutes} min",
+			"keepGoing": "Keep going",
+			"start": "Start session",
+			"end": "End session",
+			"independent": "Independent tables — each table records on its own schedule"
+		},
+		"handOver": {
+			"title": "Hand this table to another phone?",
+			"message": "Table {number}'s phone has stopped responding. Its recording is finished with the audio already received — usually most of the session — and transcribed. The table can then record the rest on any phone by scanning the same QR code.",
+			"confirm": "Hand over the table"
+		},
+		"startUnready": {
+			"title": "Start with tables missing?",
+			"message": "Only {ready} of {total} tables are armed and ready. Tables that arm later can still join the session. Start anyway?",
+			"confirm": "Start session"
+		},
+		"empty": {
+			"title": "This assembly has no sessions yet",
+			"hint": "Add a session on the Sessions tab to start recording."
+		},
+		"columns": {
+			"table": "Table",
+			"device": "Device",
+			"recording": "Recording",
+			"elapsed": "Elapsed",
+			"upload": "Upload",
+			"localAudio": "Local audio",
+			"actions": "Actions"
+		},
+		"quiet": {
+			"show": "{count} table running normally — show | {count} tables running normally — show",
+			"hide": "{count} table running normally — hide | {count} tables running normally — hide"
+		},
+		"recorders": {
+			"summary": "{count} recorders · {labels} connected",
+			"none": "none"
+		},
+		"pills": {
+			"captureInterrupted": "capture interrupted",
+			"storageError": "storage error",
+			"screenMayLock": "screen may lock",
+			"battery": "battery {pct}%",
+			"lowStorage": "low storage — {mb} MB",
+			"safe": "✓ safe",
+			"unknown": "unknown"
+		},
+		"upload": {
+			"pending": "({count} pending)",
+			"received": "{count} received"
+		},
+		"actions": {
+			"retryTranscriptionTitle": "Retry transcription (use if it has been stuck)",
+			"transcribe": "Transcribe",
+			"transcript": "Transcript",
+			"acknowledgeTitle": "The table raised its hand — tell it you have seen it",
+			"acknowledge": "Acknowledge",
+			"pauseAiTitle": "Pause the AI facilitator at this table",
+			"pauseAi": "Pause AI",
+			"resumeAiTitle": "Let the AI facilitator speak at this table again (the assembly's level)",
+			"resumeAi": "Resume AI",
+			"handOverTitle": "This table's phone has stopped responding — hand the table to another phone",
+			"handOver": "Hand over table",
+			"retryTitle": "Assemble and transcribe the audio that reached the server before the phone stopped",
+			"retry": "Retry",
+			"deviceLog": "Device log"
+		},
+		"noTables": "This session has no tables.",
+		"transcript": {
+			"title": "Transcript",
+			"empty": "The transcript is empty (no speech detected)."
+		},
+		"deviceLog": {
+			"title": "Table {number} — device log (latest 50)",
+			"empty": "No device log received yet."
+		}
+	},
+	"files": {
+		"toast": {
+			"purgeNone": "No table phones have connected to this assembly",
+			"purgeAsked": "Asked {count} table phone to clear its copy | Asked {count} table phones to clear their copy",
+			"assembling": "Assembling table {number} again",
+			"retranscribing": "Transcribing again from the stored audio — this can take a few minutes",
+			"transcriptDeletedRetranscribable": "Transcript deleted — this recording can be transcribed again",
+			"transcriptDeleted": "Transcript deleted",
+			"transcriptsDeleted": "{count} transcript deleted | {count} transcripts deleted",
+			"audioDeleted": "Audio deleted — {size} freed",
+			"recordingsCleared": "{count} recording cleared — {size} freed | {count} recordings cleared — {size} freed"
+		},
+		"header": {
+			"title": "Audio files & exports",
+			"recordings": "{count} recording | {count} recordings",
+			"audioDeleted": "· {count} with audio deleted",
+			"downloadAll": "Download all audio",
+			"exportFull": "Export full session",
+			"deleteAllAudio": "Delete all audio",
+			"deleteAllTranscripts": "Delete all transcripts",
+			"purge": "Clear audio from the table phones"
+		},
+		"coverage": {
+			"askedOnClose": "The phones were asked to clear this assembly's audio when the session was closed.",
+			"cleared": "{cleared} of {devices}",
+			"reported": "recorder sessions last reported no local recordings.",
+			"stillHolding": "{count} still hold audio.",
+			"unknown": "{count} have not reported a local recording count.",
+			"note": "These counts include older sessions. Joining again can count the same phone more than once; expired or revoked sessions may need manual cleanup."
+		},
+		"keptPastRetention": "{count} recording was kept past the retention period because no transcript exists for it — for it, the audio is the only record of the discussion. Retry transcription, or delete it deliberately. | {count} recordings were kept past the retention period because no transcript exists for them — for those, the audio is the only record of the discussion. Retry transcription, or delete them deliberately.",
+		"exportHint": "The full session export bundles metadata, audio, transcripts and the report — enough to move this assembly to another server. Deleting audio keeps transcripts, findings and the report.",
+		"empty": {
+			"title": "No recordings yet",
+			"hint": "Audio files appear here as soon as the tables record and synchronize."
+		},
+		"columns": {
+			"table": "Table",
+			"duration": "Duration",
+			"size": "Size",
+			"state": "State",
+			"transcript": "Transcript",
+			"actions": "Actions"
+		},
+		"audioDeleted": "audio deleted",
+		"liveTitle": "From the live captions, not a transcription of the finished audio",
+		"live": "live",
+		"actions": {
+			"download": "Download",
+			"deleteAudioTitle": "Delete audio",
+			"audio": "Audio",
+			"retryTitle": "Try assembling the audio again",
+			"retry": "Retry",
+			"retranscribeTitle": "Transcribe again from the stored audio",
+			"retranscribe": "Re-transcribe",
+			"deleteTranscriptTitle": "Delete transcript",
+			"transcript": "Transcript"
+		},
+		"confirmRetranscribe": {
+			"title": "Transcribe this table again?",
+			"message": "Table {number} will be transcribed again from its stored audio{replacing}. Quotes inside existing findings refer to the old text, so they are marked as removed, and the analysis runs again. The audio is not touched.",
+			"replacingLive": ", replacing the transcript taken from the live captions",
+			"replacingCurrent": ", replacing the current transcript",
+			"confirm": "Transcribe again"
+		},
+		"confirmDeleteAudio": {
+			"title": "Delete this table's audio?",
+			"message": "The audio of table {number} will be permanently deleted and cannot be recovered. Its transcript, findings and the report are kept — but the recording can never be transcribed again.",
+			"confirm": "Delete audio"
+		},
+		"confirmDeleteTranscript": {
+			"title": "Delete this table's transcript?",
+			"message": "The verbatim text of table {number} will be permanently erased — including the quotes shown inside findings and in the published report. The findings and AI summaries stay. {audioNote}",
+			"audioStillHere": "The audio is still here, so this recording can be transcribed again.",
+			"audioGone": "Its audio is already deleted, so the transcript cannot be recreated.",
+			"confirm": "Delete transcript"
+		},
+		"confirmPurge": {
+			"title": "Clear this assembly's audio from the table phones?",
+			"message": "Each phone still holds the audio it recorded. This asks them to delete it — but only the parts the server has already confirmed, so nothing can be lost. It reaches phones whose recorder is still open; one that was closed and taken away will clear itself if it is opened again.",
+			"confirm": "Clear the phones"
+		},
+		"confirmAllTranscripts": {
+			"title": "Delete all transcripts of this session?",
+			"message": "Every table's verbatim text will be permanently erased, including the quotes inside findings and in the published report. Findings and AI summaries stay. Tables whose audio is still here can be transcribed again.",
+			"confirm": "Delete all transcripts"
+		},
+		"confirmAllAudio": {
+			"title": "Delete all audio of this session?",
+			"scaleBytes": "All {size} of recorded audio",
+			"scaleAll": "All recorded audio",
+			"message": "{scale} will be permanently deleted and cannot be recovered. Transcripts, findings and the report are kept. Download or export first if you need a copy.",
+			"confirm": "Delete all audio"
+		}
+	}
+}

@@ -9,10 +9,12 @@
  */
 import { mount } from '@vue/test-utils'
 import { i18n } from '../../../frontend/src/i18n'
+import { installOrganizerCatalogue } from '../../../frontend/src/i18n/organizer'
 
 type MountArgs = Parameters<typeof mount>
 
 export function mountWithI18n(component: MountArgs[0], options: MountArgs[1] = {}) {
+	installOrganizerCatalogue()
 	i18n.global.locale.value = 'en'
 	return mount(component, {
 		...options,

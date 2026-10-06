@@ -7,6 +7,7 @@
  * copies of the same function. Small, but it is the sort of thing that makes a
  * facilitator wonder whether they are looking at the same recording.
  */
+import { t } from './i18n'
 
 /** mm:ss, zero-padded. An em dash for nothing, never "0:00" — a recording of
  * unknown length and one of zero length are different facts. */
@@ -19,9 +20,10 @@ export function duration(seconds: number | null | undefined): string {
 
 export function bytes(value: number | null | undefined): string {
 	if (!value) return '—'
-	if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`
-	if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`
-	return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`
+	if (value < 1024 * 1024) return t('organizer.settings.format.kb', { n: Math.round(value / 1024) })
+	if (value < 1024 * 1024 * 1024)
+		return t('organizer.settings.format.mb', { n: (value / 1024 / 1024).toFixed(1) })
+	return t('organizer.settings.format.gb', { n: (value / 1024 / 1024 / 1024).toFixed(2) })
 }
 
 /** A position INSIDE a recording, where 00:00 is a real answer — unlike
@@ -34,10 +36,10 @@ export function timestamp(seconds: number): string {
 /** How long ago, for a device's last contact. */
 export function relativeAge(seconds: number | null | undefined): string {
 	if (seconds === null || seconds === undefined) return '—'
-	if (seconds < 90) return `${Math.round(seconds)}s ago`
-	if (seconds < 90 * 60) return `${Math.round(seconds / 60)}m ago`
-	if (seconds < 48 * 3600) return `${Math.round(seconds / 3600)}h ago`
-	return `${Math.round(seconds / 86400)}d ago`
+	if (seconds < 90) return t('organizer.settings.format.secondsAgo', { n: Math.round(seconds) })
+	if (seconds < 90 * 60) return t('organizer.settings.format.minutesAgo', { n: Math.round(seconds / 60) })
+	if (seconds < 48 * 3600) return t('organizer.settings.format.hoursAgo', { n: Math.round(seconds / 3600) })
+	return t('organizer.settings.format.daysAgo', { n: Math.round(seconds / 86400) })
 }
 
 export function clockTime(value: Date | string | null | undefined): string {

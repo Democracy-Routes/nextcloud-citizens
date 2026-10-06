@@ -11,9 +11,11 @@
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { SpeakingBalance } from '../types'
 
 const props = defineProps<{ balance: SpeakingBalance }>()
+const { t } = useI18n()
 
 // Mid-toned hues that stay legible on both the light and dark card grounds.
 // "Others" always takes the last, muted slot.
@@ -47,30 +49,37 @@ function clock(seconds: number): string {
 	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
+/** "Voice A" / "Others" — the balance's labels are data; the words are not.
+ * Mirrors voice_name() in citizens/services/report.py. */
+function voiceName(label: string): string {
+	if (label === 'Others') return t('organizer.results.speaking.others')
+	return t('organizer.results.speaking.voice', { label })
+}
+
 const legend = computed(() =>
 	props.balance.voices.map((v, i) => ({
 		...v,
 		color: colorFor(i, v.label),
 		clock: clock(v.seconds),
+		name: voiceName(v.label),
 	})),
 )
 </script>
 
 <template>
 	<div class="cz-card cz-speaking">
-		<span class="cz-muted cz-speaking__eyebrow">SPEAKING BALANCE</span>
+		<span class="cz-muted cz-speaking__eyebrow">{{ t('organizer.results.speaking.eyebrow') }}</span>
 		<!-- a replaced phone leaves two parts whose voices cannot be matched;
 		     the chart covers the fullest part and says so -->
 		<p v-if="balance.recorder_changed" class="cz-muted cz-speaking__caveat">
-			The phone recording this table changed during the session; voices cannot be matched
-			across the parts, so this covers the fullest part only.
+			{{ t('organizer.results.speaking.caveat') }}
 		</p>
 		<div class="cz-speaking__body">
 			<svg
 				class="cz-speaking__donut"
 				viewBox="0 0 120 120"
 				role="img"
-				aria-label="Share of speaking time per detected voice">
+				:aria-label="t('organizer.results.speaking.ariaLabel')">
 				<g transform="rotate(-90 60 60)">
 					<circle cx="60" cy="60" :r="R" fill="none" stroke="var(--cz-border)" stroke-width="14" />
 					<circle
@@ -89,15 +98,14 @@ const legend = computed(() =>
 			<ul class="cz-speaking__legend">
 				<li v-for="v in legend" :key="v.label">
 					<span class="cz-speaking__swatch" :style="{ background: v.color }"></span>
-					<span class="cz-speaking__name">Voice {{ v.label }}</span>
+					<span class="cz-speaking__name">{{ v.name }}</span>
 					<span class="cz-speaking__pct">{{ v.percent }}%</span>
 					<span class="cz-muted cz-speaking__time">{{ v.clock }}</span>
 				</li>
 			</ul>
 		</div>
 		<p class="cz-muted cz-speaking__note">
-			Detected voices, not identified by name — from the clearest single recording. An estimate of
-			talk-time, not of participation or influence.
+			{{ t('organizer.results.speaking.note') }}
 		</p>
 	</div>
 </template>

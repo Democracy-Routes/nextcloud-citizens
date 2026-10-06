@@ -1,9 +1,10 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { TYPE_LABELS, TYPE_ORDER, roundHeading } from '../labels'
+import { TYPE_ORDER, roundHeading, typeLabel } from '../labels'
 import { mdiBrain, mdiCancel, mdiCheckAll, mdiClipboardTextOutline, mdiCogOutline, mdiCreation, mdiFilterOutline, mdiRefresh } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { BACKGROUND_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
@@ -21,6 +22,7 @@ import CzStatusPill from './ui/CzStatusPill.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
+const { t } = useI18n()
 
 const roundId = ref(props.assembly.rounds[0]?.id ?? '')
 const data = ref<RoundFindings | null>(null)
@@ -82,12 +84,12 @@ const confirmApproveAll = ref(false)
 const statusFilter = ref<'all' | 'draft' | 'approved' | 'rejected'>('all')
 const typeFilter = ref('all')
 
-const STATUS_FILTERS: Array<{ value: typeof statusFilter.value; label: string }> = [
-	{ value: 'all', label: 'All findings' },
-	{ value: 'draft', label: 'Needs review' },
-	{ value: 'approved', label: 'Approved' },
-	{ value: 'rejected', label: 'Rejected' },
-]
+const STATUS_FILTERS = computed<Array<{ value: typeof statusFilter.value; label: string }>>(() => [
+	{ value: 'all', label: t('organizer.results.analysis.filters.all') },
+	{ value: 'draft', label: t('organizer.results.analysis.filters.draft') },
+	{ value: 'approved', label: t('organizer.results.analysis.filters.approved') },
+	{ value: 'rejected', label: t('organizer.results.analysis.filters.rejected') },
+])
 
 function keep(finding: FindingData): boolean {
 	if (typeFilter.value !== 'all' && finding.type !== typeFilter.value) return false
@@ -135,7 +137,7 @@ async function approveAll(): Promise<void> {
 	busy.value = true
 	try {
 		const result = await api.approveDrafts(roundId.value)
-		toast(`${result.approved} finding(s) approved`)
+		toast(t('organizer.results.analysis.toast.approved', { count: result.approved }, result.approved))
 		await polling.refresh()
 	} catch (err) {
 		toast(describeError(err).message, 'error')
@@ -165,9 +167,9 @@ async function analyze(force: boolean): Promise<void> {
 	try {
 		const result = await api.requestAnalysis(roundId.value, force)
 		if (result.queued === 0) {
-			toast('Nothing to analyze — no table has a transcript ready yet', 'error')
+			toast(t('organizer.results.analysis.toast.nothingToAnalyze'), 'error')
 		} else {
-			toast(`Analysis queued for ${result.queued} table(s)`)
+			toast(t('organizer.results.analysis.toast.queued', { count: result.queued }, result.queued))
 		}
 		await reload()
 	} catch (err) {
@@ -210,9 +212,9 @@ const queueSummary = computed(() => {
 	const counts: Record<string, number> = { RUNNING: 0, QUEUED: 0, RETRY: 0 }
 	for (const table of pendingTables.value) counts[table.recording!.job!.state] += 1
 	const parts: string[] = []
-	if (counts.RUNNING) parts.push(`${counts.RUNNING} running`)
-	if (counts.QUEUED) parts.push(`${counts.QUEUED} queued`)
-	if (counts.RETRY) parts.push(`${counts.RETRY} waiting to retry`)
+	if (counts.RUNNING) parts.push(t('organizer.results.analysis.running', { count: counts.RUNNING }, counts.RUNNING))
+	if (counts.QUEUED) parts.push(t('organizer.results.analysis.queued', { count: counts.QUEUED }, counts.QUEUED))
+	if (counts.RETRY) parts.push(t('organizer.results.analysis.waitingRetry', { count: counts.RETRY }, counts.RETRY))
 	return parts.join(', ')
 })
 
@@ -222,8 +224,8 @@ async function cancelPending(): Promise<void> {
 		const result = await api.cancelAnalysis(roundId.value)
 		toast(
 			result.running
-				? `${result.cancelled} pending job(s) cancelled; ${result.running} already running will finish`
-				: `${result.cancelled} pending job(s) cancelled`,
+				? t('organizer.results.analysis.toast.cancelledRunning', { cancelled: result.cancelled, running: result.running })
+				: t('organizer.results.analysis.toast.cancelled', { count: result.cancelled }, result.cancelled),
 		)
 		await polling.refresh()
 	} catch (err) {
@@ -249,7 +251,9 @@ async function recluster(): Promise<void> {
 	busy.value = true
 	try {
 		const result = await api.recluster(roundId.value)
-		toast(result.queued ? 'Cross-table clustering queued' : 'Clustering is already queued')
+		toast(result.queued
+			? t('organizer.results.analysis.toast.reclusterQueued')
+			: t('organizer.results.analysis.toast.reclusterAlready'))
 		await polling.refresh()
 	} catch (err) {
 		toast(describeError(err).message, 'error')
@@ -265,7 +269,7 @@ async function recluster(): Promise<void> {
 			<!-- pausing while an editor is open makes the view stale on
 			     purpose, so it has to say when it was last current -->
 			<span v-if="polling.paused.value" class="cz-muted" style="font-size: 0.8125rem">
-				Paused while you edit
+				{{ t('organizer.results.analysis.pausedWhileEditing') }}
 			</span>
 			<span v-else></span>
 			<CzFreshness
@@ -282,15 +286,15 @@ async function recluster(): Promise<void> {
 					{{ roundHeading(round.position, round.title) }}
 				</option>
 			</select>
-			<select v-if="data && hasAnyFindings()" v-model="statusFilter" aria-label="Filter by review status">
+			<select v-if="data && hasAnyFindings()" v-model="statusFilter" :aria-label="t('organizer.results.analysis.filterStatus')">
 				<option v-for="option in STATUS_FILTERS" :key="option.value" :value="option.value">
 					{{ option.label }}
 				</option>
 			</select>
-			<select v-if="data && hasAnyFindings()" v-model="typeFilter" aria-label="Filter by finding type">
-				<option value="all">All types</option>
+			<select v-if="data && hasAnyFindings()" v-model="typeFilter" :aria-label="t('organizer.results.analysis.filterType')">
+				<option value="all">{{ t('organizer.results.analysis.allTypes') }}</option>
 				<option v-for="type in TYPE_ORDER" :key="type" :value="type">
-					{{ TYPE_LABELS[type] ?? type }}
+					{{ typeLabel(type) }}
 				</option>
 			</select>
 			<template v-if="data">
@@ -300,13 +304,13 @@ async function recluster(): Promise<void> {
 					v-if="draftCount > 0"
 					small variant="primary" :icon="mdiCheckAll" :disabled="busy"
 					@click="confirmApproveAll = true">
-					Approve {{ draftCount }} draft(s)
+					{{ t('organizer.results.analysis.approveDrafts', { count: draftCount }, draftCount) }}
 				</CzButton>
 				<CzButton
 					v-if="data.analysis_configured"
 					small :icon="mdiRefresh" :disabled="busy"
 					@click="requestAnalyze">
-					{{ hasAnyFindings() ? 'Re-run analysis' : 'Run analysis' }}
+					{{ hasAnyFindings() ? t('organizer.results.analysis.rerun') : t('organizer.results.analysis.run') }}
 				</CzButton>
 			</template>
 		</div>
@@ -316,8 +320,8 @@ async function recluster(): Promise<void> {
 		<CzEmptyState
 			v-if="!roundId"
 			:icon="mdiClipboardTextOutline"
-			title="This assembly has no sessions yet"
-			hint="Add a session on the Sessions tab; findings appear here once its tables have been analyzed." />
+			:title="t('organizer.results.analysis.noSessionsTitle')"
+			:hint="t('organizer.results.analysis.noSessionsHint')" />
 
 		<CzSkeleton v-else-if="!data && !error" :rows="4" />
 
@@ -326,20 +330,20 @@ async function recluster(): Promise<void> {
 			     waiting analysis used to hide behind "No findings yet" -->
 			<div v-if="pendingTables.length" class="cz-card cz-analysis-jobs">
 				<div class="cz-row cz-row--spread">
-					<span><strong>Analysis in progress</strong> — {{ queueSummary }}</span>
+					<span><strong>{{ t('organizer.results.analysis.inProgress') }}</strong> — {{ queueSummary }}</span>
 					<CzButton small :icon="mdiCancel" :disabled="busy" @click="cancelPending">
-						Cancel pending analysis
+						{{ t('organizer.results.analysis.cancelPending') }}
 					</CzButton>
 				</div>
 				<div v-for="table in retryingTables" :key="table.table_number" style="margin-top: 6px">
-					<span class="cz-muted" style="font-size: 0.8125rem">Table {{ table.table_number }}</span>
+					<span class="cz-muted" style="font-size: 0.8125rem">{{ t('organizer.results.analysis.table', { number: table.table_number }) }}</span>
 					<CzFailureNote :state="table.recording!.state" :job="table.recording!.job" />
 				</div>
 			</div>
 			<div v-if="failedTables.length" class="cz-card cz-analysis-jobs">
-				<strong>Analysis failed</strong> for {{ failedTables.length }} table(s):
+				<strong>{{ t('organizer.results.analysis.failed') }}</strong> {{ t('organizer.results.analysis.failedFor', { count: failedTables.length }, failedTables.length) }}
 				<div v-for="table in failedTables" :key="table.table_number" style="margin-top: 6px">
-					<span class="cz-muted" style="font-size: 0.8125rem">Table {{ table.table_number }}</span>
+					<span class="cz-muted" style="font-size: 0.8125rem">{{ t('organizer.results.analysis.table', { number: table.table_number }) }}</span>
 					<CzFailureNote
 						:state="table.recording!.state"
 						:error-code="table.recording!.error_code"
@@ -348,9 +352,9 @@ async function recluster(): Promise<void> {
 			</div>
 			<div v-if="roundJobFailed" class="cz-card cz-analysis-jobs">
 				<div class="cz-row cz-row--spread">
-					<strong>Cross-table clustering failed</strong>
+					<strong>{{ t('organizer.results.analysis.clusteringFailed') }}</strong>
 					<CzButton small :icon="mdiRefresh" :disabled="busy" @click="requestRecluster">
-						Re-run clustering only
+						{{ t('organizer.results.analysis.rerunClustering') }}
 					</CzButton>
 				</div>
 				<CzFailureNote state="ANALYSIS_FAILED" :job="data.round_job" />
@@ -358,42 +362,47 @@ async function recluster(): Promise<void> {
 			<CzEmptyState
 				v-if="!data.analysis_configured"
 				:icon="mdiCogOutline"
-				title="AI analysis is not configured"
-				hint="An administrator needs to add an analysis API key (Mistral, Ollama Cloud, or any OpenAI-compatible endpoint) in Settings. Analysis then runs automatically after each table is transcribed." />
+				:title="t('organizer.results.analysis.notConfiguredTitle')"
+				:hint="t('organizer.results.analysis.notConfiguredHint')" />
 
 			<CzEmptyState
 				v-else-if="!hasAnyFindings()"
 				:icon="mdiBrain"
-				:title="anyAnalyzing() ? 'Analysis in progress…' : 'No findings yet'"
+				:title="anyAnalyzing() ? t('organizer.results.analysis.inProgressTitle') : t('organizer.results.analysis.noFindingsTitle')"
 				:hint="anyAnalyzing()
-					? 'Tables are being analyzed — findings appear here automatically.'
-					: 'Findings appear automatically after tables are recorded and transcribed, or run the analysis manually.'">
+					? t('organizer.results.analysis.inProgressHint')
+					: t('organizer.results.analysis.noFindingsHint')">
 				<CzButton variant="primary" :icon="mdiCreation" :disabled="busy" @click="analyze(false)">
-					Run analysis now
+					{{ t('organizer.results.analysis.runNow') }}
 				</CzButton>
 			</CzEmptyState>
 
 			<CzEmptyState
 				v-else-if="filtering && shownCount === 0"
 				:icon="mdiFilterOutline"
-				title="No findings match this filter"
-				hint="Change the filters above to see the rest of this session's findings." />
+				:title="t('organizer.results.analysis.noMatchTitle')"
+				:hint="t('organizer.results.analysis.noMatchHint')" />
 			<template v-else>
 				<!-- the tables side by side: a lopsided table stands out by its
 				     ratio; each line measures one table, voices detected not named -->
 				<div v-if="(data.speaking_comparison?.length ?? 0) >= 2 && !filtering" class="cz-card cz-compare" data-test="comparison">
-					<h3 style="margin: 0 0 4px">Speaking balance across tables</h3>
+					<h3 style="margin: 0 0 4px">{{ t('organizer.results.analysis.comparison.title') }}</h3>
 					<p class="cz-muted" style="font-size: 0.8125rem; margin: 0 0 10px">
-						Each line measures one table on its own — voices are detected, not identified, and
-						talk-time is an estimate, not a measure of influence.
+						{{ t('organizer.results.analysis.comparison.intro') }}
 					</p>
 					<table class="cz-table">
 						<thead>
-							<tr><th>Table</th><th>Voices</th><th>Largest share</th><th>Smallest share</th><th>Ratio</th></tr>
+							<tr>
+								<th>{{ t('organizer.results.analysis.comparison.colTable') }}</th>
+								<th>{{ t('organizer.results.analysis.comparison.colVoices') }}</th>
+								<th>{{ t('organizer.results.analysis.comparison.colLargest') }}</th>
+								<th>{{ t('organizer.results.analysis.comparison.colSmallest') }}</th>
+								<th>{{ t('organizer.results.analysis.comparison.colRatio') }}</th>
+							</tr>
 						</thead>
 						<tbody>
 							<tr v-for="row in data.speaking_comparison" :key="row.table_number" :class="{ 'cz-compare--lopsided': (row.ratio ?? 0) >= 4 }">
-								<td><strong>Table {{ row.table_number }}</strong><span v-if="row.recorder_changed" class="cz-muted"> · recorder changed</span></td>
+								<td><strong>{{ t('organizer.results.analysis.table', { number: row.table_number }) }}</strong><span v-if="row.recorder_changed" class="cz-muted"> · {{ t('organizer.results.analysis.comparison.recorderChanged') }}</span></td>
 								<td>{{ row.voices }}</td>
 								<td>{{ row.largest_percent }}%</td>
 								<td>{{ row.smallest_percent }}%</td>
@@ -404,17 +413,16 @@ async function recluster(): Promise<void> {
 				</div>
 				<div v-if="shown.cross_table.length || (data.round_summary && !filtering)" style="margin-bottom: 24px">
 					<h3 style="margin-bottom: 10px">
-						Across all tables
+						{{ t('organizer.results.analysis.acrossTables') }}
 						<span v-if="data.tables_with_findings" class="cz-muted" style="font-weight: 400; font-size: 0.8125rem">
-							— aggregated from {{ data.tables_with_findings }} table(s)
+							{{ t('organizer.results.analysis.aggregatedFrom', { count: data.tables_with_findings }, data.tables_with_findings) }}
 						</span>
 					</h3>
 					<p class="cz-muted" style="font-size: 0.8125rem; margin: 0 0 8px">
-						Cross-table findings are regenerated every time a table finishes its analysis, reviews
-						included — review them after the last table.
+						{{ t('organizer.results.analysis.crossTableNote') }}
 					</p>
 					<p v-if="data.round_summary" class="cz-card" style="font-size: 0.905rem; font-style: italic">
-						<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">AI SUMMARY</span>
+						<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">{{ t('organizer.results.analysis.aiSummary') }}</span>
 						{{ data.round_summary }}
 					</p>
 					<FindingCard
@@ -427,9 +435,9 @@ async function recluster(): Promise<void> {
 
 				<template v-for="table in shown.tables" :key="table.table_number">
 					<div v-if="(table.analyzed && !filtering) || table.findings.length" style="margin-bottom: 24px">
-						<h3 style="margin-bottom: 10px">Table {{ table.table_number }}</h3>
+						<h3 style="margin-bottom: 10px">{{ t('organizer.results.analysis.table', { number: table.table_number }) }}</h3>
 						<p v-if="table.summary" class="cz-card" style="font-size: 0.905rem; font-style: italic">
-							<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">AI SUMMARY</span>
+							<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block; margin-bottom: 4px">{{ t('organizer.results.analysis.aiSummary') }}</span>
 							{{ table.summary }}
 						</p>
 						<!-- talk-time per detected voice at THIS table: diarization
@@ -438,7 +446,7 @@ async function recluster(): Promise<void> {
 							v-if="table.speaking_balance && table.speaking_balance.voices.length >= 2"
 							:balance="table.speaking_balance" />
 						<p v-if="table.analyzed && !table.findings.length" class="cz-muted" style="font-size: 0.845rem">
-							Analyzed — no substantive findings for the session question in this discussion.
+							{{ t('organizer.results.analysis.analyzedNoFindings') }}
 						</p>
 						<FindingCard
 							v-for="finding in table.findings"
@@ -450,39 +458,37 @@ async function recluster(): Promise<void> {
 				</template>
 
 				<p class="cz-muted" style="font-size: 0.8125rem">
-					AI findings are drafts until a human approves them; summaries are AI-generated neutral
-					descriptions. Every finding cites transcript evidence; “mentioned at N tables” is never
-					a measure of participant support.
+					{{ t('organizer.results.analysis.footer') }}
 				</p>
 			</template>
 		</template>
 		<CzConfirm
 			v-if="confirmApproveAll"
-			title="Approve every draft finding?"
-			:message="`${draftCount} draft finding(s) in this session will be marked approved and included in the report. Rejected findings are left alone, and you can still edit or reject any of them afterwards.`"
-			confirm-label="Approve all drafts"
+			:title="t('organizer.results.analysis.confirmApprove.title')"
+			:message="t('organizer.results.analysis.confirmApprove.message', { count: draftCount }, draftCount)"
+			:confirm-label="t('organizer.results.analysis.confirmApprove.confirm')"
 			@confirm="approveAll"
 			@cancel="confirmApproveAll = false" />
 		<CzConfirm
 			v-if="confirmRerun"
-			title="Run the analysis again?"
+			:title="t('organizer.results.analysis.confirmRerun.title')"
 			:message="
 				reviewedCount > 0
-					? `Every finding of this session — including the ${reviewedCount} you have already approved or edited — is replaced by a freshly generated set. Reviews done so far will have to be redone.`
-					: 'Every draft finding for this session is replaced with freshly generated ones.'
+					? t('organizer.results.analysis.confirmRerun.messageReviewed', { count: reviewedCount }, reviewedCount)
+					: t('organizer.results.analysis.confirmRerun.messageDrafts')
 			"
-			confirm-label="Run analysis again"
+			:confirm-label="t('organizer.results.analysis.confirmRerun.confirm')"
 			:tone="reviewedCount > 0 ? 'destructive' : 'danger'"
-			:confirm-word="reviewedCount > 0 ? 'replace' : undefined"
+			:confirm-word="reviewedCount > 0 ? t('organizer.results.analysis.replaceWord') : undefined"
 			@confirm="analyze(true)"
 			@cancel="confirmRerun = false" />
 		<CzConfirm
 			v-if="confirmRecluster"
-			title="Run the cross-table clustering again?"
-			:message="`The ${reviewedCrossTableCount} cross-table finding(s) you have already approved or edited are replaced by a freshly generated set, along with the drafts. Table findings are not touched.`"
-			confirm-label="Run clustering again"
+			:title="t('organizer.results.analysis.confirmRecluster.title')"
+			:message="t('organizer.results.analysis.confirmRecluster.message', { count: reviewedCrossTableCount }, reviewedCrossTableCount)"
+			:confirm-label="t('organizer.results.analysis.confirmRecluster.confirm')"
 			tone="destructive"
-			confirm-word="replace"
+			:confirm-word="t('organizer.results.analysis.replaceWord')"
 			@confirm="recluster"
 			@cancel="confirmRecluster = false" />
 	</div>

@@ -11,11 +11,14 @@ import {
 	mdiTimelineClockOutline,
 } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import type { AssemblyDetail, ConsentMode, Invite } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import SvgIcon from './ui/SvgIcon.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
 const emit = defineEmits<{
@@ -42,6 +45,11 @@ const draft = ref<{
 	name: '', description: '', language: 'en', autoPurge: true, redactNames: '',
 	participantConsent: 'optional', aiFacilitator: 'default',
 })
+
+/** The languages an assembly can be held in: the code is the API value, the
+ * label is the language's own name and stays the same in every locale. */
+const LANGUAGES = ['en', 'it', 'de', 'fr', 'es'] as const
+const AI_LEVELS = ['default', 'off', 'light', 'normal', 'active'] as const
 
 /** Has any table started recording?
  *
@@ -137,20 +145,25 @@ interface NextStep {
 	tab: 'rounds' | 'participants' | 'tables' | 'qr' | 'monitor'
 }
 
+// computed, not a constant: t() must re-run when the locale changes
 const nextStep = computed<NextStep | null>(() => {
 	if (activeRound.value) {
-		return { text: `Round ${activeRound.value.position} is live — watch table health and recordings.`, action: 'Open Live view', tab: 'monitor' }
+		return {
+			text: t('organizer.setup.overview.next.liveText', { position: activeRound.value.position }),
+			action: t('organizer.setup.overview.next.liveAction'),
+			tab: 'monitor',
+		}
 	}
 	if (props.assembly.rounds.length === 0) {
-		return { text: 'Start by defining the discussion sessions and their questions.', action: 'Add sessions', tab: 'rounds' }
+		return { text: t('organizer.setup.overview.next.roundsText'), action: t('organizer.setup.overview.next.roundsAction'), tab: 'rounds' }
 	}
 	if (props.assembly.participant_count === 0) {
-		return { text: 'Add participants — anonymous labels like P001 are enough.', action: 'Add participants', tab: 'participants' }
+		return { text: t('organizer.setup.overview.next.participantsText'), action: t('organizer.setup.overview.next.participantsAction'), tab: 'participants' }
 	}
 	if (activeInvites.value === 0) {
-		return { text: 'Generate the recorder QR codes and print one per table.', action: 'Generate QR codes', tab: 'qr' }
+		return { text: t('organizer.setup.overview.next.qrText'), action: t('organizer.setup.overview.next.qrAction'), tab: 'qr' }
 	}
-	return { text: 'Everything is prepared. Start a session from the Live view when the discussion begins.', action: 'Open Live view', tab: 'monitor' }
+	return { text: t('organizer.setup.overview.next.readyText'), action: t('organizer.setup.overview.next.liveAction'), tab: 'monitor' }
 })
 </script>
 
@@ -158,7 +171,7 @@ const nextStep = computed<NextStep | null>(() => {
 	<div>
 		<div v-if="nextStep" class="cz-card" style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
 			<div style="flex: 1; min-width: 220px">
-				<h3 style="margin-bottom: 3px">Next step</h3>
+				<h3 style="margin-bottom: 3px">{{ t('organizer.setup.overview.nextStep') }}</h3>
 				<p class="cz-muted" style="margin: 0">{{ nextStep.text }}</p>
 			</div>
 			<CzButton variant="primary" :icon="mdiArrowRight" @click="emit('navigate', nextStep.tab)">
@@ -171,153 +184,121 @@ const nextStep = computed<NextStep | null>(() => {
 				<div class="cz-stat__icon"><SvgIcon :path="mdiAccountGroup" :size="24" /></div>
 				<div>
 					<div class="cz-stat__value">{{ assembly.participant_count }}<span class="cz-muted" style="font-size: 0.9375rem; font-weight: 500"> / {{ assembly.expected_participants }}</span></div>
-					<div class="cz-stat__label">Participants</div>
+					<div class="cz-stat__label">{{ t('organizer.setup.overview.stats.participants') }}</div>
 				</div>
 			</button>
 			<button class="cz-stat cz-card--hover" style="background: none" @click="emit('navigate', 'tables')">
 				<div class="cz-stat__icon"><SvgIcon :path="mdiTableFurniture" :size="24" /></div>
 				<div>
 					<div class="cz-stat__value">{{ assembly.default_table_count }}</div>
-					<div class="cz-stat__label">Tables</div>
+					<div class="cz-stat__label">{{ t('organizer.setup.overview.stats.tables') }}</div>
 				</div>
 			</button>
 			<button class="cz-stat cz-card--hover" style="background: none" @click="emit('navigate', 'rounds')">
 				<div class="cz-stat__icon"><SvgIcon :path="mdiTimelineClockOutline" :size="24" /></div>
 				<div>
 					<div class="cz-stat__value">{{ doneRounds }}<span class="cz-muted" style="font-size: 0.9375rem; font-weight: 500"> / {{ assembly.rounds.length }}</span></div>
-					<div class="cz-stat__label">Sessions held</div>
+					<div class="cz-stat__label">{{ t('organizer.setup.overview.stats.sessionsHeld') }}</div>
 				</div>
 			</button>
 			<button class="cz-stat cz-card--hover" style="background: none" @click="emit('navigate', 'qr')">
 				<div class="cz-stat__icon"><SvgIcon :path="mdiQrcode" :size="24" /></div>
 				<div>
 					<div class="cz-stat__value">{{ activeInvites }}</div>
-					<div class="cz-stat__label">Active QR codes</div>
+					<div class="cz-stat__label">{{ t('organizer.setup.overview.stats.activeQr') }}</div>
 				</div>
 			</button>
 		</div>
 
 		<div class="cz-card">
 			<div class="cz-row cz-row--spread" style="margin-bottom: 8px">
-				<h3>Assembly details</h3>
+				<h3>{{ t('organizer.setup.overview.details.title') }}</h3>
 				<CzButton v-if="!editingDetails" variant="tertiary" small @click="startEditDetails">
-					Edit
+					{{ t('organizer.setup.overview.details.edit') }}
 				</CzButton>
 			</div>
 			<template v-if="editingDetails">
 				<div v-if="detailsError" class="cz-error">{{ detailsError }}</div>
 				<div class="cz-field">
-					<label for="cz-assembly-name">Name</label>
+					<label for="cz-assembly-name">{{ t('organizer.setup.overview.details.name') }}</label>
 					<input id="cz-assembly-name" v-model="draft.name" type="text" maxlength="200" />
 				</div>
 				<div class="cz-field">
-					<label for="cz-assembly-description">Description</label>
+					<label for="cz-assembly-description">{{ t('organizer.setup.overview.details.description') }}</label>
 					<textarea id="cz-assembly-description" v-model="draft.description" rows="2"></textarea>
 				</div>
 				<div class="cz-field">
-					<label for="cz-assembly-language">Language</label>
+					<label for="cz-assembly-language">{{ t('organizer.setup.overview.details.language') }}</label>
 					<select
 						id="cz-assembly-language"
 						v-model="draft.language"
 						:disabled="recordingHasBegun">
-						<option value="en">English</option>
-						<option value="it">Italiano</option>
-						<option value="de">Deutsch</option>
-						<option value="fr">Français</option>
-						<option value="es">Español</option>
+						<option v-for="code in LANGUAGES" :key="code" :value="code">
+							{{ t(`organizer.setup.overview.languages.${code}`) }}
+						</option>
 					</select>
 					<span v-if="assembly.language_auto && !recordingHasBegun" class="cz-muted" style="font-size: 0.78rem">
-						Detected from the recording: this Session was started with Record now, so the
-						first transcript decides the language of the analysis and the report. Choosing
-						one here fixes it instead.
+						{{ t('organizer.setup.overview.details.languageDetected') }}
 					</span>
 					<span v-if="recordingHasBegun" class="cz-muted" style="font-size: 0.78rem">
-						Locked: this assembly has started recording. The language decides how
-						audio is transcribed, so changing it now would leave one assembly with
-						transcripts in two languages.
+						{{ t('organizer.setup.overview.details.languageLocked') }}
 					</span>
 				</div>
 				<div class="cz-field">
 					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
 						<input v-model="draft.autoPurge" type="checkbox" />
-						Clear the audio off the table phones when the session is closed
+						{{ t('organizer.setup.overview.details.autoPurge') }}
 					</label>
 					<span class="cz-muted" style="font-size: 0.78rem">
-						Every phone keeps a copy of its table's audio so that recording survives a
-						bad network. This asks them to delete it once the assembly is finished —
-						which matters most when participants used their own devices. A phone only
-						ever deletes audio the server has already confirmed, so this cannot remove
-						a last copy. Turn it off to keep the phones' copies until you have
-						downloaded the export.
+						{{ t('organizer.setup.overview.details.autoPurgeHint') }}
 					</span>
 				</div>
 				<div class="cz-field">
-					<label>Consent at the table</label>
+					<label>{{ t('organizer.setup.overview.details.consent') }}</label>
 					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
 						<input v-model="draft.participantConsent" type="radio" value="required" />
-						Required — a table records only once one person registered there has consented
+						{{ t('organizer.setup.overview.details.consentRequired') }}
 					</label>
 					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
 						<input v-model="draft.participantConsent" type="radio" value="optional" />
-						Optional — the notice is shown and registration offered, nothing is blocked
+						{{ t('organizer.setup.overview.details.consentOptional') }}
 					</label>
 					<span class="cz-muted" style="font-size: 0.78rem">
-						Each person registers individually on the table's phone or their own (name,
-						optional email, explicit ticks against the notice the server renders). The
-						record — who, what, which notice — is kept with the assembly and exported.
-						Required is the setting for an organized assembly; Optional suits a
-						spontaneous session.
+						{{ t('organizer.setup.overview.details.consentHint') }}
 					</span>
 				</div>
 				<div class="cz-field" data-test="ai-facilitator">
-					<label>AI facilitator</label>
-					<label v-for="level in (['default', 'off', 'light', 'normal', 'active'] as const)" :key="level" style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+					<label>{{ t('organizer.setup.overview.details.aiFacilitator') }}</label>
+					<label v-for="level in AI_LEVELS" :key="level" style="display: flex; align-items: center; gap: 8px; cursor: pointer">
 						<input v-model="draft.aiFacilitator" type="radio" :value="level" />
-						{{
-							{
-								default: `Default from Settings (${assembly.ai_facilitator_default ?? 'off'})`,
-								off: 'Off',
-								light: 'Light — at most two nudges per session',
-								normal: 'Normal — at most four',
-								active: 'Active — at most eight',
-							}[level]
-						}}
+						{{ t(`organizer.setup.overview.details.aiLevel.${level}`, { level: assembly.ai_facilitator_default ?? 'off' }) }}
 					</label>
 					<span class="cz-muted" style="font-size: 0.78rem">
-						One short question or reminder on the table's phones when time runs out, the
-						room goes silent or the discussion drifts — to the facilitator's own phone
-						first when one is connected, and only then to the table. Each table can
-						switch it off from its phone; the Live tab can pause it.
+						{{ t('organizer.setup.overview.details.aiHint') }}
 						<template v-if="assembly.ai_facilitator_configured === false">
-							Not set up on this server yet (Settings → AI).
+							{{ t('organizer.setup.overview.details.aiNotConfigured') }}
 						</template>
 					</span>
 				</div>
 				<div class="cz-field">
-					<label for="cz-redact-names">Names to keep out of the AI analysis</label>
+					<label for="cz-redact-names">{{ t('organizer.setup.overview.details.redactNames') }}</label>
 					<textarea
 						id="cz-redact-names"
 						v-model="draft.redactNames"
 						rows="2"
-						placeholder="Anna, Simone, Alessandro"></textarea>
+						:placeholder="t('organizer.setup.overview.details.redactPlaceholder')"></textarea>
 					<span class="cz-muted" style="font-size: 0.78rem">
-						Speaker labels are already anonymous, but people say each other's names
-						out loud and the transcript records what was said. Names listed here — and
-						any imported participant's name — are replaced with “Person A”, “Person B”
-						before the transcript is sent to the analysis service. The transcript kept
-						on this server is unchanged, so quotes in the report still show what was
-						actually said. This does not affect the audio sent for transcription: use
-						a self-hosted engine if that matters.
+						{{ t('organizer.setup.overview.details.redactHint') }}
 					</span>
 				</div>
 				<div class="cz-row" style="justify-content: flex-end; margin-top: 8px">
-					<CzButton variant="tertiary" small @click="editingDetails = false">Cancel</CzButton>
+					<CzButton variant="tertiary" small @click="editingDetails = false">{{ t('organizer.setup.overview.details.cancel') }}</CzButton>
 					<CzButton
 						variant="primary"
 						small
 						:disabled="savingDetails || !draft.name.trim()"
 						@click="saveDetails">
-						Save
+						{{ t('organizer.setup.overview.details.save') }}
 					</CzButton>
 				</div>
 			</template>
@@ -326,16 +307,16 @@ const nextStep = computed<NextStep | null>(() => {
 					{{ assembly.description }}
 				</p>
 				<p v-else class="cz-muted" style="margin: 0; font-size: 0.845rem">
-					No description. The name and language shown in the header are edited here.
+					{{ t('organizer.setup.overview.details.noDescription') }}
 				</p>
 			</template>
 		</div>
 
 		<div class="cz-card">
 			<div class="cz-row cz-row--spread" style="margin-bottom: 8px">
-				<h3>AI analysis instructions</h3>
+				<h3>{{ t('organizer.setup.overview.instructions.title') }}</h3>
 				<CzButton v-if="!editingInstructions" variant="tertiary" small @click="startEditInstructions">
-					{{ assembly.analysis_instructions ? 'Edit' : 'Add' }}
+					{{ assembly.analysis_instructions ? t('organizer.setup.overview.details.edit') : t('organizer.setup.overview.details.add') }}
 				</CzButton>
 			</div>
 			<template v-if="editingInstructions">
@@ -343,11 +324,11 @@ const nextStep = computed<NextStep | null>(() => {
 					v-model="instructionsDraft"
 					rows="3"
 					style="width: 100%"
-					placeholder="E.g. This assembly is about urban mobility. 'PUMS' means the city's mobility plan."></textarea>
+					:placeholder="t('organizer.setup.overview.instructions.placeholder')"></textarea>
 				<div class="cz-row" style="justify-content: flex-end; margin-top: 8px">
-					<CzButton variant="tertiary" small @click="editingInstructions = false">Cancel</CzButton>
+					<CzButton variant="tertiary" small @click="editingInstructions = false">{{ t('organizer.setup.overview.details.cancel') }}</CzButton>
 					<CzButton variant="primary" small :disabled="savingInstructions" @click="saveInstructions">
-						Save
+						{{ t('organizer.setup.overview.details.save') }}
 					</CzButton>
 				</div>
 			</template>
@@ -355,19 +336,18 @@ const nextStep = computed<NextStep | null>(() => {
 				{{ assembly.analysis_instructions }}
 			</p>
 			<p v-else class="cz-muted" style="margin: 0; font-size: 0.845rem">
-				Optional context given to the AI when analyzing this assembly — topic,
-				local glossary, focus areas.
+				{{ t('organizer.setup.overview.instructions.empty') }}
 			</p>
 		</div>
 
 		<div class="cz-card">
 			<div class="cz-row cz-row--spread" style="margin-bottom: 8px">
-				<h3>Sessions</h3>
+				<h3>{{ t('organizer.setup.overview.sessions.title') }}</h3>
 				<CzButton variant="tertiary" small :icon="mdiMonitorEye" @click="emit('navigate', 'monitor')">
-					Live view
+					{{ t('organizer.setup.overview.sessions.liveView') }}
 				</CzButton>
 			</div>
-			<p v-if="assembly.rounds.length === 0" class="cz-muted">No rounds defined yet.</p>
+			<p v-if="assembly.rounds.length === 0" class="cz-muted">{{ t('organizer.setup.overview.sessions.none') }}</p>
 			<div
 				v-for="round in assembly.rounds"
 				:key="round.id"
@@ -376,14 +356,14 @@ const nextStep = computed<NextStep | null>(() => {
 				<div class="cz-row" style="min-width: 0; flex-wrap: nowrap">
 					<span class="cz-posbadge">{{ round.position }}</span>
 					<div style="min-width: 0">
-						<strong>{{ round.title || 'Untitled round' }}</strong>
+						<strong>{{ round.title || t('organizer.setup.overview.sessions.untitled') }}</strong>
 						<p class="cz-muted" style="margin: 0; font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
-							{{ round.question || 'No question set' }}
+							{{ round.question || t('organizer.setup.overview.sessions.noQuestion') }}
 						</p>
 					</div>
 				</div>
 				<div class="cz-row" style="flex-wrap: nowrap">
-					<span class="cz-muted" style="font-size: 0.8125rem">{{ round.duration_minutes }} min</span>
+					<span class="cz-muted" style="font-size: 0.8125rem">{{ t('organizer.setup.overview.sessions.minutes', { minutes: round.duration_minutes }) }}</span>
 					<CzStatusPill :status="round.status" />
 				</div>
 			</div>
@@ -393,13 +373,12 @@ const nextStep = computed<NextStep | null>(() => {
 		     small grey icon in the header, visually identical to Edit and Move
 		     buttons elsewhere in the app. -->
 		<div class="cz-card cz-dangerzone">
-			<h3>Danger zone</h3>
+			<h3>{{ t('organizer.setup.overview.danger.title') }}</h3>
 			<p class="cz-muted" style="margin: 6px 0 12px; font-size: 0.875rem">
-				Deleting this assembly permanently removes every session, recording,
-				transcript, finding and report. There is no undo and no backup.
+				{{ t('organizer.setup.overview.danger.body') }}
 			</p>
 			<CzButton variant="danger" :icon="mdiDeleteOutline" @click="emit('requestDelete')">
-				Delete this assembly
+				{{ t('organizer.setup.overview.danger.delete') }}
 			</CzButton>
 		</div>
 	</div>

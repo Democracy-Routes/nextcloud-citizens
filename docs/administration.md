@@ -239,6 +239,43 @@ each assembly can add its own instructions on top (topic context, glossary).
 API keys are stored in Nextcloud's app configuration marked *sensitive*. They
 are never sent to browsers, never written to logs, and never reach the phones.
 
+### The AI facilitator (0.7)
+
+Off unless somebody turns it on. Settings → AI → *AI facilitator* sets the
+instance default level (Off / Light / Normal / Active — at most 2 / 4 / 8
+nudges per table per session), an optional model of its own (base URL,
+model, API key; blank fields fall back to the analysis model's), and the
+thresholds behind its nudges (minutes between two nudges at a table, the
+speaking share that counts as one voice dominating, the seconds of silence
+before an open question). *Test* makes one real completion with the
+facilitator's settings. Each assembly chooses its own level on the Overview
+tab ("Default from Settings" follows this page); each table can switch it
+off from its phone's tech sheet, and the Live tab can *Pause AI* per table.
+
+Once a minute, for every table of a running session whose level is not
+Off, the server reads the table's live captions (names replaced by
+pseudonyms), the time left and — when the engine labels speakers — the
+anonymous speaking balance, and only when a trigger fires asks the model
+for one short sentence or nothing. The advice reaches the facilitator's own
+phone first (a card with *Dismiss* / *Send to the table*) and the table's
+phones directly only when no facilitator phone is connected. Every nudge,
+its delivery and the 👍/👎 counts are in the Live tab's *AI facilitator*
+log and in the audit trail; three 👎 at a table silence it there.
+`POST /api/v1/admin/facilitator/tick` runs the minute by hand for a
+rehearsal. Nothing is called without a key; a failing model is logged and
+skipped.
+
+### Language (0.7)
+
+Both halves of the app follow a language: the table phones and the
+participant pages follow the assembly's language (or the language detected
+on a Record-now session), the organizer UI follows the Nextcloud user's own
+language setting. English and Italian are complete; catalogues live in
+`frontend/src/i18n/` (shared) and `frontend/src/i18n/organizer/` (one file
+per organizer area) and a translator can edit them without touching code —
+the build fails on a key missing in one language or an English literal
+left in a template.
+
 ## 4. What leaves the server
 
 | Step | What is sent | Where | When |

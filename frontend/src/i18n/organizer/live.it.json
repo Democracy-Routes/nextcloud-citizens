@@ -1,0 +1,282 @@
+{
+	"monitor": {
+		"tableN": "Tavolo {number}",
+		"toast": {
+			"acknowledged": "Tavolo {number}: preso in carico",
+			"aiPaused": "Tavolo {number}: facilitatore AI in pausa",
+			"aiResumed": "Tavolo {number}: facilitatore AI riattivato",
+			"extended": "Sessione prolungata di {minutes} minuti",
+			"started": "Sessione avviata — i tavoli pronti stanno registrando",
+			"ended": "Sessione terminata",
+			"transcriptionQueued": "Trascrizione in coda",
+			"assembling": "Tavolo {number}: assemblaggio dell'audio arrivato al server",
+			"releasedAssembling": "Tavolo {number} liberato — la registrazione fatta finora è in trascrizione",
+			"releasedEmpty": "Tavolo {number} liberato — non aveva ancora caricato audio"
+		},
+		"delivery": {
+			"none": "nessun tavolo in questa sessione",
+			"all": "Consegnato {total}/{total}",
+			"partial": "Consegnato {seen}/{total} · {names} non ancora"
+		},
+		"author": {
+			"ai": "AI",
+			"facilitator": "Facilitatore"
+		},
+		"reasons": {
+			"NO_RECORDER": "nessun telefono si è collegato — mostra al tavolo il suo codice QR",
+			"RECORDER_OFFLINE": "il telefono non risponde",
+			"MIC_UNAVAILABLE": "il microfono non registra — basta un tocco sul telefono per autorizzarlo",
+			"LOW_STORAGE": "memoria quasi esaurita — sostituisci o libera il telefono dopo questa sessione",
+			"LOW_BATTERY": "batteria scarica — chiedi al tavolo un telefono di riserva",
+			"UPLOAD_STALLED": "caricamento in ritardo — controlla il Wi-Fi della sala",
+			"LIVE_STT_UNAVAILABLE": "sottotitoli in diretta spenti a questo tavolo",
+			"HELP_REQUESTED": "il tavolo chiede aiuto",
+			"PARTICIPANT_CONSENT_MISSING": "nessuno al tavolo ha ancora acconsentito — registra un partecipante sul telefono del tavolo",
+			"recorderSuffix": "(registratore {letter})"
+		},
+		"helpKinds": {
+			"TECHNICAL": "problema tecnico",
+			"ORGANIZER": "chiede l'organizzatore",
+			"PROCESS": "domanda sul procedimento"
+		},
+		"facts": {
+			"line": "batteria {pct} · {storage} · {pending} · {age} · {screen} · {visible} · {capture} · {rec}",
+			"mbFree": "{mb} MB liberi",
+			"chunksPending": "{count} frammenti in attesa",
+			"neverHeard": "mai sentito",
+			"heartbeat": "ultimo segnale {seconds} s fa",
+			"screenAwake": "schermo acceso",
+			"screenMayLock": "lo schermo può bloccarsi",
+			"background": "in secondo piano",
+			"foreground": "in primo piano",
+			"captureInterrupted": "registrazione interrotta",
+			"capturing": "sta registrando",
+			"noRecording": "nessuna registrazione"
+		},
+		"health": {
+			"ok": "Tutto procede regolarmente.",
+			"attention": "{count} tavolo ha bisogno di attenzione{blocked}. | {count} tavoli hanno bisogno di attenzione{blocked}.",
+			"cannotRecord": "· {count} non può registrare",
+			"quietFolded": "{count} tavolo è a posto ed è ripiegato qui sotto. | {count} tavoli sono a posto e sono ripiegati qui sotto."
+		},
+		"advanced": {
+			"show": "Diagnostica avanzata",
+			"hide": "Nascondi la diagnostica"
+		},
+		"device": {
+			"armed": "pronto",
+			"background": "in secondo piano",
+			"connected": "collegato",
+			"none": "nessun telefono"
+		},
+		"prior": {
+			"continued": "parte precedente — il tavolo ha continuato",
+			"rejoined": "parte precedente — il telefono si è ricollegato",
+			"silent": "parte precedente — il telefono ha smesso di rispondere",
+			"handedOver": "parte precedente — il tavolo è passato a un altro telefono"
+		},
+		"nextStep": {
+			"finished": "Questa sessione è terminata.",
+			"autoStart": "I tavoli pronti inizieranno da soli a registrare la sessione {position}.",
+			"start": "Inizia la sessione {position}",
+			"allDone": "Tutte le sessioni sono concluse.",
+			"allDoneHint": "Rivedi i risultati nella scheda Analisi, poi pubblica il report sui telefoni dei tavoli dalla scheda Report."
+		},
+		"broadcast": {
+			"title": "Messaggio ai tavoli",
+			"minLeft": "{minutes} min rimasti",
+			"wrapUp": "Concludete",
+			"less": "Meno",
+			"write": "Scrivi un messaggio",
+			"to": "a",
+			"allTables": "tutti i tavoli",
+			"placeholder": "Uno spunto o un'indicazione per i tavoli",
+			"ariaLabel": "Messaggio ai tavoli",
+			"send": "Invia"
+		},
+		"ai": {
+			"title": "Facilitatore AI",
+			"nudges": "{count} intervento in questa sessione | {count} interventi in questa sessione",
+			"nothingYet": "non ha ancora detto nulla",
+			"show": "Mostra",
+			"less": "Meno",
+			"dismissed": "scartato dal facilitatore",
+			"sentOn": "inoltrato dal facilitatore",
+			"onFacilitatorPhone": "sul telefono del facilitatore",
+			"toTable": "al tavolo"
+		},
+		"countbar": {
+			"tablesReady": "{ready}/{total} tavoli pronti",
+			"timeUp": "Tempo scaduto — termina tra {seconds} s",
+			"extend": "Prolunga di {minutes} min",
+			"keepGoing": "Continua",
+			"start": "Inizia la sessione",
+			"end": "Termina la sessione",
+			"independent": "Tavoli indipendenti — ogni tavolo registra con i propri tempi"
+		},
+		"handOver": {
+			"title": "Passare questo tavolo a un altro telefono?",
+			"message": "Il telefono del tavolo {number} ha smesso di rispondere. La sua registrazione viene chiusa con l'audio già ricevuto — di solito quasi tutta la sessione — e trascritta. Il tavolo può poi registrare il resto con qualsiasi telefono, scansionando lo stesso codice QR.",
+			"confirm": "Passa il tavolo"
+		},
+		"startUnready": {
+			"title": "Iniziare senza alcuni tavoli?",
+			"message": "Solo {ready} tavoli su {total} sono pronti. I tavoli che si preparano più tardi possono comunque unirsi alla sessione. Iniziare lo stesso?",
+			"confirm": "Inizia la sessione"
+		},
+		"empty": {
+			"title": "Questa assemblea non ha ancora sessioni",
+			"hint": "Aggiungi una sessione nella scheda Sessioni per iniziare a registrare."
+		},
+		"columns": {
+			"table": "Tavolo",
+			"device": "Telefono",
+			"recording": "Registrazione",
+			"elapsed": "Trascorso",
+			"upload": "Caricamento",
+			"localAudio": "Audio locale",
+			"actions": "Azioni"
+		},
+		"quiet": {
+			"show": "{count} tavolo procede regolarmente — mostra | {count} tavoli procedono regolarmente — mostra",
+			"hide": "{count} tavolo procede regolarmente — nascondi | {count} tavoli procedono regolarmente — nascondi"
+		},
+		"recorders": {
+			"summary": "{count} registratori · collegati: {labels}",
+			"none": "nessuno"
+		},
+		"pills": {
+			"captureInterrupted": "registrazione interrotta",
+			"storageError": "errore di memoria",
+			"screenMayLock": "lo schermo può bloccarsi",
+			"battery": "batteria {pct}%",
+			"lowStorage": "memoria quasi esaurita — {mb} MB",
+			"safe": "✓ al sicuro",
+			"unknown": "sconosciuto"
+		},
+		"upload": {
+			"pending": "({count} in attesa)",
+			"received": "{count} ricevuti"
+		},
+		"actions": {
+			"retryTranscriptionTitle": "Riprova la trascrizione (se sembra bloccata)",
+			"transcribe": "Trascrivi",
+			"transcript": "Trascrizione",
+			"acknowledgeTitle": "Il tavolo ha alzato la mano — fagli sapere che l'hai visto",
+			"acknowledge": "Preso in carico",
+			"pauseAiTitle": "Metti in pausa il facilitatore AI a questo tavolo",
+			"pauseAi": "Pausa AI",
+			"resumeAiTitle": "Lascia che il facilitatore AI intervenga di nuovo a questo tavolo (al livello dell'assemblea)",
+			"resumeAi": "Riattiva AI",
+			"handOverTitle": "Il telefono di questo tavolo ha smesso di rispondere — passa il tavolo a un altro telefono",
+			"handOver": "Passa il tavolo",
+			"retryTitle": "Assembla e trascrivi l'audio arrivato al server prima che il telefono si fermasse",
+			"retry": "Riprova",
+			"deviceLog": "Registro del telefono"
+		},
+		"noTables": "Questa sessione non ha tavoli.",
+		"transcript": {
+			"title": "Trascrizione",
+			"empty": "La trascrizione è vuota (nessun parlato rilevato)."
+		},
+		"deviceLog": {
+			"title": "Tavolo {number} — registro del telefono (ultime 50 righe)",
+			"empty": "Nessun registro ricevuto dal telefono."
+		}
+	},
+	"files": {
+		"toast": {
+			"purgeNone": "Nessun telefono dei tavoli si è collegato a questa assemblea",
+			"purgeAsked": "Richiesto a {count} telefono di cancellare la sua copia | Richiesto a {count} telefoni dei tavoli di cancellare la loro copia",
+			"assembling": "Nuovo assemblaggio del tavolo {number}",
+			"retranscribing": "Nuova trascrizione dall'audio conservato — può richiedere qualche minuto",
+			"transcriptDeletedRetranscribable": "Trascrizione eliminata — questa registrazione può essere trascritta di nuovo",
+			"transcriptDeleted": "Trascrizione eliminata",
+			"transcriptsDeleted": "{count} trascrizione eliminata | {count} trascrizioni eliminate",
+			"audioDeleted": "Audio eliminato — {size} liberati",
+			"recordingsCleared": "{count} registrazione svuotata — {size} liberati | {count} registrazioni svuotate — {size} liberati"
+		},
+		"header": {
+			"title": "File audio ed esportazioni",
+			"recordings": "{count} registrazione | {count} registrazioni",
+			"audioDeleted": "· {count} con audio eliminato",
+			"downloadAll": "Scarica tutto l'audio",
+			"exportFull": "Esporta l'intera assemblea",
+			"deleteAllAudio": "Elimina tutto l'audio",
+			"deleteAllTranscripts": "Elimina tutte le trascrizioni",
+			"purge": "Cancella l'audio dai telefoni dei tavoli"
+		},
+		"coverage": {
+			"askedOnClose": "Alla chiusura dell'assemblea è stato chiesto ai telefoni di cancellare l'audio.",
+			"cleared": "{cleared} su {devices}",
+			"reported": "sessioni del registratore hanno riferito di non avere più registrazioni locali.",
+			"stillHolding": "{count} conservano ancora audio.",
+			"unknown": "{count} non hanno riferito quante registrazioni locali hanno.",
+			"note": "Questi conteggi includono anche le sessioni più vecchie. Un nuovo accesso può contare lo stesso telefono più volte; le sessioni scadute o revocate potrebbero richiedere una pulizia manuale."
+		},
+		"keptPastRetention": "{count} registrazione è stata conservata oltre il periodo previsto perché non ne esiste la trascrizione — l'audio è l'unica traccia della discussione. Riprova la trascrizione, oppure eliminala di proposito. | {count} registrazioni sono state conservate oltre il periodo previsto perché non ne esiste la trascrizione — per queste, l'audio è l'unica traccia della discussione. Riprova la trascrizione, oppure eliminale di proposito.",
+		"exportHint": "L'esportazione completa raccoglie metadati, audio, trascrizioni e report — quanto basta per spostare questa assemblea su un altro server. Eliminare l'audio conserva trascrizioni, risultati e report.",
+		"empty": {
+			"title": "Nessuna registrazione",
+			"hint": "I file audio compaiono qui appena i tavoli registrano e sincronizzano."
+		},
+		"columns": {
+			"table": "Tavolo",
+			"duration": "Durata",
+			"size": "Dimensione",
+			"state": "Stato",
+			"transcript": "Trascrizione",
+			"actions": "Azioni"
+		},
+		"audioDeleted": "audio eliminato",
+		"liveTitle": "Dai sottotitoli in diretta, non da una trascrizione dell'audio completo",
+		"live": "in diretta",
+		"actions": {
+			"download": "Scarica",
+			"deleteAudioTitle": "Elimina l'audio",
+			"audio": "Audio",
+			"retryTitle": "Riprova ad assemblare l'audio",
+			"retry": "Riprova",
+			"retranscribeTitle": "Trascrivi di nuovo dall'audio conservato",
+			"retranscribe": "Ritrascrivi",
+			"deleteTranscriptTitle": "Elimina la trascrizione",
+			"transcript": "Trascrizione"
+		},
+		"confirmRetranscribe": {
+			"title": "Trascrivere di nuovo questo tavolo?",
+			"message": "Il tavolo {number} verrà trascritto di nuovo dall'audio conservato{replacing}. Le citazioni nei risultati esistenti si riferiscono al testo precedente, quindi vengono segnate come rimosse, e l'analisi viene rifatta. L'audio non viene toccato.",
+			"replacingLive": ", sostituendo la trascrizione ricavata dai sottotitoli in diretta",
+			"replacingCurrent": ", sostituendo la trascrizione attuale",
+			"confirm": "Trascrivi di nuovo"
+		},
+		"confirmDeleteAudio": {
+			"title": "Eliminare l'audio di questo tavolo?",
+			"message": "L'audio del tavolo {number} verrà eliminato definitivamente e non potrà essere recuperato. Trascrizione, risultati e report restano — ma la registrazione non potrà più essere trascritta.",
+			"confirm": "Elimina l'audio"
+		},
+		"confirmDeleteTranscript": {
+			"title": "Eliminare la trascrizione di questo tavolo?",
+			"message": "Il testo integrale del tavolo {number} verrà cancellato definitivamente — comprese le citazioni mostrate nei risultati e nel report pubblicato. Risultati e sintesi AI restano. {audioNote}",
+			"audioStillHere": "L'audio è ancora qui, quindi questa registrazione può essere trascritta di nuovo.",
+			"audioGone": "Il suo audio è già stato eliminato, quindi la trascrizione non può essere ricreata.",
+			"confirm": "Elimina la trascrizione"
+		},
+		"confirmPurge": {
+			"title": "Cancellare l'audio di questa assemblea dai telefoni dei tavoli?",
+			"message": "Ogni telefono conserva ancora l'audio che ha registrato. Questa richiesta chiede di eliminarlo — ma solo le parti che il server ha già confermato, così non si perde nulla. Raggiunge i telefoni con il registratore ancora aperto; uno chiuso e portato via si ripulirà da solo se verrà riaperto.",
+			"confirm": "Cancella dai telefoni"
+		},
+		"confirmAllTranscripts": {
+			"title": "Eliminare tutte le trascrizioni di questa assemblea?",
+			"message": "Il testo integrale di ogni tavolo verrà cancellato definitivamente, comprese le citazioni nei risultati e nel report pubblicato. Risultati e sintesi AI restano. I tavoli il cui audio è ancora qui possono essere trascritti di nuovo.",
+			"confirm": "Elimina tutte le trascrizioni"
+		},
+		"confirmAllAudio": {
+			"title": "Eliminare tutto l'audio di questa assemblea?",
+			"scaleBytes": "Tutti i {size} di audio registrato",
+			"scaleAll": "Tutto l'audio registrato",
+			"message": "{scale} verranno eliminati definitivamente e non potranno essere recuperati. Trascrizioni, risultati e report restano. Scarica o esporta prima, se ti serve una copia.",
+			"confirm": "Elimina tutto l'audio"
+		}
+	}
+}

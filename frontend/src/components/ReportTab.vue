@@ -12,11 +12,12 @@ import {
 	mdiRefresh,
 } from '@mdi/js'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../api'
 import { downloadBlob, downloadFromApi } from '../download'
 import { SLOW_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
-import { TYPE_LABELS, groupByType, roundHeading } from '../labels'
+import { groupByType, roundHeading, typeLabel } from '../labels'
 import type { AssemblyDetail, ReportData } from '../types'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzButton from './ui/CzButton.vue'
@@ -27,6 +28,7 @@ import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
 const emit = defineEmits<{ changed: [] }>()
+const { t } = useI18n()
 
 const report = ref<ReportData | null>(null)
 const error = ref('')
@@ -55,7 +57,7 @@ async function closeSession(): Promise<void> {
 	closing.value = true
 	try {
 		await api.closeSession(props.assembly.id)
-		toast('Session closed — the final report is ready')
+		toast(t('organizer.results.report.toast.closed'))
 		await reload()
 		emit('changed')
 	} catch (err) {
@@ -69,7 +71,7 @@ async function reopenSession(): Promise<void> {
 	closing.value = true
 	try {
 		await api.reopenSession(props.assembly.id)
-		toast('Session reopened — tables can record again')
+		toast(t('organizer.results.report.toast.reopened'))
 		await reload()
 		emit('changed')
 	} catch (err) {
@@ -85,10 +87,10 @@ async function togglePublish(): Promise<void> {
 	try {
 		if (report.value?.published_at) {
 			await api.unpublishReport(props.assembly.id)
-			toast('Report is no longer visible on table phones')
+			toast(t('organizer.results.report.toast.unpublished'))
 		} else {
 			await api.publishReport(props.assembly.id)
-			toast('Report published — table phones can now view and download it')
+			toast(t('organizer.results.report.toast.published'))
 		}
 		await reload()
 	} catch (err) {
@@ -110,7 +112,7 @@ async function generateSynthesis(): Promise<void> {
 	synthesising.value = true
 	try {
 		await api.generateSynthesis(props.assembly.id)
-		toast('Synthesis queued — it appears here in a minute or two')
+		toast(t('organizer.results.report.toast.synthesisQueued'))
 		// the job runs in the background: look again a little later
 		window.setTimeout(() => void reload(), 20_000)
 	} catch (err) {
@@ -124,7 +126,7 @@ async function refreshFinal(): Promise<void> {
 	refreshing.value = true
 	try {
 		await api.refreshFinalReport(props.assembly.id)
-		toast('The published version now matches the current report')
+		toast(t('organizer.results.report.toast.refreshed'))
 		await reload()
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -158,7 +160,7 @@ async function downloadReport(extension: 'md' | 'pdf'): Promise<void> {
 		await downloadFromApi(url)
 	} catch {
 		if (!window.open(url, '_blank')) {
-			toast('The report could not be downloaded — check the pop-up blocker', 'error')
+			toast(t('organizer.results.report.toast.downloadFailed'), 'error')
 		}
 	} finally {
 		downloading.value = ''
@@ -199,25 +201,21 @@ const hasContent = () =>
 		<div v-if="report" class="cz-card cz-nextstep" style="margin-bottom: 16px">
 			<div>
 				<template v-if="isFinal">
-					<strong>Final report · closed {{ closedDate() }}</strong>
+					<strong>{{ t('organizer.results.report.finalTitle', { date: closedDate() }) }}</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-						The session is closed: tables can no longer record, and this is the
-						definitive report. Participants keep reading this version even if you
-						reopen — approve more findings and press Update to push them.
+						{{ t('organizer.results.report.finalHint') }}
 					</span>
 				</template>
 				<template v-else-if="progress?.complete">
-					<strong style="color: var(--cz-green)">All {{ progress.tables_expected }} tables have finished.</strong>
+					<strong style="color: var(--cz-green)">{{ t('organizer.results.report.allDoneTitle', { count: progress.tables_expected }, progress.tables_expected) }}</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-						Close the session to create the final report and enable the downloads.
+						{{ t('organizer.results.report.allDoneHint') }}
 					</span>
 				</template>
 				<template v-else>
-					<strong>Interim report — {{ progress?.tables_complete ?? 0 }} of
-						{{ progress?.tables_expected ?? 0 }} tables have completed all sessions</strong>
+					<strong>{{ t('organizer.results.report.interimTitle', { complete: progress?.tables_complete ?? 0, expected: progress?.tables_expected ?? 0 }) }}</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-						This is a preview of an assembly still in progress. Closing the session
-						creates the final report and enables the downloads — you can reopen later.
+						{{ t('organizer.results.report.interimHint') }}
 					</span>
 				</template>
 			</div>
@@ -227,7 +225,7 @@ const hasContent = () =>
 				:icon="mdiCheckCircleOutline"
 				:disabled="closing"
 				@click="confirmClose = true">
-				Close session &amp; create final report
+				{{ t('organizer.results.report.close') }}
 			</CzButton>
 			<div v-else class="cz-row" style="flex-wrap: nowrap">
 				<CzButton
@@ -235,14 +233,14 @@ const hasContent = () =>
 					:icon="mdiRefresh"
 					:disabled="refreshing || closing"
 					@click="refreshFinal">
-					{{ refreshing ? 'Updating…' : 'Update the published version' }}
+					{{ refreshing ? t('organizer.results.report.updating') : t('organizer.results.report.updatePublished') }}
 				</CzButton>
 				<CzButton
 					variant="tertiary"
 					:icon="mdiLockOpenVariantOutline"
 					:disabled="closing"
 					@click="confirmReopen = true">
-					Reopen session
+					{{ t('organizer.results.report.reopen') }}
 				</CzButton>
 			</div>
 		</div>
@@ -252,23 +250,20 @@ const hasContent = () =>
 		<div v-if="report && report.rounds.length >= 2" class="cz-card" style="margin-bottom: 16px" data-test="synthesis-card">
 			<div class="cz-row cz-row--spread">
 				<div style="flex: 1; min-width: 240px">
-					<h3>How the discussion developed</h3>
+					<h3>{{ t('organizer.results.report.synthesis.title') }}</h3>
 					<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
 						<template v-if="report.synthesis">
-							A chapter across the sessions, written from their summaries and approved
-							cross-table findings
+							{{ t('organizer.results.report.synthesis.haveLead') }}
 							<template v-if="report.synthesis.generated_at"> · {{ report.synthesis.generated_at.slice(0, 16).replace('T', ' ') }}</template>.
-							It is remade at closing once every session's analysis is in.
+							{{ t('organizer.results.report.synthesis.haveTail') }}
 						</template>
 						<template v-else>
-							Once at least two sessions have a summary, the analysis model writes how
-							the discussion moved from the first session to the last. It happens by
-							itself at closing; generate it earlier here.
+							{{ t('organizer.results.report.synthesis.none') }}
 						</template>
 					</p>
 				</div>
 				<CzButton small variant="secondary" :icon="mdiRefresh" :disabled="synthesising" data-test="synthesis" @click="generateSynthesis">
-					{{ synthesising ? 'Queued…' : report.synthesis ? 'Generate again' : 'Generate synthesis' }}
+					{{ synthesising ? t('organizer.results.report.synthesis.queued') : report.synthesis ? t('organizer.results.report.synthesis.again') : t('organizer.results.report.synthesis.generate') }}
 				</CzButton>
 			</div>
 			<template v-if="report.synthesis">
@@ -278,7 +273,7 @@ const hasContent = () =>
 					<p style="font-size: 0.875rem; margin: 2px 0 0">{{ stage.summary }}</p>
 				</div>
 				<p v-if="report.synthesis.carried_forward.length" class="cz-muted" style="font-size: 0.8125rem; margin: 10px 0 4px">
-					Carried from one session to the next
+					{{ t('organizer.results.report.synthesis.carried') }}
 				</p>
 				<ul v-if="report.synthesis.carried_forward.length" style="margin: 0; padding-left: 18px; font-size: 0.875rem">
 					<li v-for="item in report.synthesis.carried_forward" :key="item">{{ item }}</li>
@@ -289,7 +284,7 @@ const hasContent = () =>
 		<div class="cz-row cz-row--spread" style="margin-bottom: 16px">
 			<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
 				<input v-model="includeDrafts" type="checkbox" />
-				Include unreviewed drafts (clearly marked)
+				{{ t('organizer.results.report.includeDrafts') }}
 			</label>
 			<div class="cz-row">
 				<CzButton
@@ -297,37 +292,35 @@ const hasContent = () =>
 					:icon="mdiFilePdfBox"
 					:disabled="!isFinal || !!downloading"
 					@click="downloadReport('pdf')">
-					{{ downloading === 'pdf' ? 'Preparing…' : 'PDF' }}
+					{{ downloading === 'pdf' ? t('organizer.results.report.preparing') : t('organizer.results.report.pdf') }}
 				</CzButton>
 				<CzButton
 					small
 					:icon="mdiDownloadOutline"
 					:disabled="!isFinal || !!downloading"
 					@click="downloadReport('md')">
-					{{ downloading === 'md' ? 'Preparing…' : 'Markdown' }}
+					{{ downloading === 'md' ? t('organizer.results.report.preparing') : t('organizer.results.report.markdown') }}
 				</CzButton>
-				<CzButton small :icon="mdiCodeJson" :disabled="!isFinal" @click="downloadJson">JSON</CzButton>
+				<CzButton small :icon="mdiCodeJson" :disabled="!isFinal" @click="downloadJson">{{ t('organizer.results.report.json') }}</CzButton>
 			</div>
 		</div>
 		<p v-if="!isFinal" class="cz-muted" style="margin: -8px 0 16px; font-size: 0.8125rem; text-align: right">
-			Downloads become available once the session is closed.
+			{{ t('organizer.results.report.downloadsLocked') }}
 		</p>
 
 		<div v-if="report" class="cz-card" style="margin-bottom: 16px">
 			<div class="cz-row cz-row--spread">
 				<div style="flex: 1; min-width: 240px">
 					<h3>
-						<template v-if="report.published_at">Published to table phones</template>
-						<template v-else>Not yet published to table phones</template>
+						<template v-if="report.published_at">{{ t('organizer.results.report.publishedTitle') }}</template>
+						<template v-else>{{ t('organizer.results.report.unpublishedTitle') }}</template>
 					</h3>
 					<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
 						<template v-if="report.published_at">
-							Recording phones can view this report and download the PDF
-							(approved findings and AI summaries only — drafts stay private).
+							{{ t('organizer.results.report.publishedHint') }}
 						</template>
 						<template v-else>
-							Publishing lets the recording phones view this report and download
-							the PDF. Only approved findings and AI summaries are shared.
+							{{ t('organizer.results.report.unpublishedHint') }}
 						</template>
 					</p>
 				</div>
@@ -337,7 +330,7 @@ const hasContent = () =>
 					:icon="mdiCellphoneLink"
 					:disabled="publishing"
 					@click="report.published_at ? (confirmUnpublish = true) : (confirmPublish = true)">
-					{{ report.published_at ? 'Unpublish' : 'Publish report to tables' }}
+					{{ report.published_at ? t('organizer.results.report.unpublish') : t('organizer.results.report.publish') }}
 				</CzButton>
 			</div>
 		</div>
@@ -347,20 +340,20 @@ const hasContent = () =>
 		<CzEmptyState
 			v-else-if="report && !hasContent()"
 			:icon="mdiFileDocumentOutline"
-			title="Nothing to report yet"
+			:title="t('organizer.results.report.emptyTitle')"
 			:hint="includeDrafts
-				? 'No findings exist yet — record tables and run the analysis first.'
-				: 'No approved findings yet. Approve findings in the Analysis tab, or include drafts to preview.'" />
+				? t('organizer.results.report.emptyHintDrafts')
+				: t('organizer.results.report.emptyHintApproved')" />
 
 		<template v-else-if="report">
 			<div class="cz-card">
-				<h2 style="font-size: 1.31rem">{{ report.assembly.name }} — Assembly Report</h2>
+				<h2 style="font-size: 1.31rem">{{ t('organizer.results.report.assemblyReport', { name: report.assembly.name }) }}</h2>
 				<p v-if="report.assembly.description" class="cz-muted" style="margin-top: 6px">
 					{{ report.assembly.description }}
 				</p>
 				<p class="cz-muted" style="font-size: 0.845rem; margin: 8px 0 0">
-					{{ report.assembly.participants }} participants ·
-					{{ report.assembly.tables }} tables ·
+					{{ t('organizer.results.report.participants', { count: report.assembly.participants }, report.assembly.participants) }} ·
+					{{ t('organizer.results.report.tables', { count: report.assembly.tables }, report.assembly.tables) }} ·
 					{{ report.assembly.language.toUpperCase() }}
 				</p>
 				<p style="font-size: 0.875rem; margin-top: 12px">{{ report.method }}</p>
@@ -370,18 +363,18 @@ const hasContent = () =>
 				<div
 					v-if="round.cross_table.length || round.summary || round.tables.some((t) => t.findings.length || t.summary)"
 					class="cz-card">
-					<h3>{{ roundHeading(round.position, round.title) }}</h3>
+					<h3>{{ round.heading ?? roundHeading(round.position, round.title) }}</h3>
 					<p v-if="round.question" class="cz-muted" style="font-style: italic; margin: 4px 0 14px">
 						“{{ round.question }}”
 					</p>
 					<p v-if="round.summary" style="font-size: 0.905rem; font-style: italic; margin-bottom: 14px">
-						<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block">AI SUMMARY</span>
+						<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block">{{ t('organizer.results.report.aiSummary') }}</span>
 						{{ round.summary }}
 					</p>
 
 					<template v-if="round.cross_table.length">
 						<h4 style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 12px 0 8px">
-							Across all tables
+							{{ t('organizer.results.report.acrossTables') }}
 						</h4>
 						<template v-for="group in groupByType(round.cross_table)" :key="group.type">
 							<h5
@@ -392,23 +385,23 @@ const hasContent = () =>
 							<div v-for="finding in group.findings" :key="finding.id" style="margin-bottom: 14px">
 								<strong>
 									{{ finding.title }}
-									<span v-if="finding.is_draft" class="cz-pill cz-pill--amber" style="text-transform: none">DRAFT — not reviewed</span>
+									<span v-if="finding.is_draft" class="cz-pill cz-pill--amber" style="text-transform: none">{{ t('organizer.results.report.draftPill') }}</span>
 								</strong>
 								<p v-if="finding.mentioned_table_count" class="cz-muted" style="font-size: 0.8125rem; margin: 2px 0">
-									Mentioned at {{ finding.mentioned_table_count }} table(s)
+									{{ t('organizer.results.report.mentionedAt', { count: finding.mentioned_table_count }, finding.mentioned_table_count) }}
 								</p>
 								<p style="margin: 4px 0; font-size: 0.905rem">{{ finding.summary }}</p>
 								<blockquote
 									v-for="(evidence, index) in finding.evidence.slice(0, 3)"
 									:key="index"
 									style="margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--cz-border); font-size: 0.845rem; color: var(--cz-text-muted)">
-									[{{ evidence.timestamp }}] {{ evidence.speaker || 'Speaker' }}: “{{ evidence.text }}”
+									[{{ evidence.timestamp }}] {{ evidence.speaker || t('organizer.results.report.speaker') }}: “{{ evidence.text }}”
 								</blockquote>
 									<p
 										v-if="!finding.evidence.length && finding.evidence_removed"
 										class="cz-muted"
 										style="font-size: 0.8125rem; font-style: italic; margin: 4px 0">
-										Evidence removed with the transcript
+										{{ t('organizer.results.report.evidenceRemoved') }}
 									</p>
 							</div>
 						</template>
@@ -417,40 +410,40 @@ const hasContent = () =>
 					<template v-for="table in round.tables" :key="table.table_number">
 						<template v-if="table.findings.length || table.summary">
 							<h4 style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 16px 0 8px">
-								Table {{ table.table_number }}
+								{{ t('organizer.results.report.table', { number: table.table_number }) }}
 							</h4>
 							<!-- participants' word on the summary (0.7): counts, and the
 							     notes of those who flagged something missing -->
 							<p v-if="table.validations" class="cz-validation" data-test="validations">
-								<span class="cz-validation__ok">✓ {{ table.validations.looks_right }} looks right</span>
+								<span class="cz-validation__ok">{{ t('organizer.results.report.looksRight', { count: table.validations.looks_right }, table.validations.looks_right) }}</span>
 								<span v-if="table.validations.missing" class="cz-validation__flag">
-									· ⚠ {{ table.validations.missing }} flagged something missing
+									{{ t('organizer.results.report.flaggedMissing', { count: table.validations.missing }, table.validations.missing) }}
 								</span>
 							</p>
 							<ul v-if="table.validations?.notes?.length" class="cz-validation__notes">
 								<li v-for="(note, index) in table.validations.notes" :key="index">“{{ note }}”</li>
 							</ul>
 							<p v-if="table.summary" style="font-size: 0.875rem; font-style: italic; margin: 0 0 10px">
-								<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block">AI SUMMARY</span>
+								<span class="cz-muted" style="font-style: normal; font-size: 0.75rem; display: block">{{ t('organizer.results.report.aiSummary') }}</span>
 								{{ table.summary }}
 							</p>
 							<div v-for="finding in table.findings" :key="finding.id" style="margin-bottom: 14px">
 								<strong>
-									{{ TYPE_LABELS[finding.type] ?? finding.type }}: {{ finding.title }}
-									<span v-if="finding.is_draft" class="cz-pill cz-pill--amber" style="text-transform: none">DRAFT — not reviewed</span>
+									{{ finding.type_label ?? typeLabel(finding.type) }}: {{ finding.title }}
+									<span v-if="finding.is_draft" class="cz-pill cz-pill--amber" style="text-transform: none">{{ t('organizer.results.report.draftPill') }}</span>
 								</strong>
 								<p style="margin: 4px 0; font-size: 0.905rem">{{ finding.summary }}</p>
 								<blockquote
 									v-for="(evidence, index) in finding.evidence.slice(0, 3)"
 									:key="index"
 									style="margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--cz-border); font-size: 0.845rem; color: var(--cz-text-muted)">
-									[{{ evidence.timestamp }}] {{ evidence.speaker || 'Speaker' }}: “{{ evidence.text }}”
+									[{{ evidence.timestamp }}] {{ evidence.speaker || t('organizer.results.report.speaker') }}: “{{ evidence.text }}”
 								</blockquote>
 									<p
 										v-if="!finding.evidence.length && finding.evidence_removed"
 										class="cz-muted"
 										style="font-size: 0.8125rem; font-style: italic; margin: 4px 0">
-										Evidence removed with the transcript
+										{{ t('organizer.results.report.evidenceRemoved') }}
 									</p>
 							</div>
 						</template>
@@ -465,37 +458,37 @@ const hasContent = () =>
 
 		<CzConfirm
 			v-if="confirmClose && report"
-			title="Close the session and create the final report?"
+			:title="t('organizer.results.report.confirmClose.title')"
 			:message="(progress?.tables_missing?.length
-				? `Tables ${progress.tables_missing.join(', ')} never recorded — they will not appear in the final report. `
-				: '') + 'Tables can no longer record after closing, and the report becomes final. You can reopen the session later if a late table needs to record.'"
-			confirm-label="Close session"
+				? t('organizer.results.report.confirmClose.missingTables', { tables: progress.tables_missing.join(', ') })
+				: '') + t('organizer.results.report.confirmClose.body')"
+			:confirm-label="t('organizer.results.report.confirmClose.confirm')"
 			:danger="false"
 			@confirm="closeSession"
 			@cancel="confirmClose = false" />
 
 		<CzConfirm
 			v-if="confirmUnpublish"
-			title="Stop sharing the report with the tables?"
-			message="Every table phone currently reading the report loses access to it immediately. You can publish it again at any time."
-			confirm-label="Unpublish"
+			:title="t('organizer.results.report.confirmUnpublish.title')"
+			:message="t('organizer.results.report.confirmUnpublish.message')"
+			:confirm-label="t('organizer.results.report.confirmUnpublish.confirm')"
 			tone="danger"
 			@confirm="confirmUnpublish = false; togglePublish()"
 			@cancel="confirmUnpublish = false" />
 
 		<CzConfirm
 			v-if="confirmReopen"
-			title="Reopen this session?"
-			message="Tables can record again and the report stops being final. Participants keep reading the version that was frozen when the session closed, until you close it again."
-			confirm-label="Reopen session"
+			:title="t('organizer.results.report.confirmReopen.title')"
+			:message="t('organizer.results.report.confirmReopen.message')"
+			:confirm-label="t('organizer.results.report.confirmReopen.confirm')"
 			@confirm="confirmReopen = false; reopenSession()"
 			@cancel="confirmReopen = false" />
 
 		<CzConfirm
 			v-if="confirmPublish"
-			title="Publish report to table phones?"
-			message="Every table's recording phone will be able to view this report and download the PDF. Only approved findings and AI summaries are included — unreviewed drafts stay private. You can unpublish at any time."
-			confirm-label="Publish"
+			:title="t('organizer.results.report.confirmPublish.title')"
+			:message="t('organizer.results.report.confirmPublish.message')"
+			:confirm-label="t('organizer.results.report.confirmPublish.confirm')"
 			@confirm="togglePublish"
 			@cancel="confirmPublish = false" />
 	</div>

@@ -13,6 +13,7 @@ import {
 	mdiMicrophoneOutline,
 } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../api'
 import { describeError } from '../errors'
 import type { ProvidersSummary, SttProvider } from '../types'
@@ -20,6 +21,8 @@ import CzButton from './ui/CzButton.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import SvgIcon from './ui/SvgIcon.vue'
 import { toast } from './ui/toast'
+
+const { t } = useI18n()
 
 const summary = ref<ProvidersSummary | null>(null)
 const error = ref('')
@@ -58,6 +61,7 @@ function clampCap(value: number): number {
 
 // the languages an assembly can be run in (AssemblyWizard.vue). Vosk needs its
 // own model for each, so every one gets a row whether or not it is configured.
+// Labels are endonyms — each language names itself — so they are not translated.
 const ASSEMBLY_LANGUAGES: Array<{ code: string; label: string }> = [
 	{ code: 'en', label: 'English' },
 	{ code: 'it', label: 'Italiano' },
@@ -69,27 +73,44 @@ const voskModels = ref<Record<string, { live: string; final: string }>>(
 	Object.fromEntries(ASSEMBLY_LANGUAGES.map((l) => [l.code, { live: '', final: '' }])),
 )
 
-const PROVIDER_LABELS: Record<SttProvider, string> = {
-	mistral: 'Mistral (Voxtral)',
-	deepgram: 'Deepgram',
-	whisper: 'Whisper (OpenAI-compatible)',
-	vosk: 'Vosk (offline)',
-}
+const STT_PROVIDERS: readonly SttProvider[] = ['mistral', 'deepgram', 'whisper', 'vosk']
+
+// example values shown as placeholders, not prose — never translated, so they
+// are plain constants rather than catalogue keys
+const DEEPGRAM_ENDPOINT_EXAMPLE = 'wss://api.deepgram.com/v1/listen'
+const WHISPER_BASE_URL_EXAMPLE = 'https://api.openai.com/v1'
+const VOSK_URL_EXAMPLE = 'ws://localhost:2700'
+const VOSK_MODEL_EXAMPLE = 'vosk-model-small-it-0.22'
+const VOSK_COMMAND_EXAMPLE = 'scripts/vosk-model.sh <name>'
+const ANALYSIS_BASE_URL_EXAMPLE = 'https://api.mistral.ai/v1'
+const ORG_ADDRESS_EXAMPLE = 'Piazza Maggiore 6, 40124 Bologna'
+const ORG_CONTACT_EMAIL_EXAMPLE = 'privacy@example.org'
+const ORG_AUTHORITY_EXAMPLE = 'Garante per la protezione dei dati personali'
+const ORG_NAME_EXAMPLE = 'Democracy Innovators'
+
+const providerLabel = computed<Record<SttProvider, string>>(() => ({
+	mistral: t('organizer.settings.providers.mistral'),
+	deepgram: t('organizer.settings.providers.deepgram'),
+	whisper: t('organizer.settings.providers.whisper'),
+	vosk: t('organizer.settings.providers.vosk'),
+}))
 
 // every engine produces live captions, each through its own protocol
-const CAPTION_NOTE: Record<SttProvider, string> = {
-	deepgram: 'Live captions stream natively and carry speaker labels.',
-	mistral: 'Live captions use Voxtral Realtime; realtime output has no speaker labels.',
-	whisper: 'Live captions are produced from rolling 20-second windows, so a line may be revised as more audio arrives.',
-	vosk: 'Live captions stream natively from your Vosk server, without punctuation or speaker labels.',
-}
+const captionNote = computed<Record<SttProvider, string>>(() => ({
+	deepgram: t('organizer.settings.captionNote.deepgram'),
+	mistral: t('organizer.settings.captionNote.mistral'),
+	whisper: t('organizer.settings.captionNote.whisper'),
+	vosk: t('organizer.settings.captionNote.vosk'),
+}))
 const analysisBaseUrl = ref('')
 const analysisModel = ref('')
 const analysisKey = ref('')
 const analysisEnabled = ref(true)
 const analysisExtra = ref('')
 // the AI facilitator: its own level and model, falling back to the analysis model
-const facLevel = ref<'off' | 'light' | 'normal' | 'active'>('off')
+type FacilitatorLevel = 'off' | 'light' | 'normal' | 'active'
+const FACILITATOR_LEVELS: readonly FacilitatorLevel[] = ['off', 'light', 'normal', 'active']
+const facLevel = ref<FacilitatorLevel>('off')
 const facBaseUrl = ref('')
 const facModel = ref('')
 const facKey = ref('')
@@ -113,11 +134,11 @@ const testResults = ref<Record<string, { ok: boolean; message: string }>>({})
 
 type Tab = 'audio' | 'ai' | 'general'
 const tab = ref<Tab>('audio')
-const TABS: Array<{ id: Tab; label: string; icon: string }> = [
-	{ id: 'audio', label: 'Audio', icon: mdiMicrophoneOutline },
-	{ id: 'ai', label: 'AI analysis', icon: mdiBrain },
-	{ id: 'general', label: 'General', icon: mdiCogOutline },
-]
+const tabs = computed<Array<{ id: Tab; label: string; icon: string }>>(() => [
+	{ id: 'audio', label: t('organizer.settings.tabs.audio'), icon: mdiMicrophoneOutline },
+	{ id: 'ai', label: t('organizer.settings.tabs.ai'), icon: mdiBrain },
+	{ id: 'general', label: t('organizer.settings.tabs.general'), icon: mdiCogOutline },
+])
 
 function logoUrl(): string {
 	return `${BASE}/api/v1/admin/logo?v=${logoVersion.value}`
@@ -129,7 +150,7 @@ async function uploadLogo(event: Event): Promise<void> {
 	input.value = ''
 	if (!file) return
 	if (file.size > 1_000_000) {
-		error.value = 'Logo must be 1 MB or smaller'
+		error.value = t('organizer.settings.branding.tooLarge')
 		return
 	}
 	busy.value = true
@@ -141,7 +162,7 @@ async function uploadLogo(event: Event): Promise<void> {
 		await api.uploadLogo(btoa(binary))
 		logoSet.value = true
 		logoVersion.value += 1
-		toast('Logo saved — it will appear on PDF reports')
+		toast(t('organizer.settings.branding.logoSaved'))
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	} finally {
@@ -154,7 +175,7 @@ async function removeLogo(): Promise<void> {
 	try {
 		await api.deleteLogo()
 		logoSet.value = false
-		toast('Logo removed')
+		toast(t('organizer.settings.branding.logoRemoved'))
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	} finally {
@@ -346,7 +367,7 @@ async function save(): Promise<void> {
 		analysisKey.value = ''
 		facKey.value = ''
 		saved.value = snapshot()
-		toast('Settings saved')
+		toast(t('organizer.settings.page.settingsSaved'))
 	} catch (err) {
 		error.value = describeError(err).message
 	} finally {
@@ -395,7 +416,9 @@ async function test(target: SttProvider | 'analysis' | 'facilitator'): Promise<v
 }
 
 function keyPlaceholder(configured: boolean, hint: string): string {
-	return configured ? `configured — ${hint} (type to replace)` : 'Paste API key'
+	return configured
+		? t('organizer.settings.audio.keyConfigured', { hint })
+		: t('organizer.settings.audio.pasteKey')
 }
 </script>
 
@@ -403,13 +426,13 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 	<div class="cz-page">
 		<div class="cz-pagehead">
 			<div>
-				<h2>Speech &amp; AI settings</h2>
+				<h2>{{ t('organizer.settings.page.title') }}</h2>
 				<p class="cz-muted" style="margin: 4px 0 0">
-					API keys are stored encrypted in Nextcloud and never reach browsers or table phones.
+					{{ t('organizer.settings.page.lead') }}
 				</p>
 			</div>
 			<CzButton variant="primary" :disabled="busy || !summary" @click="save">
-				{{ busy ? 'Saving…' : dirty ? 'Save settings' : 'Saved' }}
+				{{ busy ? t('organizer.settings.page.saving') : dirty ? t('organizer.settings.page.save') : t('organizer.settings.page.saved') }}
 			</CzButton>
 		</div>
 
@@ -418,8 +441,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 		     on a tab they are not looking at. Saying so is cheaper than
 		     splitting the form, and it is the surprise that mattered. -->
 		<p v-if="dirty" class="cz-muted cz-text-sm" style="margin: 0 0 12px">
-			You have unsaved changes. Saving applies every setting on every tab,
-			not only this one.
+			{{ t('organizer.settings.page.unsaved') }}
 		</p>
 
 		<div v-if="error" class="cz-error">{{ error }}</div>
@@ -428,7 +450,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 		<template v-if="summary">
 			<div class="cz-tabs" role="tablist">
 				<button
-					v-for="item in TABS"
+					v-for="item in tabs"
 					:key="item.id"
 					class="cz-tab"
 					:class="{ 'cz-tab--active': tab === item.id }"
@@ -443,45 +465,33 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 			<div v-show="tab === 'audio'" class="cz-card">
 				<div class="cz-row" style="margin-bottom: 14px">
 					<SvgIcon :path="mdiMicrophoneOutline" :size="22" style="color: var(--cz-primary)" />
-					<h3>Transcription</h3>
+					<h3>{{ t('organizer.settings.audio.title') }}</h3>
 				</div>
 
 				<div class="cz-row" style="margin-bottom: 16px">
-					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'mistral' }">
-						<input v-model="sttProvider" type="radio" value="mistral" />
-						<SvgIcon v-if="sttProvider === 'mistral'" :path="mdiCheck" :size="16" />
-						Mistral (Voxtral)
-					</label>
-					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'deepgram' }">
-						<input v-model="sttProvider" type="radio" value="deepgram" />
-						<SvgIcon v-if="sttProvider === 'deepgram'" :path="mdiCheck" :size="16" />
-						Deepgram
-					</label>
-					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'whisper' }">
-						<input v-model="sttProvider" type="radio" value="whisper" />
-						<SvgIcon v-if="sttProvider === 'whisper'" :path="mdiCheck" :size="16" />
-						Whisper (OpenAI-compatible)
-					</label>
-					<label class="cz-radiocard" :class="{ 'cz-radiocard--checked': sttProvider === 'vosk' }">
-						<input v-model="sttProvider" type="radio" value="vosk" />
-						<SvgIcon v-if="sttProvider === 'vosk'" :path="mdiCheck" :size="16" />
-						Vosk (offline)
+					<label
+						v-for="provider in STT_PROVIDERS"
+						:key="provider"
+						class="cz-radiocard"
+						:class="{ 'cz-radiocard--checked': sttProvider === provider }">
+						<input v-model="sttProvider" type="radio" :value="provider" />
+						<SvgIcon v-if="sttProvider === provider" :path="mdiCheck" :size="16" />
+						{{ providerLabel[provider] }}
 					</label>
 				</div>
 
 				<p style="font-size: 0.875rem; margin: -4px 0 10px">
-					Selected service: <strong style="color: var(--cz-primary)">{{ PROVIDER_LABELS[sttProvider] }}</strong>
-					— the fields below configure it.
+					{{ t('organizer.settings.audio.selectedService') }} <strong style="color: var(--cz-primary)">{{ providerLabel[sttProvider] }}</strong>
+					{{ t('organizer.settings.audio.selectedHint') }}
 				</p>
 				<p class="cz-muted" style="font-size: 0.8125rem; margin: -6px 0 14px">
-					{{ CAPTION_NOTE[sttProvider] }}
-					Captions are provisional — the canonical transcript is always produced from
-					the complete recording after the round.
+					{{ captionNote[sttProvider] }}
+					{{ t('organizer.settings.audio.provisional') }}
 				</p>
 
 				<div v-if="sttProvider === 'mistral'" class="cz-fieldgrid">
 					<div class="cz-field">
-						<label>Mistral API key</label>
+						<label>{{ t('organizer.settings.audio.mistral.key') }}</label>
 						<div class="cz-row" style="flex-wrap: nowrap">
 							<input
 								v-model="mistralKey"
@@ -489,7 +499,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								autocomplete="off"
 								style="flex: 1"
 								:placeholder="keyPlaceholder(summary.stt.mistral_configured, summary.stt.mistral_key_hint)" />
-							<CzButton small :disabled="busy" @click="test('mistral')">Test</CzButton>
+							<CzButton small :disabled="busy" @click="test('mistral')">{{ t('organizer.settings.audio.test') }}</CzButton>
 						</div>
 						<span v-if="testResults.mistral" class="cz-pill" :class="testResults.mistral.ok ? 'cz-pill--green' : 'cz-pill--orange'" style="text-transform: none; align-self: flex-start">
 							<SvgIcon :path="testResults.mistral.ok ? mdiCheck : mdiClose" :size="14" />
@@ -498,37 +508,36 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<div class="cz-modelhead">
-							<span>Live transcription (provisional captions)</span>
-							<span>Final transcription (canonical)</span>
+							<span>{{ t('organizer.settings.audio.liveHead') }}</span>
+							<span>{{ t('organizer.settings.audio.finalHead') }}</span>
 						</div>
 						<div class="cz-modelrow">
-							<input v-model="mistralLiveModel" type="text" placeholder="voxtral-mini-transcribe-realtime-2602" aria-label="Live transcription model" />
-							<input v-model="mistralBatchModel" type="text" placeholder="voxtral-mini-latest" aria-label="Final transcription model" />
+							<input v-model="mistralLiveModel" type="text" placeholder="voxtral-mini-transcribe-realtime-2602" :aria-label="t('organizer.settings.audio.liveModelAria')" />
+							<input v-model="mistralBatchModel" type="text" placeholder="voxtral-mini-latest" :aria-label="t('organizer.settings.audio.finalModelAria')" />
 						</div>
 						<div class="cz-modelhead cz-modelhead--hint">
-							<span>Voxtral Realtime. Billed separately from the final transcription.</span>
-							<span>Used for the canonical transcript after each round.</span>
+							<span>{{ t('organizer.settings.audio.mistral.liveHint') }}</span>
+							<span>{{ t('organizer.settings.audio.finalHint') }}</span>
 						</div>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<div class="cz-modelhead">
-							<span>Max concurrent live caption sessions</span>
-							<span>Max concurrent final transcriptions</span>
+							<span>{{ t('organizer.settings.audio.maxLive') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinal') }}</span>
 						</div>
 						<div class="cz-modelrow">
-							<input v-model.number="concurrency.mistral.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
-							<input v-model.number="concurrency.mistral.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+							<input v-model.number="concurrency.mistral.live" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxLive')" />
+							<input v-model.number="concurrency.mistral.batch" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxFinal')" />
 						</div>
 						<div class="cz-modelhead cz-modelhead--hint">
-							<span>Server-wide; one session per recording phone. Phones past the cap
-								keep recording — their captions wait for a free slot.</span>
-							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
+							<span>{{ t('organizer.settings.audio.maxLiveHint') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinalHint') }}</span>
 						</div>
 					</div>
 				</div>
 				<div v-else-if="sttProvider === 'deepgram'" class="cz-fieldgrid">
 					<div class="cz-field">
-						<label>Deepgram API key</label>
+						<label>{{ t('organizer.settings.audio.deepgram.key') }}</label>
 						<div class="cz-row" style="flex-wrap: nowrap">
 							<input
 								v-model="deepgramKey"
@@ -536,7 +545,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								autocomplete="off"
 								style="flex: 1"
 								:placeholder="keyPlaceholder(summary.stt.deepgram_configured, summary.stt.deepgram_key_hint)" />
-							<CzButton small :disabled="busy" @click="test('deepgram')">Test</CzButton>
+							<CzButton small :disabled="busy" @click="test('deepgram')">{{ t('organizer.settings.audio.test') }}</CzButton>
 						</div>
 						<span v-if="testResults.deepgram" class="cz-pill" :class="testResults.deepgram.ok ? 'cz-pill--green' : 'cz-pill--orange'" style="text-transform: none; align-self: flex-start">
 							<SvgIcon :path="testResults.deepgram.ok ? mdiCheck : mdiClose" :size="14" />
@@ -545,88 +554,79 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<div class="cz-modelhead">
-							<span>Live transcription (provisional captions)</span>
-							<span>Final transcription (canonical)</span>
+							<span>{{ t('organizer.settings.audio.liveHead') }}</span>
+							<span>{{ t('organizer.settings.audio.finalHead') }}</span>
 						</div>
 						<div class="cz-modelrow">
-							<input v-model="deepgramLiveModel" type="text" placeholder="nova-3" aria-label="Live transcription model" />
-							<input v-model="deepgramBatchModel" type="text" placeholder="nova-3" aria-label="Final transcription model" />
+							<input v-model="deepgramLiveModel" type="text" placeholder="nova-3" :aria-label="t('organizer.settings.audio.liveModelAria')" />
+							<input v-model="deepgramBatchModel" type="text" placeholder="nova-3" :aria-label="t('organizer.settings.audio.finalModelAria')" />
 						</div>
 						<div class="cz-modelhead cz-modelhead--hint">
-							<span>Streams natively and carries speaker labels.</span>
-							<span>Used for the canonical transcript after each round.</span>
+							<span>{{ t('organizer.settings.audio.deepgram.liveHint') }}</span>
+							<span>{{ t('organizer.settings.audio.finalHint') }}</span>
 						</div>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<div class="cz-modelhead">
-							<span>Max concurrent live caption sessions</span>
-							<span>Max concurrent final transcriptions</span>
+							<span>{{ t('organizer.settings.audio.maxLive') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinal') }}</span>
 						</div>
 						<div class="cz-modelrow">
-							<input v-model.number="concurrency.deepgram.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
-							<input v-model.number="concurrency.deepgram.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+							<input v-model.number="concurrency.deepgram.live" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxLive')" />
+							<input v-model.number="concurrency.deepgram.batch" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxFinal')" />
 						</div>
 						<div class="cz-modelhead cz-modelhead--hint">
-							<span>Server-wide; one session per recording phone. Phones past the cap
-								keep recording — their captions wait for a free slot.</span>
-							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
+							<span>{{ t('organizer.settings.audio.maxLiveHint') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinalHint') }}</span>
 						</div>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
-						<label>Live caption endpoint</label>
-						<input v-model="deepgramLiveUrl" type="text" placeholder="wss://api.deepgram.com/v1/listen" />
+						<label>{{ t('organizer.settings.audio.deepgram.endpoint') }}</label>
+						<input v-model="deepgramLiveUrl" type="text" :placeholder="DEEPGRAM_ENDPOINT_EXAMPLE" />
 						<span class="cz-muted" style="font-size: 0.78rem">
-							Any server speaking Deepgram's streaming protocol works here — for
-							example a self-hosted WhisperLiveKit, which keeps captions on your
-							own infrastructure.
+							{{ t('organizer.settings.audio.deepgram.endpointHint') }}
 						</span>
 					</div>
 				</div>
 
 				<div v-else-if="sttProvider === 'whisper'" class="cz-fieldgrid">
 					<div class="cz-field" style="grid-column: span 2">
-						<label>Endpoint base URL</label>
-						<input v-model="whisperBaseUrl" type="text" placeholder="https://api.openai.com/v1" />
+						<label>{{ t('organizer.settings.audio.whisper.baseUrl') }}</label>
+						<input v-model="whisperBaseUrl" type="text" :placeholder="WHISPER_BASE_URL_EXAMPLE" />
 						<span class="cz-muted" style="font-size: 0.78rem">
-							Any OpenAI-compatible transcription endpoint: OpenAI itself, or a server you
-							run (Speaches, whisper.cpp, LocalAI, vLLM, WhisperX). With your own server
-							the audio never leaves your infrastructure.
+							{{ t('organizer.settings.audio.whisper.baseUrlHint') }}
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<div class="cz-modelhead">
-							<span>Live transcription (provisional captions)</span>
-							<span>Final transcription (canonical)</span>
+							<span>{{ t('organizer.settings.audio.liveHead') }}</span>
+							<span>{{ t('organizer.settings.audio.finalHead') }}</span>
 						</div>
 						<div class="cz-modelrow">
-							<input v-model="whisperLiveModel" type="text" placeholder="same as final" aria-label="Live transcription model" />
-							<input v-model="whisperBatchModel" type="text" placeholder="whisper-1" aria-label="Final transcription model" />
+							<input v-model="whisperLiveModel" type="text" :placeholder="t('organizer.settings.audio.whisper.sameAsFinal')" :aria-label="t('organizer.settings.audio.liveModelAria')" />
+							<input v-model="whisperBatchModel" type="text" placeholder="whisper-1" :aria-label="t('organizer.settings.audio.finalModelAria')" />
 						</div>
 						<div class="cz-modelhead cz-modelhead--hint">
-							<span>Optional — captions re-transcribe a rolling window every few
-								seconds, so a smaller model keeps up more cheaply. Empty reuses the
-								final model.</span>
-							<span>A name containing “diarize” (e.g. gpt-4o-transcribe-diarize) is
-								requested in diarized mode and returns speaker labels.</span>
+							<span>{{ t('organizer.settings.audio.whisper.liveHint') }}</span>
+							<span>{{ t('organizer.settings.audio.whisper.finalHint') }}</span>
 						</div>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<div class="cz-modelhead">
-							<span>Max concurrent live caption sessions</span>
-							<span>Max concurrent final transcriptions</span>
+							<span>{{ t('organizer.settings.audio.maxLive') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinal') }}</span>
 						</div>
 						<div class="cz-modelrow">
-							<input v-model.number="concurrency.whisper.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
-							<input v-model.number="concurrency.whisper.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+							<input v-model.number="concurrency.whisper.live" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxLive')" />
+							<input v-model.number="concurrency.whisper.batch" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxFinal')" />
 						</div>
 						<div class="cz-modelhead cz-modelhead--hint">
-							<span>Server-wide; one session per recording phone. Phones past the cap
-								keep recording — their captions wait for a free slot.</span>
-							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
+							<span>{{ t('organizer.settings.audio.maxLiveHint') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinalHint') }}</span>
 						</div>
 					</div>
 					<div class="cz-field">
-						<label>API key (optional)</label>
+						<label>{{ t('organizer.settings.audio.whisper.key') }}</label>
 						<div class="cz-row" style="flex-wrap: nowrap">
 							<input
 								v-model="whisperKey"
@@ -634,55 +634,53 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								autocomplete="off"
 								style="flex: 1"
 								:placeholder="keyPlaceholder(summary.stt.whisper_configured, summary.stt.whisper_key_hint)" />
-							<CzButton small :disabled="busy" @click="test('whisper')">Test</CzButton>
+							<CzButton small :disabled="busy" @click="test('whisper')">{{ t('organizer.settings.audio.test') }}</CzButton>
 						</div>
 						<span v-if="testResults.whisper" class="cz-pill" :class="testResults.whisper.ok ? 'cz-pill--green' : 'cz-pill--orange'" style="text-transform: none; align-self: flex-start">
 							<SvgIcon :path="testResults.whisper.ok ? mdiCheck : mdiClose" :size="14" />
 							{{ testResults.whisper.message }}
 						</span>
 						<span class="cz-muted" style="font-size: 0.78rem">
-							Required by OpenAI; most self-hosted servers need none.
+							{{ t('organizer.settings.audio.whisper.keyHint') }}
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<span class="cz-muted" style="font-size: 0.78rem">
-							<strong>No speaker separation.</strong> Standard Whisper returns text with
-							timestamps but does not say who spoke, so transcripts and report quotes
-							appear without speaker labels. Servers that add diarization (WhisperX-based,
-							or OpenAI's diarizing model) are used automatically when they provide it.
+							<strong>{{ t('organizer.settings.audio.whisper.noDiarizationTitle') }}</strong>
+							{{ t('organizer.settings.audio.whisper.noDiarization') }}
 						</span>
 					</div>
 				</div>
 
 				<div v-else class="cz-fieldgrid">
 					<div class="cz-field" style="grid-column: span 2">
-						<label>Vosk server URL</label>
+						<label>{{ t('organizer.settings.audio.vosk.url') }}</label>
 						<div class="cz-row" style="flex-wrap: nowrap">
-							<input v-model="voskUrl" type="text" style="flex: 1" placeholder="ws://localhost:2700" />
-							<CzButton small :disabled="busy" @click="test('vosk')">Test</CzButton>
+							<input v-model="voskUrl" type="text" style="flex: 1" :placeholder="VOSK_URL_EXAMPLE" />
+							<CzButton small :disabled="busy" @click="test('vosk')">{{ t('organizer.settings.audio.test') }}</CzButton>
 						</div>
 						<span v-if="testResults.vosk" class="cz-pill" :class="testResults.vosk.ok ? 'cz-pill--green' : 'cz-pill--orange'" style="text-transform: none; align-self: flex-start">
 							<SvgIcon :path="testResults.vosk.ok ? mdiCheck : mdiClose" :size="14" />
 							{{ testResults.vosk.message }}
 						</span>
 						<span class="cz-muted" style="font-size: 0.78rem">
-							A vosk-server instance you run (for example the alphacep/kaldi-en image on
-							port 2700). No API key, no internet: audio never leaves your network.
+							{{ t('organizer.settings.audio.vosk.urlHint') }}
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
-						<label>Model for each language</label>
-						<span class="cz-muted" style="font-size: 0.78rem; margin-bottom: 10px">
-							Vosk needs its own model per language, and one server holds several. The
-							language you choose for an assembly picks the model. Type the model
-							<strong>name</strong> — switching model is editing this name. Leave a
-							language empty until you need it; download a model with
-							<code>scripts/vosk-model.sh &lt;name&gt;</code>.
-						</span>
+						<label>{{ t('organizer.settings.audio.vosk.perLanguage') }}</label>
+						<i18n-t
+							keypath="organizer.settings.audio.vosk.perLanguageHint"
+							tag="span"
+							class="cz-muted"
+							style="font-size: 0.78rem; margin-bottom: 10px">
+							<template #name><strong>{{ t('organizer.settings.audio.vosk.perLanguageName') }}</strong></template>
+							<template #command><code>{{ VOSK_COMMAND_EXAMPLE }}</code></template>
+						</i18n-t>
 						<div class="cz-modelhead" style="grid-template-columns: 78px 1fr 1fr">
-							<span>Language</span>
-							<span>Live transcription (provisional captions)</span>
-							<span>Final transcription (canonical)</span>
+							<span>{{ t('organizer.settings.audio.vosk.language') }}</span>
+							<span>{{ t('organizer.settings.audio.liveHead') }}</span>
+							<span>{{ t('organizer.settings.audio.finalHead') }}</span>
 						</div>
 						<div
 							v-for="lang in ASSEMBLY_LANGUAGES"
@@ -693,81 +691,69 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 							<input
 								v-model="voskModels[lang.code].live"
 								type="text"
-								placeholder="not configured"
-								:aria-label="`Live caption model for ${lang.label}`" />
+								:placeholder="t('organizer.settings.audio.vosk.notConfigured')"
+								:aria-label="t('organizer.settings.audio.vosk.liveModelFor', { language: lang.label })" />
 							<input
 								v-model="voskModels[lang.code].final"
 								type="text"
-								placeholder="same as live"
-								:aria-label="`Final transcript model for ${lang.label}`" />
+								:placeholder="t('organizer.settings.audio.vosk.sameAsLive')"
+								:aria-label="t('organizer.settings.audio.vosk.finalModelFor', { language: lang.label })" />
 						</div>
 						<span class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
-							A blank final model reuses the live one. A language left entirely blank falls
-							back to whatever model the server started with, so a half-filled table never
-							stops a recording being transcribed.
+							{{ t('organizer.settings.audio.vosk.blankHint') }}
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<div class="cz-modelhead">
-							<span>Max concurrent live caption sessions</span>
-							<span>Max concurrent final transcriptions</span>
+							<span>{{ t('organizer.settings.audio.maxLive') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinal') }}</span>
 						</div>
 						<div class="cz-modelrow">
-							<input v-model.number="concurrency.vosk.live" type="number" min="1" max="100" aria-label="Max concurrent live caption sessions" />
-							<input v-model.number="concurrency.vosk.batch" type="number" min="1" max="100" aria-label="Max concurrent final transcriptions" />
+							<input v-model.number="concurrency.vosk.live" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxLive')" />
+							<input v-model.number="concurrency.vosk.batch" type="number" min="1" max="100" :aria-label="t('organizer.settings.audio.maxFinal')" />
 						</div>
 						<div class="cz-modelhead cz-modelhead--hint">
-							<span>Server-wide; one session per recording phone. Phones past the cap
-								keep recording — their captions wait for a free slot.</span>
-							<span>Server-wide, its own pool — a busy live event never blocks it.</span>
+							<span>{{ t('organizer.settings.audio.maxLiveHint') }}</span>
+							<span>{{ t('organizer.settings.audio.maxFinalHint') }}</span>
 						</div>
 					</div>
 					<div class="cz-field">
-						<label>Model label (optional)</label>
-						<input v-model="voskBatchModel" type="text" placeholder="vosk-model-small-it-0.22" />
+						<label>{{ t('organizer.settings.audio.vosk.label') }}</label>
+						<input v-model="voskBatchModel" type="text" :placeholder="VOSK_MODEL_EXAMPLE" />
 						<span class="cz-muted" style="font-size: 0.78rem">
-							Recorded with the transcript for reference, and used as the model only for a
-							language with no row above.
+							{{ t('organizer.settings.audio.vosk.labelHint') }}
 						</span>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<span class="cz-muted" style="font-size: 0.78rem">
-							<strong>Offline, but plainer output.</strong> Vosk returns lower-case text
-							without punctuation and does not separate speakers. It is the right choice
-							when nothing may leave the premises; Deepgram or a diarizing Whisper server
-							give a far more readable assembly record.
+							<strong>{{ t('organizer.settings.audio.vosk.plainTitle') }}</strong>
+							{{ t('organizer.settings.audio.vosk.plain') }}
 						</span>
 					</div>
 				</div>
 
 				<div class="cz-row" style="gap: 24px; margin-top: 4px">
 					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-						<input v-model="liveEnabled" type="checkbox" /> Live transcription (provisional captions)
+						<input v-model="liveEnabled" type="checkbox" /> {{ t('organizer.settings.audio.liveHead') }}
 					</label>
 					<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-						<input v-model="batchEnabled" type="checkbox" /> Final transcription (canonical)
+						<input v-model="batchEnabled" type="checkbox" /> {{ t('organizer.settings.audio.finalHead') }}
 					</label>
 				</div>
 				<span class="cz-muted" style="font-size: 0.78rem; display: block; margin-top: 8px">
 					<template v-if="liveEnabled && batchEnabled">
-						Tables see captions while they talk, and each recording is transcribed again
-						afterwards from the complete audio. The final transcript is the record and the
-						one the analysis reads.
+						{{ t('organizer.settings.audio.modes.both') }}
 					</template>
 					<template v-else-if="batchEnabled">
-						No captions during the round. Each recording is transcribed after it is
-						uploaded, and that transcript is the record.
+						{{ t('organizer.settings.audio.modes.finalOnly') }}
 					</template>
 					<template v-else-if="liveEnabled">
-						<strong>The captions are the record.</strong> Nothing is transcribed a second
-						time, so the analysis reads what was captured live — quicker and much cheaper,
-						but captions can miss speech the engine could not keep up with. The audio is
-						kept, so any table can be transcribed properly later from its Files tab.
+						<strong>{{ t('organizer.settings.audio.modes.liveOnlyTitle') }}</strong>
+						{{ t('organizer.settings.audio.modes.liveOnly') }}
 					</template>
 					<template v-else>
-						<strong style="color: var(--cz-danger)">Nothing will be transcribed.</strong> Recordings are
-						stored as audio and nothing else: no transcript, no analysis, and an empty
-						report. Tick at least one box unless you only want the audio.
+						<strong style="color: var(--cz-danger)">{{ t('organizer.settings.audio.modes.noneTitle') }}</strong>
+						{{ t('organizer.settings.audio.modes.none') }}
 					</template>
 				</span>
 			</div>
@@ -775,26 +761,26 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 			<div v-show="tab === 'ai'" class="cz-card">
 				<div class="cz-row" style="margin-bottom: 4px">
 					<SvgIcon :path="mdiBrain" :size="22" style="color: var(--cz-primary)" />
-					<h3>AI analysis</h3>
+					<h3>{{ t('organizer.settings.ai.title') }}</h3>
 				</div>
 				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
-					Any OpenAI-compatible endpoint works: Mistral (default), Ollama Cloud, a remote Ollama server, vLLM…
+					{{ t('organizer.settings.ai.lead') }}
 				</p>
 				<label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 14px">
 					<input v-model="analysisEnabled" type="checkbox" />
-					Run analysis automatically after each table is transcribed
+					{{ t('organizer.settings.ai.auto') }}
 				</label>
 				<div class="cz-fieldgrid">
 					<div class="cz-field" style="grid-column: span 2">
-						<label>Base URL</label>
-						<input v-model="analysisBaseUrl" type="text" placeholder="https://api.mistral.ai/v1" />
+						<label>{{ t('organizer.settings.ai.baseUrl') }}</label>
+						<input v-model="analysisBaseUrl" type="text" :placeholder="ANALYSIS_BASE_URL_EXAMPLE" />
 					</div>
 					<div class="cz-field">
-						<label>Model</label>
+						<label>{{ t('organizer.settings.ai.model') }}</label>
 						<input v-model="analysisModel" type="text" placeholder="mistral-large-latest" />
 					</div>
 					<div class="cz-field">
-						<label>API key</label>
+						<label>{{ t('organizer.settings.ai.key') }}</label>
 						<div class="cz-row" style="flex-wrap: nowrap">
 							<input
 								v-model="analysisKey"
@@ -802,7 +788,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								autocomplete="off"
 								style="flex: 1"
 								:placeholder="keyPlaceholder(summary.analysis.configured, summary.analysis.key_hint)" />
-							<CzButton small :disabled="busy" @click="test('analysis')">Test</CzButton>
+							<CzButton small :disabled="busy" @click="test('analysis')">{{ t('organizer.settings.audio.test') }}</CzButton>
 						</div>
 						<span v-if="testResults.analysis" class="cz-pill" :class="testResults.analysis.ok ? 'cz-pill--green' : 'cz-pill--orange'" style="text-transform: none; align-self: flex-start">
 							<SvgIcon :path="testResults.analysis.ok ? mdiCheck : mdiClose" :size="14" />
@@ -812,49 +798,44 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 				</div>
 
 				<div class="cz-field" style="margin-top: 12px">
-					<label>Additional analysis instructions (optional)</label>
+					<label>{{ t('organizer.settings.ai.extra') }}</label>
 					<textarea
 						v-model="analysisExtra"
 						rows="4"
-						placeholder="E.g. Focus on transport and housing topics. Use formal Italian. Treat 'PUMS' as the city's mobility plan."></textarea>
+						:placeholder="t('organizer.settings.ai.extraPlaceholder')"></textarea>
 					<span class="cz-muted" style="font-size: 0.78rem">
-						Appended to the built-in prompts for table and round analysis. The output
-						format and the mandatory evidence links cannot be overridden.
+						{{ t('organizer.settings.ai.extraHint') }}
 					</span>
 				</div>
 
 				<!-- the AI facilitator: opt-in, its own model, conservative by design -->
 				<div class="cz-row" style="margin: 22px 0 4px">
 					<SvgIcon :path="mdiAccountVoice" :size="22" style="color: var(--cz-primary)" />
-					<h3>AI facilitator</h3>
+					<h3>{{ t('organizer.settings.facilitator.title') }}</h3>
 				</div>
 				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 10px">
-					A quiet voice beside each table during a session: one short question or reminder
-					when time runs out, the room goes silent, the discussion drifts or — where the
-					engine labels speakers — one voice dominates. It reaches the facilitator's own
-					phone first and the table's phones only when no facilitator phone is connected.
-					Each assembly can pick its own level; this is the default.
+					{{ t('organizer.settings.facilitator.lead') }}
 				</p>
 				<div class="cz-field" data-test="facilitator-level">
-					<label>Default level for new assemblies</label>
+					<label>{{ t('organizer.settings.facilitator.level') }}</label>
 					<div class="cz-row" style="gap: 14px; flex-wrap: wrap">
-						<label v-for="level in (['off', 'light', 'normal', 'active'] as const)" :key="level" style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+						<label v-for="level in FACILITATOR_LEVELS" :key="level" style="display: flex; align-items: center; gap: 6px; cursor: pointer">
 							<input v-model="facLevel" type="radio" :value="level" />
-							{{ { off: 'Off', light: 'Light (2 per session)', normal: 'Normal (4)', active: 'Active (8)' }[level] }}
+							{{ t(`organizer.settings.facilitator.levels.${level}`) }}
 						</label>
 					</div>
 				</div>
 				<div class="cz-fieldgrid" style="margin-top: 10px">
 					<div class="cz-field" style="grid-column: span 2">
-						<label>Base URL (blank: the analysis endpoint)</label>
+						<label>{{ t('organizer.settings.facilitator.baseUrl') }}</label>
 						<input v-model="facBaseUrl" type="text" :placeholder="analysisBaseUrl || 'https://api.mistral.ai/v1'" />
 					</div>
 					<div class="cz-field">
-						<label>Model (blank: the analysis model)</label>
+						<label>{{ t('organizer.settings.facilitator.model') }}</label>
 						<input v-model="facModel" type="text" :placeholder="analysisModel || 'mistral-small-latest'" />
 					</div>
 					<div class="cz-field">
-						<label>API key (blank: the analysis key)</label>
+						<label>{{ t('organizer.settings.facilitator.key') }}</label>
 						<div class="cz-row" style="flex-wrap: nowrap">
 							<input
 								v-model="facKey"
@@ -862,7 +843,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 								autocomplete="off"
 								style="flex: 1"
 								:placeholder="keyPlaceholder(summary.facilitator?.own_key ?? false, summary.facilitator?.key_hint ?? '')" />
-							<CzButton small :disabled="busy" data-test="test-facilitator" @click="test('facilitator')">Test</CzButton>
+							<CzButton small :disabled="busy" data-test="test-facilitator" @click="test('facilitator')">{{ t('organizer.settings.audio.test') }}</CzButton>
 						</div>
 						<span v-if="testResults.facilitator" class="cz-pill" :class="testResults.facilitator.ok ? 'cz-pill--green' : 'cz-pill--orange'" style="text-transform: none; align-self: flex-start">
 							<SvgIcon :path="testResults.facilitator.ok ? mdiCheck : mdiClose" :size="14" />
@@ -871,19 +852,19 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					</div>
 				</div>
 				<CzButton variant="tertiary" small style="margin-top: 8px" @click="facAdvanced = !facAdvanced">
-					{{ facAdvanced ? 'Hide thresholds' : 'Thresholds…' }}
+					{{ facAdvanced ? t('organizer.settings.facilitator.hideThresholds') : t('organizer.settings.facilitator.showThresholds') }}
 				</CzButton>
 				<div v-if="facAdvanced" class="cz-fieldgrid" style="margin-top: 8px" data-test="facilitator-thresholds">
 					<div class="cz-field">
-						<label>Minutes between two nudges at a table</label>
+						<label>{{ t('organizer.settings.facilitator.interval') }}</label>
 						<input v-model.number="facInterval" type="number" min="1" max="60" />
 					</div>
 					<div class="cz-field">
-						<label>One voice above this share counts as dominating (%)</label>
+						<label>{{ t('organizer.settings.facilitator.dominance') }}</label>
 						<input v-model.number="facDominance" type="number" min="40" max="95" />
 					</div>
 					<div class="cz-field">
-						<label>Seconds of silence before an open question</label>
+						<label>{{ t('organizer.settings.facilitator.silence') }}</label>
 						<input v-model.number="facSilence" type="number" min="20" max="600" />
 					</div>
 				</div>
@@ -893,12 +874,12 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 					class="cz-linklike"
 					style="background: none; border: none; padding: 0; color: var(--cz-primary); cursor: pointer; font-size: 0.8125rem"
 					@click="showPrompts = !showPrompts">
-					{{ showPrompts ? 'Hide built-in prompts' : 'Show the built-in prompts your instructions are appended to' }}
+					{{ showPrompts ? t('organizer.settings.ai.hidePrompts') : t('organizer.settings.ai.showPrompts') }}
 				</button>
 				<div v-if="showPrompts && summary.analysis.default_prompts" style="margin-top: 10px">
-					<p class="cz-muted" style="font-size: 0.75rem; margin-bottom: 4px">TABLE ANALYSIS (read-only)</p>
+					<p class="cz-muted" style="font-size: 0.75rem; margin-bottom: 4px">{{ t('organizer.settings.ai.tablePrompt') }}</p>
 					<pre class="cz-promptbox">{{ summary.analysis.default_prompts.table }}</pre>
-					<p class="cz-muted" style="font-size: 0.75rem; margin: 10px 0 4px">ROUND AGGREGATION (read-only)</p>
+					<p class="cz-muted" style="font-size: 0.75rem; margin: 10px 0 4px">{{ t('organizer.settings.ai.roundPrompt') }}</p>
 					<pre class="cz-promptbox">{{ summary.analysis.default_prompts.round }}</pre>
 				</div>
 			</div>
@@ -906,23 +887,23 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 			<div v-show="tab === 'general'" class="cz-card">
 				<div class="cz-row" style="margin-bottom: 4px">
 					<SvgIcon :path="mdiDeleteClockOutline" :size="22" style="color: var(--cz-primary)" />
-					<h3>Audio retention</h3>
+					<h3>{{ t('organizer.settings.retention.title') }}</h3>
 				</div>
-				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
-					Delete the raw audio of an assembly this many days after it is
-					<strong>closed</strong>. Transcripts, findings and reports are never
-					removed by this — only the recordings. Individual assemblies can
-					override it, and organizers can always delete audio sooner from the
-					Files tab.
-				</p>
+				<i18n-t
+					keypath="organizer.settings.retention.lead"
+					tag="p"
+					class="cz-muted"
+					style="font-size: 0.845rem; margin-bottom: 14px">
+					<template #closed><strong>{{ t('organizer.settings.retention.closed') }}</strong></template>
+				</i18n-t>
 				<div class="cz-field" style="max-width: 260px">
-					<label>Days to keep audio after closing</label>
+					<label>{{ t('organizer.settings.retention.days') }}</label>
 					<input v-model.number="retentionDays" type="number" min="0" max="3650" />
 					<p class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
 						{{
 							Number(retentionDays) > 0
-								? `Audio is deleted ${retentionDays} days after an assembly is closed. Table phones are told this before recording.`
-								: 'Audio is kept until someone deletes it. Table phones are told this before recording.'
+								? t('organizer.settings.retention.deletedAfter', { days: retentionDays })
+								: t('organizer.settings.retention.keptForever')
 						}}
 					</p>
 				</div>
@@ -931,48 +912,42 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 			<div v-show="tab === 'general'" class="cz-card">
 				<div class="cz-row" style="margin-bottom: 4px">
 					<SvgIcon :path="mdiShieldAccountOutline" :size="22" style="color: var(--cz-primary)" />
-					<h3>Organization data</h3>
+					<h3>{{ t('organizer.settings.org.title') }}</h3>
 				</div>
 				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
-					The notice people read before registering at a table is written by the
-					server from these fields and the live data-handling facts (the selected
-					transcription and analysis providers, retention, the phones' local copy),
-					in the assembly's language; every consent is stored with the hash of the
-					text as shown. Blank fields are simply left out of the notice. The same
-					data fills the printed event kit and the paper form.
+					{{ t('organizer.settings.org.lead') }}
 				</p>
 				<div class="cz-field" style="max-width: 420px">
-					<label>Data controller (legal name)</label>
-					<input v-model="consentController" type="text" :placeholder="orgName || 'The organiser'" />
+					<label>{{ t('organizer.settings.org.controller') }}</label>
+					<input v-model="consentController" type="text" :placeholder="orgName || t('organizer.settings.org.controllerPlaceholder')" />
 					<p class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
-						Who is responsible for the data. Empty: the organization name.
+						{{ t('organizer.settings.org.controllerHint') }}
 					</p>
 				</div>
 				<div class="cz-field" style="max-width: 420px">
-					<label>Postal address</label>
-					<input v-model="orgAddress" type="text" placeholder="Piazza Maggiore 6, 40124 Bologna" />
+					<label>{{ t('organizer.settings.org.address') }}</label>
+					<input v-model="orgAddress" type="text" :placeholder="ORG_ADDRESS_EXAMPLE" />
 				</div>
 				<div class="cz-field" style="max-width: 420px">
-					<label>Contact for data requests (email)</label>
-					<input v-model="consentContact" type="text" placeholder="privacy@example.org" />
+					<label>{{ t('organizer.settings.org.contact') }}</label>
+					<input v-model="consentContact" type="text" :placeholder="ORG_CONTACT_EMAIL_EXAMPLE" />
 				</div>
 				<div class="cz-field" style="max-width: 420px">
-					<label>Data protection contact (DPO)</label>
-					<input v-model="orgDpo" type="text" placeholder="Name · dpo@example.org" />
+					<label>{{ t('organizer.settings.org.dpo') }}</label>
+					<input v-model="orgDpo" type="text" :placeholder="t('organizer.settings.org.dpoPlaceholder')" />
 				</div>
 				<div class="cz-field" style="max-width: 420px">
-					<label>Hosting provider and country</label>
-					<input v-model="orgHosting" type="text" placeholder="Hetzner, Germany (EU)" />
+					<label>{{ t('organizer.settings.org.hosting') }}</label>
+					<input v-model="orgHosting" type="text" :placeholder="t('organizer.settings.org.hostingPlaceholder')" />
 					<p class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
-						Where this server runs — "Where your data is kept" in the notice.
+						{{ t('organizer.settings.org.hostingHint') }}
 					</p>
 				</div>
 				<div class="cz-field" style="max-width: 420px">
-					<label>Supervisory authority</label>
-					<input v-model="orgAuthority" type="text" placeholder="Garante per la protezione dei dati personali" />
+					<label>{{ t('organizer.settings.org.authority') }}</label>
+					<input v-model="orgAuthority" type="text" :placeholder="ORG_AUTHORITY_EXAMPLE" />
 					<p class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
-						Where a complaint goes. Empty: the Italian Garante for Italian assemblies,
-						"the data protection authority of your country" otherwise.
+						{{ t('organizer.settings.org.authorityHint') }}
 					</p>
 				</div>
 			</div>
@@ -980,28 +955,27 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 			<div v-show="tab === 'general'" class="cz-card">
 				<div class="cz-row" style="margin-bottom: 4px">
 					<SvgIcon :path="mdiImageOutline" :size="22" style="color: var(--cz-primary)" />
-					<h3>Organization</h3>
+					<h3>{{ t('organizer.settings.branding.title') }}</h3>
 				</div>
 				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 14px">
-					Name and logo appear on the header and footer of PDF reports.
-					Logo: PNG or JPEG, up to 1&nbsp;MB.
+					{{ t('organizer.settings.branding.lead') }}
 				</p>
 				<div class="cz-field" style="max-width: 420px">
-					<label>Organization name</label>
-					<input v-model="orgName" type="text" placeholder="Democracy Innovators" />
+					<label>{{ t('organizer.settings.branding.name') }}</label>
+					<input v-model="orgName" type="text" :placeholder="ORG_NAME_EXAMPLE" />
 				</div>
 				<div class="cz-row" style="align-items: center; gap: 16px">
 					<img
 						v-if="logoSet"
 						:src="logoUrl()"
-						alt="Organization logo"
+						:alt="t('organizer.settings.branding.logoAlt')"
 						style="max-height: 56px; max-width: 200px; border: 1px solid var(--cz-border); border-radius: 8px; padding: 6px; background: #fff" />
 					<label class="cz-btn cz-btn--secondary" style="cursor: pointer">
-						{{ logoSet ? 'Replace logo' : 'Upload logo' }}
+						{{ logoSet ? t('organizer.settings.branding.replaceLogo') : t('organizer.settings.branding.uploadLogo') }}
 						<input type="file" accept="image/png,image/jpeg" style="display: none" @change="uploadLogo" />
 					</label>
 					<CzButton v-if="logoSet" small variant="tertiary" :disabled="busy" @click="removeLogo">
-						Remove
+						{{ t('organizer.settings.branding.remove') }}
 					</CzButton>
 				</div>
 			</div>

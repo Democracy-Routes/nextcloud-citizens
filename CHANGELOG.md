@@ -177,6 +177,26 @@ not rewritten.
   `POST/GET /api/v1/assemblies/{id}/registration-link`, `GET
   /api/v1/public/recorder/participants/search`, `POST
   /api/v1/public/recorder/participants/{id}/seat`.
+- **Plan → Run → Results.** An assembly's nine tabs are grouped into three
+  spaces under a timeline of its sessions (state pills, the live one
+  highlighted; a click opens the Live tab on it): *Plan* (Overview,
+  Sessions, Participants, Tables, QR codes), *Run* (Live), *Results*
+  (Analysis, Report, Files). The page opens where the event is — Plan before
+  it starts, Run while a session is live, Results once it is closed — and
+  every old tab id keeps working.
+- **The organizer UI speaks Italian.** Every organizer screen — Home, the
+  wizards, the assembly's tabs, the Live tab's readiness wording, the
+  Analysis/Report/Files tabs, Settings — follows the Nextcloud user's
+  language (English or Italian), with the recorder's vocabulary (Sessione,
+  Tavolo, Assemblea…). Catalogues live in
+  `frontend/src/i18n/organizer/<area>.{en,it}.json`; a guard spec fails the
+  build on any English literal left in an organizer template, toast or
+  prose attribute, and the parity spec on any key missing in one language.
+- **Vocabulary sweep.** The organizer UI now uses the room's words
+  everywhere: "Whole room" instead of "Plenary", "Shared code" instead of
+  "Room recording code", "Session" instead of "Round" as a label (API names
+  and the report's "Round N" headings are unchanged), and "Hand over table"
+  wording where "replacement device" survived.
 - **The facilitator's own phone.** Any table screen (and the recording
   screen's tech sheet) offers *Add facilitator*: a code the facilitator scans
   with their own phone (`#/facilitate/<token>`, reusable for the session).

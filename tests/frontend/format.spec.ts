@@ -10,6 +10,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import { bytes, clockTime, duration, relativeAge, timestamp } from '../../frontend/src/format'
+import { installOrganizerCatalogue } from '../../frontend/src/i18n/organizer'
+
+// the suffixes ("5m ago", "MB") come from the organizer catalogue
+installOrganizerCatalogue()
 
 describe('duration', () => {
 	it('is always zero-padded', () => {

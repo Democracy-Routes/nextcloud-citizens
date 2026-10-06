@@ -1,0 +1,251 @@
+{
+	"labels": {
+		"type": {
+			"proposal": "Proposta",
+			"agreement": "Punto di consenso",
+			"disagreement": "Punto di divergenza",
+			"concern": "Preoccupazione",
+			"question": "Domanda aperta",
+			"minority_position": "Posizione di minoranza",
+			"new_idea": "Idea emergente"
+		},
+		"typePlural": {
+			"proposal": "Proposte",
+			"agreement": "Punti di consenso",
+			"disagreement": "Punti di divergenza",
+			"concern": "Preoccupazioni emerse",
+			"question": "Domande aperte",
+			"minority_position": "Posizioni di minoranza",
+			"new_idea": "Idee emergenti"
+		},
+		"otherFindings": "Altri risultati",
+		"round": "Turno {position}",
+		"roundTitled": "Turno {position} — {title}"
+	},
+	"analysis": {
+		"pausedWhileEditing": "In pausa mentre modifichi",
+		"filterStatus": "Filtra per stato di revisione",
+		"filterType": "Filtra per tipo di risultato",
+		"filters": {
+			"all": "Tutti i risultati",
+			"draft": "Da revisionare",
+			"approved": "Approvati",
+			"rejected": "Scartati"
+		},
+		"allTypes": "Tutti i tipi",
+		"approveDrafts": "Approva {count} bozze | Approva {count} bozza | Approva {count} bozze",
+		"rerun": "Ripeti l'analisi",
+		"run": "Avvia l'analisi",
+		"noSessionsTitle": "Questa assemblea non ha ancora sessioni",
+		"noSessionsHint": "Aggiungi una sessione nella scheda Sessioni; i risultati compaiono qui quando i suoi tavoli sono stati analizzati.",
+		"inProgress": "Analisi in corso",
+		"running": "{count} in esecuzione",
+		"queued": "{count} in coda",
+		"waitingRetry": "{count} in attesa di un nuovo tentativo",
+		"cancelPending": "Annulla le analisi in coda",
+		"table": "Tavolo {number}",
+		"failed": "Analisi non riuscita",
+		"failedFor": "per {count} tavoli: | per {count} tavolo: | per {count} tavoli:",
+		"clusteringFailed": "Raggruppamento tra i tavoli non riuscito",
+		"rerunClustering": "Ripeti solo il raggruppamento",
+		"notConfiguredTitle": "L'analisi con l'IA non è configurata",
+		"notConfiguredHint": "Un amministratore deve aggiungere una chiave API per l'analisi (Mistral, Ollama Cloud o qualsiasi endpoint compatibile con OpenAI) nelle Impostazioni. L'analisi parte poi da sola dopo la trascrizione di ogni tavolo.",
+		"inProgressTitle": "Analisi in corso…",
+		"noFindingsTitle": "Ancora nessun risultato",
+		"inProgressHint": "I tavoli sono in analisi — i risultati compaiono qui automaticamente.",
+		"noFindingsHint": "I risultati compaiono automaticamente dopo che i tavoli sono stati registrati e trascritti, oppure avvia l'analisi manualmente.",
+		"runNow": "Avvia l'analisi adesso",
+		"noMatchTitle": "Nessun risultato corrisponde a questo filtro",
+		"noMatchHint": "Cambia i filtri qui sopra per vedere gli altri risultati di questa sessione.",
+		"comparison": {
+			"title": "Equilibrio degli interventi tra i tavoli",
+			"intro": "Ogni riga misura un tavolo da solo — le voci sono rilevate, non identificate, e il tempo di parola è una stima, non una misura di influenza.",
+			"colTable": "Tavolo",
+			"colVoices": "Voci",
+			"colLargest": "Quota maggiore",
+			"colSmallest": "Quota minore",
+			"colRatio": "Rapporto",
+			"recorderChanged": "registratore cambiato"
+		},
+		"acrossTables": "In tutti i tavoli",
+		"aggregatedFrom": "— aggregati da {count} tavoli | — aggregati da {count} tavolo | — aggregati da {count} tavoli",
+		"crossTableNote": "I risultati tra i tavoli vengono rigenerati ogni volta che un tavolo termina la sua analisi, revisioni comprese — revisionali dopo l'ultimo tavolo.",
+		"aiSummary": "SINTESI AI",
+		"analyzedNoFindings": "Analizzato — nessun risultato sostanziale per la domanda della sessione in questa discussione.",
+		"footer": "I risultati dell'IA restano bozze finché una persona non li approva; le sintesi sono descrizioni neutre generate dall'IA. Ogni risultato cita le prove nella trascrizione; “menzionato in N tavoli” non è mai una misura del sostegno dei partecipanti.",
+		"toast": {
+			"approved": "{count} risultati approvati | {count} risultato approvato | {count} risultati approvati",
+			"nothingToAnalyze": "Niente da analizzare — nessun tavolo ha ancora una trascrizione pronta",
+			"queued": "Analisi in coda per {count} tavoli | Analisi in coda per {count} tavolo | Analisi in coda per {count} tavoli",
+			"cancelledRunning": "{cancelled} analisi in coda annullate; {running} già in esecuzione verranno completate",
+			"cancelled": "{count} analisi in coda annullate | {count} analisi in coda annullata | {count} analisi in coda annullate",
+			"reclusterQueued": "Raggruppamento tra i tavoli in coda",
+			"reclusterAlready": "Il raggruppamento è già in coda"
+		},
+		"confirmApprove": {
+			"title": "Approvare tutti i risultati in bozza?",
+			"message": "{count} risultati in bozza di questa sessione verranno approvati e inclusi nel report. I risultati scartati non vengono toccati e potrai comunque modificarli o scartarli in seguito. | {count} risultato in bozza di questa sessione verrà approvato e incluso nel report. I risultati scartati non vengono toccati e potrai comunque modificarli o scartarli in seguito. | {count} risultati in bozza di questa sessione verranno approvati e inclusi nel report. I risultati scartati non vengono toccati e potrai comunque modificarli o scartarli in seguito.",
+			"confirm": "Approva tutte le bozze"
+		},
+		"confirmRerun": {
+			"title": "Ripetere l'analisi?",
+			"messageReviewed": "Tutti i risultati di questa sessione — compresi i {count} che hai già approvato o modificato — vengono sostituiti da un nuovo insieme generato da zero. Le revisioni fatte finora andranno rifatte.",
+			"messageDrafts": "Tutti i risultati in bozza di questa sessione vengono sostituiti da altri generati da zero.",
+			"confirm": "Ripeti l'analisi"
+		},
+		"confirmRecluster": {
+			"title": "Ripetere il raggruppamento tra i tavoli?",
+			"message": "I {count} risultati tra i tavoli che hai già approvato o modificato vengono sostituiti da un nuovo insieme generato da zero, insieme alle bozze. I risultati dei singoli tavoli non vengono toccati.",
+			"confirm": "Ripeti il raggruppamento"
+		},
+		"replaceWord": "sostituisci"
+	},
+	"report": {
+		"toast": {
+			"closed": "Assemblea chiusa — il report finale è pronto",
+			"reopened": "Assemblea riaperta — i tavoli possono registrare di nuovo",
+			"unpublished": "Il report non è più visibile sui telefoni dei tavoli",
+			"published": "Report pubblicato — i telefoni dei tavoli possono ora vederlo e scaricarlo",
+			"synthesisQueued": "Sintesi in coda — comparirà qui tra un minuto o due",
+			"refreshed": "La versione pubblicata ora corrisponde al report attuale",
+			"downloadFailed": "Non è stato possibile scaricare il report — controlla il blocco dei pop-up"
+		},
+		"finalTitle": "Report finale · chiuso il {date}",
+		"finalHint": "L'assemblea è chiusa: i tavoli non possono più registrare e questo è il report definitivo. I partecipanti continuano a leggere questa versione anche se riapri — approva altri risultati e premi Aggiorna per inviarli.",
+		"allDoneTitle": "Tutti i {count} tavoli hanno finito.",
+		"allDoneHint": "Chiudi l'assemblea per creare il report finale e abilitare i download.",
+		"interimTitle": "Report provvisorio — {complete} tavoli su {expected} hanno completato tutte le sessioni",
+		"interimHint": "Questa è un'anteprima di un'assemblea ancora in corso. Chiudendo l'assemblea si crea il report finale e si abilitano i download — potrai riaprirla in seguito.",
+		"close": "Chiudi l'assemblea e crea il report finale",
+		"updating": "Aggiornamento…",
+		"updatePublished": "Aggiorna la versione pubblicata",
+		"reopen": "Riapri l'assemblea",
+		"synthesis": {
+			"title": "Come si è sviluppata la discussione",
+			"haveLead": "Un capitolo che attraversa le sessioni, scritto a partire dalle loro sintesi e dai risultati tra i tavoli approvati",
+			"haveTail": "Viene rifatto alla chiusura, quando l'analisi di ogni sessione è completa.",
+			"none": "Quando almeno due sessioni hanno una sintesi, il modello di analisi scrive come la discussione si è mossa dalla prima sessione all'ultima. Avviene da solo alla chiusura; qui puoi generarlo prima.",
+			"queued": "In coda…",
+			"again": "Genera di nuovo",
+			"generate": "Genera la sintesi",
+			"carried": "Portato da una sessione alla successiva"
+		},
+		"includeDrafts": "Includi le bozze non revisionate (chiaramente contrassegnate)",
+		"preparing": "Preparazione…",
+		"pdf": "PDF",
+		"markdown": "Markdown",
+		"json": "JSON",
+		"downloadsLocked": "I download diventano disponibili quando l'assemblea è chiusa.",
+		"publishedTitle": "Pubblicato sui telefoni dei tavoli",
+		"unpublishedTitle": "Non ancora pubblicato sui telefoni dei tavoli",
+		"publishedHint": "I telefoni che registrano possono vedere questo report e scaricare il PDF (solo risultati approvati e sintesi AI — le bozze restano private).",
+		"unpublishedHint": "Pubblicando, i telefoni che registrano possono vedere questo report e scaricare il PDF. Vengono condivisi solo i risultati approvati e le sintesi AI.",
+		"unpublish": "Ritira la pubblicazione",
+		"publish": "Pubblica il report sui tavoli",
+		"emptyTitle": "Ancora niente da riportare",
+		"emptyHintDrafts": "Non esiste ancora nessun risultato — registra i tavoli e avvia prima l'analisi.",
+		"emptyHintApproved": "Ancora nessun risultato approvato. Approva i risultati nella scheda Analisi, oppure includi le bozze per un'anteprima.",
+		"assemblyReport": "{name} — Report dell'assemblea",
+		"participants": "{count} partecipanti | {count} partecipante | {count} partecipanti",
+		"tables": "{count} tavoli | {count} tavolo | {count} tavoli",
+		"acrossTables": "In tutti i tavoli",
+		"draftPill": "BOZZA — non ancora revisionata",
+		"mentionedAt": "Menzionato in {count} tavoli | Menzionato in {count} tavolo | Menzionato in {count} tavoli",
+		"speaker": "Partecipante",
+		"evidenceRemoved": "Prove rimosse con la trascrizione",
+		"table": "Tavolo {number}",
+		"aiSummary": "SINTESI AI",
+		"looksRight": "✓ {count} dicono che va bene | ✓ {count} dice che va bene | ✓ {count} dicono che va bene",
+		"flaggedMissing": "· ⚠ {count} hanno segnalato che manca qualcosa | · ⚠ {count} ha segnalato che manca qualcosa | · ⚠ {count} hanno segnalato che manca qualcosa",
+		"confirmClose": {
+			"title": "Chiudere l'assemblea e creare il report finale?",
+			"missingTables": "I tavoli {tables} non hanno mai registrato — non compariranno nel report finale. ",
+			"body": "Dopo la chiusura i tavoli non possono più registrare e il report diventa definitivo. Potrai riaprire l'assemblea in seguito se un tavolo in ritardo deve registrare.",
+			"confirm": "Chiudi l'assemblea"
+		},
+		"confirmUnpublish": {
+			"title": "Smettere di condividere il report con i tavoli?",
+			"message": "Ogni telefono di tavolo che sta leggendo il report ne perde subito l'accesso. Potrai pubblicarlo di nuovo in qualsiasi momento.",
+			"confirm": "Ritira la pubblicazione"
+		},
+		"confirmReopen": {
+			"title": "Riaprire questa assemblea?",
+			"message": "I tavoli possono registrare di nuovo e il report smette di essere definitivo. I partecipanti continuano a leggere la versione congelata alla chiusura, finché non la chiudi di nuovo.",
+			"confirm": "Riapri l'assemblea"
+		},
+		"confirmPublish": {
+			"title": "Pubblicare il report sui telefoni dei tavoli?",
+			"message": "Il telefono che registra a ogni tavolo potrà vedere questo report e scaricare il PDF. Vengono inclusi solo i risultati approvati e le sintesi AI — le bozze non revisionate restano private. Potrai ritirare la pubblicazione in qualsiasi momento.",
+			"confirm": "Pubblica"
+		}
+	},
+	"finding": {
+		"title": "Titolo",
+		"summary": "Sintesi",
+		"cancel": "Annulla",
+		"saveApprove": "Salva e approva",
+		"mentionedAt": "Menzionato in {count} tavoli | Menzionato in {count} tavolo | Menzionato in {count} tavoli",
+		"support": "sostegno: {support}",
+		"approve": "Approva",
+		"reject": "Scarta",
+		"edit": "Modifica",
+		"excerpts": "{count} estratti a sostegno | {count} estratto a sostegno | {count} estratti a sostegno",
+		"speaker": "PARTECIPANTE",
+		"status": {
+			"DRAFT": "bozza",
+			"APPROVED": "approvato",
+			"EDITED_AND_APPROVED": "modificato e approvato",
+			"REJECTED": "scartato"
+		},
+		"toast": {
+			"edited": "Risultato modificato e approvato",
+			"approved": "Risultato approvato",
+			"rejected": "Risultato scartato"
+		}
+	},
+	"speaking": {
+		"eyebrow": "EQUILIBRIO DEGLI INTERVENTI",
+		"caveat": "Il telefono che registrava questo tavolo è cambiato durante la sessione; le voci non possono essere abbinate tra le parti, quindi l'equilibrio riguarda solo la parte più completa.",
+		"ariaLabel": "Quota del tempo di parola per ogni voce rilevata",
+		"voice": "Voce {label}",
+		"others": "Altri",
+		"note": "Voci rilevate, non identificate per nome — dalla singola registrazione più nitida. Una stima del tempo di parola, non della partecipazione o dell'influenza."
+	},
+	"failure": {
+		"retrying": "Nuovo tentativo automatico — tentativo {attempt} di {max}.",
+		"retryingNext": "Nuovo tentativo automatico — tentativo {attempt} di {max}, il prossimo tra {seconds} s.",
+		"reason": {
+			"PROVIDER_AUTH": "Il fornitore ha rifiutato la chiave API o questo modello (HTTP 401/403). Controlla la chiave, il piano e il nome del modello nelle Impostazioni, poi riprova.",
+			"PROVIDER_RATE_LIMIT": "Il fornitore sta limitando le richieste (HTTP 429). L'operazione attende e riprova da sola — non avviarne un'altra.",
+			"PROVIDER_TIMEOUT": "Il fornitore non ha risposto in tempo. L'operazione riprova da sola; se continua a fallire, il fornitore è lento o irraggiungibile.",
+			"PROVIDER_HTTP": "Il fornitore ha restituito un errore. L'operazione riprova da sola, a meno che il fornitore non abbia rifiutato la richiesta del tutto.",
+			"SCHEMA_INVALID": "Il modello ha risposto, ma non nel formato richiesto, per tre volte di seguito. Riprova; se si ripete, prova un altro modello.",
+			"NOT_CONFIGURED": "Nessun fornitore è configurato per questo passaggio — aggiungi la chiave o l'endpoint nelle Impostazioni.",
+			"NO_TRANSCRIPT": "Non c'è nessuna trascrizione da analizzare. Trascrivi prima la registrazione.",
+			"AUDIO_MISSING": "Il file audio manca sul server, quindi non può essere trascritto di nuovo.",
+			"RERUN_EMPTY": "La nuova analisi non ha prodotto risultati per un tavolo che ne aveva già, quindi sono stati conservati i risultati precedenti. Non è andato perso nulla; ripeti l'analisi se volevi sostituirli.",
+			"CANCELLED": "Annullata da un organizzatore. Riavviala quando vuoi.",
+			"UNKNOWN": "Non è riuscita per un motivo che l'app non ha riconosciuto; il dettaglio qui sotto è quello registrato dal server."
+		},
+		"code": {
+			"STORAGE_FULL": "Il server ha esaurito lo spazio mentre assemblava questa registrazione. L'audio caricato è ancora qui — libera spazio, poi riprova.",
+			"CHUNKS_GONE": "Alcune parti del caricamento mancano dall'archivio, quindi l'audio non può essere ricostruito. Questo tavolo deve registrare di nuovo la sessione.",
+			"CHUNK_CORRUPTED": "Un frammento del caricamento non ha superato la verifica di integrità, quindi l'audio non è affidabile. Questo tavolo deve registrare di nuovo la sessione.",
+			"AUDIO_DELETED": "L'audio è stato eliminato mentre veniva assemblato.",
+			"UPLOAD_TIMED_OUT": "Il telefono ha smesso di caricare e non è più tornato. Quanto è arrivato al server è conservato; il tavolo può registrare di nuovo.",
+			"UPLOAD_ABANDONED": "Un organizzatore ha interrotto l'attesa di questo caricamento. L'audio già ricevuto è conservato.",
+			"RATE_LIMITED": "Il fornitore sta limitando le richieste (HTTP 429). L'operazione attende e riprova da sola — non avviarne un'altra.",
+			"LIVE_CAPTIONS_MISSING": "La trascrizione finale è disattivata e la sessione dei sottotitoli non ha mai scritto una trascrizione. Trascrivi di nuovo dall'audio conservato.",
+			"LIVE_CAPTIONS_UNREADABLE": "La trascrizione finale è disattivata e il file dei sottotitoli non è leggibile. Trascrivi di nuovo dall'audio conservato.",
+			"LIVE_CAPTIONS_EMPTY": "La trascrizione finale è disattivata e i sottotitoli non contenevano testo. Trascrivi di nuovo dall'audio conservato.",
+			"DEVICE_SILENT": "Il telefono è rimasto muto a metà sessione e il tavolo è stato liberato. Quanto è arrivato al server è conservato.",
+			"ROUND_CONTINUED": "Il tavolo ha terminato in anticipo mentre la sessione era ancora aperta, poi ha proseguito: questa è la prima parte della sessione, il resto è nella registrazione qui sotto."
+		},
+		"state": {
+			"AUDIO_INVALID": "L'audio caricato non ha superato la convalida.",
+			"TRANSCRIPTION_FAILED": "Il servizio di trascrizione non ha restituito una trascrizione. L'audio è intatto, quindi si può riprovare.",
+			"ANALYSIS_FAILED": "L'analisi con l'IA non è stata completata. La trascrizione è intatta, quindi si può ripetere.",
+			"UPLOAD_INCOMPLETE": "Non tutta la registrazione è arrivata al server."
+		}
+	}
+}
