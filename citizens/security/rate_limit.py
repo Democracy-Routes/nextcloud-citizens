@@ -55,6 +55,9 @@ HELP_LIMITER = SlidingWindowLimiter(max_events=6, window_seconds=60)
 # participants registered from one phone: a table of ten passing the phone
 # around takes minutes, not seconds
 PARTICIPANT_LIMITER = SlidingWindowLimiter(max_events=20, window_seconds=60)
+# a facilitator writing prompts to their table: a few a minute is facilitation,
+# more is a loop. Keyed by facilitator session.
+PROMPT_LIMITER = SlidingWindowLimiter(max_events=10, window_seconds=60)
 
 
 def token_key(token: str) -> str:

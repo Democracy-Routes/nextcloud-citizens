@@ -99,29 +99,41 @@ def post_message(
 
 
 def unseen_for(session: Session, recorder_session: RecorderSession) -> list[dict]:
-    """What this phone has not shown yet: the active session's messages for
-    every table or for this one, above the phone's receipt (or, without a
-    receipt, from the last few minutes)."""
+    return unseen_for_table(
+        session, recorder_session.assembly_id, recorder_session.table_number,
+        recorder_session.last_seen_message_id,
+    )
+
+
+def unseen_for_table(
+    session: Session, assembly_id: str, table_number: int, last_seen_message_id: int | None
+) -> list[dict]:
+    """What a phone at this table has not shown yet: the active session's
+    messages for every table or for this one, above the phone's receipt (or,
+    without a receipt, from the last few minutes). A facilitator's phone
+    beside the table reads the same list with its own receipt."""
     query = (
         select(SessionMessage)
         .join(Round, Round.id == SessionMessage.round_id)
         .where(
-            SessionMessage.assembly_id == recorder_session.assembly_id,
+            SessionMessage.assembly_id == assembly_id,
             Round.status == "ACTIVE",
             (SessionMessage.target_table_number.is_(None))
-            | (SessionMessage.target_table_number == recorder_session.table_number),
+            | (SessionMessage.target_table_number == table_number),
         )
     )
-    if recorder_session.last_seen_message_id is not None:
-        query = query.where(SessionMessage.id > recorder_session.last_seen_message_id)
+    if last_seen_message_id is not None:
+        query = query.where(SessionMessage.id > last_seen_message_id)
     else:
         query = query.where(SessionMessage.created_at >= utcnow() - FRESH_WINDOW)
     rows = session.execute(query.order_by(SessionMessage.id.desc()).limit(MAX_UNSEEN)).scalars()
     return [as_phone_dict(m) for m in reversed(list(rows))]
 
 
-def mark_seen(session: Session, recorder_session: RecorderSession, message_id: int) -> None:
-    """The phone's receipt: never moves backwards, never beyond its own event."""
+def mark_seen(session: Session, recorder_session, message_id: int) -> None:
+    """The phone's receipt: never moves backwards, never beyond its own event.
+    `recorder_session` is any row with `assembly_id` and
+    `last_seen_message_id` — a recorder's or a facilitator's."""
     exists = session.execute(
         select(func.count()).where(
             SessionMessage.id == message_id,
@@ -134,6 +146,16 @@ def mark_seen(session: Session, recorder_session: RecorderSession, message_id: i
         recorder_session.last_seen_message_id = message_id
 
 
+def author_of(created_by: str | None) -> str:
+    """Who is speaking, for the phone's banner: the organizer (a user), the
+    table's facilitator ("facilitator:<id>") or the AI facilitator ("ai")."""
+    if created_by == "ai" or (created_by or "").startswith("ai:"):
+        return "ai"
+    if (created_by or "").startswith("facilitator:"):
+        return "facilitator"
+    return "organizer"
+
+
 def as_phone_dict(message: SessionMessage) -> dict:
     return {
         "id": message.id,
@@ -141,6 +163,7 @@ def as_phone_dict(message: SessionMessage) -> dict:
         "text": message.text,
         "sound": message.sound,
         "created_at": message.created_at,
+        "author": author_of(message.created_by),
     }
 
 

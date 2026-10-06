@@ -99,7 +99,9 @@ onBeforeUnmount(() => window.clearInterval(ticker))
 					? t('recorder.table.addTableTitle')
 					: purpose === 'REGISTER_PARTICIPANT'
 						? t('recorder.table.registerTitle')
-						: t('recorder.table.addRecorderTitle')
+						: purpose === 'FACILITATE_TABLE'
+							? t('recorder.table.facilitatorTitle')
+							: t('recorder.table.addRecorderTitle')
 			}}
 		</p>
 		<TableBadge v-if="purpose !== 'ADD_TABLE'" :number="tableNumber" :color-key="colorKey" />
@@ -114,7 +116,9 @@ onBeforeUnmount(() => window.clearInterval(ticker))
 						? t('recorder.table.addTableHint')
 						: purpose === 'REGISTER_PARTICIPANT'
 							? t('recorder.table.registerHint')
-							: t('recorder.table.addRecorderHint')
+							: purpose === 'FACILITATE_TABLE'
+								? t('recorder.table.facilitatorHint')
+								: t('recorder.table.addRecorderHint')
 				}}
 			</p>
 			<p class="rc-muted" style="font-size: 0.8rem; margin: 6px 0 0">

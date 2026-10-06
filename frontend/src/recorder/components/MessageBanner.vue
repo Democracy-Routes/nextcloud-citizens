@@ -46,7 +46,15 @@ onBeforeUnmount(() => {
 	<div class="rc-message" :class="{ 'rc-message--compact': compact }" role="status" aria-live="polite">
 		<SvgIcon :path="mdiBullhornOutline" :size="compact ? 16 : 22" />
 		<div class="rc-message__body">
-			<span v-if="!compact" class="rc-message__from">{{ t('recorder.message.from') }}</span>
+			<span v-if="!compact" class="rc-message__from">
+				{{
+					message.author === 'facilitator'
+						? t('recorder.message.fromFacilitator')
+						: message.author === 'ai'
+							? t('recorder.message.fromAi')
+							: t('recorder.message.from')
+				}}
+			</span>
 			<strong class="rc-message__text">{{ message.text }}</strong>
 		</div>
 		<button type="button" class="rc-message__close" :aria-label="t('recorder.message.dismiss')" @click="emit('dismiss')">

@@ -17,8 +17,10 @@ import { setLocale } from '../i18n'
 import { decideOnStatusFailure } from './errors'
 import { hasUnfinishedAudio, purgeLocalAudio, type PurgeOutcome } from './purge'
 import ArmedScreen from './components/ArmedScreen.vue'
+import CapabilityQr from './components/CapabilityQr.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
 import ConfirmJoinScreen from './components/ConfirmJoinScreen.vue'
+import FacilitatorPage from './components/FacilitatorPage.vue'
 import JoinedScreen from './components/JoinedScreen.vue'
 import ParticipantPage from './components/ParticipantPage.vue'
 import Preflight from './components/Preflight.vue'
@@ -46,6 +48,7 @@ type Screen =
 	| 'report'
 	| 'register'
 	| 'participant'
+	| 'facilitate'
 	| 'error'
 
 const { t } = useI18n()
@@ -353,10 +356,106 @@ function participantRegistered(token: string): void {
 	} catch {
 		/* private mode: the page lasts until reload */
 	}
+	// a facilitator who registered for consent from their own page goes back
+	// to it; the registration stays on this phone like anyone else's
+	if (facilitatorToken.value) {
+		history.replaceState(null, '', window.location.pathname + window.location.search + '#/facilitator')
+		screen.value = 'facilitate'
+		return
+	}
 	// the code's token leaves the visible URL; a reload lands on the page
 	history.replaceState(null, '', window.location.pathname + window.location.search + '#/participant')
 	screen.value = 'participant'
 }
+
+/* ---- the facilitator's own phone (0.7 facilitator) ----
+ * recorder.html#/facilitate/<token> is the table phone's "Add facilitator"
+ * code. Redeeming it hands this browser a bearer for one table's view, kept
+ * under its own key: a facilitator's phone is neither a table phone nor a
+ * participant's, and may later become a recorder through the join route. */
+const FACILITATOR_KEY = 'citizens-facilitator-session'
+const facilitatorToken = ref<string | null>(null)
+const facilitatorBusy = ref(false)
+
+function facilitatorLoad(): string | null {
+	try {
+		return localStorage.getItem(FACILITATOR_KEY)
+	} catch {
+		return null
+	}
+}
+
+function facilitatorStore(token: string | null): void {
+	try {
+		if (token) localStorage.setItem(FACILITATOR_KEY, token)
+		else localStorage.removeItem(FACILITATOR_KEY)
+	} catch {
+		/* private mode: the page lasts until reload */
+	}
+}
+
+async function facilitateWithToken(code: string): Promise<void> {
+	facilitatorBusy.value = true
+	screen.value = 'joining'
+	try {
+		const joined = await recorderApi.facilitate(code)
+		facilitatorToken.value = joined.facilitator_token
+		facilitatorStore(joined.facilitator_token)
+		setLocale(joined.assembly.language)
+		history.replaceState(null, '', window.location.pathname + window.location.search + '#/facilitator')
+		screen.value = 'facilitate'
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+		screen.value = 'error'
+	} finally {
+		facilitatorBusy.value = false
+	}
+}
+
+function forgetFacilitator(): void {
+	facilitatorToken.value = null
+	facilitatorStore(null)
+	history.replaceState(null, '', window.location.pathname + window.location.search)
+	screen.value = 'no-invite'
+}
+
+/** The facilitator registers for consent: the table's registration code
+ * opens here, on the same phone, and the page comes back afterwards. */
+function facilitatorRegisters(code: string): void {
+	registerToken.value = code
+	screen.value = 'register'
+}
+
+/** This phone becomes a recorder of the table: the join route takes over,
+ * the facilitator view is left (its bearer is dropped — one role per phone). */
+function facilitatorBecomesRecorder(url: string): void {
+	const match = url.match(/#\/join\/(.+)$/)
+	if (!match) return
+	facilitatorToken.value = null
+	facilitatorStore(null)
+	window.location.hash = `#/join/${match[1]}`
+}
+
+/** The facilitator routes, before any join is attempted. */
+function facilitatorFromHash(): boolean {
+	const facilitate = window.location.hash.match(/#\/facilitate\/(.+)$/)
+	if (facilitate && !capturing.value && !facilitatorBusy.value) {
+		void facilitateWithToken(decodeURIComponent(facilitate[1]))
+		return true
+	}
+	if (/#\/facilitator$/.test(window.location.hash) || (!window.location.hash && !sessionLoad())) {
+		const stored = facilitatorLoad()
+		if (stored) {
+			facilitatorToken.value = stored
+			screen.value = 'facilitate'
+			return true
+		}
+	}
+	return false
+}
+
+/* ---- "Add facilitator" from a table screen: the code as a sheet ---- */
+const facilitatorSheet = ref(false)
 
 function forgetParticipant(): void {
 	participantToken.value = null
@@ -390,6 +489,7 @@ function participantFromHash(): boolean {
 
 async function joinFromHash(): Promise<boolean> {
 	if (participantFromHash()) return true
+	if (facilitatorFromHash()) return true
 	// A QR opened in this same tab can be a fragment-only navigation: Vue
 	// remains mounted. Do not tear down a live microphone to switch sessions.
 	const match = window.location.hash.match(/#\/join\/(.+)$/)
@@ -608,6 +708,7 @@ function sessionStorageClear(): void {
 			@ready="screen = 'armed'"
 			@start="startRound"
 			@participants="screen = 'consent'"
+			@facilitator="facilitatorSheet = true"
 			@report="screen = 'report'" />
 
 		<ArmedScreen
@@ -617,6 +718,7 @@ function sessionStorageClear(): void {
 			@start="startRound"
 			@back="screen = 'preflight'"
 			@participants="screen = 'consent'"
+			@facilitator="facilitatorSheet = true"
 			@report="screen = 'report'" />
 
 		<ReportScreen
@@ -638,6 +740,15 @@ function sessionStorageClear(): void {
 			:token="participantToken"
 			@forget="forgetParticipant" />
 
+		<!-- the facilitator's own phone: one table's view, never a recorder -->
+		<FacilitatorPage
+			v-else-if="screen === 'facilitate' && facilitatorToken"
+			:token="facilitatorToken"
+			:registered="participantToken !== null || participantLoad() !== null"
+			@forget="forgetFacilitator"
+			@register="facilitatorRegisters"
+			@become-recorder="facilitatorBecomesRecorder" />
+
 		<RecordingScreen
 			v-else-if="screen === 'recording' && session && selectedRound"
 			:key="`${selectedRound.id}:${startNonce}`"
@@ -647,6 +758,21 @@ function sessionStorageClear(): void {
 			@next-round="startRound"
 			@start-failed="startFailedRoundId = $event; capturing = false"
 			@settled="capturing = false"
+			@facilitator="facilitatorSheet = true"
 			@view-report="screen = 'report'" />
+
+		<!-- "Add facilitator": the code a facilitator's own phone scans, over
+		     whichever table screen asked for it -->
+		<div v-if="facilitatorSheet && session" class="rc-sheet-scrim" @click.self="facilitatorSheet = false">
+			<div class="rc-sheet" role="dialog" aria-modal="true">
+				<CapabilityQr
+					:token="session.session_token"
+					purpose="FACILITATE_TABLE"
+					:table-number="session.table_number"
+					:color-key="session.table_color"
+					:round-id="selectedRound?.id ?? null"
+					@close="facilitatorSheet = false" />
+			</div>
+		</div>
 	</div>
 </template>

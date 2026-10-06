@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiAccountVoice,
 	mdiAlert,
 	mdiCheckCircle,
 	mdiCloseCircle,
@@ -29,7 +30,14 @@ import { pickMimeType } from '../engine'
 import { idb } from '../idb'
 
 const props = defineProps<{ session: JoinResult }>()
-const emit = defineEmits<{ ready: []; start: [round: RoundInfo]; report: []; participants: [] }>()
+const emit = defineEmits<{
+	ready: []
+	start: [round: RoundInfo]
+	report: []
+	participants: []
+	/** show the code a facilitator's own phone scans to follow this table */
+	facilitator: []
+}>()
 
 const { t } = useI18n()
 
@@ -281,6 +289,11 @@ const STATE_CLASS: Record<CheckState, string> = {
 		<!-- a hand to raise only where there is an organizer to see it -->
 		<HelpButton v-if="session.assembly.kind !== 'session'" :token="session.session_token" :help="help" />
 		<ParticipantsLine :consent="consent" @open="emit('participants')" />
+		<!-- the facilitator's own phone follows this table from here -->
+		<button type="button" class="rc-facilitator-link" data-test="add-facilitator" @click="emit('facilitator')">
+			<SvgIcon :path="mdiAccountVoice" :size="16" />
+			{{ t('recorder.table.addFacilitator') }}
+		</button>
 
 		<div class="rc-scroll">
 		<!-- the table is done: its summaries and the report, nothing about microphones -->

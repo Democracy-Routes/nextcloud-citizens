@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiAccountVoice,
 	mdiBroadcast,
 	mdiCheckCircle,
 	mdiCloudUploadOutline,
@@ -36,6 +37,8 @@ const emit = defineEmits<{
 	exit: []
 	nextRound: [round: RoundInfo]
 	viewReport: []
+	/** show the code a facilitator's own phone scans to follow this table */
+	facilitator: []
 	/** recording could not be started for THIS round — armed must not
 	 * immediately send the table straight back in, whatever the cause */
 	startFailed: [roundId: string]
@@ -689,6 +692,13 @@ async function clearSynced(): Promise<void> {
 			</button>
 
 			<div v-if="techOpen" class="rc-card" style="padding: 8px 18px">
+				<!-- the facilitator's own phone can follow the table from mid-session too -->
+				<div class="rc-status-row">
+					<button type="button" class="rc-facilitator-link" style="margin: 0" data-test="add-facilitator" @click="emit('facilitator')">
+						<SvgIcon :path="mdiAccountVoice" :size="16" />
+						{{ t('recorder.table.addFacilitator') }}
+					</button>
+				</div>
 				<!-- the table's cues, a per-phone choice -->
 				<div class="rc-status-row">
 					<span class="rc-status-row__label">{{ t('recorder.recording.sounds') }}</span>

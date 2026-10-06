@@ -177,6 +177,18 @@ not rewritten.
   `POST/GET /api/v1/assemblies/{id}/registration-link`, `GET
   /api/v1/public/recorder/participants/search`, `POST
   /api/v1/public/recorder/participants/{id}/seat`.
+- **The facilitator's own phone.** Any table screen (and the recording
+  screen's tech sheet) offers *Add facilitator*: a code the facilitator scans
+  with their own phone (`#/facilitate/<token>`, reusable for the session).
+  Their phone then follows that one table — the session's question and goal,
+  a clock that turns red when the time is up, who registered and consented,
+  the recorder phones, the organizer's messages, the table's hand — and lets
+  them write a prompt to the table's phones (shown as "From the facilitator",
+  with a chime), raise the table's hand, register for consent on the same
+  phone, or hand the phone over to the recorder app as a second recorder. It
+  never records and sees no other table. Migration 0035
+  (`facilitator_sessions`, bearer hashed, no personal data); routes
+  `POST /api/v1/public/facilitate`, `GET/POST /api/v1/public/facilitator/*`.
 - **Remix the tables to meet new people.** Tables tab → *Remix* with a goal:
   *new people* seats everyone (including those registered at the tables)
   so that as few pairs as possible sit together again, balanced table sizes;

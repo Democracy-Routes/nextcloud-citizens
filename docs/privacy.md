@@ -143,6 +143,14 @@ there (controller, address, contact, data-protection contact, hosting,
 supervisory authority) — blank fields are left out, never shown as
 placeholders.
 
+A **facilitator's own phone** (0.7) follows one table through a code the
+table's phone shows. The server keeps only a hashed bearer with the table
+number and timestamps (`facilitator_sessions`) — no name, no audio, no
+captions: the facilitator's page reads the same roster (names only) and
+messages the table's phones read, and what it writes (a prompt, a hand
+raised) is audited under the session id. Registering for consent from that
+phone goes through the ordinary registration code and record.
+
 An assembly set to *Consent at the table: required* (the default for an
 organized assembly) records a table only once one registered person there
 has consented; the rule is enforced where recording starts, not only on the

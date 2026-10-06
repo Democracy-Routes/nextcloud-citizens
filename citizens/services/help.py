@@ -27,33 +27,48 @@ OPEN_VISIBLE = timedelta(hours=3)
 
 
 def raise_hand(session: Session, recorder_session: RecorderSession, kind: str) -> HelpRequest:
+    return raise_hand_at(
+        session, recorder_session.assembly_id, recorder_session.table_number, kind,
+        slot=recorder_session.slot, actor=f"recorder-session:{recorder_session.id}",
+    )
+
+
+def raise_hand_at(
+    session: Session,
+    assembly_id: str,
+    table_number: int,
+    kind: str,
+    *,
+    slot: int = 1,
+    actor: str | None = None,
+) -> HelpRequest:
+    """The table's hand goes up — from one of its recorder phones or from the
+    facilitator's phone beside it (services/facilitators.py)."""
     if kind not in HELP_KINDS:
         raise HTTPException(status_code=422, detail="Unknown kind of help")
     active_round = session.execute(
-        select(Round.id).where(
-            Round.assembly_id == recorder_session.assembly_id, Round.status == "ACTIVE"
-        )
+        select(Round.id).where(Round.assembly_id == assembly_id, Round.status == "ACTIVE")
     ).scalar_one_or_none()
-    request = open_for_table(session, recorder_session.assembly_id, recorder_session.table_number)
+    request = open_for_table(session, assembly_id, table_number)
     if request is not None:
         # the same table again: what it needs may have changed, not how many
         # times it needs it
         request.kind = kind
-        request.slot = recorder_session.slot
+        request.slot = slot
         request.created_at = utcnow()
         request.round_id = active_round
     else:
         request = HelpRequest(
-            assembly_id=recorder_session.assembly_id,
+            assembly_id=assembly_id,
             round_id=active_round,
-            table_number=recorder_session.table_number,
-            slot=recorder_session.slot,
+            table_number=table_number,
+            slot=slot,
             kind=kind,
         )
         session.add(request)
         session.flush()
     record_audit_event(
-        session, "help_requested", "help_request", request.id,
+        session, "help_requested", "help_request", request.id, actor=actor,
         data={"table": request.table_number, "slot": request.slot, "kind": kind},
     )
     return request
@@ -74,13 +89,17 @@ def open_for_table(session: Session, assembly_id: str, table_number: int) -> Hel
 
 
 def latest_for_phone(session: Session, recorder_session: RecorderSession) -> dict | None:
+    return latest_for_table(session, recorder_session.assembly_id, recorder_session.table_number)
+
+
+def latest_for_table(session: Session, assembly_id: str, table_number: int) -> dict | None:
     """What the phone shows: its table's open request, or one acknowledged a
     moment ago (so "the organizer has seen it" can be said), else nothing."""
     request = session.execute(
         select(HelpRequest)
         .where(
-            HelpRequest.assembly_id == recorder_session.assembly_id,
-            HelpRequest.table_number == recorder_session.table_number,
+            HelpRequest.assembly_id == assembly_id,
+            HelpRequest.table_number == table_number,
         )
         .order_by(HelpRequest.created_at.desc())
         .limit(1)

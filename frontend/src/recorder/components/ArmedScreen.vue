@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { mdiQrcode } from '@mdi/js'
+import { mdiAccountVoice, mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { setLocale } from '../../i18n'
 import { recorderApi, type HelpState, type JoinResult, type RoundInfo, type TableConsent } from '../api'
@@ -30,7 +30,14 @@ const props = defineProps<{
 	 * or the table is stuck in a five-second failure loop with no way out */
 	blockedRoundId?: string | null
 }>()
-const emit = defineEmits<{ start: [round: RoundInfo]; back: []; report: []; participants: [] }>()
+const emit = defineEmits<{
+	start: [round: RoundInfo]
+	back: []
+	report: []
+	participants: []
+	/** show the code a facilitator's own phone scans to follow this table */
+	facilitator: []
+}>()
 
 const rounds = ref<RoundInfo[]>(props.session.rounds)
 const offline = ref(false)
@@ -168,6 +175,12 @@ onBeforeUnmount(() => {
 				<HelpButton :token="session.session_token" :help="help" />
 			</div>
 			<div class="rc-center"><ParticipantsLine :consent="consent" @open="emit('participants')" /></div>
+			<div class="rc-center">
+				<button type="button" class="rc-facilitator-link" data-test="add-facilitator" @click="emit('facilitator')">
+					<SvgIcon :path="mdiAccountVoice" :size="16" />
+					{{ t('recorder.table.addFacilitator') }}
+				</button>
+			</div>
 
 			<!-- the microphone failed for the round that is currently open: say so
 			     and wait to be asked, rather than silently retrying forever -->

@@ -19,6 +19,7 @@ from citizens.api.assemblies import router as assemblies_router
 from citizens.api.files import router as files_router
 from citizens.api.findings import router as findings_router
 from citizens.api.limits import BodySizeLimitMiddleware
+from citizens.api.public_facilitator import router as public_facilitator_router
 from citizens.api.public_recorder import router as public_recorder_router
 from citizens.api.recorder_page import router as recorder_page_router
 from citizens.api.recorders import router as recorders_router
@@ -152,6 +153,7 @@ def create_app(with_auth: bool = True) -> FastAPI:
     app.include_router(sessions_router, prefix="/api/v1")
     app.include_router(recorders_router, prefix="/api/v1")
     app.include_router(public_recorder_router, prefix="/api/v1")
+    app.include_router(public_facilitator_router, prefix="/api/v1")
     app.include_router(admin_router, prefix="/api/v1")
     app.include_router(transcripts_router, prefix="/api/v1")
     app.include_router(findings_router, prefix="/api/v1")

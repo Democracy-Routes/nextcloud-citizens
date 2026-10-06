@@ -51,6 +51,13 @@ def participant_register_url(token: str) -> str:
     return f"{recorder_page_url()}#/register/{token}"
 
 
+def facilitator_url(token: str) -> str:
+    """The URL a facilitator's own phone opens (FACILITATE_TABLE code): the
+    same page, its facilitator route — a view beside the table, never a
+    recorder."""
+    return f"{recorder_page_url()}#/facilitate/{token}"
+
+
 def qr_svg(url: str) -> str:
     """A QR code as a STANDALONE SVG document.
 

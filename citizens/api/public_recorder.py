@@ -122,7 +122,7 @@ def peek_capability(data: JoinIn, request: Request, session: ReadDB):
 
 
 class CapabilityIn(BaseModel):
-    purpose: Literal["ADD_RECORDER_TO_TABLE", "ADD_TABLE", "REGISTER_PARTICIPANT"]
+    purpose: Literal["ADD_RECORDER_TO_TABLE", "ADD_TABLE", "REGISTER_PARTICIPANT", "FACILITATE_TABLE"]
     # the Session this is being done in, when the phone knows it
     round_id: str | None = None
 

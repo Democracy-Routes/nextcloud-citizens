@@ -19,6 +19,11 @@ limit, brute-force protection, revocation all come for free — and differ by
                          next recorder slot, recording beside the others
   ADD_TABLE              made in a Session; the next table is created in every
                          round and the scanner is its first recorder (slot 1)
+  REGISTER_PARTICIPANT   made at table N; a person's own phone registers there
+                         (consent); reusable by the whole table, never joins
+  FACILITATE_TABLE       made at table N; a facilitator's own phone follows the
+                         table (question, time, hand, messages, prompts);
+                         reusable for the session, never a recorder
 
 A table's identity is its number, the same in every round, so ADD_TABLE's
 `round_id` is the Session the code was made in — scope and audit — not a
@@ -54,10 +59,18 @@ ADD_TABLE = "ADD_TABLE"
 #: a participant registers at this table on their own phone (0.7 consent):
 #: scoped to assembly + table, reusable by the whole table, never joins
 REGISTER_PARTICIPANT = "REGISTER_PARTICIPANT"
-#: a registration code lives as long as a session, not a walk across the room
+#: a facilitator's own phone follows this table (0.7 facilitator): scoped to
+#: assembly + table, reusable (the facilitator may rescan), never a recorder
+FACILITATE_TABLE = "FACILITATE_TABLE"
+#: a registration or facilitator code lives as long as a session, not a walk
+#: across the room
 REGISTRATION_TTL = timedelta(hours=3)
 #: The purposes a joined phone may make a code for.
 ACTION_PURPOSES = (ADD_RECORDER_TO_TABLE, ADD_TABLE)
+#: codes a whole table (or a facilitator coming back) may scan more than once
+REUSABLE_PURPOSES = (REGISTER_PARTICIPANT, FACILITATE_TABLE)
+#: codes that concern the table they were made at
+TABLE_SCOPED_PURPOSES = (ADD_RECORDER_TO_TABLE, REGISTER_PARTICIPANT, FACILITATE_TABLE)
 
 #: How long an action code stays scannable. Long enough to walk a phone across
 #: the room; short enough that a photographed screen is useless by the break.
@@ -118,11 +131,35 @@ def create_capability(
     round_id: str | None = None,
 ) -> CapabilityCard:
     """A joined phone makes a code for the next phone. Server-checked throughout."""
-    if purpose not in ACTION_PURPOSES and purpose != REGISTER_PARTICIPANT:
+    if purpose not in ACTION_PURPOSES and purpose not in REUSABLE_PURPOSES:
         raise HTTPException(status_code=422, detail="Unknown capability")
     assembly = session.get(Assembly, recorder_session.assembly_id)
     if assembly is None:
         raise HTTPException(status_code=404, detail="Assembly not found")
+    return mint_capability(
+        session, assembly, purpose,
+        table_number=recorder_session.table_number if purpose in TABLE_SCOPED_PURPOSES else None,
+        round_id=round_id,
+        created_by_session_id=recorder_session.id,
+        actor=f"recorder-session:{recorder_session.id}",
+    )
+
+
+def mint_capability(
+    session: Session,
+    assembly: Assembly,
+    purpose: str,
+    *,
+    table_number: int | None,
+    round_id: str | None = None,
+    created_by_session_id: str | None = None,
+    actor: str,
+) -> CapabilityCard:
+    """The code itself, whoever asked for it — a table's phone or a
+    facilitator's (services/facilitators.py). Table-scoped purposes need the
+    table; the caller has already decided which table that is."""
+    if purpose in TABLE_SCOPED_PURPOSES and table_number is None:
+        raise HTTPException(status_code=422, detail="This code needs a table")
     if assembly.closed_at is not None:
         raise HTTPException(status_code=409, detail="This assembly has been closed")
     if purpose == ADD_TABLE and assembly.recording_mode == "plenary":
@@ -136,27 +173,27 @@ def create_capability(
 
     now = utcnow()
     token = generate_token()
-    registration = purpose == REGISTER_PARTICIPANT
-    table_number = (
-        recorder_session.table_number if purpose in (ADD_RECORDER_TO_TABLE, REGISTER_PARTICIPANT) else None
-    )
+    reusable = purpose in REUSABLE_PURPOSES
+    if purpose not in TABLE_SCOPED_PURPOSES:
+        table_number = None
     invite = RecorderInvite(
         assembly_id=assembly.id,
         purpose=purpose,
         table_number=table_number,
         round_id=round_id,
-        # a whole table scans the registration code; the others are one-shot
-        single_use=not registration,
+        # a whole table scans the registration code, a facilitator may rescan
+        # theirs; the others are one-shot
+        single_use=not reusable,
         token_hash=hash_token(token),
         token_encrypted=encrypt_token(token),
-        expires_at=now + (REGISTRATION_TTL if registration else CAPABILITY_TTL),
-        created_by_session_id=recorder_session.id,
+        expires_at=now + (REGISTRATION_TTL if reusable else CAPABILITY_TTL),
+        created_by_session_id=created_by_session_id,
     )
     session.add(invite)
     session.flush()
     record_audit_event(
         session, "capability_created", "recorder_invite", invite.id,
-        actor=f"recorder-session:{recorder_session.id}",
+        actor=actor,
         data={
             "purpose": purpose,
             "assembly_id": assembly.id,
@@ -168,13 +205,14 @@ def create_capability(
     log.info(
         "capability_created",
         invite_id=invite.id, purpose=purpose, assembly_id=assembly.id,
-        table_number=table_number, by_session=recorder_session.id,
+        table_number=table_number, by=actor,
     )
-    url = (
-        invite_svc.participant_register_url(token)
-        if registration
-        else invite_svc.recorder_join_url(token)
-    )
+    if purpose == REGISTER_PARTICIPANT:
+        url = invite_svc.participant_register_url(token)
+    elif purpose == FACILITATE_TABLE:
+        url = invite_svc.facilitator_url(token)
+    else:
+        url = invite_svc.recorder_join_url(token)
     return CapabilityCard(
         invite_id=invite.id,
         purpose=purpose,
@@ -207,6 +245,10 @@ def join_with_token(session: Session, token: str) -> Joined:
         # a registration code never makes a recorder; its own route handles it
         raise HTTPException(
             status_code=409, detail="This code registers a participant — open it on your own phone"
+        )
+    if invite.purpose == FACILITATE_TABLE:
+        raise HTTPException(
+            status_code=409, detail="This code is for a facilitator's phone — open it there"
         )
 
     if invite.purpose == JOIN_TABLE:

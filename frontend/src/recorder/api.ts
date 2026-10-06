@@ -36,7 +36,58 @@ export interface AssemblyInfo {
 	recording_mode: 'orchestrated' | 'independent' | 'plenary'
 }
 
-export type CapabilityPurpose = 'ADD_RECORDER_TO_TABLE' | 'ADD_TABLE' | 'REGISTER_PARTICIPANT'
+export type CapabilityPurpose =
+	| 'ADD_RECORDER_TO_TABLE'
+	| 'ADD_TABLE'
+	| 'REGISTER_PARTICIPANT'
+	| 'FACILITATE_TABLE'
+
+/** The session the facilitator is in, with its clock (services/facilitators.py). */
+export interface FacilitatorRound {
+	id: string
+	position: number
+	title: string
+	question: string
+	objective: string
+	status: string
+	duration_minutes: number
+	started_at: string | null
+	ends_at: string | null
+	/** negative once the time is up; null when the session is not running */
+	seconds_left: number | null
+}
+
+/** A piece of advice from the AI facilitator, for the facilitator to judge. */
+export interface FacilitatorAdvice {
+	id: string
+	kind: string
+	text: string
+	created_at: string
+}
+
+/** Everything the facilitator's page shows, for one table. */
+export interface FacilitatorStatus {
+	assembly: AssemblyInfo
+	assembly_closed: boolean
+	table_number: number
+	color_key: string
+	round: FacilitatorRound | null
+	rounds: Array<{ id: string; position: number; title: string; status: string }>
+	consent: TableConsent
+	participants: Array<{ label: string; name: string; recording_consent: boolean }>
+	recorders: number
+	messages: PhoneMessage[]
+	help: HelpState | null
+	/** anonymous speaking balance when the engine labels speakers; null otherwise */
+	speaking: { voices: number; shares: number[]; largest_percent: number } | null
+	advice: FacilitatorAdvice[]
+	capabilities: { live_speaking_balance: boolean; ai_facilitator: boolean }
+}
+
+export interface FacilitatorJoin extends FacilitatorStatus {
+	facilitator_token: string
+	expires_at: string
+}
 
 /** What a registration code is for, read on the participant's own phone. */
 export interface RegisterNotice extends ConsentNotice {
@@ -170,6 +221,8 @@ export interface PhoneMessage {
 	/** the phone may vibrate once */
 	sound: boolean
 	created_at: string
+	/** who is speaking; absent from a server before the facilitator (0.7) */
+	author?: 'organizer' | 'facilitator' | 'ai'
 }
 
 export type HelpKind = 'TECHNICAL' | 'ORGANIZER' | 'PROCESS'
@@ -552,4 +605,37 @@ export const recorderApi = {
 
 	/** The same report, through a participant's own bearer. */
 	participantReportPdf: (token: string) => pdfOf('/api/v1/public/participant/report.pdf', token),
+
+	/* ---- the facilitator's own phone (0.7) ---- */
+
+	/** Redeem the table's FACILITATE_TABLE code: a bearer for one table's view. */
+	facilitate: (token: string) =>
+		request<FacilitatorJoin>('POST', '/api/v1/public/facilitate', { json: { token } }),
+
+	facilitatorStatus: (token: string) =>
+		request<FacilitatorStatus>('GET', '/api/v1/public/facilitator/status', { token }),
+
+	facilitatorHeartbeat: (token: string) =>
+		request<{ ok: boolean }>('POST', '/api/v1/public/facilitator/heartbeat', { token }),
+
+	facilitatorLeave: (token: string) =>
+		request<{ ok: boolean }>('POST', '/api/v1/public/facilitator/leave', { token }),
+
+	facilitatorMessageSeen: (token: string, messageId: number) =>
+		request<{ ok: boolean }>('POST', '/api/v1/public/facilitator/messages/seen', {
+			token,
+			json: { message_id: messageId },
+		}),
+
+	/** A prompt to this table's phones, labelled as the facilitator's. */
+	facilitatorPrompt: (token: string, text: string) =>
+		request<PhoneMessage>('POST', '/api/v1/public/facilitator/prompt', { token, json: { text } }),
+
+	/** The table's hand, raised from the facilitator's phone. */
+	facilitatorHelp: (token: string, kind: HelpKind) =>
+		request<HelpState>('POST', '/api/v1/public/facilitator/help', { token, json: { kind } }),
+
+	/** A code for this table: register for consent, or add a recorder (this phone included). */
+	facilitatorCode: (token: string, purpose: 'REGISTER_PARTICIPANT' | 'ADD_RECORDER_TO_TABLE') =>
+		request<CapabilityCard>('POST', '/api/v1/public/facilitator/codes', { token, json: { purpose } }),
 }
