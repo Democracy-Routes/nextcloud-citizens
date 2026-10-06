@@ -19,6 +19,7 @@ from citizens.services import consent as consent_svc
 from citizens.services import help as help_svc
 from citizens.services import invites as invite_svc
 from citizens.services import messages as messages_svc
+from citizens.services import provider_config
 from citizens.services import rounds as rounds_svc
 from citizens.services import tables as tables_svc
 from citizens.services.audit import record_audit_event
@@ -82,6 +83,8 @@ def update_assembly(assembly_id: str, data: schemas.AssemblyUpdate, user: Curren
             status_code=409,
             detail=f"Cannot change {', '.join(sorted(changed))} once recording has begun.",
         )
+    if fields.get("ai_facilitator") == "default":
+        fields["ai_facilitator"] = None  # follow Settings
     for field, value in fields.items():
         setattr(assembly, field, value)
     session.flush()
@@ -324,6 +327,35 @@ def randomize(round_id: str, user: CurrentUser, session: DB):
     return svc.tables_with_participants(session, round_)
 
 
+class FacilitationIn(BaseModel):
+    level: Literal["default", "off", "light", "normal", "active"]
+
+
+@router.post("/assemblies/{assembly_id}/tables/{table_number}/facilitation")
+def set_table_facilitation(
+    assembly_id: str, table_number: int, data: FacilitationIn, user: CurrentUser, session: DB
+):
+    """The Live tab's "Pause AI" for one table — or a level of its own;
+    "default" follows the assembly again."""
+    from citizens.services import facilitator as ai_svc
+
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    return ai_svc.set_table_level(
+        session, assembly, table_number, None if data.level == "default" else data.level,
+        actor=user,
+    )
+
+
+@router.get("/rounds/{round_id}/interventions")
+def round_interventions(round_id: str, user: CurrentUser, session: ReadDB):
+    """What the AI facilitator said at each table of this session, to whom,
+    and what people thought of it."""
+    from citizens.services import facilitator as ai_svc
+
+    round_ = svc.get_owned_round(session, round_id, user)
+    return ai_svc.interventions_for_round(session, round_)
+
+
 class RemixIn(BaseModel):
     goal: Literal["new_people", "random", "continuity"] = "new_people"
 
@@ -358,6 +390,9 @@ def _detail(session: Session, assembly: Assembly) -> schemas.AssemblyDetail:
     ).scalar_one()
     detail = schemas.AssemblyDetail.model_validate(assembly, from_attributes=True)
     detail.participant_count = count
+    facilitator_settings = provider_config.facilitator_settings_cached()
+    detail.ai_facilitator_default = facilitator_settings.get("level", "off")
+    detail.ai_facilitator_configured = bool(facilitator_settings.get("configured"))
     recordings = dict(
         session.execute(
             select(Recording.round_id, func.count())

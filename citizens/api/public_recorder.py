@@ -489,6 +489,46 @@ def message_seen(data: MessageSeenIn, recorder_session: RecorderSess, session: D
     return {"ok": True}
 
 
+class FacilitatorLevelIn(BaseModel):
+    level: Literal["default", "off", "light", "normal", "active"]
+
+
+@router.post("/recorder/facilitator")
+def set_facilitator_level(data: FacilitatorLevelIn, recorder_session: RecorderSess, session: DB):
+    """The table's own AI-facilitator switch (tech sheet): a level of its
+    own, or "default" to follow the assembly again."""
+    from citizens.services import facilitator as ai_svc
+
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    return ai_svc.set_table_level(
+        session, assembly, recorder_session.table_number,
+        None if data.level == "default" else data.level,
+        actor=f"recorder-session:{recorder_session.id}",
+    )
+
+
+class MessageFeedbackIn(BaseModel):
+    helpful: bool
+
+
+@router.post("/recorder/messages/{message_id}/feedback")
+def message_feedback(
+    message_id: int, data: MessageFeedbackIn, recorder_session: RecorderSess, session: DB
+):
+    """👍 / 👎 under an AI facilitator banner on the table's phone. Only AI
+    messages take feedback; anything else is 404."""
+    from citizens.services import facilitator as ai_svc
+
+    intervention = ai_svc.intervention_for_message(session, recorder_session.assembly_id, message_id)
+    if intervention is None or intervention.table_number != recorder_session.table_number:
+        raise HTTPException(status_code=404, detail="No AI message to rate")
+    return ai_svc.give_feedback(
+        session, intervention, recorder_session.table_number, "table_phone", data.helpful
+    )
+
+
 @router.get("/recorder/consent-notice")
 def consent_notice(recorder_session: ReadingSess, session: ReadDB):
     """The notice people read before registering, rendered by the server and
@@ -871,6 +911,9 @@ def _assembly_state(
         # the assembly's consent rule and where this table stands under it,
         # so the phone can gate without a second call
         "consent": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+        # the AI facilitator at this table: effective level and the table's own
+        # override, for the tech sheet's switch
+        "ai_facilitator": _ai_level(session, assembly, recorder_session.table_number),
         "rounds": [
             {
                 "id": round_.id,
@@ -889,6 +932,12 @@ def _assembly_state(
             for round_ in assembly.rounds
         ],
     }
+
+
+def _ai_level(session: Session, assembly: Assembly, table_number: int) -> dict:
+    from citizens.services import facilitator as ai_svc
+
+    return ai_svc.table_level_state(session, assembly, table_number)
 
 
 def _table_summary(session: Session, assembly_id: str, recorder_session: RecorderSession) -> dict:

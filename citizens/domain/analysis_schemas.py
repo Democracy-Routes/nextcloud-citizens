@@ -55,3 +55,11 @@ class AssemblySynthesis(BaseModel):
     narrative: str = Field(min_length=10, max_length=4000)
     stages: list[SynthesisStage] = Field(max_length=12)
     carried_forward: list[str] = Field(default_factory=list, max_length=20)
+
+
+class FacilitatorAdvice(BaseModel):
+    """What the AI facilitator may say about one table, one tick: a kind the
+    organizer can filter on and one short sentence — or nothing."""
+
+    kind: Literal["time", "objective", "silence", "balance", "none"]
+    text: str = Field(default="", max_length=240)

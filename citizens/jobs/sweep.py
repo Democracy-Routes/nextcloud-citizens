@@ -337,6 +337,12 @@ def sweep_stale_exports() -> int:
     return removed
 
 
+def _facilitator_tick() -> None:
+    from citizens.services import facilitator
+
+    facilitator.tick()
+
+
 def run_sweeps() -> None:
     from citizens.services import provider_config, public_url
 
@@ -352,6 +358,9 @@ def run_sweeps() -> None:
         ("missed_enqueues", sweep_missed_enqueues),
         ("expired_audio", sweep_expired_audio),
         ("stale_exports", sweep_stale_exports),
+        # the AI facilitator's minute: reads the snapshot, calls the model
+        # with no transaction open, writes one short delivery
+        ("ai_facilitator", _facilitator_tick),
     ):
         try:
             sweep()

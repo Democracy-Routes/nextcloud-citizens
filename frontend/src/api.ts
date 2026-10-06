@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type {
+	Intervention,
 	Assembly,
 	AssemblyCreated,
 	AssemblyDetail,
@@ -146,7 +147,7 @@ export const api = {
 	getProviders: () => request<ProvidersSummary>('GET', '/api/v1/admin/providers'),
 	updateProviders: (payload: Record<string, unknown>) =>
 		request<ProvidersSummary>('PUT', '/api/v1/admin/providers', payload),
-	testProvider: (target: SttProvider | 'analysis', apiKey?: string, baseUrl?: string, model?: string) =>
+	testProvider: (target: SttProvider | 'analysis' | 'facilitator', apiKey?: string, baseUrl?: string, model?: string) =>
 		request<{ ok: boolean; message: string }>('POST', '/api/v1/admin/providers/test', {
 			target,
 			api_key: apiKey,
@@ -165,6 +166,14 @@ export const api = {
 			create ? 'POST' : 'GET',
 			`/api/v1/assemblies/${assemblyId}/registration-link`,
 		),
+	/** The Live tab's "Pause AI" for one table ('default' follows the assembly). */
+	setTableFacilitation: (assemblyId: string, tableNumber: number, level: 'default' | 'off' | 'light' | 'normal' | 'active') =>
+		request<{ level: string; override: string | null }>(
+			'POST', `/api/v1/assemblies/${assemblyId}/tables/${tableNumber}/facilitation`, { level },
+		),
+	/** What the AI facilitator said at each table of a session. */
+	roundInterventions: (roundId: string) =>
+		request<Intervention[]>('GET', `/api/v1/rounds/${roundId}/interventions`),
 	acknowledgeHelp: (requestId: string) =>
 		request<HelpRequest>('POST', `/api/v1/help-requests/${requestId}/acknowledge`),
 	roundMessages: (roundId: string) =>

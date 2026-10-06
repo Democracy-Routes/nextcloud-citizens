@@ -203,6 +203,7 @@ def list_with_delivery(session: Session, round_: Round, limit: int = 20) -> list
                 **as_phone_dict(message),
                 "target_table_number": message.target_table_number,
                 "created_by": message.created_by,
+                "author": author_of(message.created_by),
                 "seen_by": seen_by,
                 "not_seen_by": [n for n in targets if n not in seen_by],
             }

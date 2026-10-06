@@ -17,6 +17,9 @@ const facilitatorHelp = vi.fn()
 const facilitatorCode = vi.fn()
 const facilitatorMessageSeen = vi.fn()
 const facilitatorLeave = vi.fn()
+const adviceDismiss = vi.fn()
+const adviceSend = vi.fn()
+const adviceFeedback = vi.fn()
 
 vi.mock('../../frontend/src/recorder/api', () => ({
 	recorderApi: {
@@ -27,6 +30,9 @@ vi.mock('../../frontend/src/recorder/api', () => ({
 		facilitatorMessageSeen: (...args: unknown[]) => facilitatorMessageSeen(...args),
 		facilitatorLeave: (...args: unknown[]) => facilitatorLeave(...args),
 		facilitatorHeartbeat: vi.fn().mockResolvedValue({ ok: true }),
+		facilitatorAdviceDismiss: (...args: unknown[]) => adviceDismiss(...args),
+		facilitatorAdviceSend: (...args: unknown[]) => adviceSend(...args),
+		facilitatorAdviceFeedback: (...args: unknown[]) => adviceFeedback(...args),
 	},
 	RecorderApiError: class extends Error {},
 }))
@@ -156,6 +162,37 @@ describe('the facilitator page', () => {
 		await flushPromises()
 		expect(facilitatorLeave).toHaveBeenCalledWith('fac-token')
 		expect(wrapper.emitted('forget')).toBeTruthy()
+	})
+
+	it('shows the AI facilitator\'s advice for the facilitator to judge', async () => {
+		adviceDismiss.mockResolvedValue({})
+		adviceSend.mockResolvedValue({ sent_to_table_at: 'now' })
+		adviceFeedback.mockResolvedValue({})
+		facilitatorStatus.mockResolvedValue({
+			...STATUS,
+			ai_facilitator: { level: 'normal', override: null, assembly_level: 'normal', instance_level: 'off', configured: true },
+			capabilities: { live_speaking_balance: false, ai_facilitator: true },
+			advice: [
+				{ id: 'i1', kind: 'objective', text: 'What would make your list of three?', created_at: 'now' },
+				{ id: 'i2', kind: 'time', text: 'Three minutes left — which problem matters most?', created_at: 'now' },
+			],
+		})
+		const wrapper = await mountPage()
+		const card = wrapper.find('[data-test="advice"]')
+		expect(card.text()).toContain('Level: Normal')
+		expect(wrapper.findAll('[data-test="advice-card"]')).toHaveLength(2)
+
+		await wrapper.findAll('[data-test="advice-down"]')[0].trigger('click')
+		expect(adviceFeedback).toHaveBeenCalledWith('fac-token', 'i1', false)
+		await wrapper.findAll('[data-test="advice-dismiss"]')[0].trigger('click')
+		await flushPromises()
+		expect(adviceDismiss).toHaveBeenCalledWith('fac-token', 'i1')
+		expect(wrapper.findAll('[data-test="advice-card"]')).toHaveLength(1)
+
+		await wrapper.find('[data-test="advice-send"]').trigger('click')
+		await flushPromises()
+		expect(adviceSend).toHaveBeenCalledWith('fac-token', 'i2')
+		expect(wrapper.find('[data-test="advice-sent"]').text()).toContain('Sent to the table')
 	})
 
 	it('has no hand to raise in a spontaneous Session', async () => {

@@ -132,6 +132,15 @@ class ProvidersUpdate(BaseModel):
     analysis_api_key: str | None = Field(default=None, max_length=500)
     analysis_enabled: bool | None = None
     analysis_extra_instructions: str | None = Field(default=None, max_length=4000)
+    # the AI facilitator: its instance default level, its own model (blank
+    # falls back to the analysis model), and the thresholds behind its nudges
+    facilitator_level: Literal["off", "light", "normal", "active"] | None = None
+    facilitator_base_url: str | None = Field(default=None, max_length=500)
+    facilitator_model: str | None = Field(default=None, max_length=200)
+    facilitator_api_key: str | None = Field(default=None, max_length=500)
+    facilitator_interval_minutes: int | None = Field(default=None, ge=1, le=60)
+    facilitator_dominance_percent: int | None = Field(default=None, ge=40, le=95)
+    facilitator_silence_seconds: int | None = Field(default=None, ge=20, le=600)
     organization_name: str | None = Field(default=None, max_length=200)
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
     consent_controller: str | None = Field(default=None, max_length=200)
@@ -203,7 +212,7 @@ def update_providers(data: ProvidersUpdate, store: Store, user: AdminUser, sessi
 
 
 class TestIn(BaseModel):
-    target: Literal["mistral", "deepgram", "whisper", "vosk", "analysis"]
+    target: Literal["mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator"]
     # lets the admin test what's typed in the form before saving it
     api_key: str | None = Field(default=None, max_length=500)
     base_url: str | None = Field(default=None, max_length=500)
@@ -220,6 +229,15 @@ def test_provider(data: TestIn, store: Store, user: AdminUser):
         override_base_url=(data.base_url or "").strip() or None,
         override_model=(data.model or "").strip() or None,
     )
+
+
+@router.post("/facilitator/tick")
+def facilitator_tick(user: AdminUser):
+    """Run the AI facilitator's minute now (it runs by itself from the sweep):
+    for a rehearsal or a smoke test that cannot wait for the clock."""
+    from citizens.services import facilitator
+
+    return {"delivered": facilitator.tick()}
 
 
 class LogoIn(BaseModel):

@@ -30,6 +30,9 @@ class Assembly(Base):
     # detected language becomes it (services/transcription.py); a wizard's
     # explicit choice, or a manual change, leaves this off
     language_auto: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # the AI facilitator's level here (off/light/normal/active); None follows
+    # the instance default in Settings (services/facilitator.py)
+    ai_facilitator: Mapped[str | None] = mapped_column(String(12))
     scheduled_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     status: Mapped[str] = mapped_column(String(20), default="DRAFT")
     # "orchestrated": facilitator starts/ends rounds for all tables at once;

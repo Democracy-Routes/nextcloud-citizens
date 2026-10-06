@@ -114,6 +114,20 @@ def _table_recorders(
     return recorders
 
 
+def _ai_levels(session: Session, round_: Round) -> dict[int, str]:
+    """Each table's effective AI-facilitator level, from the snapshot and
+    the tables' own switches (services/facilitator.py)."""
+    from citizens.services import facilitator as ai_svc
+    from citizens.services.provider_config import facilitator_settings_cached
+
+    settings = facilitator_settings_cached()
+    overrides = ai_svc.table_overrides(session, round_.assembly_id)
+    return {
+        table.number: ai_svc.effective_level(round_.assembly, overrides.get(table.number), settings)
+        for table in round_.tables
+    }
+
+
 def round_monitor(session: Session, round_: Round) -> dict:
     """Per-table live health, combining device heartbeats with recording rows.
 
@@ -125,6 +139,7 @@ def round_monitor(session: Session, round_: Round) -> dict:
     live_stt_enabled = bool(live_stt_snapshot().get("enabled"))
     # tables that raised their hand (services/help.py), by number
     hands = help_svc.open_by_table(session, round_.assembly_id)
+    ai_levels = _ai_levels(session, round_)
     # who registered and consented at each table (services/consent.py); a
     # table nobody registered at reads as zero under the assembly's rule
     consents = consent_svc.consent_by_table(session, round_.assembly)
@@ -203,6 +218,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
                 "color_key": table.color_key or color_for(table.number),
                 # the table's open request for the organizer, if its hand is up
                 "help_request": hands.get(table.number),
+                # the AI facilitator's effective level at this table (Pause AI)
+                "ai_facilitator": ai_levels.get(table.number, "off"),
                 # registered / consenting people at this table, and whether the
                 # assembly's consent rule lets it record
                 "consent": consent,

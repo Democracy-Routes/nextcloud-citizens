@@ -151,6 +151,22 @@ messages the table's phones read, and what it writes (a prompt, a hand
 raised) is audited under the session id. Registering for consent from that
 phone goes through the ordinary registration code and record.
 
+The **AI facilitator** (0.7, off unless an administrator or organizer turns
+it on) sends a language model, once a minute at most, the last ~40 live
+caption lines of a table with every known participant name replaced by a
+pseudonym (the same `redact_names` list the analysis uses), the session's
+question and time, and — only when the engine labels speakers — anonymous
+speaking-time shares. It receives one sentence back, which is stored with
+the table number, the model name and who it was delivered to
+(`facilitator_interventions`), and shown on the facilitator's phone or the
+table's phones. Thumbs up or down are stored as counts per intervention
+(`facilitator_feedback`), never as who tapped. The model and endpoint are
+the ones configured in Settings → AI facilitator, falling back to the
+analysis model; the consent notice's analysis provider therefore covers it
+when the two are the same service, and an administrator who points the
+facilitator at a different provider should name it in the organization
+data.
+
 An assembly set to *Consent at the table: required* (the default for an
 organized assembly) records a table only once one registered person there
 has consented; the rule is enforced where recording starts, not only on the

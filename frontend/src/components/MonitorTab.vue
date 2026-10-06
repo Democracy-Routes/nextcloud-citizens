@@ -20,7 +20,7 @@ import { describeError } from '../errors'
 import { relativeAge, timestamp } from '../format'
 import { LIVE_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
-import type { AssemblyDetail, MonitorTable, RoundMonitor, SessionMessage, TranscriptData } from '../types'
+import type { AssemblyDetail, Intervention, MonitorTable, RoundMonitor, SessionMessage, TranscriptData } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
@@ -60,6 +60,7 @@ async function poll(): Promise<void> {
 	// sidebar and the Rounds tab stay on whatever they last heard
 	if (previous && previous !== monitor.value.status) emit('changed')
 	void loadMessages()
+	void loadInterventions()
 }
 
 /* ---- the facilitator's voice: "5 minutes left" to every table, or one ----
@@ -121,6 +122,34 @@ function deliveryText(message: SessionMessage): string {
 }
 
 const recentMessages = computed(() => messages.value.slice(0, 3))
+
+/* ---- the AI facilitator's log and the per-table pause ---- */
+const interventions = ref<Intervention[]>([])
+const aiLogOpen = ref(false)
+
+async function loadInterventions(): Promise<void> {
+	if (!roundId.value) return
+	try {
+		interventions.value = await api.roundInterventions(roundId.value)
+	} catch {
+		/* an older server: no log */
+	}
+}
+
+const anyAi = computed(
+	() => interventions.value.length > 0 || (monitor.value?.tables ?? []).some((t) => (t.ai_facilitator ?? 'off') !== 'off'),
+)
+
+function authorLabel(message: SessionMessage): string {
+	return message.author === 'ai' ? 'AI' : message.author === 'facilitator' ? 'Facilitator' : ''
+}
+
+function pauseAi(table: MonitorTable, level: 'off' | 'default'): void {
+	void run(
+		() => api.setTableFacilitation(props.assembly.id, table.number, level),
+		level === 'off' ? `Table ${table.number}: AI facilitator paused` : `Table ${table.number}: AI facilitator resumed`,
+	)
+}
 
 // keeps polling while hidden: this is the live view, and a facilitator
 // switching to another tab for ten seconds should not come back to stale data
@@ -722,9 +751,42 @@ function pendingChunks(table: MonitorTable): number {
 				<li v-for="message in recentMessages" :key="message.id">
 					<span class="cz-muted">{{ clockOf(message.created_at) }}</span>
 					<span v-if="message.target_table_number" class="cz-muted"> · Table {{ message.target_table_number }}</span>
+					<span v-if="authorLabel(message)" class="cz-pill cz-pill--grey" style="margin-left: 4px">{{ authorLabel(message) }}</span>
 					— {{ message.text }}
 					<span class="cz-broadcast__delivery" :class="{ 'cz-broadcast__delivery--partial': message.not_seen_by.length }">
 						{{ deliveryText(message) }}
+					</span>
+				</li>
+			</ul>
+		</div>
+
+		<!-- what the AI facilitator said at the tables, and what people thought of it -->
+		<div v-if="anyAi" class="cz-card cz-broadcast" data-test="ai-log">
+			<div class="cz-row" style="gap: 8px; flex-wrap: wrap">
+				<strong>AI facilitator</strong>
+				<span class="cz-muted" style="font-size: 0.8125rem">
+					{{ interventions.length ? `${interventions.length} nudge${interventions.length === 1 ? '' : 's'} this session` : 'nothing said yet' }}
+				</span>
+				<CzButton v-if="interventions.length" variant="tertiary" small @click="aiLogOpen = !aiLogOpen">
+					{{ aiLogOpen ? 'Less' : 'Show' }}
+				</CzButton>
+			</div>
+			<ul v-if="aiLogOpen" class="cz-broadcast__log">
+				<li v-for="item in interventions.slice(0, 12)" :key="item.id">
+					<span class="cz-muted">{{ clockOf(item.created_at) }}</span>
+					<span class="cz-muted"> · Table {{ item.table_number }} · {{ item.kind }}</span>
+					— {{ item.text }}
+					<span class="cz-broadcast__delivery" :class="{ 'cz-broadcast__delivery--partial': item.dismissed_at }">
+						{{
+							item.dismissed_at
+								? 'dismissed by the facilitator'
+								: item.sent_to_table_at
+									? 'sent on by the facilitator'
+									: item.delivered_to === 'facilitator'
+										? "on the facilitator's phone"
+										: 'to the table'
+						}}
+						· 👍 {{ item.feedback.helpful }} · 👎 {{ item.feedback.not_helpful }}
 					</span>
 				</li>
 			</ul>
@@ -977,6 +1039,26 @@ function pendingChunks(table: MonitorTable): number {
 									:disabled="busy"
 									@click="acknowledgeHelp(table)">
 									Acknowledge
+								</CzButton>
+								<CzButton
+									v-if="(table.ai_facilitator ?? 'off') !== 'off'"
+									small
+									variant="secondary"
+									title="Pause the AI facilitator at this table"
+									:disabled="busy"
+									data-test="pause-ai"
+									@click="pauseAi(table, 'off')">
+									Pause AI
+								</CzButton>
+								<CzButton
+									v-else-if="interventions.some((i) => i.table_number === table.number)"
+									small
+									variant="tertiary"
+									title="Let the AI facilitator speak at this table again (the assembly's level)"
+									:disabled="busy"
+									data-test="resume-ai"
+									@click="pauseAi(table, 'default')">
+									Resume AI
 								</CzButton>
 								<CzButton
 									v-if="canReplaceDevice(table)"

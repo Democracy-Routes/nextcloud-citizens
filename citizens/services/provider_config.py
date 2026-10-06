@@ -64,6 +64,9 @@ class ConfigSnapshot:
     # Settings costs no OCS round-trip; empty until the first request for it
     # or the first save — the minute sweep does not rebuild it
     summary: dict = field(default_factory=dict)
+    # the AI facilitator's instance settings (services/facilitator.py reads
+    # them from here once a minute, never from Nextcloud inside a transaction)
+    facilitator: dict = field(default_factory=dict)
     refreshed_at: float = 0.0
     # False: the refresh failed and these are defaults (or the previous values)
     ok: bool = False
@@ -210,6 +213,7 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 consent_contact=get_setting(store, "consent_contact"),
                 organization=_read_organization(store),
                 summary=providers_summary(store) if with_summary else previous_summary,
+                facilitator=_read_facilitator(store),
                 refreshed_at=time.monotonic(),
                 ok=True,
                 store_id=id(store),
@@ -229,6 +233,7 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 consent_contact=previous.consent_contact if previous else "",
                 organization=dict(previous.organization) if previous else {},
                 summary=dict(previous.summary) if previous else {},
+                facilitator=dict(previous.facilitator) if previous else {},
                 refreshed_at=time.monotonic(),
                 ok=False,
                 store_id=previous.store_id if previous else 0,
@@ -424,17 +429,60 @@ def _is_local_endpoint(url: str) -> bool:
     return address.is_private or address.is_loopback or address.is_link_local
 
 
+def _read_facilitator(store: "ConfigStore") -> dict:
+    """The AI facilitator's instance settings. `configured` means a model can
+    be called: its own key, or the analysis key when it has none of its own."""
+    level = get_setting(store, "facilitator_level") or "off"
+    if level not in ("off", "light", "normal", "active"):
+        level = "off"
+
+    def number(key: str, fallback: int) -> int:
+        try:
+            return int(get_setting(store, key) or fallback)
+        except ValueError:
+            return fallback
+
+    own_key = bool(store.get_value("facilitator_api_key"))
+    return {
+        "level": level,
+        "configured": own_key or bool(store.get_value("analysis_api_key")),
+        "own_key": own_key,
+        "interval_minutes": max(1, number("facilitator_interval_minutes", 4)),
+        "dominance_percent": min(95, max(40, number("facilitator_dominance_percent", 60))),
+        "silence_seconds": max(20, number("facilitator_silence_seconds", 90)),
+    }
+
+
+def facilitator_settings_cached() -> dict:
+    """The AI facilitator's instance settings from the snapshot (level,
+    thresholds); empty before the first refresh, which reads as Off."""
+    return dict(config_snapshot().facilitator)
+
+
+def facilitator_model_config(store: "ConfigStore") -> tuple[str, str, str]:
+    """(base_url, key, model) for the AI facilitator: its own, falling back
+    field by field to the analysis model's. Reads Nextcloud — call it outside
+    any database transaction."""
+    key = store.get_value("facilitator_api_key") or store.get_value("analysis_api_key") or ""
+    base_url = get_setting(store, "facilitator_base_url") or get_setting(store, "analysis_base_url")
+    model = get_setting(store, "facilitator_model") or get_setting(store, "analysis_model")
+    return base_url, key, model
+
+
 def analysis_enabled_cached() -> bool:
     """The analysis-enabled flag for hot public endpoints (status polls hit
     this) — from the snapshot, never an OCS read."""
     return config_snapshot().analysis_enabled
 
-KEY_FIELDS = ("mistral_api_key", "deepgram_api_key", "whisper_api_key", "analysis_api_key")
+KEY_FIELDS = (
+    "mistral_api_key", "deepgram_api_key", "whisper_api_key", "analysis_api_key",
+    "facilitator_api_key",
+)
 
 # targets whose connection test sends a stored API key, so an admin-supplied
 # endpoint override must be accompanied by an admin-supplied key (see
 # test_connection). Vosk is absent because it authenticates with no key.
-KEYED_TEST_TARGETS = ("whisper", "analysis", "mistral", "deepgram")
+KEYED_TEST_TARGETS = ("whisper", "analysis", "facilitator", "mistral", "deepgram")
 
 # where each engine's live captions connect; Deepgram's is configurable so
 # servers speaking the same protocol (WhisperLiveKit) can be used instead
@@ -496,6 +544,15 @@ DEFAULTS = {
     # appended to the built-in analysis prompts (tone, focus areas, glossary);
     # the JSON output contract and evidence rules stay protected
     "analysis_extra_instructions": "",
+    # the AI facilitator (services/facilitator.py): the instance default level
+    # an assembly inherits, its own model (blank = the analysis model), and
+    # the thresholds behind its nudges
+    "facilitator_level": "off",
+    "facilitator_base_url": "",
+    "facilitator_model": "",
+    "facilitator_interval_minutes": "4",
+    "facilitator_dominance_percent": "60",
+    "facilitator_silence_seconds": "90",
     # shown with the logo on PDF report headers/footers
     "organization_name": "",
     # Organization data for the consent notice: who is responsible for the
@@ -669,6 +726,12 @@ def providers_summary(store: ConfigStore) -> dict:
             "enabled": get_setting(store, "analysis_enabled") == "1",
             "extra_instructions": get_setting(store, "analysis_extra_instructions"),
         },
+        "facilitator": {
+            **_read_facilitator(store),
+            "base_url": get_setting(store, "facilitator_base_url"),
+            "model": get_setting(store, "facilitator_model"),
+            "key_hint": key_hint(store, "facilitator_api_key"),
+        },
     }
 
 
@@ -741,12 +804,18 @@ def test_connection(
                 log.warning("provider_test_failed", target=target, error=type(exc).__name__)
                 return {"ok": False, "message": f"Could not reach {url}: {type(exc).__name__}"}
             return {"ok": True, "message": "Connected"}
-        elif target == "analysis":
-            key = override_key or store.get_value("analysis_api_key")
+        elif target in ("analysis", "facilitator"):
+            if target == "facilitator":
+                fac_base, fac_key, fac_model = facilitator_model_config(store)
+                key = override_key or fac_key
+                base = (override_base_url or fac_base).rstrip("/")
+                model = override_model or fac_model
+            else:
+                key = override_key or store.get_value("analysis_api_key")
+                base = (override_base_url or get_setting(store, "analysis_base_url")).rstrip("/")
+                model = override_model or get_setting(store, "analysis_model")
             if not key:
                 return {"ok": False, "message": "No analysis API key — paste one or save it first"}
-            base = (override_base_url or get_setting(store, "analysis_base_url")).rstrip("/")
-            model = override_model or get_setting(store, "analysis_model")
             # One real, tiny completion. Listing /models only proves the key
             # exists: it said "Connected" for a workspace whose every chat call
             # was refused with 403 at the 2026-09-18 rehearsal.

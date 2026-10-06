@@ -160,7 +160,11 @@ onBeforeUnmount(() => {
 
 <template>
 	<div class="rc-fill">
-		<MessageBanner v-if="messages.current.value" :message="messages.current.value" @dismiss="messages.dismiss" />
+		<MessageBanner
+			v-if="messages.current.value"
+			:message="messages.current.value"
+			@dismiss="messages.dismiss"
+			@feedback="recorderApi.messageFeedback(session.session_token, messages.current.value.id, $event).catch(() => undefined)" />
 		<div class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 16px; padding-bottom: 8px">
 				<p class="rc-eyebrow">{{ session.assembly.name }}</p>

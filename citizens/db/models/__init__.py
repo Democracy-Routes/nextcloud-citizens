@@ -11,7 +11,12 @@ from citizens.db.models.assembly import (
 from citizens.db.models.audit import AuditEvent
 from citizens.db.models.base import Base
 from citizens.db.models.consent import ConsentNotice, ParticipantConsent, ParticipantSession
-from citizens.db.models.facilitator import FacilitatorSession
+from citizens.db.models.facilitator import (
+    FacilitatorFeedback,
+    FacilitatorIntervention,
+    FacilitatorSession,
+    TableFacilitation,
+)
 from citizens.db.models.findings import Finding, FindingEvidence
 from citizens.db.models.help import HelpRequest
 from citizens.db.models.jobs import AppJob
@@ -45,4 +50,7 @@ __all__ = [
     "ParticipantSession",
     "SummaryValidation",
     "FacilitatorSession",
+    "FacilitatorIntervention",
+    "FacilitatorFeedback",
+    "TableFacilitation",
 ]

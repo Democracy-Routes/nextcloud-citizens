@@ -177,8 +177,25 @@ def status(session: Session, facilitator: FacilitatorSession) -> dict:
     assembly = session.get(Assembly, facilitator.assembly_id)
     if assembly is None:
         raise HTTPException(status_code=404, detail="Assembly not found")
+    from citizens.services import facilitator as ai_svc
+    from citizens.services import live_source, speaking_live
+    from citizens.services.live_captions import LIVE_CAPTIONS
+
     table_number = facilitator.table_number
     roster = consent_svc.table_roster(session, assembly.id, table_number)
+    current = _current_round(assembly)
+    # the anonymous speaking balance from the table's live captions, when the
+    # engine labels speakers — and whether it does at all
+    speaking = None
+    labels_speakers = False
+    if current is not None and current.status == "ACTIVE":
+        table = next((t for t in current.tables if t.number == table_number), None)
+        recording = live_source.current(session, current.id, table.id) if table else None
+        if recording is not None:
+            lines = LIVE_CAPTIONS.status(recording.id).get("lines", [])
+            labels_speakers = speaking_live.engine_labels_speakers(lines)
+            speaking = speaking_live.live_balance(lines)
+    ai_level = ai_svc.table_level_state(session, assembly, table_number)
     return {
         "assembly": {
             "id": assembly.id,
@@ -190,7 +207,7 @@ def status(session: Session, facilitator: FacilitatorSession) -> dict:
         "assembly_closed": assembly.closed_at is not None,
         "table_number": table_number,
         "color_key": color_for(table_number),
-        "round": _round_card(_current_round(assembly)),
+        "round": _round_card(current),
         "rounds": [
             {"id": r.id, "position": r.position, "title": r.title, "status": r.status}
             for r in sorted(assembly.rounds, key=lambda r: r.position)
@@ -202,12 +219,16 @@ def status(session: Session, facilitator: FacilitatorSession) -> dict:
             session, assembly.id, table_number, facilitator.last_seen_message_id
         ),
         "help": help_svc.latest_for_table(session, assembly.id, table_number),
-        # filled in by the AI facilitator and the live speaking metrics when
-        # the engine provides them (phase C2/C3); explicit so the page can say
-        # "not available with this engine" rather than show nothing
-        "speaking": None,
-        "advice": [],
-        "capabilities": {"live_speaking_balance": False, "ai_facilitator": False},
+        # None when the engine labels no speakers (or too little was said):
+        # the page says "not available with this engine" rather than guess
+        "speaking": speaking,
+        # the AI facilitator's open advice cards for this table
+        "advice": ai_svc.pending_advice(session, assembly.id, table_number),
+        "ai_facilitator": ai_level,
+        "capabilities": {
+            "live_speaking_balance": labels_speakers,
+            "ai_facilitator": ai_level["level"] != "off",
+        },
     }
 
 

@@ -15,7 +15,17 @@ import SvgIcon from '../../components/ui/SvgIcon.vue'
 import type { PhoneMessage } from '../api'
 
 const props = defineProps<{ message: PhoneMessage }>()
-const emit = defineEmits<{ dismiss: [] }>()
+const emit = defineEmits<{
+	dismiss: []
+	/** 👍 / 👎 under an AI facilitator message (never for a person's) */
+	feedback: [helpful: boolean]
+}>()
+
+const rated = ref(false)
+function rate(helpful: boolean): void {
+	rated.value = true
+	emit('feedback', helpful)
+}
 
 const { t } = useI18n()
 
@@ -35,7 +45,14 @@ function schedule(): void {
 	goneTimer = window.setTimeout(() => emit('dismiss'), FULL_MS + COMPACT_MS)
 }
 
-watch(() => props.message.id, schedule, { immediate: true })
+watch(
+	() => props.message.id,
+	() => {
+		rated.value = false
+		schedule()
+	},
+	{ immediate: true },
+)
 onBeforeUnmount(() => {
 	window.clearTimeout(foldTimer)
 	window.clearTimeout(goneTimer)
@@ -56,6 +73,14 @@ onBeforeUnmount(() => {
 				}}
 			</span>
 			<strong class="rc-message__text">{{ message.text }}</strong>
+			<!-- the AI's advice takes a thumb; a person's word does not -->
+			<span v-if="message.author === 'ai' && !compact" class="rc-message__thumbs" data-test="thumbs">
+				<template v-if="!rated">
+					<button type="button" class="rc-message__thumb" data-test="thumb-up" @click="rate(true)">👍 {{ t('recorder.message.helpful') }}</button>
+					<button type="button" class="rc-message__thumb" data-test="thumb-down" @click="rate(false)">👎 {{ t('recorder.message.notHelpful') }}</button>
+				</template>
+				<span v-else class="rc-message__thanks">{{ t('recorder.message.thanks') }}</span>
+			</span>
 		</div>
 		<button type="button" class="rc-message__close" :aria-label="t('recorder.message.dismiss')" @click="emit('dismiss')">
 			×
@@ -103,4 +128,18 @@ onBeforeUnmount(() => {
 	min-height: 32px;
 	cursor: pointer;
 }
+
+.rc-message__thumbs { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.rc-message__thumb {
+	background: rgba(255, 255, 255, 0.18);
+	border: 1px solid rgba(255, 255, 255, 0.4);
+	border-radius: 999px;
+	color: inherit;
+	font: inherit;
+	font-size: 0.8125rem;
+	padding: 4px 10px;
+	min-height: 32px;
+	cursor: pointer;
+}
+.rc-message__thanks { font-size: 0.8125rem; opacity: 0.85; }
 </style>

@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiAccountVoice,
 	mdiBrain,
 	mdiCheck,
 	mdiClose,
@@ -87,6 +88,15 @@ const analysisModel = ref('')
 const analysisKey = ref('')
 const analysisEnabled = ref(true)
 const analysisExtra = ref('')
+// the AI facilitator: its own level and model, falling back to the analysis model
+const facLevel = ref<'off' | 'light' | 'normal' | 'active'>('off')
+const facBaseUrl = ref('')
+const facModel = ref('')
+const facKey = ref('')
+const facInterval = ref(4)
+const facDominance = ref(60)
+const facSilence = ref(90)
+const facAdvanced = ref(false)
 const orgName = ref('')
 const retentionDays = ref(0)
 // the consent notice: who is responsible for the data, and how to reach them
@@ -196,6 +206,14 @@ async function reload(): Promise<void> {
 	analysisModel.value = summary.value.analysis.model
 	analysisEnabled.value = summary.value.analysis.enabled
 	analysisExtra.value = summary.value.analysis.extra_instructions
+	if (summary.value.facilitator) {
+		facLevel.value = summary.value.facilitator.level
+		facBaseUrl.value = summary.value.facilitator.base_url
+		facModel.value = summary.value.facilitator.model
+		facInterval.value = summary.value.facilitator.interval_minutes
+		facDominance.value = summary.value.facilitator.dominance_percent
+		facSilence.value = summary.value.facilitator.silence_seconds
+	}
 	orgName.value = summary.value.organization_name
 	retentionDays.value = summary.value.audio_retention_days ?? 0
 	consentController.value = summary.value.consent_controller ?? ''
@@ -285,6 +303,12 @@ function currentPayload(): Record<string, unknown> {
 			analysis_model: analysisModel.value.trim(),
 			analysis_enabled: analysisEnabled.value,
 			analysis_extra_instructions: analysisExtra.value.trim(),
+			facilitator_level: facLevel.value,
+			facilitator_base_url: facBaseUrl.value.trim(),
+			facilitator_model: facModel.value.trim(),
+			facilitator_interval_minutes: Number(facInterval.value) || 4,
+			facilitator_dominance_percent: Number(facDominance.value) || 60,
+			facilitator_silence_seconds: Number(facSilence.value) || 90,
 			organization_name: orgName.value.trim(),
 			audio_retention_days: Number(retentionDays.value) || 0,
 			consent_controller: consentController.value.trim(),
@@ -314,11 +338,13 @@ async function save(): Promise<void> {
 		if (deepgramKey.value) payload.deepgram_api_key = deepgramKey.value
 		if (whisperKey.value) payload.whisper_api_key = whisperKey.value
 		if (analysisKey.value) payload.analysis_api_key = analysisKey.value
+		if (facKey.value) payload.facilitator_api_key = facKey.value
 		summary.value = await api.updateProviders(payload)
 		mistralKey.value = ''
 		deepgramKey.value = ''
 		whisperKey.value = ''
 		analysisKey.value = ''
+		facKey.value = ''
 		saved.value = snapshot()
 		toast('Settings saved')
 	} catch (err) {
@@ -328,7 +354,7 @@ async function save(): Promise<void> {
 	}
 }
 
-async function test(target: SttProvider | 'analysis'): Promise<void> {
+async function test(target: SttProvider | 'analysis' | 'facilitator'): Promise<void> {
 	busy.value = true
 	try {
 		const typedKeys: Record<string, string> = {
@@ -336,17 +362,24 @@ async function test(target: SttProvider | 'analysis'): Promise<void> {
 			deepgram: deepgramKey.value,
 			whisper: whisperKey.value,
 			analysis: analysisKey.value,
+			facilitator: facKey.value,
 		}
 		const typed = typedKeys[target] ?? ''
 		const baseUrls: Record<string, string> = {
 			analysis: analysisBaseUrl.value.trim(),
+			facilitator: facBaseUrl.value.trim(),
 			whisper: whisperBaseUrl.value.trim(),
 			vosk: voskUrl.value.trim(),
 		}
 		const baseUrl = baseUrls[target]
 		// the analysis test makes one real completion: with the model in the
 		// form, not the saved one, or a typed replacement can never be tested
-		const model = target === 'analysis' ? analysisModel.value.trim() || undefined : undefined
+		const model =
+			target === 'analysis'
+				? analysisModel.value.trim() || undefined
+				: target === 'facilitator'
+					? facModel.value.trim() || undefined
+					: undefined
 		testResults.value = {
 			...testResults.value,
 			[target]: await api.testProvider(target, typed.trim() || undefined, baseUrl, model),
@@ -788,6 +821,71 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 						Appended to the built-in prompts for table and round analysis. The output
 						format and the mandatory evidence links cannot be overridden.
 					</span>
+				</div>
+
+				<!-- the AI facilitator: opt-in, its own model, conservative by design -->
+				<div class="cz-row" style="margin: 22px 0 4px">
+					<SvgIcon :path="mdiAccountVoice" :size="22" style="color: var(--cz-primary)" />
+					<h3>AI facilitator</h3>
+				</div>
+				<p class="cz-muted" style="font-size: 0.845rem; margin-bottom: 10px">
+					A quiet voice beside each table during a session: one short question or reminder
+					when time runs out, the room goes silent, the discussion drifts or — where the
+					engine labels speakers — one voice dominates. It reaches the facilitator's own
+					phone first and the table's phones only when no facilitator phone is connected.
+					Each assembly can pick its own level; this is the default.
+				</p>
+				<div class="cz-field" data-test="facilitator-level">
+					<label>Default level for new assemblies</label>
+					<div class="cz-row" style="gap: 14px; flex-wrap: wrap">
+						<label v-for="level in (['off', 'light', 'normal', 'active'] as const)" :key="level" style="display: flex; align-items: center; gap: 6px; cursor: pointer">
+							<input v-model="facLevel" type="radio" :value="level" />
+							{{ { off: 'Off', light: 'Light (2 per session)', normal: 'Normal (4)', active: 'Active (8)' }[level] }}
+						</label>
+					</div>
+				</div>
+				<div class="cz-fieldgrid" style="margin-top: 10px">
+					<div class="cz-field" style="grid-column: span 2">
+						<label>Base URL (blank: the analysis endpoint)</label>
+						<input v-model="facBaseUrl" type="text" :placeholder="analysisBaseUrl || 'https://api.mistral.ai/v1'" />
+					</div>
+					<div class="cz-field">
+						<label>Model (blank: the analysis model)</label>
+						<input v-model="facModel" type="text" :placeholder="analysisModel || 'mistral-small-latest'" />
+					</div>
+					<div class="cz-field">
+						<label>API key (blank: the analysis key)</label>
+						<div class="cz-row" style="flex-wrap: nowrap">
+							<input
+								v-model="facKey"
+								type="password"
+								autocomplete="off"
+								style="flex: 1"
+								:placeholder="keyPlaceholder(summary.facilitator?.own_key ?? false, summary.facilitator?.key_hint ?? '')" />
+							<CzButton small :disabled="busy" data-test="test-facilitator" @click="test('facilitator')">Test</CzButton>
+						</div>
+						<span v-if="testResults.facilitator" class="cz-pill" :class="testResults.facilitator.ok ? 'cz-pill--green' : 'cz-pill--orange'" style="text-transform: none; align-self: flex-start">
+							<SvgIcon :path="testResults.facilitator.ok ? mdiCheck : mdiClose" :size="14" />
+							{{ testResults.facilitator.message }}
+						</span>
+					</div>
+				</div>
+				<CzButton variant="tertiary" small style="margin-top: 8px" @click="facAdvanced = !facAdvanced">
+					{{ facAdvanced ? 'Hide thresholds' : 'Thresholds…' }}
+				</CzButton>
+				<div v-if="facAdvanced" class="cz-fieldgrid" style="margin-top: 8px" data-test="facilitator-thresholds">
+					<div class="cz-field">
+						<label>Minutes between two nudges at a table</label>
+						<input v-model.number="facInterval" type="number" min="1" max="60" />
+					</div>
+					<div class="cz-field">
+						<label>One voice above this share counts as dominating (%)</label>
+						<input v-model.number="facDominance" type="number" min="40" max="95" />
+					</div>
+					<div class="cz-field">
+						<label>Seconds of silence before an open question</label>
+						<input v-model.number="facSilence" type="number" min="20" max="600" />
+					</div>
 				</div>
 
 				<button

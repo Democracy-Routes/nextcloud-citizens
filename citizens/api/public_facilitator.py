@@ -25,6 +25,7 @@ from citizens.security.rate_limit import (
     client_ip,
     token_key,
 )
+from citizens.services import facilitator as ai_svc
 from citizens.services import facilitators as facilitator_svc
 from citizens.services import messages as messages_svc
 
@@ -124,6 +125,35 @@ def facilitator_help(data: HelpIn, facilitator: Facilitator, session: DB):
     """The table's hand, raised from the facilitator's phone."""
     HELP_LIMITER.check(facilitator.id)
     return facilitator_svc.raise_hand(session, facilitator, data.kind)
+
+
+@router.post("/facilitator/advice/{intervention_id}/dismiss")
+def dismiss_advice(intervention_id: str, facilitator: Facilitator, session: DB):
+    """The facilitator judged the AI's advice not worth the table's attention."""
+    return ai_svc.dismiss(session, facilitator, intervention_id)
+
+
+@router.post("/facilitator/advice/{intervention_id}/send", status_code=201)
+def send_advice(intervention_id: str, facilitator: Facilitator, session: DB):
+    """The facilitator sends the AI's advice on to the table's phones, as
+    their own prompt."""
+    PROMPT_LIMITER.check(facilitator.id)
+    return ai_svc.send_to_table(session, facilitator, intervention_id)
+
+
+class FeedbackIn(BaseModel):
+    helpful: bool
+
+
+@router.post("/facilitator/advice/{intervention_id}/feedback")
+def advice_feedback(
+    intervention_id: str, data: FeedbackIn, facilitator: Facilitator, session: DB
+):
+    """A thumb on a piece of advice, from the facilitator's phone."""
+    intervention = ai_svc._advice_for(session, facilitator, intervention_id)
+    return ai_svc.give_feedback(
+        session, intervention, facilitator.table_number, "facilitator", data.helpful
+    )
 
 
 class CodeIn(BaseModel):

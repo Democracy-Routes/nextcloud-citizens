@@ -189,6 +189,37 @@ not rewritten.
   never records and sees no other table. Migration 0035
   (`facilitator_sessions`, bearer hashed, no personal data); routes
   `POST /api/v1/public/facilitate`, `GET/POST /api/v1/public/facilitator/*`.
+- **The AI facilitator, opt-in.** A quiet voice beside each table during a
+  session. Once a minute it reads the table's live captions (pseudonymised),
+  the time left and — where the engine labels speakers — the anonymous
+  speaking balance, and only when a trigger fires (time running out,
+  silence, a stretch of new discussion, one voice dominating) asks a model
+  for one short sentence or nothing. The advice goes to the facilitator's
+  own phone first, as a card with *Dismiss* / *Send to the table*; the
+  table's phones get it directly, labelled "AI facilitator", only when no
+  facilitator phone is connected. Levels Off / Light (2 per session) /
+  Normal (4) / Active (8): the instance default in Settings → AI (with its
+  own model, key and thresholds, falling back to the analysis model), per
+  assembly on the Overview tab, and the table's own switch on its phone's
+  tech sheet; the Live tab can *Pause AI* per table and reads the log of
+  what was said, to whom, and the thumbs. 👍 / 👎 under every AI message
+  (table phone and facilitator phone); three 👎 at a table silence it
+  there. Migration 0036; `POST /api/v1/public/recorder/facilitator`,
+  `POST /api/v1/public/recorder/messages/{id}/feedback`,
+  `POST /api/v1/public/facilitator/advice/{id}/dismiss|send|feedback`,
+  `POST /api/v1/assemblies/{id}/tables/{n}/facilitation`,
+  `GET /api/v1/rounds/{id}/interventions`, `POST /api/v1/admin/facilitator/tick`.
+- **Live speaking balance on the facilitator's phone.** When the engine
+  labels speakers (Deepgram), the last five minutes of the table's captions
+  become Voice A / B / C bars — speaking time, no names; otherwise the page
+  says it is not available with this engine. The AI facilitator's balance
+  nudge needs these figures and is refused without them.
+- **Vosk speaker vectors: investigated, not shipped.** The deployed Vosk
+  server already supports `vosk-model-spk-0.4` behind one variable; a spike
+  on dev audio measured 128-d vectors on 89–100 % of utterances, same-voice
+  cosine ≈ 0.57 vs different ≈ 0.13, above-realtime decoding. Findings,
+  caveats (short utterances, mixed voices) and the proposed in-memory
+  clustering design are in `docs/vosk-speaker-vectors.md`.
 - **Remix the tables to meet new people.** Tables tab → *Remix* with a goal:
   *new people* seats everyone (including those registered at the tables)
   so that as few pairs as possible sit together again, balanced table sizes;

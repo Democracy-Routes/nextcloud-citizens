@@ -14,7 +14,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../../i18n'
-import { recorderApi, type HelpState, type JoinResult, type RoundInfo } from '../api'
+import { recorderApi, type AiFacilitatorState, type AiLevel, type HelpState, type JoinResult, type RoundInfo } from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
@@ -92,6 +92,26 @@ const help = ref<HelpState | null | undefined>(undefined)
 // Cues the table hears: recording started / stopped / resumed. A spontaneous
 // session defaults to quiet, an assembly to normal; the tech sheet changes it.
 const sounds = ref<SoundLevel>(soundLevel(props.session.assembly.kind === 'session' ? 'quiet' : 'normal'))
+
+/* ---- the AI facilitator at this table: the status poll says the effective
+ * level; the tech sheet's buttons set the table's own level (or follow the
+ * assembly again). Nothing here touches capture. */
+const ai = ref<AiFacilitatorState | null>(null)
+const aiBusy = ref(false)
+async function chooseAi(level: AiLevel | 'default'): Promise<void> {
+	if (aiBusy.value) return
+	aiBusy.value = true
+	try {
+		ai.value = await recorderApi.setFacilitatorLevel(props.session.session_token, level)
+	} catch {
+		/* the next poll says */
+	} finally {
+		aiBusy.value = false
+	}
+}
+function rateMessage(messageId: number, helpful: boolean): void {
+	void recorderApi.messageFeedback(props.session.session_token, messageId, helpful).catch(() => undefined)
+}
 function chooseSounds(level: SoundLevel): void {
 	sounds.value = level
 	setSoundLevel(level)
@@ -442,6 +462,7 @@ onMounted(async () => {
 			const status = await recorderApi.status(props.session.session_token)
 			messages.ingest(status)
 			help.value = status.help
+			if (status.ai_facilitator) ai.value = status.ai_facilitator
 			const current = status.rounds.find((r) => r.id === props.round.id)
 			if (current && current.status === 'ENDED') {
 				roundEnded.value = true
@@ -585,7 +606,11 @@ async function clearSynced(): Promise<void> {
 		<p v-if="startedBanner" class="rc-started" role="status" data-test="started">
 			{{ t('recorder.recording.startedBanner') }}
 		</p>
-		<MessageBanner v-if="messages.current.value" :message="messages.current.value" @dismiss="messages.dismiss" />
+		<MessageBanner
+			v-if="messages.current.value"
+			:message="messages.current.value"
+			@dismiss="messages.dismiss"
+			@feedback="rateMessage(messages.current.value.id, $event)" />
 		<HelpButton
 			v-if="!plenary && session.assembly.kind !== 'session'"
 			:token="session.session_token"
@@ -698,6 +723,23 @@ async function clearSynced(): Promise<void> {
 						<SvgIcon :path="mdiAccountVoice" :size="16" />
 						{{ t('recorder.table.addFacilitator') }}
 					</button>
+				</div>
+				<!-- the AI facilitator at this table: the table's own switch -->
+				<div v-if="ai && ai.configured" class="rc-status-row" data-test="ai-row">
+					<span class="rc-status-row__label">{{ t('recorder.recording.aiTitle') }}</span>
+					<span class="rc-sounds" role="group" :aria-label="t('recorder.recording.aiHint')">
+						<button
+							v-for="level in (['off', 'light', 'normal', 'active'] as const)"
+							:key="level"
+							type="button"
+							class="rc-sounds__opt"
+							:class="{ 'rc-sounds__opt--on': ai.level === level }"
+							:disabled="aiBusy"
+							:data-test="`ai-${level}`"
+							@click="chooseAi(level)">
+							{{ t(`recorder.recording.ai${level.charAt(0).toUpperCase() + level.slice(1)}`) }}
+						</button>
+					</span>
 				</div>
 				<!-- the table's cues, a per-phone choice -->
 				<div class="rc-status-row">

@@ -68,6 +68,8 @@ class AssemblyCreate(BaseModel):
     # for an organized assembly; the API default stays 'optional' so clients
     # and scripts from before 0.7 keep working unchanged.
     participant_consent: Literal["required", "optional"] = "optional"
+    # the AI facilitator's level here; None follows the instance default
+    ai_facilitator: Literal["off", "light", "normal", "active"] | None = None
     rounds: list[RoundIn] = []
 
 
@@ -87,6 +89,8 @@ class AssemblyUpdate(BaseModel):
     participant_consent: Literal["required", "optional"] | None = None
     # false when the organizer picks the language by hand on a Record-now session
     language_auto: bool | None = None
+    # the AI facilitator's level for this assembly; "default" follows Settings
+    ai_facilitator: Literal["default", "off", "light", "normal", "active"] | None = None
 
 
 class AssemblyOut(BaseModel):
@@ -113,6 +117,8 @@ class AssemblyOut(BaseModel):
     participant_consent: str = "optional"
     # the language is being detected from the recording (Record now)
     language_auto: bool = False
+    # off / light / normal / active, or None: the instance default applies
+    ai_facilitator: str | None = None
     created_by: str
     created_at: datetime
 
@@ -120,6 +126,9 @@ class AssemblyOut(BaseModel):
 class AssemblyDetail(AssemblyOut):
     rounds: list[RoundOut]
     participant_count: int = 0
+    # what "default" means right now (Settings → AI facilitator)
+    ai_facilitator_default: str = "off"
+    ai_facilitator_configured: bool = False
 
 
 class ParticipantIn(BaseModel):
@@ -292,6 +301,8 @@ class MessageOut(BaseModel):
     sound: bool
     created_at: datetime
     created_by: str | None = None
+    # organizer / facilitator / ai — who the phones say it is from
+    author: str = "organizer"
     target_table_number: int | None = None
     seen_by: list[int] = []
     not_seen_by: list[int] = []

@@ -154,6 +154,44 @@ async function becomeRecorder(): Promise<void> {
 	}
 }
 
+/* ---- the AI facilitator's advice: the facilitator decides ---- */
+const adviceBusy = ref<string | null>(null)
+const sentAdvice = ref<Set<string>>(new Set())
+const ratedAdvice = ref<Record<string, boolean>>({})
+async function dismissAdvice(id: string): Promise<void> {
+	adviceBusy.value = id
+	try {
+		await recorderApi.facilitatorAdviceDismiss(props.token, id)
+		if (status.value) status.value = { ...status.value, advice: status.value.advice.filter((a) => a.id !== id) }
+	} catch {
+		/* the next poll says */
+	} finally {
+		adviceBusy.value = null
+	}
+}
+async function sendAdvice(id: string): Promise<void> {
+	adviceBusy.value = id
+	try {
+		await recorderApi.facilitatorAdviceSend(props.token, id)
+		sentAdvice.value = new Set([...sentAdvice.value, id])
+		window.setTimeout(() => {
+			if (status.value) status.value = { ...status.value, advice: status.value.advice.filter((a) => a.id !== id) }
+		}, 2500)
+	} catch {
+		/* the next poll says */
+	} finally {
+		adviceBusy.value = null
+	}
+}
+function rateAdvice(id: string, helpful: boolean): void {
+	ratedAdvice.value = { ...ratedAdvice.value, [id]: helpful }
+	void recorderApi.facilitatorAdviceFeedback(props.token, id, helpful).catch(() => undefined)
+}
+const aiLevelLabel = computed(() => {
+	const level = status.value?.ai_facilitator?.level ?? 'off'
+	return t(`recorder.recording.ai${level.charAt(0).toUpperCase() + level.slice(1)}`)
+})
+
 /* ---- speaking balance (when the engine labels speakers) ---- */
 const voices = computed(() => {
 	const speaking = status.value?.speaking
@@ -245,11 +283,33 @@ onBeforeUnmount(() => {
 
 			<!-- the AI facilitator's advice, for the facilitator to judge -->
 			<div v-if="status.capabilities.ai_facilitator" class="rc-card" style="text-align: left" data-test="advice">
-				<p class="rc-eyebrow" style="margin-bottom: 2px">{{ t('recorder.facilitator.adviceTitle') }}</p>
+				<p class="rc-eyebrow" style="margin-bottom: 2px">
+					{{ t('recorder.facilitator.adviceTitle') }} · {{ t('recorder.facilitator.adviceLevel', { level: aiLevelLabel }) }}
+				</p>
 				<p v-if="!status.advice.length" class="rc-muted" style="margin: 4px 0 0; font-size: 0.875rem">
 					{{ t('recorder.facilitator.adviceNone') }}
 				</p>
-				<slot name="advice" :advice="status.advice" />
+				<div v-for="item in status.advice" :key="item.id" class="rc-fac-advice" data-test="advice-card">
+					<p>{{ item.text }}</p>
+					<p v-if="sentAdvice.has(item.id)" class="rc-ok" style="margin: 0; font-size: 0.875rem" data-test="advice-sent">
+						✓ {{ t('recorder.facilitator.sentToTable') }}
+					</p>
+					<div v-else class="rc-fac-advice__actions">
+						<button type="button" class="rc-btn rc-subtle" :disabled="adviceBusy === item.id" data-test="advice-dismiss" @click="dismissAdvice(item.id)">
+							{{ t('recorder.facilitator.dismiss') }}
+						</button>
+						<button type="button" class="rc-btn rc-primary" :disabled="adviceBusy === item.id" data-test="advice-send" @click="sendAdvice(item.id)">
+							{{ t('recorder.facilitator.sendToTable') }}
+						</button>
+					</div>
+					<div class="rc-message__thumbs" style="margin-top: 8px">
+						<template v-if="ratedAdvice[item.id] === undefined">
+							<button type="button" class="rc-fac-thumb" data-test="advice-up" @click="rateAdvice(item.id, true)">👍 {{ t('recorder.facilitator.helpful') }}</button>
+							<button type="button" class="rc-fac-thumb" data-test="advice-down" @click="rateAdvice(item.id, false)">👎 {{ t('recorder.facilitator.notHelpful') }}</button>
+						</template>
+						<span v-else class="rc-muted" style="font-size: 0.8125rem">{{ t('recorder.message.thanks') }}</span>
+					</div>
+				</div>
 			</div>
 
 			<!-- messages from the organizer -->
@@ -369,4 +429,15 @@ onBeforeUnmount(() => {
 .rc-pad { padding: 6px 2px calc(12px + env(safe-area-inset-bottom, 0px)); }
 .rc-lead { font-size: 1.02rem; line-height: 1.5; margin: 8px 0 0; }
 .rc-ok { color: #1e6b3a; }
+.rc-fac-thumb {
+	background: none;
+	border: 1px solid var(--rc-border);
+	border-radius: 999px;
+	color: inherit;
+	font: inherit;
+	font-size: 0.8125rem;
+	padding: 4px 10px;
+	min-height: 32px;
+	cursor: pointer;
+}
 </style>

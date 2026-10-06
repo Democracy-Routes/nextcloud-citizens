@@ -31,6 +31,8 @@ export interface Assembly {
 	participant_consent?: ConsentMode
 	/** Record now: the language follows the first transcript until chosen by hand */
 	language_auto?: boolean
+	/** the AI facilitator's level; 'default' (or null) follows Settings */
+	ai_facilitator?: 'default' | 'off' | 'light' | 'normal' | 'active' | null
 	name: string
 	description: string
 	language: string
@@ -133,6 +135,8 @@ export interface AssemblyUpdate {
 	audio_retention_days?: number | null
 	participant_consent?: ConsentMode
 	language_auto?: boolean
+	/** the AI facilitator's level; 'default' (or null) follows Settings */
+	ai_facilitator?: 'default' | 'off' | 'light' | 'normal' | 'active' | null
 }
 
 /** 'required': a table records only once one registered person there has
@@ -141,6 +145,9 @@ export interface AssemblyUpdate {
 export type ConsentMode = 'required' | 'optional'
 
 export interface AssemblyDetail extends Assembly {
+	/** what "default" means for the AI facilitator right now, and whether it can run */
+	ai_facilitator_default?: 'off' | 'light' | 'normal' | 'active'
+	ai_facilitator_configured?: boolean
 	rounds: Round[]
 	participant_count: number
 }
@@ -292,10 +299,25 @@ export interface SessionMessage {
 	sound: boolean
 	created_at: string
 	created_by: string | null
+	/** who the phones say it is from */
+	author?: 'organizer' | 'facilitator' | 'ai'
 	/** null: every table */
 	target_table_number: number | null
 	seen_by: number[]
 	not_seen_by: number[]
+}
+
+/** What the AI facilitator said at a table, and what people thought of it. */
+export interface Intervention {
+	id: string
+	kind: string
+	text: string
+	table_number: number
+	delivered_to: 'facilitator' | 'table'
+	created_at: string
+	sent_to_table_at: string | null
+	dismissed_at: string | null
+	feedback: { helpful: number; not_helpful: number }
 }
 
 /** The assembly's pre-registration link, and how many used it (0.7). */
@@ -321,6 +343,8 @@ export interface MonitorTable {
 	number: number
 	/** the table's open request for the organizer; absent on older servers */
 	help_request?: HelpRequest | null
+	/** the AI facilitator's effective level at this table (0.7) */
+	ai_facilitator?: 'off' | 'light' | 'normal' | 'active'
 	color_key?: TableColor | string
 	device: { connected: boolean; seconds_since_contact: number | null; status: DeviceStatus }
 	armed: boolean
@@ -417,6 +441,18 @@ export interface ProvidersSummary {
 		enabled: boolean
 		extra_instructions: string
 		default_prompts?: { table: string; round: string }
+	}
+	/** the AI facilitator's instance settings (absent from a server before 0.7) */
+	facilitator?: {
+		level: 'off' | 'light' | 'normal' | 'active'
+		configured: boolean
+		own_key: boolean
+		interval_minutes: number
+		dominance_percent: number
+		silence_seconds: number
+		base_url: string
+		model: string
+		key_hint: string
 	}
 	logo_set: boolean
 }

@@ -37,7 +37,11 @@ const draft = ref<{
 	autoPurge: boolean
 	redactNames: string
 	participantConsent: ConsentMode
-}>({ name: '', description: '', language: 'en', autoPurge: true, redactNames: '', participantConsent: 'optional' })
+	aiFacilitator: 'default' | 'off' | 'light' | 'normal' | 'active'
+}>({
+	name: '', description: '', language: 'en', autoPurge: true, redactNames: '',
+	participantConsent: 'optional', aiFacilitator: 'default',
+})
 
 /** Has any table started recording?
  *
@@ -57,6 +61,7 @@ function startEditDetails(): void {
 		autoPurge: props.assembly.auto_purge_device_audio,
 		redactNames: props.assembly.redact_names,
 		participantConsent: props.assembly.participant_consent ?? 'optional',
+		aiFacilitator: (props.assembly.ai_facilitator ?? 'default') as 'default' | 'off' | 'light' | 'normal' | 'active',
 	}
 	detailsError.value = ''
 	editingDetails.value = true
@@ -72,6 +77,7 @@ async function saveDetails(): Promise<void> {
 			auto_purge_device_audio: draft.value.autoPurge,
 			redact_names: draft.value.redactNames.trim(),
 			participant_consent: draft.value.participantConsent,
+			ai_facilitator: draft.value.aiFacilitator,
 			// never sent once recording has begun, so a stale form cannot
 			// change it behind the guard
 			...(recordingHasBegun.value ? {} : { language: draft.value.language }),
@@ -261,6 +267,30 @@ const nextStep = computed<NextStep | null>(() => {
 						record — who, what, which notice — is kept with the assembly and exported.
 						Required is the setting for an organized assembly; Optional suits a
 						spontaneous session.
+					</span>
+				</div>
+				<div class="cz-field" data-test="ai-facilitator">
+					<label>AI facilitator</label>
+					<label v-for="level in (['default', 'off', 'light', 'normal', 'active'] as const)" :key="level" style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+						<input v-model="draft.aiFacilitator" type="radio" :value="level" />
+						{{
+							{
+								default: `Default from Settings (${assembly.ai_facilitator_default ?? 'off'})`,
+								off: 'Off',
+								light: 'Light — at most two nudges per session',
+								normal: 'Normal — at most four',
+								active: 'Active — at most eight',
+							}[level]
+						}}
+					</label>
+					<span class="cz-muted" style="font-size: 0.78rem">
+						One short question or reminder on the table's phones when time runs out, the
+						room goes silent or the discussion drifts — to the facilitator's own phone
+						first when one is connected, and only then to the table. Each table can
+						switch it off from its phone; the Live tab can pause it.
+						<template v-if="assembly.ai_facilitator_configured === false">
+							Not set up on this server yet (Settings → AI).
+						</template>
 					</span>
 				</div>
 				<div class="cz-field">

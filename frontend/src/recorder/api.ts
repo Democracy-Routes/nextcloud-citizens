@@ -81,7 +81,19 @@ export interface FacilitatorStatus {
 	/** anonymous speaking balance when the engine labels speakers; null otherwise */
 	speaking: { voices: number; shares: number[]; largest_percent: number } | null
 	advice: FacilitatorAdvice[]
+	/** the AI facilitator at this table: effective level and the table's own override */
+	ai_facilitator?: AiFacilitatorState
 	capabilities: { live_speaking_balance: boolean; ai_facilitator: boolean }
+}
+
+export type AiLevel = 'off' | 'light' | 'normal' | 'active'
+
+export interface AiFacilitatorState {
+	level: AiLevel
+	override: AiLevel | null
+	assembly_level: AiLevel | null
+	instance_level: AiLevel
+	configured: boolean
 }
 
 export interface FacilitatorJoin extends FacilitatorStatus {
@@ -284,6 +296,8 @@ export interface RecorderStatus {
 	consent?: TableConsent
 	/** null: no hand up; absent: a server older than 0.7 */
 	help?: HelpState | null
+	/** the AI facilitator at this table (absent before 0.7) */
+	ai_facilitator?: AiFacilitatorState
 	report_available?: boolean
 	/** the organizer closed the assembly (possibly mid-round): stop, don't advance */
 	assembly_closed?: boolean
@@ -634,6 +648,26 @@ export const recorderApi = {
 	/** The table's hand, raised from the facilitator's phone. */
 	facilitatorHelp: (token: string, kind: HelpKind) =>
 		request<HelpState>('POST', '/api/v1/public/facilitator/help', { token, json: { kind } }),
+
+	/** The AI facilitator's advice: judged on the facilitator's phone. */
+	facilitatorAdviceDismiss: (token: string, interventionId: string) =>
+		request<FacilitatorAdvice>('POST', `/api/v1/public/facilitator/advice/${interventionId}/dismiss`, { token }),
+	facilitatorAdviceSend: (token: string, interventionId: string) =>
+		request<FacilitatorAdvice>('POST', `/api/v1/public/facilitator/advice/${interventionId}/send`, { token }),
+	facilitatorAdviceFeedback: (token: string, interventionId: string, helpful: boolean) =>
+		request<{ intervention_id: string; helpful: boolean }>(
+			'POST', `/api/v1/public/facilitator/advice/${interventionId}/feedback`, { token, json: { helpful } },
+		),
+
+	/** The table's own AI-facilitator switch ('default' follows the assembly). */
+	setFacilitatorLevel: (token: string, level: AiLevel | 'default') =>
+		request<AiFacilitatorState>('POST', '/api/v1/public/recorder/facilitator', { token, json: { level } }),
+
+	/** 👍 / 👎 under an AI facilitator banner. */
+	messageFeedback: (token: string, messageId: number, helpful: boolean) =>
+		request<{ intervention_id: string; helpful: boolean }>(
+			'POST', `/api/v1/public/recorder/messages/${messageId}/feedback`, { token, json: { helpful } },
+		),
 
 	/** A code for this table: register for consent, or add a recorder (this phone included). */
 	facilitatorCode: (token: string, purpose: 'REGISTER_PARTICIPANT' | 'ADD_RECORDER_TO_TABLE') =>
