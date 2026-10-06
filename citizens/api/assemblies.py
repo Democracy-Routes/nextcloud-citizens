@@ -27,11 +27,11 @@ from citizens.storage.paths import purge_assembly_storage
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # round_monitor is polled every few seconds by every open organizer tab for the
 # whole length of an event. Taking SQLite's writer slot for it competes with
 # the phones' chunk uploads for no reason: it only reads.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 @router.get("/assemblies", response_model=list[schemas.AssemblyOut])

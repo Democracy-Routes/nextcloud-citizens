@@ -30,10 +30,10 @@ from citizens.storage.paths import device_log_path
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # Listing invites and rendering the QR sheet are reads; the sheet in particular
 # renders a PDF, which must not hold the writer slot while tables are joining.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 @router.get("/assemblies/{assembly_id}/invites", response_model=list[schemas.InviteOut])

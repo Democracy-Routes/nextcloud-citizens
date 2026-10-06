@@ -28,7 +28,7 @@ log = get_logger(__name__)
 
 router = APIRouter(prefix="/admin")
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 
 
 def get_config_store(nc: Annotated[NextcloudApp, Depends(nc_app)]) -> provider_config.ConfigStore:

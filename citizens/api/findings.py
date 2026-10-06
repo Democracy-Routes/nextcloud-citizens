@@ -29,7 +29,7 @@ from citizens.services.speaking import round_speaking_comparison, table_speaking
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 
 
 def _finding_payload(session: Session, finding: Finding, table_numbers: dict[str, int]) -> dict:

@@ -24,13 +24,13 @@ from citizens.storage import exports
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # Reads go through a session that does NOT take SQLite's single writer slot.
 # Building an audio bundle copies every recording byte-for-byte and a session
 # export also renders the PDF; holding the write lock across that starved every
 # phone still uploading chunks, which surfaced as "database is locked" 500s
 # mid-event.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 def _refuse_if_being_assembled(session: Session, recording: Recording) -> None:

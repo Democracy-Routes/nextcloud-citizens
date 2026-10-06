@@ -21,11 +21,11 @@ from citizens.services.report_pdf import render_pdf
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # Rendering a report reads every transcript and finding, and the PDF path also
 # asks Nextcloud for the organization name over OCS. None of that may happen
 # while holding SQLite's single writer slot.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 def _report_filename(name: str, ext: str) -> str:

@@ -46,9 +46,9 @@ from citizens.storage.paths import device_log_path
 
 router = APIRouter(prefix="/public")
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # for pure polls: no BEGIN IMMEDIATE, so readers never queue behind writers
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 def _session_from_authorization(

@@ -23,7 +23,7 @@ from citizens.storage.paths import live_caption_path
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 
 
 def _owned_recording(session: Session, recording_id: str, user: str) -> Recording:

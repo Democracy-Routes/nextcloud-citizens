@@ -31,8 +31,8 @@ from citizens.services import messages as messages_svc
 
 router = APIRouter(prefix="/public")
 
-DB = Annotated[Session, Depends(get_db)]
-ReadDB = Annotated[Session, Depends(get_read_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 def _bearer(authorization: str) -> str:

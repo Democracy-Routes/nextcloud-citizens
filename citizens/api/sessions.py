@@ -22,8 +22,8 @@ from citizens.services.assemblies import get_owned_round
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
-ReadDB = Annotated[Session, Depends(get_read_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 @router.get("/sessions", response_model=list[schemas.SessionOut])
