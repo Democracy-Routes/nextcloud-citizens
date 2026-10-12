@@ -174,7 +174,7 @@ describe('the device-audio purge line', () => {
 		await flushPromises()
 
 		expect(wrapper.text()).toContain('6 of 8')
-		expect(wrapper.text()).toContain('recorder sessions last reported no local recordings')
+		expect(wrapper.text()).toContain('the phones last reported no local recordings')
 		expect(wrapper.text()).toContain('2 still hold audio')
 		expect(wrapper.text()).toContain('same phone more than once')
 		expect(wrapper.text()).toContain('expired or revoked sessions may need manual cleanup')
