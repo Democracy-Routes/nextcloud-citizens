@@ -561,7 +561,7 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
             t_zero = time.monotonic() + 3
             events = {"message": False, "hands": False, "paused": False}
 
-            def organizer_loop(t_zero=t_zero, rid=rid, s=s):
+            def organizer_loop(t_zero=t_zero, rid=rid, s=s, events=events):
                 last_tick = time.monotonic()
                 last_sample = 0.0
                 while not _STOP.is_set() and time.monotonic() - t_zero < seconds:
