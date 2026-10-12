@@ -151,11 +151,27 @@ def parse_participants_csv(csv_text: str) -> list[schemas.ParticipantIn]:
     return participants
 
 
+
+def seatable_participants(session: Session, assembly: Assembly) -> list[Participant]:
+    """Who New seating may place at a recorded table: everyone on the list
+    EXCEPT a person whose newest consent act refuses or withdraws recording —
+    the room's procedure puts them at a table that is not recorded, and a
+    seating plan that dealt them to a recorded table would block it
+    (PARTICIPANT_REFUSED) the moment the session was set up."""
+    from citizens.services import consent as consent_svc
+
+    latest = consent_svc.latest_consents(session, assembly.id)
+    return [
+        p for p in assembly.participants
+        if not consent_svc.refuses_recording(latest.get(p.id))
+    ]
+
+
 def randomize_assignments(session: Session, round_: Round) -> None:
     """Shuffle all assembly participants and deal them round-robin to tables."""
     if not round_.tables:
         raise HTTPException(status_code=422, detail="Round has no tables")
-    participants = list(round_.assembly.participants)
+    participants = seatable_participants(session, round_.assembly)
     random.shuffle(participants)
     _replace_assignments(
         session,
@@ -181,14 +197,16 @@ def remix_assignments(session: Session, round_: Round, goal: str = "new_people")
       smallest tables.
 
     Everyone on the assembly's list is seated, those who registered at the
-    tables included. Returns how many repeated pairs the seating has, so the
+    tables included — except people whose newest consent act refuses or
+    withdraws recording (seatable_participants): they sit at a table that is
+    not recorded. Returns how many repeated pairs the seating has, so the
     organizer sees what the goal achieved."""
     if goal not in REMIX_GOALS:
         raise HTTPException(status_code=422, detail="Unknown remix goal")
     if not round_.tables:
         raise HTTPException(status_code=422, detail="Round has no tables")
     tables = sorted(round_.tables, key=lambda t: t.number)
-    participants = list(round_.assembly.participants)
+    participants = seatable_participants(session, round_.assembly)
     met = _co_seatings(session, round_)
 
     if goal == "random":

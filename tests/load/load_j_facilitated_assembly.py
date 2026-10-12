@@ -310,15 +310,17 @@ class Phone:
             return
         chunks = self.chunks[session_index]
         CAPTION_POLLS.setdefault(f"t{self.table}{'ABCD'[self.slot - 1]}", [])
-        for seq, blob in enumerate(chunks):
+        for slot_index, blob in enumerate(chunks):
             if _STOP.is_set():
                 break
-            due = t_zero + seq * CHUNK_SECONDS
+            due = t_zero + slot_index * CHUNK_SECONDS
             if (delay := due - time.monotonic()) > 0 and _STOP.wait(delay):
                 break
-            elapsed = seq * CHUNK_SECONDS
+            elapsed = slot_index * CHUNK_SECONDS
             if self.stall and self.stall[0] <= elapsed < self.stall[1]:
-                continue  # the phone is asleep: nothing leaves it
+                continue  # the phone is asleep: that stretch is never captured
+            # a phone numbers what it captured: no gaps in the sequence
+            seq = self.sent
             status = phone_chunk(self.recording_id, seq, blob, self.token)
             if status != 200:
                 with _LOCK:
@@ -374,12 +376,23 @@ class FacilitatorPhone:
         self.sent_one = False
         self.rated: set[str] = set()
         self.recorder_alerts: list[dict] = []
+        self.policy: dict = {}
+
+    def run(self, stop: threading.Event) -> None:
+        """The phone's own loop, as the real page runs it: a heartbeat every
+        25 s (the server's window is 90 s), the status every 10 s."""
+        last_heartbeat = 0.0
+        while not stop.is_set() and self.connected:
+            if time.monotonic() - last_heartbeat >= 25:
+                last_heartbeat = time.monotonic()
+                phone("POST", "/api/v1/public/facilitator/heartbeat", token=self.token, phase="fac-heartbeat", timeout=30)
+            self.tick(self.policy)
+            stop.wait(10)
 
     def tick(self, policy: dict) -> None:
-        """One heartbeat + one status read: cards collected, the policy applied."""
+        """One status read: cards collected, the policy applied."""
         if not self.connected:
             return
-        phone("POST", "/api/v1/public/facilitator/heartbeat", token=self.token, phase="fac-heartbeat", timeout=30)
         status, body = phone("GET", "/api/v1/public/facilitator/status", token=self.token, phase="fac-status", timeout=30)
         if status != 200:
             return
@@ -579,21 +592,27 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
             t_zero = time.monotonic() + 3
             events = {"message": False, "hands": False, "paused": False}
 
+            session_stop = threading.Event()
+
+            def sampler_loop(t_zero=t_zero, rid=rid, s=s, session_stop=session_stop):
+                while not session_stop.is_set():
+                    now = time.monotonic() - t_zero
+                    entry = sample(rid, f"s{s + 1}+{int(now)}s")
+                    entry["now"] = now
+                    entry["session"] = s + 1
+                    line = " ".join(
+                        f"T{n}:{v['readiness'][:1] if v['readiness'] else '?'}"
+                        f"{'/' + ','.join(v['reasons']) if v['reasons'] else ''}"
+                        f"(src {v['live_source_slot']})"
+                        for n, v in sorted((entry.get("tables") or {}).items())
+                    )
+                    print(f"    [{entry['t']}] +{int(now)}s pool wait {entry['pool_max_wait_ms']} ms  {line}")
+                    session_stop.wait(15)
+
             def organizer_loop(t_zero=t_zero, rid=rid, s=s, events=events):
                 last_tick = time.monotonic()
-                last_sample = 0.0
                 while not _STOP.is_set() and time.monotonic() - t_zero < seconds:
                     now = time.monotonic() - t_zero
-                    if now - last_sample >= 30:
-                        last_sample = now
-                        entry = sample(rid, f"s{s + 1}+{int(now)}s")
-                        line = " ".join(
-                            f"T{n}:{v['readiness'][:1] if v['readiness'] else '?'}"
-                            f"{'/' + ','.join(v['reasons']) if v['reasons'] else ''}"
-                            f"(src {v['live_source_slot']})"
-                            for n, v in sorted((entry.get("tables") or {}).items())
-                        )
-                        print(f"    [{entry['t']}] pool wait {entry['pool_max_wait_ms']} ms  {line}")
                     if time.monotonic() - last_tick >= 60:
                         last_tick = time.monotonic()
                         facilitator_tick()
@@ -611,10 +630,16 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
                         nonlocal paused_at
                         org("POST", f"/api/v1/assemblies/{aid}/tables/{paused_table}/facilitation", {"level": "off"})
                         paused_at = time.time()
-                    for table, fac in facilitators.items():
-                        fac.tick(policies[table])
                     _STOP.wait(10)
 
+            for table, fac in facilitators.items():
+                fac.policy = policies[table]
+            fac_threads = [threading.Thread(target=fac.run, args=(session_stop,), daemon=True)
+                           for fac in facilitators.values()]
+            for thread in fac_threads:
+                thread.start()
+            sampler_thread = threading.Thread(target=sampler_loop, daemon=True)
+            sampler_thread.start()
             org_thread = threading.Thread(target=organizer_loop, daemon=True)
             org_thread.start()
             with concurrent.futures.ThreadPoolExecutor(max_workers=len(phones)) as pool:
@@ -626,6 +651,9 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
                         with _LOCK:
                             FAILURES.append(f"phone thread: {type(exc).__name__}: {exc}")
             org_thread.join(timeout=30)
+            session_stop.set()
+            for thread in (*fac_threads, sampler_thread):
+                thread.join(timeout=40)
             # one last read on every phone: a banner sent in the final minute
             # lands here rather than being missed by the 30 s poll cadence
             for p in phones:
@@ -633,7 +661,10 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
 
             # the stall chain, read from the samples of this session
             if s == 0 and any(p.stall for p in phones):
-                mid = [e for e in SAMPLES if e["label"].startswith("s1+") and 120 <= int(e["label"][3:-1]) <= 210]
+                # silence is counted from the last chunk (+90 s) and reported from
+                # +120 s; the phone wakes at +210 s and its first chunk lands a
+                # few seconds later
+                mid = [e for e in SAMPLES if e.get("session") == 1 and 125 <= e.get("now", -1) <= 205]
                 silent = any("CAPTURE_SILENT" in (e.get("tables") or {}).get(1, {}).get("reasons", []) for e in mid)
                 failed_over = any((e.get("tables") or {}).get(1, {}).get("live_source_slot") == 2 for e in mid)
                 check("table 1: CAPTURE_SILENT reached the Live tab during the stall", silent,
@@ -699,7 +730,11 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
 
         # the tail: transcripts, analyses, the synthesis at closing
         print("\nwaiting for transcription and analysis…")
-        budget = max(15 * 60, total_phones * sessions * minutes * 8)
+        audio_minutes = total_phones * sessions * minutes
+        # Vosk on this host runs close to real time for 24 recordings in a row;
+        # a hosted engine is many times faster
+        budget = max(20 * 60, int(audio_minutes * 60 * (0.9 if use_vosk else 0.25)) + 10 * 60)
+        print(f"  {audio_minutes} minutes of audio to transcribe; budget {budget // 60} min")
         deadline = time.monotonic() + budget
         while time.monotonic() < deadline:
             done = 0
@@ -707,10 +742,13 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
                 status, findings = org("GET", f"/api/v1/rounds/{round_['id']}/findings", timeout=60)
                 if status == 200 and findings.get("round_summary"):
                     done += 1
-            print(f"    sessions analysed: {done}/{len(rounds)}")
+            status, files = org("GET", f"/api/v1/assemblies/{aid}/files", timeout=60)
+            entries = [e for r in (files.get("rounds") or []) for e in r["tables"]] if status == 200 else []
+            transcribed = sum(1 for e in entries if e.get("has_transcript"))
+            print(f"    [{time.strftime('%H:%M:%S')}] transcribed {transcribed}/{len(entries)}  sessions analysed: {done}/{len(rounds)}")
             if done == len(rounds):
                 break
-            time.sleep(30)
+            time.sleep(60)
         check("every session was analysed within the budget", done == len(rounds), f"{done}/{len(rounds)}")
         status, _ = org("POST", f"/api/v1/assemblies/{aid}/close", {})
         check("assembly closed", status in (200, 204), str(status))

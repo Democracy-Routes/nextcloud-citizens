@@ -338,6 +338,11 @@ def _stands(consent: ParticipantConsent | None) -> bool:
     return bool(consent and consent.recording_consent and consent.withdrawn_at is None)
 
 
+def refuses_recording(consent: ParticipantConsent | None) -> bool:
+    """Public name of _refuses, for the seating plan."""
+    return _refuses(consent)
+
+
 def _refuses(consent: ParticipantConsent | None) -> bool:
     """Is this (newest) act a refusal or a withdrawal? A person with no act
     at all (an organizer's list entry) neither consents nor refuses."""

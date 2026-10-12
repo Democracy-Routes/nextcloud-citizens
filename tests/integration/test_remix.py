@@ -94,3 +94,49 @@ def test_the_participants_page_says_where_to_go_next(client):
     nxt = status["next_table"]
     assert nxt and nxt["round_position"] == 2 and nxt["table_number"] in (1, 2)
     assert nxt["color_key"] == ("blue" if nxt["table_number"] == 1 else "green")
+
+
+def test_new_seating_leaves_a_refuser_at_the_table_that_is_not_recorded(client):
+    """A person who refused (and was marked as moved) must not be dealt to a
+    recorded table by New seating: the 2026-10-12 rehearsal seated the two
+    moved refusers at tables 3 and 4, which were then blocked by
+    PARTICIPANT_REFUSED for the whole second session."""
+    import re
+
+    created = client.post(
+        "/api/v1/assemblies",
+        json={
+            "name": "TEST remix consent", "default_table_count": 2,
+            "participant_consent": "required",
+            "rounds": [{"title": "S1", "question": "Q"}, {"title": "S2", "question": "Q"}],
+        },
+    ).json()
+    round1, round2 = (r["id"] for r in created["rounds"])
+    client.post(f"/api/v1/rounds/{round1}/start")
+    token = re.search(r"#/join/(.+)$", created["invites"][0]["url"]).group(1)
+    joined = client.post("/api/v1/public/join", json={"token": token},
+                         headers={"X-Forwarded-For": "10.70.0.1"}).json()
+    phone = {"Authorization": f"Bearer {joined['session_token']}"}
+    notice = client.get("/api/v1/public/recorder/consent-notice", headers=phone).json()
+    act = {"notice_hash": notice["hash"], "notice_read": True, "recording_consent": True,
+           "transcription_consent": True, "analysis_consent": True, "publication_consent": True}
+    for name in ("Anna", "Bruno", "Carla"):
+        client.post("/api/v1/public/recorder/participants", json={**act, "name": name}, headers=phone)
+    refuser = client.post(
+        "/api/v1/public/recorder/participants",
+        json={**act, "name": "Dario", "recording_consent": False, "transcription_consent": False,
+              "analysis_consent": False, "publication_consent": False},
+        headers=phone,
+    ).json()["participant"]["id"]
+    client.post(f"/api/v1/public/recorder/participants/{refuser}/moved", headers=phone)
+
+    for goal in ("new_people", "random", "continuity"):
+        mixed = client.post(f"/api/v1/rounds/{round2}/assignments/remix", json={"goal": goal}).json()
+        assert mixed["seated"] == 3, mixed
+        tables = client.get(f"/api/v1/rounds/{round2}/tables").json()
+        seated = {p["name"] for t in tables for p in t["participants"]}
+        assert "Dario" not in seated and seated == {"Anna", "Bruno", "Carla"}
+    monitor = client.get(f"/api/v1/rounds/{round2}/monitor").json()
+    assert not any(
+        r["code"] == "PARTICIPANT_REFUSED" for t in monitor["tables"] for r in t["readiness"]["reasons"]
+    )
