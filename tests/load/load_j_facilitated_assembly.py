@@ -32,6 +32,7 @@ import base64
 import concurrent.futures
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -45,6 +46,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 SECRET_FILE = REPO / ".app_secret"
 PROXY = "https://cloud.democracyinnovators.com/index.php/apps/app_api/proxy/citizens"
 ORGANIZER = "rehearsal-0.7"
+ADMIN = os.environ.get("CITIZENS_ADMIN", "alex")  # admin routes need a Nextcloud admin
 CHUNK_SECONDS = 10
 WEBM_CLUSTER_ID = b"\x1f\x43\xb6\x75"
 
@@ -113,8 +115,8 @@ def _request(url: str, method: str, headers: dict, body: bytes | None, phase: st
 
 
 def org(method: str, path: str, data=None, raw: bool = False, phase: str = "organizer",
-        timeout: int = 120):
-    headers = appapi_headers()
+        timeout: int = 120, user: str | None = None):
+    headers = appapi_headers(user or ORGANIZER)
     body = None
     if data is not None:
         headers["Content-Type"] = "application/json"
@@ -242,8 +244,8 @@ def prepare_audio(workdir: pathlib.Path, phones: int, sessions: int, seconds: in
 
 
 def preflight(use_vosk: bool) -> str | None:
-    status, settings = org("GET", "/api/v1/admin/providers")
-    must("admin settings readable", status == 200, str(status))
+    status, settings = org("GET", "/api/v1/admin/providers", user=ADMIN)
+    must("admin settings readable (set CITIZENS_ADMIN to a Nextcloud admin)", status == 200 and "stt" in settings, str(status))
     fac = settings.get("facilitator") or {}
     must("the AI assistant has a model to call (facilitator.configured)", fac.get("configured") is True,
          json.dumps({k: v for k, v in fac.items() if "key" not in k}))
@@ -253,7 +255,7 @@ def preflight(use_vosk: bool) -> str | None:
     if use_vosk and previous != "vosk":
         models = stt.get("vosk_language_models") or {}
         must("Vosk has an Italian model", bool(models.get("it")), json.dumps(models))
-        status, _ = org("PUT", "/api/v1/admin/providers", {"stt_provider": "vosk"})
+        status, _ = org("PUT", "/api/v1/admin/providers", {"stt_provider": "vosk"}, user=ADMIN)
         must("live engine switched to Vosk for the run", status == 200, str(status))
         print(f"  live/final engine: vosk (was {previous}; restored at the end)")
         return previous
@@ -263,7 +265,7 @@ def preflight(use_vosk: bool) -> str | None:
 
 def restore_provider(previous: str | None) -> None:
     if previous:
-        status, _ = org("PUT", "/api/v1/admin/providers", {"stt_provider": previous})
+        status, _ = org("PUT", "/api/v1/admin/providers", {"stt_provider": previous}, user=ADMIN)
         print(f"  live/final engine restored to {previous}: {status}")
 
 
@@ -450,7 +452,7 @@ def register_people(table_phone: Phone, table: int, people: int, refuse_one: boo
 
 def facilitator_tick() -> int:
     started = time.monotonic()
-    status, body = org("POST", "/api/v1/admin/facilitator/tick", {}, phase="tick", timeout=300)
+    status, body = org("POST", "/api/v1/admin/facilitator/tick", {}, phase="tick", timeout=300, user=ADMIN)
     took = time.monotonic() - started
     delivered = body.get("delivered", 0) if status == 200 else -1
     with _LOCK:

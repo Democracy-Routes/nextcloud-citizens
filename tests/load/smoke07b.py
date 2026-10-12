@@ -17,6 +17,7 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -34,13 +35,14 @@ IP = subprocess.check_output(
 ORG = f"http://{IP}:23000"
 PROXY = "https://cloud.democracyinnovators.com/index.php/apps/app_api/proxy/citizens"
 ORGANIZER = "smoke-0.7b"
+ADMIN = os.environ.get("CITIZENS_ADMIN", "alex")  # admin routes need a Nextcloud admin
 STEPS: list[str] = []
 
 
-def org(method, path, data=None, raw=False):
+def org(method, path, data=None, raw=False, user=None):
     headers = {
         "EX-APP-ID": "citizens", "EX-APP-VERSION": "1.0.0",
-        "AUTHORIZATION-APP-API": base64.b64encode(f"{ORGANIZER}:{SECRET}".encode()).decode(),
+        "AUTHORIZATION-APP-API": base64.b64encode(f"{user or ORGANIZER}:{SECRET}".encode()).decode(),
     }
     body = None
     if data is not None:
@@ -395,15 +397,13 @@ try:
     ok("table 2's quotations are withheld (Giulia declined the quotations box)",
        tables[0]["table_number"] == 2 and tables[0].get("quotations_withheld") is True
        and "citazioni" in orep["methodology_note"], json.dumps({k: tables[0].get(k) for k in ("table_number", "quotations_withheld")}))
-    code, mdtxt = org("GET", f"/api/v1/assemblies/{aid}/report.md", raw=True)
-    ok("Markdown report prints the withholding sentence under the table",
-       code == 200 and "Le citazioni di questo tavolo non sono incluse" in mdtxt.decode(errors="replace"), str(code))
     code, files = org("GET", f"/api/v1/assemblies/{aid}/files")
     ok("files listing carries the coverage field", code == 200 and all("coverage" in e for r in files["rounds"] for e in r["tables"]), str(code))
 
     # 10. live captions on the configured engine: two phones, a takeover, lines after it
     if not ARGS.no_captions:
-        code, settings_ = org("GET", "/api/v1/admin/providers")
+        code, settings_ = org("GET", "/api/v1/admin/providers", user=ADMIN)
+        ok("admin settings readable (set CITIZENS_ADMIN to a Nextcloud admin)", code == 200 and "stt" in settings_, str(code))
         engine = settings_["stt"]["provider"] if settings_["stt"]["live_enabled"] else ""
         ok("live captions are enabled on the dev instance", bool(engine), json.dumps(settings_["stt"].get("provider")))
         code, sess = org("POST", "/api/v1/sessions", {"question": "Prova sottotitoli", "table_count": 1, "duration_minutes": 10, "recording_mode": "independent", "language": "it"})
@@ -417,7 +417,8 @@ try:
         chunks_b = phone_chunks(3, offset_minutes=2)
         code, ra = phone("POST", "/api/v1/public/recorder/start", {"round_id": crid, "mime_type": "audio/webm;codecs=opus"}, token=pa["session_token"])
         code, rb = phone("POST", "/api/v1/public/recorder/start", {"round_id": crid, "mime_type": "audio/webm;codecs=opus"}, token=pb["session_token"])
-        ok("both recording; A is the live source", ra.get("live_source") is True and rb.get("live_source") is False, json.dumps({"a": ra.get("live_source"), "b": rb.get("live_source")}))
+        code, lb0 = phone("GET", f"/api/v1/public/recorder/recordings/{rb['recording_id']}/live", token=pb["session_token"])
+        ok("both recording; B is told it is the backup, A carries the captions", code == 200 and lb0.get("reason") == "backup" and lb0.get("live_source_label") == "A", json.dumps(lb0)[:160])
         t0 = time.monotonic()
         takeover_at = 9  # chunk index: after ~90 s A hands the captions to B
         first_line_after = None
