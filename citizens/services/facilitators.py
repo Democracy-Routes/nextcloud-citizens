@@ -182,8 +182,11 @@ def status(session: Session, facilitator: FacilitatorSession) -> dict:
     from citizens.services.live_captions import LIVE_CAPTIONS
 
     table_number = facilitator.table_number
-    roster = consent_svc.table_roster(session, assembly.id, table_number)
     current = _current_round(assembly)
+    # the people of THIS session while it runs (New seating may already have
+    # moved them for the next one); the session being set up otherwise
+    round_id = current.id if current is not None and current.status == "ACTIVE" else None
+    roster = consent_svc.table_roster(session, assembly.id, table_number, round_id)
     # the anonymous speaking balance from the table's live captions, when the
     # engine labels speakers — and whether it does at all
     speaking = None
@@ -216,7 +219,7 @@ def status(session: Session, facilitator: FacilitatorSession) -> dict:
             {"id": r.id, "position": r.position, "title": r.title, "status": r.status}
             for r in sorted(assembly.rounds, key=lambda r: r.position)
         ],
-        "consent": consent_svc.table_consent_state(session, assembly, table_number),
+        "consent": consent_svc.table_consent_state(session, assembly, table_number, round_id),
         "participants": roster,
         "recorders": capabilities_svc.recorder_count(session, assembly.id, table_number),
         "messages": messages_svc.unseen_for_table(

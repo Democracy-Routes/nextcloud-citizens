@@ -169,7 +169,7 @@ try:
 
     # 2. phone A joins table 1 through the proxy; its join carries the consent state
     code, a = phone("POST", "/api/v1/public/join", {"token": tok(created["invites"][0]["url"])})
-    ok("phone A joins", code == 200 and a["consent"] == {"mode": "required", "registered": 0, "consenting": 0, "can_record": False}, json.dumps(a.get("consent")))
+    ok("phone A joins", code == 200 and a["consent"] == {"mode": "required", "registered": 0, "consenting": 0, "refusing": 0, "can_record": False}, json.dumps(a.get("consent")))
     tA = a["session_token"]
 
     # 3. the notice, in Italian, hashed; start is refused until someone consents
