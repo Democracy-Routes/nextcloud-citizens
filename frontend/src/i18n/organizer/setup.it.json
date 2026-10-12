@@ -111,6 +111,33 @@
 	},
 	"participants": {
 		"copyFailed": "Copia non riuscita — selezionate il link e copiatelo a mano",
+		"consentActions": {
+			"change": "Ha cambiato idea",
+			"withdraw": "Revoca il consenso",
+			"move": "Spostato a un altro tavolo",
+			"done": {
+				"change": "{who} acconsente di nuovo",
+				"withdraw": "{who} ha revocato il consenso",
+				"move": "{who} segnato come spostato"
+			}
+		},
+		"consentConfirm": {
+			"change": {
+				"title": "{who} ha cambiato idea?",
+				"message": "Registra un nuovo atto di consenso sulla parola di {who}: registrazione, trascrizione, analisi e citazioni. Il suo tavolo potrà registrare di nuovo quando nessuno dei seduti rifiuta.",
+				"confirm": "Registra il consenso"
+			},
+			"withdraw": {
+				"title": "{who} revoca il consenso?",
+				"message": "Un nuovo atto con tutte le caselle vuote. Quanto registrato finora viene conservato ed elaborato; il suo tavolo non può registrare di nuovo finché non viene segnato come spostato o non cambia idea.",
+				"confirm": "Registra la revoca"
+			},
+			"move": {
+				"title": "Segnare {who} come spostato?",
+				"message": "Lascia l'elenco del suo tavolo per le sessioni ancora da fare — la procedura in sala per un rifiuto è un tavolo che non viene registrato. Il suo consenso resta com'è; fallo sedere di nuovo per nome dove si trova ora.",
+				"confirm": "Segna come spostato"
+			}
+		},
 		"source": {
 			"table": "Tavolo {number}",
 			"ownPhone": "proprio telefono",

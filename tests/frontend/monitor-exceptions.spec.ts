@@ -200,4 +200,17 @@ describe('the exception-first Live tab', () => {
 		expect(badges[0].classes()).toContain('cz-coverage--low')
 		expect(badges[1].classes()).not.toContain('cz-coverage--low')
 	})
+
+	it('words a refusal seated at the table as the blocker it is', async () => {
+		const REFUSED = { status: 'BLOCKED', reasons: [{ code: 'PARTICIPANT_REFUSED', severity: 'blocker', slot: null, data: {} }] }
+		roundMonitor.mockResolvedValue(monitor(
+			[table(1, REFUSED)],
+			{ status: 'BLOCKED', ready: 0, needs_attention: 0, blocked: 1 },
+		))
+		const wrapper = mountWithI18n(MonitorTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.text()).toContain('someone seated here refused to be recorded')
+		expect(wrapper.find('.cz-reasons__blocker').exists()).toBe(true)
+	})
+
 })

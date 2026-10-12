@@ -456,6 +456,7 @@ const REASON_CODES = [
 	'LIVE_STT_UNAVAILABLE',
 	'HELP_REQUESTED',
 	'PARTICIPANT_CONSENT_MISSING',
+	'PARTICIPANT_REFUSED',
 ]
 
 function reasonWording(code: string): string {

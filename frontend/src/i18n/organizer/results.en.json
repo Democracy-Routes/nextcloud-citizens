@@ -111,6 +111,7 @@
 			"downloadFailed": "The report could not be downloaded — check the pop-up blocker"
 		},
 		"finalTitle": "Final report · closed {date}",
+		"quotationsWithheld": "Quotations withheld: a participant seated at this table did not consent to being quoted.",
 		"finalHint": "{Thing} is closed: tables can no longer record, and this is the definitive report. Participants keep reading this version even if you reopen — approve more findings and press Update to push them.",
 		"allDoneTitle": "All {count} tables have finished.",
 		"allDoneHint": "Close {thing} to create the final report and enable the downloads.",

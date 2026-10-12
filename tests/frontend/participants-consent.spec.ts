@@ -19,6 +19,9 @@ const { CONSENT } = vi.hoisted(() => ({
 	},
 }))
 
+const participantConsent = vi.fn()
+const participantMoved = vi.fn()
+
 vi.mock('../../frontend/src/api', () => ({
 	api: {
 		listParticipants: vi.fn().mockResolvedValue([
@@ -32,6 +35,8 @@ vi.mock('../../frontend/src/api', () => ({
 		addParticipants: vi.fn(),
 		importCsv: vi.fn(),
 		deleteParticipant: vi.fn(),
+		participantConsent: (...args: unknown[]) => participantConsent(...args),
+		participantMoved: (...args: unknown[]) => participantMoved(...args),
 		registrationLink: vi.fn().mockResolvedValue({
 			url: 'https://nc.example/recorder.html#/register/pre', qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
 			expires_at: '2026-11-05T00:00:00Z', registered: { total: 4, seated: 1 },
@@ -58,4 +63,38 @@ describe('the Participants tab', () => {
 		expect(card.text()).toContain('https://nc.example/recorder.html#/register/pre')
 		expect(card.text()).toContain('4 registered ahead · 1 seated.')
 	})
+
+	it('records a change of mind, a withdrawal and a move, each after a confirm', async () => {
+		participantConsent.mockReset().mockResolvedValue({ participant: { id: '2', label: 'P002' }, consent: {} })
+		participantMoved.mockReset().mockResolvedValue({ participant: { id: '1', label: 'P001' } })
+		const wrapper = mountWithI18n(ParticipantsTab, { props: { assemblyId: 'a1' } })
+		await flushPromises()
+		const rows = wrapper.findAll('tbody tr')
+		// Anna consented: she can withdraw or be moved; Bruno refused: change of mind or moved
+		expect(rows[0].findAll('[data-test^="consent-"]').map((b) => b.text())).toEqual(['Withdraws consent', 'Moved to another table'])
+		expect(rows[1].findAll('[data-test^="consent-"]').map((b) => b.text())).toEqual(['Changed their mind', 'Moved to another table'])
+		expect(rows[2].findAll('[data-test^="consent-"]')).toHaveLength(0)
+
+		await rows[1].find('[data-test="consent-change"]').trigger('click')
+		expect(wrapper.text()).toContain('changed their mind?')
+		await wrapper.findAll('button').find((b) => b.text() === 'Record the consent')!.trigger('click')
+		await flushPromises()
+		expect(participantConsent).toHaveBeenCalledWith('a1', '2', {
+			recording_consent: true, transcription_consent: true, analysis_consent: true, publication_consent: true,
+		})
+
+		await rows[0].find('[data-test="consent-withdraw"]').trigger('click')
+		expect(wrapper.text()).toContain('withdraws consent?')
+		await wrapper.findAll('button').find((b) => b.text() === 'Record the withdrawal')!.trigger('click')
+		await flushPromises()
+		expect(participantConsent).toHaveBeenLastCalledWith('a1', '1', {
+			recording_consent: false, transcription_consent: false, analysis_consent: false, publication_consent: false,
+		})
+
+		await rows[0].find('[data-test="consent-move"]').trigger('click')
+		await wrapper.findAll('button').find((b) => b.text() === 'Mark as moved')!.trigger('click')
+		await flushPromises()
+		expect(participantMoved).toHaveBeenCalledWith('a1', '1')
+	})
+
 })

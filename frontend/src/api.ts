@@ -122,6 +122,23 @@ export const api = {
 	importCsv: (assemblyId: string, csv: string) =>
 		request<Participant[]>('POST', `/api/v1/assemblies/${assemblyId}/participants/import-csv`, { csv }),
 	deleteParticipant: (id: string) => request<void>('DELETE', `/api/v1/participants/${id}`),
+	/** Changed their mind / withdraws consent, recorded on the person's word (a further act). */
+	participantConsent: (
+		assemblyId: string,
+		participantId: string,
+		flags: { recording_consent: boolean; transcription_consent: boolean; analysis_consent: boolean; publication_consent: boolean },
+	) =>
+		request<{ participant: { id: string; label: string }; consent: unknown }>(
+			'POST',
+			`/api/v1/assemblies/${assemblyId}/participants/${participantId}/consent`,
+			flags,
+		),
+	/** Moved to another table: leaves the current table's roster for the sessions still to come. */
+	participantMoved: (assemblyId: string, participantId: string) =>
+		request<{ participant: { id: string; label: string } }>(
+			'POST',
+			`/api/v1/assemblies/${assemblyId}/participants/${participantId}/moved`,
+		),
 
 	roundTables: (roundId: string) => request<Table[]>('GET', `/api/v1/rounds/${roundId}/tables`),
 	// the next table, in every round at once, with its QR code (in this response only)

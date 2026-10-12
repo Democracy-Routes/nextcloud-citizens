@@ -611,6 +611,8 @@ export interface ReportData {
 			summary: string
 			speaking_balance?: SpeakingBalance | null
 			findings: ReportFinding[]
+			/** someone seated here declined to be quoted: no verbatim quotation from this table */
+			quotations_withheld?: boolean
 			/** participants' word on the summary (0.7): counts, notes for the organizer */
 			validations?: { looks_right: number; missing: number; notes?: string[] } | null
 		}>
@@ -630,6 +632,8 @@ export interface ReportFinding {
 	table_number: number | null
 	mentioned_table_count: number
 	evidence_removed?: boolean
+	/** the table's quotations are withheld (see the table's flag) */
+	quotations_withheld?: boolean
 	evidence: Array<{ speaker: string; start: number; timestamp: string; text: string }>
 }
 

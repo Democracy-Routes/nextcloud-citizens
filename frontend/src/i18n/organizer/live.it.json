@@ -32,6 +32,7 @@
 			"LIVE_STT_UNAVAILABLE": "sottotitoli in diretta spenti a questo tavolo",
 			"HELP_REQUESTED": "il tavolo chiede aiuto",
 			"PARTICIPANT_CONSENT_MISSING": "nessuno al tavolo ha ancora acconsentito — registra un partecipante sul telefono del tavolo",
+			"PARTICIPANT_REFUSED": "una persona seduta qui ha rifiutato di essere registrata — segnala come spostata a un tavolo che non viene registrato, oppure registra che ha cambiato idea",
 			"CAPTURE_SILENT": "nessun audio arriva al server da {seconds} s — il telefono potrebbe essere in standby o in secondo piano: riapri il registratore",
 			"recorderSuffix": "(registratore {letter})"
 		},

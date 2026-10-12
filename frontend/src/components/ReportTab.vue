@@ -414,6 +414,11 @@ const hasContent = () =>
 							<h4 style="font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cz-text-muted); margin: 16px 0 8px">
 								{{ t('organizer.results.report.table', { number: table.table_number }) }}
 							</h4>
+							<!-- someone seated here declined to be quoted: the findings stand,
+							     their verbatim quotations do not reach the report -->
+							<p v-if="table.quotations_withheld" class="cz-muted" data-test="quotations-withheld">
+								{{ t('organizer.results.report.quotationsWithheld') }}
+							</p>
 							<!-- participants' word on the summary (0.7): counts, and the
 							     notes of those who flagged something missing -->
 							<p v-if="table.validations" class="cz-validation" data-test="validations">

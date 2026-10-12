@@ -111,6 +111,33 @@
 	},
 	"participants": {
 		"copyFailed": "Copy failed — select the link and copy it by hand",
+		"consentActions": {
+			"change": "Changed their mind",
+			"withdraw": "Withdraws consent",
+			"move": "Moved to another table",
+			"done": {
+				"change": "{who} consents again",
+				"withdraw": "{who} withdrew consent",
+				"move": "{who} marked as moved"
+			}
+		},
+		"consentConfirm": {
+			"change": {
+				"title": "{who} changed their mind?",
+				"message": "Record a new consent act on {who}'s word: recording, transcription, analysis and quotations. Their table can record again once nobody seated there refuses.",
+				"confirm": "Record the consent"
+			},
+			"withdraw": {
+				"title": "{who} withdraws consent?",
+				"message": "A new act with every box unticked. What was recorded so far is kept and processed; their table cannot record again until they are marked as moved or change their mind.",
+				"confirm": "Record the withdrawal"
+			},
+			"move": {
+				"title": "Mark {who} as moved?",
+				"message": "They leave their table's roster for the sessions still to come — the room's procedure for a refusal is a table that is not recorded. Their consent record is untouched; seat them again by name where they sit now.",
+				"confirm": "Mark as moved"
+			}
+		},
 		"source": {
 			"table": "Table {number}",
 			"ownPhone": "own phone",

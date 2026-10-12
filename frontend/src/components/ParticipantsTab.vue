@@ -117,6 +117,39 @@ const newName = ref('')
 const csvText = ref('')
 const showCsv = ref(false)
 const removeTarget = ref<Participant | null>(null)
+
+/* ---- the consent acts an organizer records on a person's word (0.7):
+ * changed their mind (after a refusal), withdraws consent, moved to another
+ * table — append-only on the server, the newest act counts everywhere */
+type ConsentAction = 'change' | 'withdraw' | 'move'
+const consentAction = ref<{ kind: ConsentAction; participant: Participant } | null>(null)
+
+function consentActions(participant: Participant): ConsentAction[] {
+	if (!participant.consent) return []
+	if (!participant.consent.recording) {
+		return participant.registered_table_number === null ? ['change'] : ['change', 'move']
+	}
+	return participant.registered_table_number === null ? ['withdraw'] : ['withdraw', 'move']
+}
+
+async function runConsentAction(): Promise<void> {
+	const target = consentAction.value
+	if (!target) return
+	consentAction.value = null
+	await run(async () => {
+		if (target.kind === 'move') {
+			await api.participantMoved(props.assemblyId, target.participant.id)
+		} else {
+			const yes = target.kind === 'change'
+			await api.participantConsent(props.assemblyId, target.participant.id, {
+				recording_consent: yes, transcription_consent: yes, analysis_consent: yes, publication_consent: yes,
+			})
+		}
+		toast(t(`organizer.setup.participants.consentActions.done.${target.kind}`, { who: describe(target.participant) }))
+		await reload()
+		emit('changed')
+	})
+}
 const loadError = ref<UiError | null>(null)
 
 async function reload(): Promise<void> {
@@ -299,7 +332,19 @@ function initials(participant: Participant): string {
 								</template>
 								<span v-else class="cz-muted">—</span>
 							</td>
-							<td style="text-align: right">
+							<td style="text-align: right; white-space: nowrap">
+								<!-- a refusal is reversed, a consent withdrawn, a person moved
+								     to a table that is not recorded — each a new act, confirmed -->
+								<CzButton
+									v-for="kind in consentActions(participant)"
+									:key="kind"
+									small
+									variant="tertiary"
+									:disabled="busy"
+									:data-test="`consent-${kind}`"
+									@click="consentAction = { kind, participant }">
+									{{ t(`organizer.setup.participants.consentActions.${kind}`) }}
+								</CzButton>
 								<CzButton small variant="tertiary" :icon="mdiDeleteOutline" :title="t('organizer.setup.participants.remove')" :disabled="busy" @click="removeTarget = participant" />
 							</td>
 						</tr>
@@ -308,6 +353,14 @@ function initials(participant: Participant): string {
 			</template>
 		</template>
 
+		<CzConfirm
+			v-if="consentAction"
+			:title="t(`organizer.setup.participants.consentConfirm.${consentAction.kind}.title`, { who: describe(consentAction.participant) })"
+			:message="t(`organizer.setup.participants.consentConfirm.${consentAction.kind}.message`, { who: describe(consentAction.participant) })"
+			:confirm-label="t(`organizer.setup.participants.consentConfirm.${consentAction.kind}.confirm`)"
+			:tone="consentAction.kind === 'withdraw' ? 'danger' : undefined"
+			@confirm="runConsentAction"
+			@cancel="consentAction = null" />
 		<CzConfirm
 			v-if="removeTarget"
 			:title="t('organizer.setup.participants.removeTitle')"

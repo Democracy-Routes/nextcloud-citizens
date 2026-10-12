@@ -89,6 +89,25 @@ not rewritten.
   report. Reseating between sessions is "New seating"; a phone is a phone,
   not a device; a facilitator's code that stopped working is an expired
   link, not an ended session.
+- **A refusal blocks the table; consent is two boxes; quotations can be
+  withheld.** Under consent-required, a table records only when at least one
+  seated person consents AND nobody seated there has refused or withdrawn —
+  a refusal is not outvoted, the person is marked as moved to a table that
+  is not recorded (the room's procedure), or changes their mind. The seat of
+  the session decides (the seating plan first, the registration table as
+  fallback). Consent acts are append-only: *Changed their mind*, *Withdraws
+  consent* (what was recorded so far is kept) and *Moved to another table*
+  exist on the table phone's participants screen, for that table's people,
+  and on the organizer's Participants tab for anyone; the newest act counts
+  everywhere and the consent register lists every act. The notice (2026-10.3)
+  splits the required processing acceptance from an optional quotations
+  sentence, ticked by default, and says a non-recorded table is possible.
+  Where someone seated declined quotations, the report prints no verbatim
+  quotation from that table — the findings stand on the analysis, the table
+  section says so, cross-table findings borrow nothing from it, and the
+  methodology note explains it. The Live tab shows `PARTICIPANT_REFUSED` as
+  a blocker; the phone's recording screen shows a persistent alert while a
+  refuser is seated.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`

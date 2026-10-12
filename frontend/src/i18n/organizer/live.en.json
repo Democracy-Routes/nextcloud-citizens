@@ -32,6 +32,7 @@
 			"LIVE_STT_UNAVAILABLE": "live captions off at this table",
 			"HELP_REQUESTED": "the table asks for help",
 			"PARTICIPANT_CONSENT_MISSING": "nobody at the table has consented yet — register a participant on the table phone",
+			"PARTICIPANT_REFUSED": "someone seated here refused to be recorded — mark them as moved to a table that is not recorded, or record that they changed their mind",
 			"CAPTURE_SILENT": "no audio has reached the server for {seconds} s — the phone may be asleep or in the background: open the recorder on it",
 			"recorderSuffix": "(recorder {letter})"
 		},
