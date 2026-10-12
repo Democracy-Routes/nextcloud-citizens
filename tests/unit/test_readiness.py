@@ -168,3 +168,18 @@ def test_a_recording_the_server_hears_nothing_from_is_flagged_and_blocks_a_lone_
     assert r.table_readiness([silent]).status == r.READY
     armed = _recorder(slot=1, state="", storage_ok=True)
     assert r.table_readiness([armed]).status == r.READY
+
+
+def test_a_refusal_at_the_table_blocks_whatever_the_phones_say():
+    healthy = _recorder(storage_ok=True, battery_level=0.8, capture_ok=True)
+    result = r.table_readiness([healthy], consent_refused=True)
+    assert result.status == r.BLOCKED
+    assert _codes(result) == [(r.PARTICIPANT_REFUSED, r.BLOCKER, None)]
+    # both at once: refused first, then missing, then the hand
+    result = r.table_readiness(
+        [healthy], consent_missing=True, consent_refused=True, help_requested="PROCESS"
+    )
+    assert _codes(result)[:2] == [
+        (r.PARTICIPANT_REFUSED, r.BLOCKER, None),
+        (r.PARTICIPANT_CONSENT_MISSING, r.BLOCKER, None),
+    ]

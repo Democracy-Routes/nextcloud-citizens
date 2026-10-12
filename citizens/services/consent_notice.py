@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from citizens.services.report_text import normalize_language
 
 #: bumped whenever the wording changes; old consents keep their old hash
-NOTICE_VERSION = "2026-10.2"
+NOTICE_VERSION = "2026-10.3"
 
 _TEXT = {
     "en": {
@@ -108,10 +108,17 @@ _TEXT = {
         ),
         "rights_contact": " — write to {contact}",
         "authority_default": "the data protection authority of your country",
+        "choice": (
+            "Taking part does not require being recorded: if you do not consent, you can sit "
+            "at a table that is not recorded."
+        ),
         "accept": (
             "By registering you declare that you have read this notice and you consent to the "
             "audio recording of the discussion at your table, to its transcription and "
-            "AI-assisted analysis, and to short anonymous quotations from your table in the "
+            "AI-assisted analysis."
+        ),
+        "accept_quotations": (
+            "I also agree to short anonymous quotations from my table being included in the "
             "assembly's report, which may be published."
         ),
         "fallback_controller": "The organiser",
@@ -209,11 +216,18 @@ _TEXT = {
         "authority_default": (
             "Garante per la protezione dei dati personali (www.garanteprivacy.it)"
         ),
+        "choice": (
+            "Partecipare non richiede di essere registrati: se non acconsenti, puoi sederti a "
+            "un tavolo che non viene registrato."
+        ),
         "accept": (
             "Registrandoti dichiari di aver letto questa informativa e acconsenti alla "
             "registrazione audio della discussione al tuo tavolo, alla sua trascrizione e "
-            "analisi assistita dall'IA, e all'inserimento di brevi citazioni anonime dal tuo "
-            "tavolo nel rapporto dell'assemblea, che potrà essere pubblicato."
+            "analisi assistita dall'IA."
+        ),
+        "accept_quotations": (
+            "Acconsento inoltre a che brevi citazioni anonime dal mio tavolo siano inserite nel "
+            "rapporto dell'assemblea, che potrà essere pubblicato."
         ),
         "fallback_controller": "L'organizzazione",
     },
@@ -233,7 +247,16 @@ class Notice:
 
     @property
     def acceptance(self) -> str:
-        """The sentence the one acceptance box carries — the last paragraph."""
+        """The sentence the required box carries: recording, transcription,
+        analysis — the processing. Second to last paragraph since 2026-10.3."""
+        return self.paragraphs[-2]
+
+    @property
+    def acceptance_quotations(self) -> str:
+        """The sentence the optional box carries: short anonymous quotations in
+        the report. Last paragraph. Declining it withholds every verbatim
+        quotation from the person's table, not only their own words, because
+        voices are not separated in the recording."""
         return self.paragraphs[-1]
 
     def as_dict(self) -> dict:
@@ -243,6 +266,7 @@ class Notice:
             "hash": self.hash,
             "paragraphs": list(self.paragraphs),
             "acceptance": self.acceptance,
+            "acceptance_quotations": self.acceptance_quotations,
         }
 
 
@@ -337,5 +361,7 @@ def render_notice(
             authority=authority,
         )
     )
+    paragraphs.append(t("choice"))
     paragraphs.append(t("accept"))
+    paragraphs.append(t("accept_quotations"))
     return Notice(NOTICE_VERSION, lang, notice_hash(NOTICE_VERSION, lang, paragraphs), paragraphs)

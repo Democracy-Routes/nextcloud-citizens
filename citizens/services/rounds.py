@@ -151,13 +151,13 @@ def round_monitor(session: Session, round_: Round) -> dict:
     ai_levels = _ai_levels(session, round_)
     # who registered and consented at each table (services/consent.py); a
     # table nobody registered at reads as zero under the assembly's rule
-    consents = consent_svc.consent_by_table(session, round_.assembly)
+    consents = consent_svc.consent_by_table(session, round_.assembly, round_.id)
     consent_required = round_.assembly.participant_consent == "required"
     tables = []
     for table in round_.tables:
         consent = consents.get(table.number) or {
             "mode": round_.assembly.participant_consent, "registered": 0, "consenting": 0,
-            "can_record": not consent_required,
+            "refusing": 0, "can_record": not consent_required,
         }
         recordings = list(
             session.execute(
@@ -217,7 +217,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
             ),
             round_active=round_.status == "ACTIVE",
             help_requested=(hands.get(table.number) or {}).get("kind"),
-            consent_missing=not consent["can_record"],
+            consent_missing=consent_required and consent["consenting"] == 0,
+            consent_refused=consent.get("refusing", 0) > 0,
         )
 
         tables.append(

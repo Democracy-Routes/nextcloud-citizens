@@ -70,11 +70,11 @@ def test_people_register_at_home_and_are_seated_at_the_door_by_name(client):
     seated = client.post(f"/api/v1/public/recorder/participants/{found[0]['id']}/seat", headers=table2)
     assert seated.status_code == 200, seated.text
     assert seated.json()["table"] == {
-        "mode": "required", "registered": 1, "consenting": 1, "can_record": True,
+        "mode": "required", "registered": 1, "consenting": 1, "refusing": 0, "can_record": True,
     }
     roster = client.get("/api/v1/public/recorder/consent-notice", headers=table2).json()["participants"]
-    assert roster == [
-        {"label": ines["participant"]["label"], "name": "Ines Rossi", "recording_consent": True},
+    assert [(p["label"], p["name"], p["recording_consent"], p["refused"]) for p in roster] == [
+        (ines["participant"]["label"], "Ines Rossi", True, False),
     ]
     started = client.post("/api/v1/public/recorder/start",
                           json={"round_id": round_id, "mime_type": "audio/webm"}, headers=table2)

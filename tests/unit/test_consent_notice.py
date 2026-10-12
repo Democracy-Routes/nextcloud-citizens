@@ -51,8 +51,13 @@ def test_the_notice_has_every_section_and_names_the_providers():
     assert "withdrawal of consent at any time" in text and "write to privacy@example.org" in text
     assert "lodge a complaint with the data protection authority of your country" in text
     assert notice.acceptance.startswith("By registering you declare that you have read this notice")
-    assert "short anonymous quotations" in notice.acceptance
-    assert notice.as_dict()["acceptance"] == notice.paragraphs[-1]
+    # two boxes since 2026-10.3: the processing is required, quotations are a
+    # separate, optional sentence — declining it withholds the table's quotes
+    assert "short anonymous quotations" not in notice.acceptance
+    assert "short anonymous quotations" in notice.acceptance_quotations
+    assert notice.as_dict()["acceptance"] == notice.paragraphs[-2]
+    assert notice.as_dict()["acceptance_quotations"] == notice.paragraphs[-1]
+    assert any("not recorded" in paragraph for paragraph in notice.paragraphs)
     assert notice.version == NOTICE_VERSION and notice.language == "en"
 
 

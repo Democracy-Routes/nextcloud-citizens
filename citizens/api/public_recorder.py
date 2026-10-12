@@ -631,6 +631,65 @@ def register_participant(data: ParticipantRegisterIn, recorder_session: Recorder
     }
 
 
+class ConsentChangeIn(BaseModel):
+    """A further act by someone already on this table's roster: the notice
+    they read now (by hash), and what they consent to. Every flag false is a
+    withdrawal."""
+    notice_hash: str = Field(min_length=64, max_length=64)
+    notice_read: bool = False
+    recording_consent: bool = False
+    transcription_consent: bool = False
+    analysis_consent: bool = False
+    publication_consent: bool = False
+
+
+@router.post("/recorder/participants/{participant_id}/consent", status_code=201)
+def change_consent(
+    participant_id: str, data: ConsentChangeIn, recorder_session: RecorderSess, session: DB
+):
+    """Changed their mind (after a refusal) or withdraws consent, on the
+    table's phone — only for a person seated at THIS table. Append-only: the
+    register keeps every act and the newest counts."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    participant = consent_svc.participant_at_table(
+        session, assembly, participant_id, recorder_session.table_number
+    )
+    consent = consent_svc.act(
+        session, assembly, participant,
+        notice_hash=data.notice_hash, notice_read=data.notice_read,
+        recording=data.recording_consent, transcription=data.transcription_consent,
+        analysis=data.analysis_consent, publication=data.publication_consent,
+        method="TABLE_DEVICE", recorder_session=recorder_session,
+    )
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "consent": consent_svc.consent_dict(consent),
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
+
+
+@router.post("/recorder/participants/{participant_id}/moved")
+def participant_moved(participant_id: str, recorder_session: RecorderSess, session: DB):
+    """Marked as moved to another table — the room's procedure for a refusal
+    (a table that is not recorded). Leaves this table's roster; consent acts
+    stay as they are."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    participant = consent_svc.participant_at_table(
+        session, assembly, participant_id, recorder_session.table_number
+    )
+    consent_svc.unseat(session, assembly, participant, actor=f"recorder-session:{recorder_session.id}")
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
+
+
 # ---- registration on the participant's own phone (0.7 consent) ----
 #
 # The table's notice screen shows a REGISTER_PARTICIPANT code; a person scans

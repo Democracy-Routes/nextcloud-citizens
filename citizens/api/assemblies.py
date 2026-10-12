@@ -297,6 +297,51 @@ def import_participants_csv(assembly_id: str, data: schemas.CsvImportIn, user: C
     return svc.add_participants(session, assembly, svc.parse_participants_csv(data.csv))
 
 
+class ConsentChangeByOrganizerIn(BaseModel):
+    recording_consent: bool = False
+    transcription_consent: bool = False
+    analysis_consent: bool = False
+    publication_consent: bool = False
+
+
+def _owned_participant(session: Session, assembly: Assembly, participant_id: str) -> Participant:
+    participant = session.get(Participant, participant_id)
+    if participant is None or participant.assembly_id != assembly.id:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return participant
+
+
+@router.post("/assemblies/{assembly_id}/participants/{participant_id}/consent", status_code=201)
+def organizer_records_consent_change(
+    assembly_id: str, participant_id: str, data: ConsentChangeByOrganizerIn,
+    user: CurrentUser, session: DB,
+):
+    """Changed their mind / Withdraws consent, recorded by the organizer on
+    the person's word (no notice hash: the organizer vouches for it)."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    participant = _owned_participant(session, assembly, participant_id)
+    consent = consent_svc.act(
+        session, assembly, participant,
+        notice_hash=None, notice_read=True,
+        recording=data.recording_consent, transcription=data.transcription_consent,
+        analysis=data.analysis_consent, publication=data.publication_consent,
+        method="ORGANIZER", actor=user,
+    )
+    return {"participant": {"id": participant.id, "label": participant.label},
+            "consent": consent_svc.consent_dict(consent)}
+
+
+@router.post("/assemblies/{assembly_id}/participants/{participant_id}/moved")
+def organizer_marks_moved(assembly_id: str, participant_id: str, user: CurrentUser, session: DB):
+    """Moved to another table: leaves the current table's roster for the
+    sessions still to come; seated again by name where they sit now."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    participant = _owned_participant(session, assembly, participant_id)
+    consent_svc.unseat(session, assembly, participant, actor=user)
+    return {"participant": {"id": participant.id, "label": participant.label},
+            "registered_table_number": None}
+
+
 @router.delete("/participants/{participant_id}", status_code=204)
 def delete_participant(participant_id: str, user: CurrentUser, session: DB):
     participant = session.get(Participant, participant_id)

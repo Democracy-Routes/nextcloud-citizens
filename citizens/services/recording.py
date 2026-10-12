@@ -370,7 +370,7 @@ def start_recording(
     # rule lives here, where recording starts, not only on the phone
     from citizens.services import consent as consent_svc
 
-    consent_svc.guard_recording(session, round_.assembly, recorder_session.table_number)
+    consent_svc.guard_recording(session, round_.assembly, recorder_session.table_number, round_.id)
 
     # Plenary is the whole room recorded by many phones at once: several
     # concurrent recordings on the one table are the point, not an accident, so

@@ -44,6 +44,9 @@ from citizens.services.provider_config import config_snapshot, organization_data
 from citizens.services.recording import RERECORDABLE_STATES
 
 CONSENT_REQUIRED_CODE = "PARTICIPANT_CONSENT_REQUIRED"
+#: someone seated at the table refused: recording there waits until they are
+#: marked as moved to a table that is not recorded, or change their mind
+REFUSED_CODE = "PARTICIPANT_REFUSED"
 
 
 @dataclass(frozen=True)
@@ -302,79 +305,147 @@ def consent_dict(consent: ParticipantConsent | None) -> dict | None:
     }
 
 
-def table_roster(session: Session, assembly_id: str, table_number: int) -> list[dict]:
-    """Who registered at this table, for the phone: names only, never email."""
+def _seats(session: Session, assembly_id: str, round_id: str | None) -> dict[str, int]:
+    """participant id → table number for one session: the seating plan's word
+    (table_assignments, written by registration at the table and by New
+    seating between sessions) first, and the registration table for anyone
+    the plan has not placed in this session."""
+    seats: dict[str, int] = {}
+    if round_id is not None:
+        for participant_id, number in session.execute(
+            select(TableAssignment.participant_id, Table.number)
+            .join(Table, Table.id == TableAssignment.table_id)
+            .where(TableAssignment.round_id == round_id)
+        ):
+            seats[participant_id] = number
+    for participant_id, number in session.execute(
+        select(Participant.id, Participant.registered_table_number).where(
+            Participant.assembly_id == assembly_id,
+            Participant.registered_table_number.is_not(None),
+        )
+    ):
+        seats.setdefault(participant_id, number)
+    return seats
+
+
+def _current_round_id(session: Session, assembly_id: str, table_number: int) -> str | None:
+    round_ = _round_being_set_up(session, assembly_id, table_number)
+    return round_.id if round_ is not None else None
+
+
+def _stands(consent: ParticipantConsent | None) -> bool:
+    """Does this (newest) act consent to recording?"""
+    return bool(consent and consent.recording_consent and consent.withdrawn_at is None)
+
+
+def _refuses(consent: ParticipantConsent | None) -> bool:
+    """Is this (newest) act a refusal or a withdrawal? A person with no act
+    at all (an organizer's list entry) neither consents nor refuses."""
+    return bool(consent) and (not consent.recording_consent or consent.withdrawn_at is not None)
+
+
+def table_roster(
+    session: Session, assembly_id: str, table_number: int, round_id: str | None = None
+) -> list[dict]:
+    """Who sits at this table in this session (the one being set up when
+    `round_id` is None), for the phone: names only, never email. The newest
+    consent act counts — a change of mind, a withdrawal — and the roster says
+    who refused, because that person blocks the table until marked as moved."""
+    if round_id is None:
+        round_id = _current_round_id(session, assembly_id, table_number)
+    seats = _seats(session, assembly_id, round_id)
+    ids = [pid for pid, number in seats.items() if number == table_number]
+    if not ids:
+        return []
     latest = latest_consents(session, assembly_id)
     people = session.execute(
         select(Participant)
-        .where(
-            Participant.assembly_id == assembly_id,
-            Participant.registered_table_number == table_number,
-        )
-        .order_by(Participant.created_at.asc())
+        .where(Participant.id.in_(ids))
+        .order_by(Participant.created_at.asc(), Participant.label.asc())
     ).scalars()
     return [
         {
+            "id": p.id,
             "label": p.label,
             "name": p.name,
-            "recording_consent": bool(
-                latest.get(p.id) and latest[p.id].recording_consent and latest[p.id].withdrawn_at is None
+            "recording_consent": _stands(latest.get(p.id)),
+            "publication_consent": bool(
+                latest.get(p.id) and latest[p.id].publication_consent
+                and latest[p.id].withdrawn_at is None
             ),
+            "refused": _refuses(latest.get(p.id)),
         }
         for p in people
     ]
 
 
+def _state(mode: str, registered: int, consenting: int, refusing: int) -> dict:
+    return {
+        "mode": mode,
+        "registered": registered,
+        "consenting": consenting,
+        "refusing": refusing,
+        # required: at least one consent AND nobody seated who refused — a
+        # refusal is not outvoted, the person is moved to a table that is not
+        # recorded (or changes their mind)
+        "can_record": mode != "required" or (consenting > 0 and refusing == 0),
+    }
+
+
 def consenting_count(session: Session, assembly_id: str, table_number: int) -> int:
-    """How many people registered at this table consent to recording."""
+    """How many people seated at this table consent to recording."""
     roster = table_roster(session, assembly_id, table_number)
     return sum(1 for person in roster if person["recording_consent"])
 
 
-def table_consent_state(session: Session, assembly: Assembly, table_number: int) -> dict:
-    roster = table_roster(session, assembly.id, table_number)
-    consenting = sum(1 for person in roster if person["recording_consent"])
-    return {
-        "mode": assembly.participant_consent,
-        "registered": len(roster),
-        "consenting": consenting,
-        "can_record": assembly.participant_consent != "required" or consenting > 0,
-    }
+def table_consent_state(
+    session: Session, assembly: Assembly, table_number: int, round_id: str | None = None
+) -> dict:
+    roster = table_roster(session, assembly.id, table_number, round_id)
+    return _state(
+        assembly.participant_consent,
+        len(roster),
+        sum(1 for person in roster if person["recording_consent"]),
+        sum(1 for person in roster if person["refused"]),
+    )
 
 
-def consent_by_table(session: Session, assembly: Assembly) -> dict[int, dict]:
-    """Every table's registered / consenting counts in two queries — for the
-    monitor, which asks for all tables at once every few seconds."""
+def consent_by_table(session: Session, assembly: Assembly, round_id: str | None = None) -> dict[int, dict]:
+    """Every table's registered / consenting / refusing counts in three
+    queries — for the monitor, which asks for all tables at once every few
+    seconds. With `round_id`, the seats of that session."""
     latest = latest_consents(session, assembly.id)
     counts: dict[int, dict] = {}
-    for participant in session.execute(
-        select(Participant).where(
-            Participant.assembly_id == assembly.id,
-            Participant.registered_table_number.is_not(None),
-        )
-    ).scalars():
-        entry = counts.setdefault(
-            participant.registered_table_number, {"registered": 0, "consenting": 0}
-        )
+    for participant_id, number in _seats(session, assembly.id, round_id).items():
+        entry = counts.setdefault(number, {"registered": 0, "consenting": 0, "refusing": 0})
         entry["registered"] += 1
-        consent = latest.get(participant.id)
-        if consent is not None and consent.recording_consent and consent.withdrawn_at is None:
+        consent = latest.get(participant_id)
+        if _stands(consent):
             entry["consenting"] += 1
+        elif _refuses(consent):
+            entry["refusing"] += 1
     return {
-        number: {
-            "mode": assembly.participant_consent,
-            **entry,
-            "can_record": assembly.participant_consent != "required" or entry["consenting"] > 0,
-        }
-        for number, entry in counts.items()
+        number: _state(assembly.participant_consent, **entry) for number, entry in counts.items()
     }
 
 
-def guard_recording(session: Session, assembly: Assembly, table_number: int) -> None:
+def guard_recording(
+    session: Session, assembly: Assembly, table_number: int, round_id: str | None = None
+) -> None:
     """The rule behind 'required', enforced where recording starts."""
     if assembly.participant_consent != "required":
         return
-    if consenting_count(session, assembly.id, table_number) == 0:
+    state = table_consent_state(session, assembly, table_number, round_id)
+    if state["refusing"] > 0:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": REFUSED_CODE,
+                "message": "Someone seated at this table refused to be recorded — "
+                           "mark them as moved to a table that is not recorded first",
+            },
+        )
+    if state["consenting"] == 0:
         raise HTTPException(
             status_code=409,
             detail={
@@ -382,6 +453,127 @@ def guard_recording(session: Session, assembly: Assembly, table_number: int) -> 
                 "message": "Register at least one participant who consents to recording first",
             },
         )
+
+
+def participant_at_table(
+    session: Session, assembly: Assembly, participant_id: str, table_number: int
+) -> Participant:
+    """The person, if they sit at this table in the session being set up —
+    a phone acts on its own table's people only (404 otherwise)."""
+    participant = session.get(Participant, participant_id)
+    if participant is None or participant.assembly_id != assembly.id:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    seats = _seats(session, assembly.id, _current_round_id(session, assembly.id, table_number))
+    if seats.get(participant.id) != table_number:
+        raise HTTPException(status_code=404, detail="Participant not found at this table")
+    return participant
+
+
+def act(
+    session: Session,
+    assembly: Assembly,
+    participant: Participant,
+    *,
+    notice_hash: str | None,
+    notice_read: bool,
+    recording: bool,
+    transcription: bool,
+    analysis: bool,
+    publication: bool,
+    method: str,
+    recorder_session: RecorderSession | None = None,
+    actor: str | None = None,
+    notice: Notice | None = None,
+) -> ParticipantConsent:
+    """A further consent act by someone already registered: a change of mind
+    after a refusal, or a withdrawal (every flag false). Append-only — the
+    register keeps every act, and the newest one counts everywhere. Name and
+    email are not touched. `notice_hash` None means the organizer acts on the
+    person's word; a phone must carry the notice the person just read."""
+    if assembly.closed_at is not None:
+        raise HTTPException(status_code=409, detail="This assembly has been closed")
+    if notice is None:
+        notice = notice_for(assembly)
+    if notice_hash is not None and notice_hash != notice.hash:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "NOTICE_CHANGED", "message": "The notice has changed — please read it again"},
+        )
+    if session.get(ConsentNotice, notice.hash) is None:
+        session.add(
+            ConsentNotice(
+                hash=notice.hash, version=notice.version, language=notice.language, text=notice.text
+            )
+        )
+        session.flush()
+    table_number = participant.registered_table_number
+    round_id = (
+        _current_round_id(session, assembly.id, table_number) if table_number is not None else None
+    )
+    consent = ParticipantConsent(
+        assembly_id=assembly.id,
+        participant_id=participant.id,
+        round_id=round_id,
+        table_number=table_number,
+        recorder_session_id=recorder_session.id if recorder_session else None,
+        method=method,
+        notice_hash=notice.hash,
+        notice_version=notice.version,
+        notice_language=notice.language,
+        notice_read=notice_read,
+        recording_consent=recording,
+        transcription_consent=transcription,
+        analysis_consent=analysis,
+        publication_consent=publication,
+        confirmed_at=utcnow(),
+    )
+    session.add(consent)
+    session.flush()
+    record_audit_event(
+        session, "consent_changed", "participant", participant.id,
+        actor=actor or (f"recorder-session:{recorder_session.id}" if recorder_session else None),
+        data={
+            "table": table_number,
+            "round_id": round_id,
+            "method": method,
+            "notice_version": notice.version,
+            "recording": recording,
+            "transcription": transcription,
+            "analysis": analysis,
+            "publication": publication,
+            "withdrawal": not (recording or transcription or analysis or publication),
+        },
+    )
+    return consent
+
+
+def unseat(session: Session, assembly: Assembly, participant: Participant, *, actor: str | None) -> None:
+    """Marked as moved to another table (the room's procedure for a refusal:
+    a table that is not recorded). The person leaves this table's roster for
+    the sessions still to come; their consent acts stay as they are, and they
+    can be seated elsewhere by name as a pre-registered person is."""
+    if assembly.closed_at is not None:
+        raise HTTPException(status_code=409, detail="This assembly has been closed")
+    table_number = participant.registered_table_number
+    open_round_ids = [
+        r.id for r in assembly.rounds if r.status in ("NOT_STARTED", "ACTIVE")
+    ]
+    if open_round_ids:
+        for assignment in session.execute(
+            select(TableAssignment).where(
+                TableAssignment.participant_id == participant.id,
+                TableAssignment.round_id.in_(open_round_ids),
+            )
+        ).scalars():
+            session.delete(assignment)
+    participant.registered_table_number = None
+    participant.registered_round_id = None
+    participant.registered_session_id = None
+    session.flush()
+    record_audit_event(
+        session, "participant_moved", "participant", participant.id, actor=actor,
+        data={"from_table": table_number},
+    )
 
 
 #: a participant's page outlives the event: the report may come weeks later
@@ -538,32 +730,39 @@ REGISTER_COLUMNS = (
 
 
 def consent_register_rows(session: Session, assembly: Assembly) -> list[dict]:
-    """One row per person who has a consent record — the register an
-    authority or an auditor asks for. People from the organizer's list with
-    no record are left out: they signed nothing here."""
+    """One row per consent ACT — the register an authority or an auditor asks
+    for, with a change of mind or a withdrawal as a further row under the same
+    label. People from the organizer's list with no record are left out: they
+    signed nothing here."""
+    acts: dict[str, list[ParticipantConsent]] = {}
+    for consent in session.execute(
+        select(ParticipantConsent)
+        .where(ParticipantConsent.assembly_id == assembly.id)
+        .order_by(ParticipantConsent.confirmed_at.asc(), ParticipantConsent.created_at.asc())
+    ).scalars():
+        acts.setdefault(consent.participant_id, []).append(consent)
     rows = []
     for person in participants_with_consent(session, assembly):
-        consent = person["consent"]
-        if consent is None:
-            continue
-        rows.append(
-            {
-                "label": person["label"],
-                "name": person["name"],
-                "email": person["email"],
-                "source": person["source"],
-                "table": person["registered_table_number"] or "",
-                "method": consent["method"],
-                "notice_version": consent["notice_version"],
-                "notice_hash": consent["notice_hash"],
-                "recording": "yes" if consent["recording"] else "no",
-                "transcription": "yes" if consent["transcription"] else "no",
-                "analysis": "yes" if consent["analysis"] else "no",
-                "publication": "yes" if consent["publication"] else "no",
-                "confirmed_at": consent["confirmed_at"].isoformat() if consent["confirmed_at"] else "",
-                "withdrawn_at": consent["withdrawn_at"].isoformat() if consent["withdrawn_at"] else "",
-            }
-        )
+        for record in acts.get(person["id"], []):
+            consent = consent_dict(record)
+            rows.append(
+                {
+                    "label": person["label"],
+                    "name": person["name"],
+                    "email": person["email"],
+                    "source": person["source"],
+                    "table": person["registered_table_number"] or "",
+                    "method": consent["method"],
+                    "notice_version": consent["notice_version"],
+                    "notice_hash": consent["notice_hash"],
+                    "recording": "yes" if consent["recording"] else "no",
+                    "transcription": "yes" if consent["transcription"] else "no",
+                    "analysis": "yes" if consent["analysis"] else "no",
+                    "publication": "yes" if consent["publication"] else "no",
+                    "confirmed_at": consent["confirmed_at"].isoformat() if consent["confirmed_at"] else "",
+                    "withdrawn_at": consent["withdrawn_at"].isoformat() if consent["withdrawn_at"] else "",
+                }
+            )
     return rows
 
 

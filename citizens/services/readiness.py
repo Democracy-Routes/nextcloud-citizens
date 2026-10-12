@@ -42,6 +42,9 @@ HELP_REQUESTED = "HELP_REQUESTED"
 #: table has consented yet (services/consent.py): the server will refuse to
 #: start, so a blocker
 PARTICIPANT_CONSENT_MISSING = "PARTICIPANT_CONSENT_MISSING"
+# someone seated at the table refused to be recorded: the server refuses to
+# start until they are marked as moved (or change their mind)
+PARTICIPANT_REFUSED = "PARTICIPANT_REFUSED"
 
 BLOCKER = "blocker"
 WARNING = "warning"
@@ -100,6 +103,7 @@ def table_readiness(
     round_active: bool = False,
     help_requested: str | None = None,
     consent_missing: bool = False,
+    consent_refused: bool = False,
 ) -> TableReadiness:
     """Decide from the monitor's per-recorder entries.
 
@@ -109,11 +113,14 @@ def table_readiness(
     up: a warning on top of whatever else, so the table stays in view.
     `consent_missing`: the assembly requires individual consent and nobody at
     this table has given it — the server will refuse to start, so a blocker
-    whatever the phones say.
+    whatever the phones say. `consent_refused`: someone seated here refused;
+    the server refuses to start until they are marked as moved.
     """
     hand = [Reason(HELP_REQUESTED, WARNING, None, {"kind": help_requested})] if help_requested else []
     if consent_missing:
         hand = [Reason(PARTICIPANT_CONSENT_MISSING, BLOCKER), *hand]
+    if consent_refused:
+        hand = [Reason(PARTICIPANT_REFUSED, BLOCKER), *hand]
     if not recorders:
         return TableReadiness(BLOCKED, [Reason(NO_RECORDER, BLOCKER), *hand])
 
@@ -185,7 +192,7 @@ def table_readiness(
             ))
 
     reasons.extend(hand)
-    if blocked or consent_missing:
+    if blocked or consent_missing or consent_refused:
         return TableReadiness(BLOCKED, reasons)
     return TableReadiness(NEEDS_ATTENTION if reasons else READY, reasons)
 
