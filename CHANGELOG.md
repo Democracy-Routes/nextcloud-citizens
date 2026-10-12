@@ -40,6 +40,13 @@ not rewritten.
   when a table turns red or a recorder goes silent (a button switches the
   sound off), and the facilitator's phone shows which recorder to go and look
   at. The table phone itself stays silent.
+- **A quiet phone no longer costs the caption connection.** Mistral closes a
+  realtime socket that receives no audio for about half a minute, and every
+  such drop in the 2026-10-11 log followed a hole in a phone's upload stream.
+  After 20 s without a chunk a PCM caption session (Mistral, Vosk) now sends a
+  second of silence per second until audio returns, and subtracts that
+  silence from the engine's timestamps, so the lines keep the recording's own
+  clock even when they are the transcript of record.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`

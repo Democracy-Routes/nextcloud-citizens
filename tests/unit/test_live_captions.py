@@ -320,3 +320,67 @@ def test_a_restarted_session_does_not_erase_what_came_before(settings_env):
         "after reconnecting",
     ]
     assert written["resumed"] is True
+
+
+# --------------------------------------------------- silence keepalive
+
+def test_a_quiet_phone_gets_real_time_silence_sent_in_its_place():
+    """Mistral closes a socket that receives no audio for about half a minute
+    (every drop in the 2026-10-11 log followed a hole in the upload stream).
+    After SILENCE_AFTER_SECONDS without a chunk the session sends a second of
+    silence per second until audio returns, and remembers how much."""
+    import asyncio
+
+    from citizens.services import live_audio
+    from citizens.services.live_captions import MistralSession
+
+    async def scenario():
+        session = MistralSession("rec", "key", "", "en")
+        first = await session.next_audio(idle_seconds=0.01, frame_seconds=1.0)
+        assert first == bytes(live_audio.BYTES_PER_SECOND), "one second of PCM silence"
+        assert session.injected_seconds == 1.0
+        # still idle: the next wait is one frame, not the long idle wait
+        second = await session.next_audio(idle_seconds=10.0, frame_seconds=0.01)
+        assert second == bytes(int(live_audio.BYTES_PER_SECOND * 0.01))
+        # audio returns: it is handed over as is, and the idle state ends
+        session.queue.put_nowait(b"speech")
+        assert await session.next_audio(idle_seconds=0.01, frame_seconds=1.0) == b"speech"
+        assert session._idle is False
+        session.queue.put_nowait(None)
+        assert await session.next_audio(idle_seconds=0.01) is None
+
+    asyncio.run(scenario())
+
+
+def test_injected_silence_is_subtracted_from_the_engines_clock():
+    """The engine's timeline runs ahead of the recording by the silence the
+    session made up; with final transcription off these lines ARE the
+    transcript, so they must keep the recording's own clock."""
+    import json
+
+    from citizens.services.live_captions import MistralSession, VoskSession
+
+    mistral = MistralSession("rec", "key", "", "en")
+    mistral.injected_seconds = 60.0
+    mistral._handle_message(json.dumps(
+        {"type": "transcription.segment", "text": "after the gap", "start": 70.5, "end": 72.0}
+    ))
+    assert mistral.lines[-1]["t"] == 10.5 and mistral.lines[-1]["end"] == 12.0
+    # never before the start of the recording, whatever the arithmetic says
+    mistral._handle_message(json.dumps(
+        {"type": "transcription.segment", "text": "odd", "start": 59.0, "end": 59.5}
+    ))
+    assert mistral.lines[-1]["t"] == 0.0
+
+    vosk = VoskSession("rec", "", "", "en", endpoint="ws://vosk:2700")
+    vosk.injected_seconds = 30.0
+    vosk._handle_message(json.dumps({
+        "text": "hello there",
+        "result": [
+            {"word": "hello", "start": 40.0, "end": 40.4},
+            {"word": "there", "start": 40.5, "end": 41.0},
+        ],
+    }))
+    line = vosk.lines[-1]
+    assert line["t"] == 10.0 and line["end"] == 11.0
+    assert [w["start"] for w in line["words"]] == [10.0, 10.5]

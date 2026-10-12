@@ -54,6 +54,16 @@ DISPOSE_TIMEOUT_SECONDS = 20.0
 FINISH_TIMEOUT_SECONDS = 60.0
 FAILURE_COOLDOWN = 60.0
 KEEPALIVE_SECONDS = 5.0
+# PCM engines (Mistral, Vosk) are fed only what the phone sends. When the
+# phone stalls — a tab in the background, a brief disconnect — the socket goes
+# quiet and Mistral closes it within about half a minute (every
+# ConnectionClosedError in the 2026-10-11 log followed a hole in the upload
+# stream). After this long without audio the session sends real-time silence
+# instead, one second per second, so the connection and the engine's state
+# survive the stall; the silence is subtracted from the engine's timestamps so
+# the transcript of record keeps the recording's own clock.
+SILENCE_AFTER_SECONDS = 20.0
+SILENCE_FRAME_SECONDS = 1.0
 # how many lines the phone and the monitor are shown — a display window, not
 # the record. self.lines keeps everything; status() returns this many.
 MAX_LINES = 80
@@ -116,6 +126,37 @@ class _BaseSession:
         # cleanup — which is what kills ffmpeg — never runs.
         self.pcm_stream = None
         self.pump_task: asyncio.Task | None = None
+        # silence this session sent on its own while the phone was quiet, in
+        # seconds — the engine's clock runs ahead of the recording by this much
+        self.injected_seconds = 0.0
+        self._idle = False
+
+    async def next_audio(
+        self, idle_seconds: float = SILENCE_AFTER_SECONDS, frame_seconds: float = SILENCE_FRAME_SECONDS
+    ) -> bytes | None:
+        """The next PCM to send: the phone's audio, the None sentinel, or —
+        when nothing has arrived for `idle_seconds` — `frame_seconds` of
+        silence, then another every `frame_seconds` until audio returns."""
+        timeout = frame_seconds if self._idle else idle_seconds
+        try:
+            item = await asyncio.wait_for(self.queue.get(), timeout=timeout)
+        except TimeoutError:
+            if not self._idle:
+                log.info("live_stt_silence_keepalive", recording_id=self.recording_id)
+            self._idle = True
+            self.injected_seconds += frame_seconds
+            return bytes(int(live_audio.BYTES_PER_SECOND * frame_seconds))
+        if self._idle and item is not None:
+            log.info(
+                "live_stt_audio_resumed", recording_id=self.recording_id,
+                injected_seconds=round(self.injected_seconds, 1),
+            )
+        self._idle = False
+        return item
+
+    def recording_time(self, engine_seconds: float) -> float:
+        """An engine timestamp mapped back onto the recording's clock."""
+        return max(0.0, engine_seconds - self.injected_seconds)
 
     def add_line(
         self,
@@ -285,7 +326,7 @@ class VoskSession(_BaseSession):
                 log.info("live_stt_session_started", recording_id=self.recording_id, provider="vosk")
                 framer = live_audio.Framer(self.FRAME_SECONDS)
                 while True:
-                    item = await self.queue.get()
+                    item = await self.next_audio()
                     if item is None:
                         # the tail is part of the recording too — send it
                         # before the terminator, not after
@@ -323,15 +364,16 @@ class VoskSession(_BaseSession):
             self.set_provisional(data["partial"])
             return
         words = data.get("result") or []
+        clock = self.recording_time
         self.add_line(
             data.get("text", ""),
-            start=float(words[0]["start"]) if words else 0.0,
-            end=float(words[-1]["end"]) if words else None,
+            start=clock(float(words[0]["start"])) if words else 0.0,
+            end=clock(float(words[-1]["end"])) if words else None,
             # Vosk gives per-word timings and the batch path stores them; keep
             # them so a live transcript is as navigable as a final one
             words=[
-                {"text": w.get("word") or "", "start": float(w.get("start", 0.0)),
-                 "end": float(w.get("end", 0.0))}
+                {"text": w.get("word") or "", "start": clock(float(w.get("start", 0.0))),
+                 "end": clock(float(w.get("end", 0.0)))}
                 for w in words
             ],
         )
@@ -402,7 +444,7 @@ class MistralSession(_BaseSession):
 
                 try:
                     while True:
-                        item = await self.queue.get()
+                        item = await self.next_audio()
                         if item is None:
                             for frame in framer.flush():
                                 await append(frame)
@@ -444,8 +486,9 @@ class MistralSession(_BaseSession):
             # a segment supersedes the deltas accumulated for it
             self.add_line(
                 data.get("text") or self._pending,
-                start=float(data.get("start") or 0.0),
-                end=float(data["end"]) if data.get("end") is not None else None,
+                start=self.recording_time(float(data.get("start") or 0.0)),
+                end=(self.recording_time(float(data["end"]))
+                     if data.get("end") is not None else None),
                 speaker=data.get("speaker_id"),
             )
             self._pending = ""
