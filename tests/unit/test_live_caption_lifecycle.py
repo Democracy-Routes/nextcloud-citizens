@@ -512,7 +512,8 @@ def test_feeds_queued_before_finish_land_before_the_sentinel(settings_env, monke
         manager.set_loop(asyncio.get_running_loop())
         events: list[str] = []
 
-        async def slow_feed(recording_id, data, config, language, assembly_id="", segment=0):
+        async def slow_feed(recording_id, data, config, language, assembly_id="", segment=0,
+                            header_path=None):
             await asyncio.sleep(0.05)
             events.append("feed")
 
@@ -544,7 +545,8 @@ def test_a_stuck_feed_cannot_hold_the_recording_open_forever(settings_env, monke
         monkeypatch.setattr(lc, "FINISH_TIMEOUT_SECONDS", 0.1)
         disposed = asyncio.Event()
 
-        async def stuck_feed(recording_id, data, config, language, assembly_id="", segment=0):
+        async def stuck_feed(recording_id, data, config, language, assembly_id="", segment=0,
+                             header_path=None):
             await asyncio.sleep(30)
 
         async def dispose(_session, keep_stream=False):
@@ -632,3 +634,109 @@ def test_drain_discards_the_buffered_pcm():
 
     assert stream.pcm.empty()
     assert stream._queued_bytes == 0
+
+
+def test_a_decoder_built_mid_stream_is_seeded_with_the_container_header(
+    settings_env, monkeypatch, tmp_path
+):
+    asyncio.run(_test_a_decoder_built_mid_stream_is_seeded(settings_env, monkeypatch, tmp_path))
+
+
+async def _test_a_decoder_built_mid_stream_is_seeded(settings_env, monkeypatch, tmp_path):
+    """A backup phone promoted mid-recording: its first fed chunk is not the
+    one that opened its segment, so the decoder built for it must be given
+    that chunk's container header first — or it decodes nothing (the
+    2026-10-11 takeover that produced no captions)."""
+    from citizens.services.live_audio import EBML_MAGIC, WEBM_CLUSTER_ID
+
+    manager = LiveCaptionManager()
+    manager.set_loop(asyncio.get_running_loop())
+    stream = _FakeStream()
+    monkeypatch.setattr(lc.live_audio, "PcmStream", lambda recording_id: stream)
+
+    class _PcmSession(_BaseSession):
+        wants_pcm = True
+
+        async def run(self):
+            await self.queue.get()
+
+    monkeypatch.setitem(lc.SESSION_TYPES, "mistral", _PcmSession)
+    header = EBML_MAGIC + b"\x42\x86\x81\x01tracks"
+    first_chunk = tmp_path / "000000.bin"
+    first_chunk.write_bytes(header + WEBM_CLUSTER_ID + b"ten seconds of audio")
+
+    await manager._feed_async(
+        "rec-b", b"chunk-61", {"provider": "mistral", "api_key": "k"}, "en", "asm-1",
+        header_path=first_chunk,
+    )
+    assert stream.fed == [header, b"chunk-61"], stream.fed
+
+    # the decoder exists now: later chunks are NOT re-seeded
+    await manager._feed_async(
+        "rec-b", b"chunk-62", {"provider": "mistral", "api_key": "k"}, "en", "asm-1",
+        header_path=first_chunk,
+    )
+    assert stream.fed == [header, b"chunk-61", b"chunk-62"]
+    await manager.shutdown()
+
+
+def test_a_raw_container_session_built_mid_stream_is_seeded_too(settings_env, monkeypatch, tmp_path):
+    asyncio.run(_test_a_raw_container_session_is_seeded(settings_env, monkeypatch, tmp_path))
+
+
+async def _test_a_raw_container_session_is_seeded(settings_env, monkeypatch, tmp_path):
+    """Deepgram is fed the WebM stream itself: a session that starts on a later
+    chunk gets the header down its queue ahead of that chunk."""
+    from citizens.services.live_audio import EBML_MAGIC, WEBM_CLUSTER_ID
+
+    manager = LiveCaptionManager()
+    manager.set_loop(asyncio.get_running_loop())
+    got: list[bytes] = []
+
+    class _RawSession(_BaseSession):
+        wants_pcm = False
+
+        async def run(self):
+            while True:
+                item = await self.queue.get()
+                if item is None:
+                    return
+                got.append(item)
+
+    monkeypatch.setitem(lc.SESSION_TYPES, "deepgram", _RawSession)
+    header = EBML_MAGIC + b"tracks"
+    first_chunk = tmp_path / "000000.bin"
+    first_chunk.write_bytes(header + WEBM_CLUSTER_ID + b"audio")
+
+    await manager._feed_async(
+        "rec-c", b"chunk-9", {"provider": "deepgram", "api_key": "k"}, "en", "asm-1",
+        header_path=first_chunk,
+    )
+    await asyncio.sleep(0.05)
+    assert got == [header, b"chunk-9"], got
+    await manager.shutdown()
+
+
+def test_the_first_chunk_of_a_segment_is_not_seeded(settings_env, monkeypatch):
+    asyncio.run(_test_the_first_chunk_is_not_seeded(settings_env, monkeypatch))
+
+
+async def _test_the_first_chunk_is_not_seeded(settings_env, monkeypatch):
+    manager = LiveCaptionManager()
+    manager.set_loop(asyncio.get_running_loop())
+    stream = _FakeStream()
+    monkeypatch.setattr(lc.live_audio, "PcmStream", lambda recording_id: stream)
+
+    class _PcmSession(_BaseSession):
+        wants_pcm = True
+
+        async def run(self):
+            await self.queue.get()
+
+    monkeypatch.setitem(lc.SESSION_TYPES, "mistral", _PcmSession)
+    await manager._feed_async(
+        "rec-a", b"chunk-0", {"provider": "mistral", "api_key": "k"}, "en", "asm-1",
+        header_path=None,
+    )
+    assert stream.fed == [b"chunk-0"]
+    await manager.shutdown()

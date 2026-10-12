@@ -29,9 +29,15 @@ def captions(monkeypatch):
     which sessions were ended, instead of opening provider websockets."""
     fed: list[str] = []
     finished: list[str] = []
-    monkeypatch.setattr(LIVE_CAPTIONS, "feed", lambda recording_id, *a, **k: fed.append(recording_id))
+    headers: list = []  # the header_path handed over with each fed chunk
+
+    def feed(recording_id, *a, **k):
+        fed.append(recording_id)
+        headers.append(k.get("header_path"))
+
+    monkeypatch.setattr(LIVE_CAPTIONS, "feed", feed)
     monkeypatch.setattr(LIVE_CAPTIONS, "finish", lambda recording_id: finished.append(recording_id))
-    return {"fed": fed, "finished": finished}
+    return {"fed": fed, "finished": finished, "headers": headers}
 
 
 def _assembly(client, mode="orchestrated"):
@@ -256,3 +262,29 @@ def test_plenary_phones_share_one_live_source_too(client, captions):
     _upload(client, phone_b, rec_b, 0)
     assert captions["fed"] == [rec_a]
     assert _sources(round_id) == [rec_a]
+
+
+def test_a_promoted_recorder_hands_the_engine_its_segments_opening_chunk(client, captions):
+    """The engine seeds a decoder it builds mid-stream with the container
+    header of the segment's first chunk. The upload path tells it where that
+    chunk is: nothing for the chunk that opened the segment, the stored path of
+    that chunk for every later one — including the backup's own first chunk
+    once the backup is promoted, which is the case that produced no captions
+    on 2026-10-11."""
+    _, _, headers_a, headers_b, rec_a, rec_b = _two_recorders(client)
+    _upload(client, headers_a, rec_a, 0, b"a-header-chunk")
+    _upload(client, headers_a, rec_a, 1, b"a-chunk-1")
+    _upload(client, headers_b, rec_b, 0, b"b-header-chunk")  # backup: stored, not fed
+    assert captions["fed"] == [rec_a, rec_a]
+    assert captions["headers"][0] is None, "the opening chunk carries its own header"
+    assert str(captions["headers"][1]).endswith("000000.bin")
+    assert rec_a in str(captions["headers"][1])
+
+    client.post("/api/v1/public/recorder/live-source", headers=headers_b,
+                json={"recording_id": rec_b})
+    _upload(client, headers_b, rec_b, 1, b"b-chunk-1")
+    assert captions["fed"][-1] == rec_b
+    header = captions["headers"][-1]
+    assert header is not None and header.exists(), "the backup's opening chunk is on disk"
+    assert rec_b in str(header) and str(header).endswith("000000.bin")
+    assert header.read_bytes() == b"b-header-chunk"

@@ -27,6 +27,7 @@ import contextlib
 import json
 import time
 import urllib.parse
+from pathlib import Path
 
 from citizens.config import get_settings
 from citizens.logging_setup import get_logger
@@ -644,12 +645,20 @@ class LiveCaptionManager:
         language: str,
         assembly_id: str = "",
         segment: int = 0,
+        header_path: Path | None = None,
     ) -> None:
         """Called from the (threadpool) chunk-upload path. Never raises.
 
         `segment` is which MediaRecorder session of the recording the bytes
         come from: a change means a fresh container header, which neither the
-        decoder nor a provider fed raw containers can take mid-stream."""
+        decoder nor a provider fed raw containers can take mid-stream.
+
+        `header_path` is the stored chunk that opened this segment, given
+        whenever `data` is not that chunk. A decoder or raw-container session
+        built NOW — because this phone was just promoted to live source, took
+        the source over from a sibling that stopped, or had its decoder reaped
+        while the provider was down — is seeded with that chunk's container
+        header before `data`, or it could decode nothing at all."""
         try:
             if self._loop is None or not config.get("enabled"):
                 return
@@ -662,7 +671,9 @@ class LiveCaptionManager:
             if provider in ("vosk", "whisper") and not config.get("endpoint"):
                 return
             asyncio.run_coroutine_threadsafe(
-                self._tracked_feed(recording_id, data, config, language, assembly_id, segment),
+                self._tracked_feed(
+                    recording_id, data, config, language, assembly_id, segment, header_path
+                ),
                 self._loop,
             )
         except Exception:
@@ -717,6 +728,7 @@ class LiveCaptionManager:
         language: str,
         assembly_id: str = "",
         segment: int = 0,
+        header_path: Path | None = None,
     ) -> None:
         """_feed_async, registered so finish() can fence behind it.
 
@@ -730,7 +742,9 @@ class LiveCaptionManager:
         if task is not None:
             pending.add(task)
         try:
-            await self._feed_async(recording_id, data, config, language, assembly_id, segment)
+            await self._feed_async(
+                recording_id, data, config, language, assembly_id, segment, header_path
+            )
         finally:
             if task is not None:
                 pending.discard(task)
@@ -745,6 +759,7 @@ class LiveCaptionManager:
         language: str,
         assembly_id: str = "",
         segment: int = 0,
+        header_path: Path | None = None,
     ) -> None:
         provider = config["provider"]
         wants_pcm = SESSION_TYPES[provider].wants_pcm
@@ -832,6 +847,10 @@ class LiveCaptionManager:
             # so the cooldown above could never see it, and every subsequent
             # ten-second chunk leaked another session, task and connection.
             self._sessions[recording_id] = session
+            # The container header, when this chunk is not the one that opened
+            # the segment: a decoder or raw-container session that starts here
+            # starts mid-stream and must be seeded with it (live_audio).
+            header = await self._load_header(recording_id, header_path)
             if wants_pcm:
                 stream = self._streams.get(recording_id)
                 if stream is None:
@@ -843,6 +862,8 @@ class LiveCaptionManager:
                         log.warning("live_stt_pcm_stream_failed", recording_id=recording_id)
                         return
                     self._streams[recording_id] = stream
+                    if header:
+                        stream.feed(header)
                 else:
                     # reusing the decoder that outlived a failed session: throw
                     # away the PCM it buffered during the reconnect gap, so the
@@ -855,6 +876,13 @@ class LiveCaptionManager:
                 session.pump_task = loop.create_task(
                     self._pump_pcm(session, session.pcm_stream)
                 )
+            elif header:
+                # a provider fed raw containers (Deepgram) is seeded the same
+                # way: the header goes down its queue ahead of this chunk
+                try:
+                    session.queue.put_nowait(header)
+                except asyncio.QueueFull:
+                    log.warning("live_stt_queue_full", recording_id=recording_id)
         session.last_fed = time.monotonic()
         if wants_pcm:
             stream = self._streams.get(recording_id)
@@ -865,6 +893,24 @@ class LiveCaptionManager:
             session.queue.put_nowait(data)
         except asyncio.QueueFull:
             log.warning("live_stt_queue_full", recording_id=recording_id)
+
+    async def _load_header(self, recording_id: str, header_path: Path | None) -> bytes:
+        """The container header of the segment's first chunk, read off the
+        event loop; empty when there is none to seed with (this chunk opened
+        the segment) or the file is gone (never, while recording — reclaim
+        waits for assembly)."""
+        if header_path is None:
+            return b""
+        try:
+            first_chunk = await asyncio.to_thread(header_path.read_bytes)
+        except OSError:
+            log.warning("live_stt_seed_unreadable", recording_id=recording_id,
+                        path=str(header_path))
+            return b""
+        header = live_audio.container_header(first_chunk)
+        log.info("live_stt_seeded", recording_id=recording_id, header_bytes=len(header),
+                 whole_chunk=len(header) == len(first_chunk))
+        return header
 
     async def _pump_pcm(self, session: "_BaseSession", stream) -> None:
         """Forward decoded PCM into the session queue until the stream ends."""

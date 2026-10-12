@@ -7,6 +7,7 @@ recordings for its own table, upload chunks, and complete recordings.
 """
 
 import json
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -235,7 +236,7 @@ async def upload_chunk(
     # uploading at once made a plain redirect take 27 seconds, the organizer UI
     # stop responding, and commits (which the loop must schedule) stall until
     # waiting writers gave up with "database is locked".
-    def _persist() -> tuple[dict, str, str, dict, str, bool]:
+    def _persist() -> tuple[dict, str, str, dict, str, bool, Path | None]:
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
@@ -243,14 +244,22 @@ async def upload_chunk(
             session, recording, sequence_number, x_chunk_sha256, body, x_chunk_segment
         )
         language = ""
+        header_path = None
+        feed_live = recording.live_source
         if not outcome.get("duplicate"):
             assembly = session.get(Assembly, recording.assembly_id)
             language = assembly.language if assembly else ""
-        feed_live = recording.live_source
+            if feed_live:
+                # the segment's opening chunk, for a caption decoder that has
+                # to start on THIS chunk (a phone promoted mid-recording)
+                header_path = rec_svc.segment_header_path(
+                    session, recording, sequence_number, x_chunk_segment
+                )
         session.commit()  # durable receipt before an acknowledgement can leave the server
-        return outcome, recording.id, language, stt, recording.assembly_id, feed_live
+        return outcome, recording.id, language, stt, recording.assembly_id, feed_live, header_path
 
-    result, recording_id_out, language, stt, assembly_id, feed_live = await run_in_threadpool(_persist)
+    (result, recording_id_out, language, stt, assembly_id, feed_live,
+     header_path) = await run_in_threadpool(_persist)
     # Only the table's live source feeds the caption engine: a backup recorder's
     # audio is kept and transcribed afterwards, but it must not open a second
     # streaming session for the same discussion (services/live_source.py).
@@ -258,7 +267,8 @@ async def upload_chunk(
         # provisional live captions ride on the safety upload — failures here
         # never affect the recording (brief §51)
         LIVE_CAPTIONS.feed(
-            recording_id_out, body, stt, language, assembly_id, segment=x_chunk_segment
+            recording_id_out, body, stt, language, assembly_id, segment=x_chunk_segment,
+            header_path=header_path,
         )
     return result
 
@@ -293,7 +303,7 @@ async def upload_part(
         raise HTTPException(422, "Invalid checksum")
     body = await _read_capped_body(request, multipart_audio.PART_BYTES)
 
-    def persist() -> tuple[dict, str, str, dict, bool]:
+    def persist() -> tuple[dict, str, str, dict, bool, Path | None]:
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
@@ -301,9 +311,14 @@ async def upload_part(
                                               x_total_bytes, x_chunk_sha256, x_part_sha256, body)
         assembly = session.get(Assembly, recording.assembly_id)
         language = assembly.language if assembly else ""
-        return result, recording.assembly_id, language, stt, recording.live_source
+        header_path = None
+        if recording.live_source and not result.get("duplicate"):
+            header_path = rec_svc.segment_header_path(
+                session, recording, sequence_number, x_chunk_segment
+            )
+        return result, recording.assembly_id, language, stt, recording.live_source, header_path
 
-    result, assembly_id, language, stt, feed_live = await run_in_threadpool(persist)
+    result, assembly_id, language, stt, feed_live, header_path = await run_in_threadpool(persist)
     # Live captions feed on chunk order. The plain route feeds upload_chunk as
     # the chunk arrives; a chunk big enough to go through parts never reached
     # the caption session until finalize — so a phone whose chunks all exceed
@@ -317,7 +332,8 @@ async def upload_part(
     # time — mid-stream, which the decoder cannot tell from new speech. And only
     # from the table's live source (see upload_chunk).
     if not result.get("duplicate") and feed_live:
-        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id, segment=x_chunk_segment)
+        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id,
+                           segment=x_chunk_segment, header_path=header_path)
     return result
 
 

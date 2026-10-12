@@ -5,6 +5,7 @@
 import hashlib
 import json
 from datetime import timedelta
+from pathlib import Path
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -507,6 +508,28 @@ def receive_chunk(
         segment_number=segment_number,
     )
     return {"acknowledged": True, "duplicate": False, "sequence_number": sequence_number}
+
+
+def segment_header_path(
+    session: Session, recording: Recording, sequence_number: int, segment_number: int
+) -> Path | None:
+    """The stored chunk that opened this chunk's MediaRecorder segment, when
+    this chunk is not it: the caption engine seeds a decoder built mid-stream
+    with that chunk's container header (services/live_audio.container_header).
+    None when this chunk opens the segment (it carries the header itself) or
+    when nothing of the segment is stored yet (a first chunk arriving in parts)."""
+    first = session.execute(
+        select(AudioChunk.sequence_number, AudioChunk.path)
+        .where(
+            AudioChunk.recording_id == recording.id,
+            AudioChunk.segment_number == segment_number,
+        )
+        .order_by(AudioChunk.sequence_number.asc())
+        .limit(1)
+    ).first()
+    if first is None or first.sequence_number >= sequence_number:
+        return None
+    return get_settings().app_persistent_storage / first.path
 
 
 def note_segment_start(

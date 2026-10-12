@@ -13,6 +13,17 @@ through QR codes whose meaning the already-authorized phone chose. The
 recorder engine, storage, ownership, retention and export paths are extended,
 not rewritten.
 
+- **Live captions survive a change of phone.** Only the first chunk of a
+  recording carries the WebM container header, so a caption decoder that
+  started on a later chunk — a backup phone promoted to live source, the
+  source passing to a sibling, a decoder rebuilt after the idle reaper — could
+  decode nothing at all (the 2026-10-11 field test: a takeover produced no
+  captions for the rest of the session). The upload path now tells the caption
+  engine where the segment's opening chunk is stored and the engine seeds a
+  decoder or raw-container session it builds mid-stream with that chunk's
+  header first. Measured on real phone chunks: Chrome cuts every chunk at a
+  Cluster boundary, so the 260-byte header followed by any later chunk decodes
+  cleanly, with none of the first chunk's audio replayed.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`
