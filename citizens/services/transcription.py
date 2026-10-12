@@ -183,7 +183,15 @@ def transcribe_recording(
         raise TranscriptionError(f"Unknown STT provider {provider}", permanent=True)
 
     if assembly is not None and assembly.language_auto:
-        adopt_detected_language(session, assembly, normalized.language, recording)
+        detected = normalized.language
+        if detect and not detected:
+            # the engine said nothing (observed with Mistral on 2026-10-11: an
+            # Italian table summarised in English): ask the analysis model
+            # from the text — an HTTP call, made before any further query
+            detected = detect_language_from_text(
+                store, " ".join(segment.text for segment in normalized.segments)
+            )
+        adopt_detected_language(session, assembly, detected, recording)
     transcript = store_transcript(session, recording, normalized)
     log.info(
         "stt_completed",
@@ -196,6 +204,41 @@ def transcribe_recording(
 
 #: engines that return the language they heard when none is forced
 DETECTING_PROVIDERS = ("deepgram", "mistral", "whisper")
+
+#: how much of a transcript the language question gets: a few sentences decide it
+LANGUAGE_SAMPLE_CHARS = 1500
+LANGUAGE_SYSTEM = (
+    "You identify the language of a transcript. Answer with the ISO 639-1 code "
+    "only — one of: en, it, de, fr, es — or the word unknown."
+)
+
+
+def detect_language_from_text(store: provider_config.ConfigStore, text: str) -> str:
+    """The language of a transcript, asked of the analysis model, as an ISO
+    code the app knows — or "" when there is no text, no model, or no clear
+    answer. Never raises: a missing guess leaves the language as it was."""
+    from citizens.domain.schemas import Language
+    from citizens.providers.analysis.openai_compat import _chat
+    from citizens.services.analysis import AnalysisError, _analysis_config
+
+    sample = (text or "").strip()[:LANGUAGE_SAMPLE_CHARS]
+    if len(sample) < 20:
+        return ""
+    try:
+        base_url, key, model = _analysis_config(store)
+        answer = _chat(
+            base_url, key, model,
+            [{"role": "system", "content": LANGUAGE_SYSTEM}, {"role": "user", "content": sample}],
+        )
+    except (AnalysisError, Exception):
+        log.warning("language_text_detection_failed", exc_info=True)
+        return ""
+    code = "".join(ch for ch in (answer or "").strip().lower()[:8] if ch.isalpha())[:2]
+    if code not in Language.__args__:
+        log.info("language_text_detection_unclear", answer=(answer or "")[:40])
+        return ""
+    log.info("language_detected_from_text", language=code, sample_chars=len(sample))
+    return code
 
 
 def adopt_detected_language(

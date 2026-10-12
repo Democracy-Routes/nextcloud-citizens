@@ -10,9 +10,10 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from citizens.db.models import Assembly, Participant, Round, Table, TableAssignment
+from citizens.db.models import Assembly, Participant, Recording, Round, Table, TableAssignment
 from citizens.domain import schemas
 from citizens.domain.tables import color_for
+from citizens.services.audit import record_audit_event
 
 
 def get_owned_assembly(session: Session, assembly_id: str, user_id: str) -> Assembly:
@@ -47,6 +48,8 @@ def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate
         redact_names=data.redact_names,
         participant_consent=data.participant_consent,
         ai_facilitator=data.ai_facilitator,
+        audio_retention_days=data.audio_retention_days,
+        zero_retention=data.zero_retention,
         created_by=user_id,
     )
     for position, round_in in enumerate(data.rounds, start=1):
@@ -54,6 +57,59 @@ def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate
     session.add(assembly)
     session.flush()
     return assembly
+
+
+def change_language(session: Session, assembly: Assembly, language: str) -> dict:
+    """Set the assembly's language after recording began and transcribe every
+    recording that still has audio again in it (S8).
+
+    Refused while a session is being recorded (its transcript would land in
+    the old language) and once zero retention has run (no audio to transcribe
+    from). A language chosen here is chosen by hand: detection stops. Findings
+    and the report follow the new transcripts through the normal chain; a
+    closed assembly's frozen report is refreshed when analysis completes.
+    """
+    from citizens.services.retranscription import RETRANSCRIBABLE, queue_final_transcription
+
+    if any(round_.status == "ACTIVE" for round_ in assembly.rounds):
+        raise HTTPException(
+            status_code=409, detail="SESSION_ACTIVE: finish the session being recorded first"
+        )
+    if assembly.zero_retention_done_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="ZERO_RETENTION_APPLIED: the audio is gone, nothing can be transcribed again",
+        )
+    previous = assembly.language
+    assembly.language_auto = False
+    queued = skipped_no_audio = 0
+    if language != previous:
+        assembly.language = language
+        session.flush()
+        for recording in session.execute(
+            select(Recording).where(
+                Recording.assembly_id == assembly.id,
+                Recording.state.in_(RETRANSCRIBABLE),
+            )
+        ).scalars():
+            try:
+                if queue_final_transcription(session, recording):
+                    queued += 1
+            except HTTPException:
+                skipped_no_audio += 1
+    record_audit_event(
+        session, "language_changed", "assembly", assembly.id,
+        data={
+            "from": previous, "to": language, "queued": queued,
+            "skipped_no_audio": skipped_no_audio,
+        },
+    )
+    return {
+        "language": assembly.language,
+        "queued": queued,
+        "skipped_no_audio": skipped_no_audio,
+        "closed": assembly.closed_at is not None,
+    }
 
 
 def _build_round(round_in: schemas.RoundIn, position: int, table_count: int) -> Round:

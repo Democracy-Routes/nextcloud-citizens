@@ -99,6 +99,12 @@ _TEXT = {
             "transcript, the summaries and the report are kept as the record of the assembly, "
             "together with the participant list."
         ),
+        "retention_zero": (
+            "How long: the audio recording and the transcript are deleted as soon as the "
+            "assembly is closed and its report is written. Only the report — summaries and "
+            "quotations — is kept as the record of the assembly, together with the "
+            "participant list."
+        ),
         "rights": (
             "Your rights: access, rectification, erasure, restriction, portability, objection, "
             "and withdrawal of consent at any time (it does not affect processing already "
@@ -203,6 +209,12 @@ _TEXT = {
             "Per quanto tempo: la registrazione audio viene conservata finché chi organizza non "
             "la cancella. Trascrizione, sintesi e rapporto sono conservati come documentazione "
             "dell'assemblea, insieme all'elenco dei partecipanti."
+        ),
+        "retention_zero": (
+            "Per quanto tempo: la registrazione audio e la trascrizione vengono cancellate "
+            "appena l'assemblea viene chiusa e il rapporto è scritto. Solo il rapporto — sintesi "
+            "e citazioni — è conservato come documentazione dell'assemblea, insieme all'elenco "
+            "dei partecipanti."
         ),
         "rights": (
             "I tuoi diritti: accesso, rettifica, cancellazione, limitazione, portabilità, "
@@ -353,7 +365,10 @@ def render_notice(
         )
     )
     days = int(handling.get("audio_retention_days") or 0)
-    paragraphs.append(t("retention_days", days=days) if days > 0 else t("retention_none"))
+    if handling.get("zero_retention"):
+        paragraphs.append(t("retention_zero"))
+    else:
+        paragraphs.append(t("retention_days", days=days) if days > 0 else t("retention_none"))
     paragraphs.append(
         t(
             "rights",

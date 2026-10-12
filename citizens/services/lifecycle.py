@@ -97,12 +97,25 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
         assembly_id=assembly.id,
         progress=assembly_progress(session, assembly),
     )
+    # an assembly that keeps nothing but its report: now, if everything is
+    # processed; otherwise the sweep does it once the last job is through
+    from citizens.services import zero_retention
+
+    zero_retention.apply_if_ready(session, assembly)
     return report
 
 
 def reopen_assembly(session: Session, assembly: Assembly) -> None:
     """Accept recordings again. The frozen snapshot stays in place, so phones
     keep showing the report exactly as it was at closing."""
+    if assembly.zero_retention_done_at is not None:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=409,
+            detail="ZERO_RETENTION_APPLIED: the audio and transcripts are gone; "
+                   "this assembly cannot be reopened",
+        )
     assembly.closed_at = None
     assembly.status = "ACTIVE"
     # Withdraw any standing purge request. The phone-facing flag is a bare

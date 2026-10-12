@@ -148,6 +148,13 @@ def list_files(session: Session, assembly: Assembly) -> dict:
                 "audio_deleted_at": (
                     recording.audio_deleted_at.isoformat() if recording.audio_deleted_at else None
                 ),
+                # "silence" / "organizer" when the server finished it; a
+                # continuation holds what its phone sent after that close
+                "closed_by": recording.closed_by,
+                "continued_from_id": recording.continued_from_id,
+                "audio_added_at": (
+                    recording.audio_added_at.isoformat() if recording.audio_added_at else None
+                ),
                 "has_transcript": recording.id in transcribed,
                 "transcript_source": (
                     transcribed[recording.id].source if recording.id in transcribed else ""

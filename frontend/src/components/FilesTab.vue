@@ -18,7 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../api'
 import { downloadFromApi } from '../download'
 import { describeError } from '../errors'
-import { bytes, duration } from '../format'
+import { bytes, clockTime, duration } from '../format'
 import { BACKGROUND_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, FileEntry, FilesListing } from '../types'
@@ -395,6 +395,17 @@ async function deleteAll(): Promise<void> {
 										data-test="coverage">
 										{{ t('organizer.live.files.captured', { percent: entry.coverage.percent }) }}
 									</span>
+									<!-- finished server-side without anyone tapping Finish, or
+									     holding audio that arrived after such a close -->
+									<div v-if="entry.closed_by === 'silence'" class="cz-muted" style="font-size: 0.72rem; margin-top: 2px" data-test="closed-silence">
+										{{ t('organizer.live.files.closedSilence') }}
+									</div>
+									<div v-if="entry.closed_by === 'organizer'" class="cz-muted" style="font-size: 0.72rem; margin-top: 2px" data-test="closed-organizer">
+										{{ t('organizer.live.files.closedOrganizer') }}
+									</div>
+									<div v-if="entry.continued_from_id" class="cz-muted" style="font-size: 0.72rem; margin-top: 2px" data-test="audio-added">
+										{{ t('organizer.live.files.audioAdded', { time: clockTime(entry.created_at) }) }}
+									</div>
 								</td>
 								<td>
 									<template v-if="entry.audio_deleted_at">

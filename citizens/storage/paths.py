@@ -60,6 +60,11 @@ def device_log_path(root: Path, session_id: str) -> Path:
     return root / "logs" / "devices" / f"{session_id}.jsonl"
 
 
+def live_captions_dir(root: Path, assembly_id: str) -> Path:
+    """Every caption file of one assembly (zero retention removes the lot)."""
+    return root / "live_captions" / assembly_id
+
+
 def live_caption_path(root: Path, assembly_id: str, recording_id: str) -> Path:
     """Where a finished caption session leaves what it heard.
 

@@ -102,6 +102,14 @@ export interface FileEntry {
 	has_transcript: boolean
 	transcript_source: string
 	can_retranscribe: boolean
+	/** finished server-side without anyone tapping Finish: the silence sweep,
+	 * or the organizer from the Live tab (0.7) */
+	closed_by?: 'silence' | 'organizer' | null
+	/** the id of the recording this one continues — audio that arrived after
+	 * that recording was closed server-side; null for an ordinary recording */
+	continued_from_id?: string | null
+	/** when this continuation's audio first arrived (0.7); null otherwise */
+	audio_added_at?: string | null
 }
 
 /** How far a request to clear the phones actually reached.
@@ -389,6 +397,15 @@ export interface MonitorTable {
 			live_source?: boolean
 			silent_seconds?: number | null
 			coverage?: Coverage | null
+			/** finished server-side without this phone tapping Finish: the
+			 * silence sweep, or the organizer from the Live tab (0.7) */
+			closed_by?: 'silence' | 'organizer' | null
+			/** the organizer asked this phone to finish; true until closed_by is set */
+			finish_requested?: boolean
+			/** this row holds audio that arrived after an earlier recording of
+			 * the same phone was closed server-side — the continuation, not the
+			 * original (0.7) */
+			continued?: boolean
 		} | null
 	}>
 	/** which recorder's captions the room reads; null when none */

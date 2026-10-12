@@ -57,6 +57,9 @@ class RecorderSession(Base):
     # the newest organizer message this phone has shown (session_messages.id):
     # the Live tab's "delivered 9/10" reads from here
     last_seen_message_id: Mapped[int | None] = mapped_column(Integer)
+    # the phone's own random id (localStorage): a single-use code scanned
+    # again by the same phone returns this session instead of 410
+    device_id: Mapped[str | None] = mapped_column(String(64))
 
 
 class Recording(Base):
@@ -101,6 +104,23 @@ class Recording(Base):
     # phones record (services/live_source.py). A partial unique index on
     # (round_id, table_id) WHERE live_source makes a second primary impossible.
     live_source: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # who finished this recording when the phone did not: "silence" (no chunk
+    # for five minutes, services/recording.close_server_side) or "organizer"
+    # (the Live tab's Finish). NULL when the phone finished it itself.
+    closed_by: Mapped[str | None] = mapped_column(String(16))
+    # the organizer asked the phone to finish; it does so on its next poll,
+    # and the sweep finishes it server-side if the phone never answers
+    finish_requested_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # A closed recording's phone that comes back keeps uploading under this
+    # id; the audio lands in a CONTINUATION recording of the same table and
+    # slot (continued_by_id), whose own chunk 0 may be the stored container
+    # header so its mid-stream clusters decode. late_seq_shift maps the
+    # phone's sequence numbers onto the continuation's.
+    audio_added_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    continued_from_id: Mapped[str | None] = mapped_column(String(36))
+    continued_by_id: Mapped[str | None] = mapped_column(String(36))
+    late_seq_shift: Mapped[int | None] = mapped_column(Integer)
+    late_header_chunks: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 

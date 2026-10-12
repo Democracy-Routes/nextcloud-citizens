@@ -126,6 +126,16 @@
 			"message": "Il telefono del tavolo {number} ha smesso di rispondere. La sua registrazione viene chiusa con l'audio già ricevuto — di solito quasi tutta la sessione — e trascritta. Il tavolo può poi registrare il resto con qualsiasi telefono, scansionando lo stesso codice QR.",
 			"confirm": "Passa il tavolo"
 		},
+		"finishRecording": "Termina registrazione",
+		"finishRequested": "Chiusura… il telefono è stato avvisato",
+		"closedSilence": "Chiusa dal server dopo 5 minuti di silenzio",
+		"closedOrganizer": "Chiusa da qui",
+		"continued": "Audio arrivato dopo la chiusura, conservato",
+		"finishConfirm": {
+			"title": "Terminare la registrazione di questo tavolo?",
+			"message": "La registrazione del tavolo {number} verrà chiusa ora, con l'audio già ricevuto. Al telefono verrà chiesto di interrompersi; nulla di quanto registrato finora viene perso.",
+			"confirm": "Termina registrazione"
+		},
 		"startUnready": {
 			"title": "Iniziare senza alcuni tavoli?",
 			"message": "Solo {ready} tavoli su {total} sono pronti. I tavoli che si preparano più tardi possono comunque unirsi alla sessione. Iniziare lo stesso?",
@@ -241,6 +251,9 @@
 		"audioDeleted": "audio eliminato",
 		"liveTitle": "Dai sottotitoli in diretta, non da una trascrizione dell'audio completo",
 		"live": "in diretta",
+		"closedSilence": "chiusa dal server dopo 5 min di silenzio",
+		"closedOrganizer": "chiusa dalla scheda Live",
+		"audioAdded": "audio aggiunto alle {time}",
 		"actions": {
 			"download": "Scarica",
 			"deleteAudioTitle": "Elimina l'audio",

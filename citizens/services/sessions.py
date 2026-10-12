@@ -28,6 +28,7 @@ press Start for a round that nobody is orchestrating.
 from dataclasses import dataclass
 from datetime import datetime
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -117,13 +118,47 @@ def record_now(session: Session, user_id: str, language: str = "en") -> schemas.
     to ask yet — and the container is named after the moment instead.
     """
     data = schemas.SessionCreate(
-        question="", recording_mode="independent", table_count=1, language=language
+        question="", recording_mode="independent", table_count=1, language=language,
+        # nobody planned this: no countdown, no auto-finish (R12)
+        duration_minutes=0,
     )
     created = create_standalone_session(session, user_id, data)
     created.container.name = _record_now_name(utcnow())
     # nobody chose this language — the UI's is a guess until the first
     # transcript says what was actually spoken
     created.container.language_auto = True
+    [card] = created.invites
+    return schemas.RecordNowOut(
+        session_id=created.session_id,
+        container_id=created.container_id,
+        table_number=card.table_number,
+        recorder_url=card.url,
+    )
+
+
+def record_another(session: Session, container: Assembly, round_: Round) -> schemas.RecordNowOut:
+    """The phone's "Record another session" (R13): a fresh one-table Session
+    like the one it just finished — same owner, language, question — with no
+    planned time. Only from a Session that is not part of an assembly and
+    that nobody orchestrates (Record now, or a Session started as independent)."""
+    if container.kind != SESSION_KIND or container.recording_mode != "independent":
+        raise HTTPException(
+            status_code=409, detail="Only a session recorded on its own can be followed this way"
+        )
+    data = schemas.SessionCreate(
+        question=round_.question or "", objective=round_.objective,
+        recording_mode="independent", table_count=1, language=container.language,
+        duration_minutes=0,
+    )
+    created = create_standalone_session(session, container.created_by, data)
+    if not round_.question:
+        created.container.name = _record_now_name(utcnow())
+    created.container.language_auto = container.language_auto
+    created.container.auto_purge_device_audio = container.auto_purge_device_audio
+    record_audit_event(
+        session, "session_followed", "round", created.round_.id,
+        actor="recorder-session", data={"previous_round_id": round_.id},
+    )
     [card] = created.invites
     return schemas.RecordNowOut(
         session_id=created.session_id,

@@ -126,6 +126,16 @@
 			"message": "Table {number}'s phone has stopped responding. Its recording is finished with the audio already received — usually most of the session — and transcribed. The table can then record the rest on any phone by scanning the same QR code.",
 			"confirm": "Hand over the table"
 		},
+		"finishRecording": "Finish recording",
+		"finishRequested": "Finishing… the phone was asked",
+		"closedSilence": "Finished by the server after 5 minutes of silence",
+		"closedOrganizer": "Finished from here",
+		"continued": "Audio that arrived after the close, kept",
+		"finishConfirm": {
+			"title": "Finish this table's recording?",
+			"message": "Table {number}'s recording will be finished now, with the audio already received. The phone will be asked to stop; nothing it has recorded so far is lost.",
+			"confirm": "Finish recording"
+		},
 		"startUnready": {
 			"title": "Start with tables missing?",
 			"message": "Only {ready} of {total} tables are armed and ready. Tables that arm later can still join the session. Start anyway?",
@@ -241,6 +251,9 @@
 		"audioDeleted": "audio deleted",
 		"liveTitle": "From the live captions, not a transcription of the finished audio",
 		"live": "live",
+		"closedSilence": "finished by the server after 5 min of silence",
+		"closedOrganizer": "finished from the Live tab",
+		"audioAdded": "audio added at {time}",
 		"actions": {
 			"download": "Download",
 			"deleteAudioTitle": "Delete audio",

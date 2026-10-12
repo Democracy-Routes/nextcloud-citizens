@@ -23,8 +23,9 @@ from citizens.db.models import (
 from citizens.db.models.base import utcnow
 from citizens.domain.analysis_schemas import RoundAnalysis, TableAnalysis
 from citizens.logging_setup import get_logger
-from citizens.providers.analysis.openai_compat import AnalysisError, chat_json
+from citizens.providers.analysis.openai_compat import AnalysisError, _chat, chat_json
 from citizens.services import provider_config, pseudonyms
+from citizens.services.audit import record_audit_event
 from citizens.services.table_recordings import recordings_for_table, recordings_overlap
 
 log = get_logger(__name__)
@@ -339,8 +340,15 @@ def table_recordings(session: Session, recording: Recording) -> list[Recording]:
     return recordings_for_table(session, recording.round_id, recording.table_id)
 
 
-def analyze_table(session: Session, store: provider_config.ConfigStore, recording: Recording) -> int:
+def analyze_table(
+    session: Session, store: provider_config.ConfigStore, recording: Recording,
+    keep_approved: bool = False,
+) -> int:
     """Extract findings for one table's discussion; returns stored finding count.
+
+    keep_approved: this run was not asked for by anybody — audio arrived after
+    a server-side close — so the findings the organizer already approved stay,
+    the model is told about them, and only drafts are replaced.
 
     Analyses the TABLE, not the recording. A table whose phone was replaced has
     two recordings, and analysing each separately would produce two competing
@@ -409,12 +417,19 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
                 f"{pseudonyms.redact(block['text'], hidden)}"
                 for block in coalesce_segments(list(transcript.segments))
             )
+    kept_titles = _approved_titles(session, siblings) if keep_approved else []
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title if round_ else ''}\n"
         f"{_objective_line(round_)}"
         f"Table number: {recording.table_number}\n\n"
-        "Transcript segments (format: [segment ids] SPEAKER (start-end): text):\n"
+        + (
+            "Findings already approved for this table, which stay as they are — do not "
+            "repeat them; report only what is NEW in the transcript:\n"
+            + "\n".join(f"- {title}" for title in kept_titles) + "\n\n"
+            if kept_titles else ""
+        )
+        + "Transcript segments (format: [segment ids] SPEAKER (start-end): text):\n"
         + "\n".join(lines)
     )
 
@@ -462,8 +477,12 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     # nothing: PermanentJobError does not roll back (see jobs/runner.py). The
     # delete and the inserts below are one transaction, so re-analysis either
     # replaces the findings or leaves them untouched.
-    _delete_table_findings(session, siblings)
+    _delete_table_findings(session, siblings, keep_approved=keep_approved)
     _set_table_summary(siblings, primary, result.summary)
+    if assembly is not None and round_ is not None:
+        _name_record_now_session(
+            session, base_url, key, model, assembly, round_, result.summary, language
+        )
 
     stored = 0
     for item, evidence_ids in usable:
@@ -624,15 +643,88 @@ def _table_has_findings(session: Session, siblings: list[Recording]) -> bool:
     ).first() is not None
 
 
-def _delete_table_findings(session: Session, siblings: list[Recording]) -> None:
+APPROVED_STATUSES = ("APPROVED", "EDITED_AND_APPROVED")
+
+TITLE_SYSTEM = (
+    "You name a recorded discussion from its summary. Answer with a title of at most "
+    "eight words in {language}, no quotation marks, no final period — the title only."
+)
+
+
+def _name_record_now_session(
+    session: Session, base_url: str, key: str, model: str,
+    assembly: Assembly, round_: Round, summary: str, language: str,
+) -> None:
+    """A Record-now session was named after the clock (R16): once its first
+    table is analysed, the model names it after what was said — the sidebar
+    then reads "Parking in the old town" instead of "Recording 2026-10-15
+    09:12 UTC". Only a Session with no question and no title of its own, only
+    once, and never fatal: a title is a courtesy, the analysis is the record."""
+    if assembly.kind != "session" or round_.question or round_.title or not summary.strip():
+        return
+    if not assembly.name.startswith("Recording "):
+        return  # the organizer already renamed it
+    try:
+        answer = _chat(
+            base_url, key, model,
+            [
+                {"role": "system", "content": TITLE_SYSTEM.format(language=language)},
+                {"role": "user", "content": summary.strip()[:2000]},
+            ],
+        )
+    except Exception:
+        log.warning("session_title_failed", assembly_id=assembly.id, exc_info=True)
+        return
+    title = " ".join((answer or "").strip().strip('"\u201c\u201d\'').rstrip(".").split())
+    if not title or len(title) > 120:
+        return
+    round_.title = title
+    assembly.name = title
+    session.flush()
+    record_audit_event(
+        session, "session_titled", "assembly", assembly.id,
+        data={"title": title, "round_id": round_.id, "model": model},
+    )
+    log.info("session_titled", assembly_id=assembly.id, title=title)
+
+
+def _delete_table_findings(
+    session: Session, siblings: list[Recording], keep_approved: bool = False
+) -> None:
     """Clear this table's findings across every recording it has.
 
     A replaced phone leaves findings attributed to the earlier recording; a
     re-analysis that only cleared the current one would leave those behind as
-    duplicates nobody could account for.
+    duplicates nobody could account for. With keep_approved (a late-audio
+    re-run nobody asked for) the approved ones stay — the model was told not
+    to repeat them.
     """
     for sibling in siblings:
-        _delete_existing(session, recording_id=sibling.id, scope="table")
+        if not keep_approved:
+            _delete_existing(session, recording_id=sibling.id, scope="table")
+            continue
+        drafts = session.execute(
+            select(Finding).where(
+                Finding.scope == "table",
+                Finding.recording_id == sibling.id,
+                Finding.status.notin_(APPROVED_STATUSES),
+            )
+        ).scalars()
+        for finding in drafts:
+            session.delete(finding)
+    session.flush()
+
+
+def _approved_titles(session: Session, siblings: list[Recording]) -> list[str]:
+    return list(
+        session.execute(
+            select(Finding.title).where(
+                Finding.scope == "table",
+                Finding.recording_id.in_([sibling.id for sibling in siblings]),
+                Finding.status.in_(APPROVED_STATUSES),
+            )
+        ).scalars()
+    )
 
 
 def _set_table_summary(siblings: list[Recording], primary: Recording, summary: str) -> None:

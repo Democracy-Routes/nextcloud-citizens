@@ -335,6 +335,21 @@ export interface RecorderStatus {
 	table?: TableInfo
 	rounds: RoundInfo[]
 	purge_local_audio?: boolean
+	/** This phone's own newest recording, when the server finished it without
+	 * the phone tapping Finish (the silence sweep, or the organizer from the
+	 * Live tab) — or asked for it to finish. null: nothing of this applies.
+	 * Absent from a server older than 0.7. */
+	recording_notice?: {
+		recording_id: string
+		round_id: string
+		closed_by: 'silence' | 'organizer' | null
+		closed_at: string | null
+		/** the organizer asked this phone to finish */
+		finish_requested: boolean
+		/** this phone kept uploading after the close; that audio is being kept
+		 * in a continuation recording the phone never has to know about */
+		audio_added: boolean
+	} | null
 }
 
 export interface PublishedReport {

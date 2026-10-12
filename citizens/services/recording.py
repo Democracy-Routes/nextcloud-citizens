@@ -19,6 +19,7 @@ from citizens.logging_setup import get_logger
 from citizens.security.recorder_tokens import generate_token, hash_token
 from citizens.services import invites as invite_svc
 from citizens.services import live_source, provider_config
+from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job
 from citizens.services.recording_states import transition
 from citizens.services.tables import table_numbers
@@ -616,7 +617,265 @@ def complete_recording(session: Session, recording: Recording, total_chunks: int
     return {"state": recording.state, "missing_sequences": []}
 
 
+# ---- recordings the server finishes, and the audio that comes afterwards ----
+
+#: A RECORDING recording whose phone has sent no chunk for this long is
+#: finished by the sweep with what the server holds (close_server_side). The
+#: Live tab has shown CAPTURE_SILENT since 30 s; five minutes is past any
+#: WiFi hiccup, and a phone asleep that long is not coming back on its own.
+AUTO_CLOSE_SILENT_SECONDS = 300
+#: The organizer's Finish asks the phone first (it finishes on its next
+#: poll, keeping every chunk); the sweep finishes it server-side after this.
+FINISH_REQUEST_GRACE_SECONDS = 90
+#: states in which the phone's chunks still go into the recording itself
+OPEN_STATES = ("RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS", "UPLOAD_INCOMPLETE")
+SERVER_CLOSERS = ("silence", "organizer")
+
+
+def stream_header(first_chunk: bytes) -> bytes:
+    """The container header a chunk from mid-stream needs in front of it to
+    decode: live_audio.container_header, with a fragmented mp4 (iPhone)
+    trimmed to its init segment (everything before the first moof box) so no
+    old audio rides along."""
+    from citizens.services.live_audio import EBML_MAGIC, container_header
+
+    header = container_header(first_chunk)
+    if not first_chunk.startswith(EBML_MAGIC):
+        moof = first_chunk.find(b"moof")
+        if moof >= 4:
+            header = first_chunk[: moof - 4]
+    return header
+
+
+def _segment_header_file(directory: Path, segment_number: int) -> Path:
+    return directory / f"late-header-{segment_number}.bin"
+
+
+def persist_segment_headers(session: Session, recording: Recording) -> int:
+    """Keep each segment's container header beside the recording before the
+    server finishes it: the chunk files are reclaimed once assembled, and a
+    phone that comes back sends the NEXT clusters of the same MediaRecorder
+    stream — decodable only behind that header (measured in Block 1: header
+    plus a later chunk decodes, a later chunk alone does not)."""
+    root = get_settings().app_persistent_storage
+    directory = recording_dir(
+        root, recording.assembly_id, recording.round_id, recording.table_id, recording.id
+    )
+    firsts: dict[int, AudioChunk] = {}
+    for chunk in session.execute(
+        select(AudioChunk)
+        .where(AudioChunk.recording_id == recording.id)
+        .order_by(AudioChunk.sequence_number.asc())
+    ).scalars():
+        firsts.setdefault(chunk.segment_number, chunk)
+    written = 0
+    for segment_number, chunk in firsts.items():
+        try:
+            header = stream_header((root / chunk.path).read_bytes())
+        except OSError:
+            log.warning("segment_header_unreadable", recording_id=recording.id, exc_info=True)
+            continue
+        if header:
+            write_audio(_segment_header_file(directory, segment_number), header)
+            written += 1
+    return written
+
+
+def close_server_side(session: Session, recording: Recording, closed_by: str) -> dict | None:
+    """Finish a RECORDING recording the phone has not, with the contiguous
+    chunks the server holds. Returns complete_recording's result, or None
+    when there is nothing to assemble yet (the stall sweep handles those).
+    Chunks the phone sends afterwards go into a continuation
+    (late_audio_target), never into a 409 the phone cannot recover from."""
+    if recording.state != "RECORDING" or closed_by not in SERVER_CLOSERS:
+        return None
+    total = salvage_total_chunks(session, recording)
+    if total == 0:
+        return None
+    persist_segment_headers(session, recording)
+    recording.closed_by = closed_by
+    result = complete_recording(session, recording, total)
+    record_audit_event(
+        session, "recording_closed_by_server", "recording", recording.id,
+        data={"closed_by": closed_by, "total_chunks": total, "table_number": recording.table_number},
+    )
+    log.warning(
+        "recording_closed_by_server",
+        recording_id=recording.id, table_number=recording.table_number,
+        closed_by=closed_by, total_chunks=total,
+    )
+    return result
+
+
+def late_audio_target(
+    session: Session, recording: Recording, sequence_number: int, segment_number: int = 0
+) -> tuple[Recording, int]:
+    """Where a chunk the phone sends under this recording's id belongs.
+
+    The recording itself while it is open. Once the server has finished it,
+    the phone — which never learns that in time, and whose uploader stops for
+    good on a 409 — keeps sending the rest of the same stream; that goes into
+    a continuation recording of the same table and slot, opened here on the
+    first late chunk, with the phone's sequence numbers shifted onto it. A
+    continuation closed again continues again, so the chain is followed."""
+    for _ in range(100):
+        if recording.closed_by is None or recording.state in OPEN_STATES:
+            return recording, sequence_number
+        if recording.continued_by_id:
+            following = session.get(Recording, recording.continued_by_id)
+            if following is None:
+                break
+            sequence_number += following.late_seq_shift or 0
+            recording = following
+            continue
+        return _open_continuation(session, recording, sequence_number, segment_number)
+    raise HTTPException(status_code=409, detail=f"Recording is {recording.state}")
+
+
+def _open_continuation(
+    session: Session, closed: Recording, sequence_number: int, segment_number: int
+) -> tuple[Recording, int]:
+    root = get_settings().app_persistent_storage
+    closed_dir = recording_dir(root, closed.assembly_id, closed.round_id, closed.table_id, closed.id)
+    header_file = _segment_header_file(closed_dir, segment_number)
+    # a chunk of a segment the closed recording never saw opens that segment
+    # itself, header included; one from a segment it did see needs the header
+    header = header_file.read_bytes() if header_file.is_file() else b""
+    continuation = Recording(
+        assembly_id=closed.assembly_id,
+        round_id=closed.round_id,
+        table_id=closed.table_id,
+        table_number=closed.table_number,
+        recorder_session_id=closed.recorder_session_id,
+        state="RECORDING",
+        mime_type=closed.mime_type,
+        started_at=utcnow(),
+        continued_from_id=closed.id,
+        late_header_chunks=1 if header else 0,
+        late_seq_shift=(1 if header else 0) - sequence_number,
+    )
+    session.add(continuation)
+    session.flush()
+    if header:
+        directory = recording_dir(
+            root, continuation.assembly_id, continuation.round_id,
+            continuation.table_id, continuation.id,
+        )
+        target = chunk_path(directory, 0)
+        write_audio(target, header)
+        session.add(
+            AudioChunk(
+                recording_id=continuation.id,
+                sequence_number=0,
+                segment_number=segment_number,
+                sha256=hashlib.sha256(header).hexdigest(),
+                size_bytes=len(header),
+                path=str(target.relative_to(root)),
+            )
+        )
+        continuation.received_chunks = 1
+    closed.continued_by_id = continuation.id
+    closed.audio_added_at = utcnow()
+    session.flush()
+    live_source.assign_if_vacant(session, continuation)
+    record_audit_event(
+        session, "late_audio_accepted", "recording", continuation.id,
+        data={
+            "continued_from_id": closed.id, "closed_by": closed.closed_by,
+            "table_number": closed.table_number, "first_sequence": sequence_number,
+            "header_seeded": bool(header),
+        },
+    )
+    log.warning(
+        "late_audio_accepted",
+        recording_id=continuation.id, continued_from_id=closed.id,
+        table_number=closed.table_number, first_sequence=sequence_number,
+        header_seeded=bool(header),
+    )
+    return continuation, sequence_number + (continuation.late_seq_shift or 0)
+
+
+def continuation_chain(session: Session, recording: Recording) -> list[Recording]:
+    """This recording and every continuation after it, in order."""
+    chain = [recording]
+    while chain[-1].continued_by_id and len(chain) < 100:
+        following = session.get(Recording, chain[-1].continued_by_id)
+        if following is None:
+            break
+        chain.append(following)
+    return chain
+
+
+def _chunk_entries(session: Session, recording: Recording) -> list[tuple[int, int, str]] | None:
+    """(sequence, size, sha256) of a recording's chunks: the rows while they
+    exist, manifest.json once they are reclaimed. None when neither is there."""
+    rows = [
+        (row.sequence_number, row.size_bytes, row.sha256)
+        for row in session.execute(
+            select(AudioChunk.sequence_number, AudioChunk.size_bytes, AudioChunk.sha256)
+            .where(AudioChunk.recording_id == recording.id)
+            .order_by(AudioChunk.sequence_number.asc())
+        )
+    ]
+    if rows:
+        return rows
+    root = get_settings().app_persistent_storage
+    path = recording_dir(
+        root, recording.assembly_id, recording.round_id, recording.table_id, recording.id
+    ) / "manifest.json"
+    try:
+        chunks = json.loads(path.read_text())["chunks"]
+        return [(int(c["sequence"]), int(c["size"]), str(c["sha256"])) for c in chunks]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _continued_status(session: Session, recording: Recording) -> dict | None:
+    """The status of a recording the server closed, as the PHONE sees it: one
+    recording, its own sequence numbers, every chunk it sent — so the phone's
+    manifest check (engine.markServerComplete) passes once the continuation
+    is assembled too, and it can clear its local copy."""
+    chain = continuation_chain(session, recording)
+    if len(chain) < 2:
+        return None
+    root = get_settings().app_persistent_storage
+    entries: list[tuple[int, int, str]] = []
+    shift = 0
+    available = True
+    for link in chain:
+        shift += link.late_seq_shift or 0
+        link_entries = _chunk_entries(session, link)
+        if link_entries is None:
+            return None
+        header_chunks = link.late_header_chunks or 0
+        entries.extend(
+            (seq - shift, size, sha) for seq, size, sha in link_entries if seq >= header_chunks
+        )
+        available = available and link.audio_deleted_at is None and bool(link.canonical_audio_path) \
+            and (root / link.canonical_audio_path).is_file()
+    entries.sort()
+    last = chain[-1]
+    manifest = "".join(f"{seq}:{size}:{sha}\n" for seq, size, sha in entries)
+    return {
+        "recording_id": recording.id,
+        "state": last.state,
+        "received_chunks": len(entries),
+        "total_chunks": (entries[-1][0] + 1) if last.total_chunks is not None and entries else None,
+        "missing_sequences": [],
+        "error_code": last.error_code,
+        "duration_seconds": sum(link.duration_seconds or 0 for link in chain) or None,
+        "audio_manifest_sha256": hashlib.sha256(manifest.encode()).hexdigest() if entries else None,
+        "audio_manifest_bytes": sum(size for _, size, _ in entries) if entries else None,
+        "audio_available": available,
+        "continued_by": last.id,
+    }
+
+
 def recording_status(session: Session, recording: Recording) -> dict:
+    if recording.continued_by_id:
+        merged = _continued_status(session, recording)
+        if merged is not None:
+            return merged
     root = get_settings().app_persistent_storage
     available = recording.audio_deleted_at is None and bool(recording.canonical_audio_path) \
         and (root / recording.canonical_audio_path).is_file()

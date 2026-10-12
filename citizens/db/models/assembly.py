@@ -60,6 +60,11 @@ class Assembly(Base):
     # NULL = follow the default, 0 = keep indefinitely
     audio_retention_days: Mapped[int | None] = mapped_column(Integer())
     audio_purged_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # keep nothing but the report once closed and processed
+    # (services/zero_retention.py); done_at says it ran, and from then on
+    # reopening and changing the language are refused
+    zero_retention: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    zero_retention_done_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     # The organizer asked the table phones to delete their local copies. The
     # server cannot push to a phone, so this travels on the status poll each
     # recorder already makes every few seconds. Set once and left set: a phone

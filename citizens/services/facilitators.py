@@ -154,7 +154,8 @@ def _round_card(round_: Round | None) -> dict | None:
         return None
     ends_at = None
     seconds_left = None
-    if round_.status == "ACTIVE" and round_.started_at is not None:
+    # no planned time (duration 0): no end to count down to
+    if round_.status == "ACTIVE" and round_.started_at is not None and round_.duration_minutes:
         ends_at = round_.started_at + timedelta(minutes=round_.duration_minutes)
         seconds_left = int((ends_at - utcnow()).total_seconds())
     return {

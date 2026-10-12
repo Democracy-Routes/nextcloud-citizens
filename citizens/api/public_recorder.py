@@ -18,7 +18,7 @@ from starlette.concurrency import run_in_threadpool
 
 from citizens.api.downloads import download_headers
 from citizens.config import get_settings
-from citizens.db.models import Assembly, ParticipantSession, RecorderSession, Recording
+from citizens.db.models import Assembly, ParticipantSession, RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.domain.tables import color_for
@@ -85,6 +85,11 @@ ReadingSess = Annotated[RecorderSession, Depends(get_reading_session)]
 
 class JoinIn(BaseModel):
     token: str = Field(min_length=16, max_length=128)
+    # the phone's own random id (kept in its browser): a single-use code
+    # scanned again by the SAME phone returns its session instead of 410
+    device_id: str | None = Field(
+        default=None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
 
 
 @router.post("/join")
@@ -99,7 +104,7 @@ def join(data: JoinIn, request: Request, session: DB):
     analysis_enabled = provider_config.analysis_enabled_cached()
     # a printed table code, or an action code another phone made: the token
     # decides, never the scanner (services/capabilities.py)
-    joined = capabilities_svc.join_with_token(session, data.token)
+    joined = capabilities_svc.join_with_token(session, data.token, device_id=data.device_id)
     recorder_session = joined.recorder_session
     return {
         "session_token": joined.bearer,
@@ -138,6 +143,25 @@ def create_capability(data: CapabilityIn, recorder_session: RecorderSess, sessio
         session, recorder_session, data.purpose, round_id=data.round_id
     )
     return card.as_dict()
+
+
+class RecordAnotherIn(BaseModel):
+    round_id: str
+
+
+@router.post("/recorder/sessions", status_code=201)
+def record_another_session(data: RecordAnotherIn, recorder_session: RecorderSess, session: DB):
+    """Record another session from the phone's done screen (R13): a new
+    one-table Session like this one, and the link that joins its table."""
+    from citizens.services import sessions as sessions_svc
+
+    CAPABILITY_LIMITER.check(recorder_session.id)
+    round_ = session.get(Round, data.round_id)
+    if round_ is None or round_.assembly_id != recorder_session.assembly_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    container = session.get(Assembly, recorder_session.assembly_id)
+    made = sessions_svc.record_another(session, container, round_)
+    return made.model_dump()
 
 
 @router.get("/recorder/status")
@@ -261,15 +285,20 @@ async def upload_chunk(
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+        # a recording the server has finished: the phone's later chunks go
+        # into its continuation, under the continuation's sequence numbers
+        recording, sequence = rec_svc.late_audio_target(
+            session, recording, sequence_number, x_chunk_segment
+        )
         outcome = rec_svc.receive_chunk(
-            session, recording, sequence_number, x_chunk_sha256, body, x_chunk_segment
+            session, recording, sequence, x_chunk_sha256, body, x_chunk_segment
         )
         language = ""
         if not outcome.get("duplicate"):
             assembly = session.get(Assembly, recording.assembly_id)
             language = assembly.language if assembly else ""
         feed_live, header_path, demoted_id = _live_feed_plan(
-            session, recording, bool(outcome.get("duplicate")), sequence_number, x_chunk_segment
+            session, recording, bool(outcome.get("duplicate")), sequence, x_chunk_segment
         )
         session.commit()  # durable receipt before an acknowledgement can leave the server
         return (outcome, recording.id, language, stt, recording.assembly_id, feed_live,
@@ -299,7 +328,8 @@ def uploaded_parts(recording_id: str, sequence_number: int, recorder_session: Re
     from citizens.services.multipart_audio import part_status
 
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-    return part_status(session, recording, sequence_number)
+    recording, sequence = rec_svc.late_audio_target(session, recording, sequence_number)
+    return part_status(session, recording, sequence)
 
 
 @router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/parts/{part_number}")
@@ -324,21 +354,25 @@ async def upload_part(
         raise HTTPException(422, "Invalid checksum")
     body = await _read_capped_body(request, multipart_audio.PART_BYTES)
 
-    def persist() -> tuple[dict, str, str, dict, bool, Path | None, str | None]:
+    def persist() -> tuple[dict, str, str, dict, bool, Path | None, str | None, str]:
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-        result = multipart_audio.receive_part(session, recording, sequence_number, part_number,
+        recording, sequence = rec_svc.late_audio_target(
+            session, recording, sequence_number, x_chunk_segment
+        )
+        result = multipart_audio.receive_part(session, recording, sequence, part_number,
                                               x_total_bytes, x_chunk_sha256, x_part_sha256, body)
         assembly = session.get(Assembly, recording.assembly_id)
         language = assembly.language if assembly else ""
         feed_live, header_path, demoted_id = _live_feed_plan(
-            session, recording, bool(result.get("duplicate")), sequence_number, x_chunk_segment
+            session, recording, bool(result.get("duplicate")), sequence, x_chunk_segment
         )
-        return result, recording.assembly_id, language, stt, feed_live, header_path, demoted_id
+        return (result, recording.assembly_id, language, stt, feed_live, header_path, demoted_id,
+                recording.id)
 
     (result, assembly_id, language, stt, feed_live, header_path,
-     demoted_id) = await run_in_threadpool(persist)
+     demoted_id, recording_id) = await run_in_threadpool(persist)
     if demoted_id:
         LIVE_CAPTIONS.finish(demoted_id)
     # Live captions feed on chunk order. The plain route feeds upload_chunk as
@@ -372,9 +406,12 @@ def finalize_uploaded_chunk(
     if not 0 <= x_chunk_segment <= rec_svc.MAX_SEGMENT_NUMBER:
         raise HTTPException(status_code=422, detail="Invalid segment number")
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    recording, sequence = rec_svc.late_audio_target(
+        session, recording, sequence_number, x_chunk_segment
+    )
     # Live captions were fed as each part landed (upload_part) — reading the
     # assembled chunk back here would feed every byte a second time.
-    return finalize_chunk(session, recording, sequence_number, x_chunk_segment)
+    return finalize_chunk(session, recording, sequence, x_chunk_segment)
 
 
 class CompleteIn(BaseModel):
@@ -386,7 +423,13 @@ def complete(
     recording_id: str, data: CompleteIn, recorder_session: RecorderSess, session: DB
 ):
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-    result = rec_svc.complete_recording(session, recording, data.total_chunks)
+    if recording.continued_by_id:
+        # the server finished this one; the phone's total counts the stream
+        # it kept sending, which lives in the continuation
+        recording, total = rec_svc.late_audio_target(session, recording, data.total_chunks)
+    else:
+        total = data.total_chunks
+    result = rec_svc.complete_recording(session, recording, total)
     if not result["missing_sequences"]:
         LIVE_CAPTIONS.finish(recording.id)
     return result
@@ -954,6 +997,10 @@ def _assembly_state(
         # was reachable by the API and unreachable by an actual phone.
         if rec_svc.device_has_gone_silent(recording):
             continue
+        if recording.continued_by_id:
+            # the server finished it and the phone kept going: its
+            # continuation is the row that says where this round stands
+            continue
         recorded_rounds[recording.round_id] = recording.state
         if recording.recorder_session_id == recorder_session.id:
             own_rounds.add(recording.round_id)
@@ -1011,6 +1058,9 @@ def _assembly_state(
         # the AI facilitator at this table: effective level and the table's own
         # override, for the tech sheet's switch
         "ai_facilitator": _ai_level(session, assembly, recorder_session.table_number),
+        # the server finished (or wants finished) this phone's recording: the
+        # phone shows it and, for a Finish request, finishes
+        "recording_notice": _recording_notice(session, recorder_session),
         "rounds": [
             {
                 "id": round_.id,
@@ -1028,6 +1078,28 @@ def _assembly_state(
             }
             for round_ in assembly.rounds
         ],
+    }
+
+
+def _recording_notice(session: Session, recorder_session: RecorderSession) -> dict | None:
+    recording = session.execute(
+        select(Recording)
+        .where(
+            Recording.recorder_session_id == recorder_session.id,
+            Recording.continued_from_id.is_(None),
+        )
+        .order_by(Recording.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if recording is None or (recording.closed_by is None and recording.finish_requested_at is None):
+        return None
+    return {
+        "recording_id": recording.id,
+        "round_id": recording.round_id,
+        "closed_by": recording.closed_by,
+        "closed_at": recording.ended_at.isoformat() if recording.ended_at else None,
+        "finish_requested": recording.finish_requested_at is not None,
+        "audio_added": recording.continued_by_id is not None,
     }
 
 

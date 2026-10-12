@@ -591,6 +591,30 @@ function recorderFacts(recorder: RecorderEntry): string {
 	const rec = recorder.recording ? recorder.recording.state : f('noRecording')
 	return f('line', { pct, storage, pending, age, screen, visible, capture, rec })
 }
+
+type RecorderRecordingInfo = NonNullable<RecorderEntry['recording']>
+
+/** The recorders of a table that have a recording of their own to report
+ * on — the per-recorder Finish control sits beside each one's coverage
+ * badge, since a table with more than one phone can have one finish while
+ * another keeps recording. */
+function recordingRecorders(table: MonitorTable): Array<{ slot: number; recording: RecorderRecordingInfo }> {
+	return (table.recorders ?? [])
+		.filter((r) => !!r.recording)
+		.map((r) => ({ slot: r.slot, recording: r.recording as RecorderRecordingInfo }))
+}
+
+const confirmFinishRecording = ref<{ number: number; recording: RecorderRecordingInfo } | null>(null)
+
+/** Finish one recorder's recording from here, the way the 5-minute silence
+ * sweep would — asked for explicitly rather than waited out. */
+async function finishRecordingNow(): Promise<void> {
+	const target = confirmFinishRecording.value
+	confirmFinishRecording.value = null
+	if (!target) return
+	await run(() => api.finishRecording(target.recording.id))
+}
+
 const quietTables = computed(() => (monitor.value?.tables ?? []).filter(isQuiet))
 const attentionTables = computed(() => (monitor.value?.tables ?? []).filter((t) => !isQuiet(t)))
 const visibleTables = computed(() =>
@@ -949,6 +973,14 @@ function pendingChunks(table: MonitorTable): number {
 			@cancel="confirmReplace = null" />
 
 		<CzConfirm
+			v-if="confirmFinishRecording"
+			:title="t('organizer.live.monitor.finishConfirm.title')"
+			:message="t('organizer.live.monitor.finishConfirm.message', { number: confirmFinishRecording.number })"
+			:confirm-label="t('organizer.live.monitor.finishConfirm.confirm')"
+			@confirm="finishRecordingNow"
+			@cancel="confirmFinishRecording = null" />
+
+		<CzConfirm
 			v-if="confirmStartUnready && monitor"
 			:title="t('organizer.live.monitor.startUnready.title')"
 			:message="t('organizer.live.monitor.startUnready.message', { ready: monitor.tables_ready, total: monitor.tables_total })"
@@ -1000,6 +1032,38 @@ function pendingChunks(table: MonitorTable): number {
 									{{ badge.label }} {{ t('organizer.live.files.captured', { percent: badge.percent }) }}
 								</span>
 							</div>
+							<!-- each recorder's own recording: finish it from here, or say
+							     what the server already did with it (closed by itself after
+							     5 minutes of silence, closed from here earlier, or still
+							     receiving audio that arrived after such a close) -->
+							<ul v-if="recordingRecorders(table).length" class="cz-finishrows" data-test="finish-rows">
+								<li
+									v-for="entry in recordingRecorders(table)"
+									:key="'finish-' + entry.slot"
+									class="cz-muted"
+									style="font-size: 0.78rem; margin-top: 4px">
+									<CzButton
+										v-if="entry.recording.state === 'RECORDING' && !entry.recording.finish_requested"
+										small
+										variant="secondary"
+										data-test="finish-recording"
+										@click="confirmFinishRecording = { number: table.number, recording: entry.recording }">
+										{{ t('organizer.live.monitor.finishRecording') }}
+									</CzButton>
+									<span v-else-if="entry.recording.finish_requested && entry.recording.state === 'RECORDING'" data-test="finish-requested">
+										{{ t('organizer.live.monitor.finishRequested') }}
+									</span>
+									<span v-if="entry.recording.closed_by === 'silence'" data-test="closed-silence">
+										{{ t('organizer.live.monitor.closedSilence') }}
+									</span>
+									<span v-if="entry.recording.closed_by === 'organizer'" data-test="closed-organizer">
+										{{ t('organizer.live.monitor.closedOrganizer') }}
+									</span>
+									<span v-if="entry.recording.continued" data-test="continued">
+										{{ t('organizer.live.monitor.continued') }}
+									</span>
+								</li>
+							</ul>
 							<!-- a table with more than one recorder phone: say so, and
 							     which of them are reachable -->
 							<div

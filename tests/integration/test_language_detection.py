@@ -146,3 +146,61 @@ def test_a_session_with_a_chosen_language_is_never_changed(client, tmp_path, mon
     assert _wait(client, headers, rec) in ("TRANSCRIBED", "ANALYZING", "READY_FOR_REVIEW")
     assert seen == ["en"], "the chosen language is forced on the engine"
     assert client.get(f"/api/v1/assemblies/{made['container_id']}").json()["language"] == "en"
+
+
+def test_when_the_engine_names_no_language_the_text_decides(client, tmp_path, monkeypatch):
+    """Observed on 2026-10-11: Mistral returned no language and an Italian
+    table was summarised in English. The analysis model reads the text."""
+    store = MemoryStore({"deepgram_api_key": "dg-test", "stt_provider": "deepgram",
+                         "stt_batch_enabled": "1", "analysis_enabled": "0",
+                         "analysis_api_key": "sk-test", "analysis_base_url": "https://llm.test/v1",
+                         "analysis_model": "test-model"})
+    monkeypatch.setattr("citizens.services.provider_config.default_store", lambda: store)
+    spoken = NormalizedTranscript(
+        provider="deepgram", model="nova-3", language="",
+        segments=[NormalizedSegment(
+            speaker="SPEAKER_01", start=0.2, end=4.0,
+            text="Buongiorno a tutti, oggi parliamo della mobilità nel nostro quartiere.",
+        )],
+        raw={},
+    )
+    monkeypatch.setattr(
+        "citizens.services.transcription.deepgram_provider.transcribe_file",
+        lambda api_key, path, mime, language, model="": spoken,
+    )
+    asked: list[list[dict]] = []
+
+    def fake_chat(base_url, api_key, model, messages):
+        asked.append(messages)
+        return "Italian (it)."
+
+    monkeypatch.setattr("citizens.providers.analysis.openai_compat._chat", fake_chat)
+    audio = tmp_path / "s.webm"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+         "-c:a", "libopus", str(audio)], check=True, timeout=120,
+    )
+    made = client.post("/api/v1/sessions/record-now", json={"language": "en"}).json()
+    token = re.search(r"#/join/(.+)$", made["recorder_url"]).group(1)
+    joined = client.post("/api/v1/public/join", json={"token": token},
+                         headers={"X-Forwarded-For": "10.11.0.5"}).json()
+    headers = {"Authorization": f"Bearer {joined['session_token']}"}
+    first = _record(client, headers, made["session_id"], audio.read_bytes())
+    assert _wait(client, headers, first) in ("TRANSCRIBED", "ANALYZING", "READY_FOR_REVIEW")
+    assert len(asked) == 1 and "Buongiorno" in asked[0][-1]["content"]
+    assert client.get(f"/api/v1/assemblies/{made['container_id']}").json()["language"] == "it"
+
+
+def test_a_text_too_short_or_an_unclear_answer_changes_nothing(monkeypatch):
+    from citizens.services.transcription import detect_language_from_text
+
+    store = MemoryStore({"analysis_api_key": "sk-test", "analysis_base_url": "https://llm.test/v1",
+                         "analysis_model": "m"})
+    monkeypatch.setattr("citizens.providers.analysis.openai_compat._chat",
+                        lambda *args: "I cannot tell.")
+    assert detect_language_from_text(store, "ciao") == ""
+    assert detect_language_from_text(store, "Buongiorno a tutti, oggi parliamo di mobilità.") == ""
+    monkeypatch.setattr("citizens.providers.analysis.openai_compat._chat",
+                        lambda *args: (_ for _ in ()).throw(RuntimeError("down")))
+    assert detect_language_from_text(store, "Buongiorno a tutti, oggi parliamo di mobilità.") == ""
+    assert detect_language_from_text(MemoryStore(), "Buongiorno a tutti, oggi parliamo di mobilità.") == ""

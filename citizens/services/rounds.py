@@ -117,6 +117,12 @@ def _table_recorders(
                     ),
                     # audio captured against the time it has been recording
                     "coverage": coverage(recording, now),
+                    # "silence" / "organizer" when the server finished it
+                    "closed_by": recording.closed_by,
+                    "finish_requested": recording.finish_requested_at is not None,
+                    # the phone came back after a server-side close: this row
+                    # holds the audio it has sent since
+                    "continued": recording.continued_from_id is not None,
                 },
             }
         )

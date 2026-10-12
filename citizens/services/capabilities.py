@@ -233,7 +233,7 @@ def mint_capability(
     )
 
 
-def join_with_token(session: Session, token: str) -> Joined:
+def join_with_token(session: Session, token: str, device_id: str | None = None) -> Joined:
     """Redeem whatever the token is: a table code, or an action code.
 
     The caller's write transaction already holds SQLite's single writer slot
@@ -263,6 +263,7 @@ def join_with_token(session: Session, token: str) -> Joined:
         if invite.table_number is None:
             raise HTTPException(status_code=409, detail="This code is not a table code")
         recorder_session, bearer = rec_svc.mint_session(session, invite, invite.table_number, slot=1)
+        recorder_session.device_id = device_id
         return Joined(
             recorder_session=recorder_session, bearer=bearer, purpose=JOIN_TABLE,
             table_number=invite.table_number, color_key=color_for(invite.table_number),
@@ -276,6 +277,9 @@ def join_with_token(session: Session, token: str) -> Joined:
             .values(consumed_at=utcnow())
         )
         if claimed.rowcount == 0:
+            resumed = _resume_own_session(session, invite, device_id)
+            if resumed is not None:
+                return resumed
             log.info("capability_refused", invite_id=invite.id, purpose=invite.purpose,
                      reason="consumed")
             raise HTTPException(status_code=410, detail="This code has already been used")
@@ -325,10 +329,51 @@ def join_with_token(session: Session, token: str) -> Joined:
         invite_id=invite.id, purpose=invite.purpose, assembly_id=assembly.id,
         table_number=table_number, slot=slot, table_created=table_created,
     )
+    recorder_session.device_id = device_id
     return Joined(
         recorder_session=recorder_session, bearer=bearer, purpose=invite.purpose,
         table_number=table_number, color_key=color_for(table_number),
         slot=slot, table_created=table_created,
+    )
+
+
+def _resume_own_session(session: Session, invite, device_id: str | None) -> Joined | None:
+    """A spent single-use code, scanned again by the phone that spent it (R14):
+    a reload that lost its storage, the link opened a second time. Its own
+    session comes back — with a fresh bearer, since only the hash is kept —
+    instead of a 410 that strands the phone. Any other phone still gets the
+    410: the code was for one phone, and the id is what says it is the same one.
+    The session was minted on the table's own code where one exists, so it is
+    found by phone and assembly, around the moment the code was spent."""
+    if not device_id or invite.consumed_at is None:
+        return None
+    own = session.execute(
+        select(RecorderSession)
+        .where(
+            RecorderSession.assembly_id == invite.assembly_id,
+            RecorderSession.device_id == device_id,
+            RecorderSession.revoked_at.is_(None),
+            RecorderSession.created_at >= invite.consumed_at - timedelta(seconds=5),
+            RecorderSession.created_at <= invite.consumed_at + timedelta(seconds=5),
+        )
+        .order_by(RecorderSession.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if own is None or own.expires_at < utcnow():
+        return None
+    bearer = generate_token()
+    own.token_hash = hash_token(bearer)
+    session.flush()
+    log.info("capability_resumed", invite_id=invite.id, purpose=invite.purpose,
+             recorder_session_id=own.id)
+    record_audit_event(
+        session, "capability_resumed", "recorder_invite", invite.id,
+        actor=f"recorder-session:{own.id}", data={"purpose": invite.purpose},
+    )
+    return Joined(
+        recorder_session=own, bearer=bearer, purpose=invite.purpose,
+        table_number=own.table_number, color_key=color_for(own.table_number),
+        slot=own.slot, table_created=False,
     )
 
 

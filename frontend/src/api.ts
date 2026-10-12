@@ -285,6 +285,14 @@ export const api = {
 			'POST',
 			`/api/v1/recordings/${recordingId}/replace-device`,
 		),
+	/** Finish this recording now, with whatever audio has already arrived, and
+	 * ask the phone to stop — the organizer's own version of the 5-minute
+	 * silence sweep. 409 if the recording is not RECORDING any more. */
+	finishRecording: (recordingId: string) =>
+		request<{ state: string; finish_requested_at: string | null }>(
+			'POST',
+			`/api/v1/recordings/${recordingId}/finish`,
+		),
 	/** Try assembling a recording's audio again — the way out of a failure
 	 * that left it stuck, once the disk has room. */
 	retryAssembly: (recordingId: string) =>

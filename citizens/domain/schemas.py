@@ -13,7 +13,9 @@ class RoundIn(BaseModel):
     question: str = ""
     # what the discussion should produce, as distinct from what it is about
     objective: str | None = Field(default=None, max_length=2000)
-    duration_minutes: int = Field(default=30, ge=1, le=600)
+    # 0 = no planned time: no countdown, no auto-finish, no time nudge
+    # (Record now sessions start that way)
+    duration_minutes: int = Field(default=30, ge=0, le=600)
 
 
 class RoundUpdate(BaseModel):
@@ -21,7 +23,7 @@ class RoundUpdate(BaseModel):
     question: str | None = None
     # sent as "" to clear; left out to keep (see assemblies.update_round)
     objective: str | None = Field(default=None, max_length=2000)
-    duration_minutes: int | None = Field(default=None, ge=1, le=600)
+    duration_minutes: int | None = Field(default=None, ge=0, le=600)
     position: int | None = Field(default=None, ge=1)
 
 
@@ -70,7 +72,18 @@ class AssemblyCreate(BaseModel):
     participant_consent: Literal["required", "optional"] = "optional"
     # the AI facilitator's level here; None follows the instance default
     ai_facilitator: Literal["off", "light", "normal", "active"] | None = None
+    # null follows the instance default; 0 keeps audio indefinitely
+    audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    # keep nothing but the report once closed (services/zero_retention.py)
+    zero_retention: bool = False
     rounds: list[RoundIn] = []
+
+
+class LanguageChange(BaseModel):
+    """The organizer changes the language after recording began: every
+    recording with audio is transcribed again (services/assemblies.change_language)."""
+
+    language: Language
 
 
 class AssemblyUpdate(BaseModel):
@@ -89,6 +102,7 @@ class AssemblyUpdate(BaseModel):
     participant_consent: Literal["required", "optional"] | None = None
     # false when the organizer picks the language by hand on a Record-now session
     language_auto: bool | None = None
+    zero_retention: bool | None = None
     # the AI facilitator's level for this assembly; "default" follows Settings
     ai_facilitator: Literal["default", "off", "light", "normal", "active"] | None = None
 
@@ -114,6 +128,8 @@ class AssemblyOut(BaseModel):
     closed_at: datetime | None
     audio_retention_days: int | None = None
     audio_purged_at: datetime | None = None
+    zero_retention: bool = False
+    zero_retention_done_at: datetime | None = None
     participant_consent: str = "optional"
     # the language is being detected from the recording (Record now)
     language_auto: bool = False
@@ -230,7 +246,7 @@ class SessionCreate(BaseModel):
 
     question: str = Field(default="", max_length=2000)
     objective: str | None = Field(default=None, max_length=2000)
-    duration_minutes: int = Field(default=30, ge=1, le=600)
+    duration_minutes: int = Field(default=30, ge=0, le=600)
     table_count: int = Field(default=1, ge=1, le=200)
     recording_mode: Literal["orchestrated", "independent", "plenary"] = "orchestrated"
     language: Language = "en"

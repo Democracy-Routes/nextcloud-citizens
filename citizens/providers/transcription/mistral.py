@@ -116,6 +116,11 @@ def normalize(raw: dict, model: str, requested_language: str) -> NormalizedTrans
         segments.append(
             NormalizedSegment(speaker="", start=0.0, end=0.0, text=raw["text"].strip())
         )
+    if not raw.get("language") and not requested_language:
+        # detection was wanted (no language forced, none incompatible with
+        # timestamps) and the engine named none: the text-based fallback in
+        # services/transcription takes over; this line is the evidence
+        log.info("mistral_language_not_detected", keys=sorted(raw.keys()))
     return NormalizedTranscript(
         provider="mistral",
         model=model,

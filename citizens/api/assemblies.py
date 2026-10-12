@@ -91,6 +91,22 @@ def update_assembly(assembly_id: str, data: schemas.AssemblyUpdate, user: Curren
     return _detail(session, assembly)
 
 
+@router.post("/assemblies/{assembly_id}/language")
+def change_language(
+    assembly_id: str, data: schemas.LanguageChange, user: CurrentUser, session: DB
+):
+    """Change the language once recording has begun: transcripts are made
+    again in it (PUT refuses the field then, deliberately — this is the
+    explicit path, with its cost stated)."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    result = svc.change_language(session, assembly, data.language)
+    record_audit_event(
+        session, "language_change_requested", "assembly", assembly.id, actor=user,
+        data={"language": data.language},
+    )
+    return result
+
+
 def _assembly_has_recordings(session: Session, assembly_id: str) -> bool:
     return (
         session.execute(

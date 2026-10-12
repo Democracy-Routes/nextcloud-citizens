@@ -70,6 +70,7 @@ def notice_for(assembly: Assembly) -> Notice:
     handling = dict(snapshot.data_handling)
     if assembly.audio_retention_days is not None:
         handling["audio_retention_days"] = assembly.audio_retention_days
+    handling["zero_retention"] = bool(assembly.zero_retention)
     return render_notice(
         assembly.language,
         handling,

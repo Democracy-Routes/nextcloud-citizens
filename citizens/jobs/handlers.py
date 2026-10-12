@@ -353,7 +353,13 @@ def _maybe_enqueue_analysis(session: Session, recording: Recording) -> None:
         log.warning("analysis_enqueue_deferred", recording_id=recording_id, exc_info=True)
         return
     if ready and not has_live_job(session, "ANALYZE_TABLE", "recording_id", recording_id):
-        enqueue_job(session, "ANALYZE_TABLE", {"recording_id": recording_id})
+        payload: dict = {"recording_id": recording_id}
+        if recording.continued_from_id is not None:
+            # audio that came after a server-side close: the table's analysis
+            # runs again on its own, and what the organizer already approved
+            # must not vanish for it (analysis.analyze_table keep_approved)
+            payload["keep_approved"] = True
+        enqueue_job(session, "ANALYZE_TABLE", payload)
         log.info("analysis_enqueued", recording_id=recording_id)
 
 
@@ -372,7 +378,9 @@ def handle_analyze_table(session: Session, payload: dict) -> None:
     session.commit()
     store = provider_config.default_store()
     try:
-        analysis_svc.analyze_table(session, store, recording)
+        analysis_svc.analyze_table(
+            session, store, recording, keep_approved=bool(payload.get("keep_approved"))
+        )
     except AnalysisError as exc:
         _fail_recording(session, recording, "ANALYSIS_FAILED", exc)
         log.error("analysis_failed", recording_id=recording.id, permanent=exc.permanent)

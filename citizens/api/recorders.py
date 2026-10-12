@@ -132,6 +132,34 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     return {"state": recording.state}
 
 
+@router.post("/recordings/{recording_id}/finish")
+def finish_recording(recording_id: str, user: CurrentUser, session: DB):
+    """Finish a table's recording from the Live tab.
+
+    Asks the phone first: it finishes on its next poll, so every chunk it
+    holds is uploaded and verified as if somebody had tapped Finish at the
+    table. A phone that does not answer in FINISH_REQUEST_GRACE_SECONDS is
+    finished server-side by the sweep with the audio already received, and
+    whatever it sends later goes into a continuation of the same table.
+    """
+    recording = session.get(Recording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    get_owned_assembly(session, recording.assembly_id, user)
+    if recording.state != "RECORDING":
+        raise HTTPException(status_code=409, detail=f"Recording is {recording.state}")
+    if recording.finish_requested_at is None:
+        recording.finish_requested_at = utcnow()
+        record_audit_event(
+            session, "recording_finish_requested", "recording", recording.id, actor=user,
+            data={"table_number": recording.table_number},
+        )
+    return {
+        "state": recording.state,
+        "finish_requested_at": recording.finish_requested_at.isoformat(),
+    }
+
+
 @router.post("/recordings/{recording_id}/replace-device")
 def replace_device(recording_id: str, user: CurrentUser, session: DB):
     """This table's phone is gone; let another one take over.

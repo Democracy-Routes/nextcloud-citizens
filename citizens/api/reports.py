@@ -12,7 +12,7 @@ from citizens.api.downloads import download_headers
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.security.identity import CurrentUser
-from citizens.services import lifecycle
+from citizens.services import lifecycle, zero_retention
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
 from citizens.services.branding import logo_path, organization_name
@@ -78,11 +78,17 @@ def assembly_report_pdf(
 ):
     assembly = get_owned_assembly(session, assembly_id, user)
     _require_closed(assembly)
-    pdf = render_pdf(
-        build_report(session, assembly, include_drafts=include_drafts),
-        logo_path(),
-        organization_name(),
-    )
+    retained = zero_retention.retained_pdf_path(assembly.id)
+    if assembly.zero_retention_done_at is not None and retained.is_file():
+        # the transcripts are gone: the PDF written before they went is the
+        # report, quotations included
+        pdf = retained.read_bytes()
+    else:
+        pdf = render_pdf(
+            build_report(session, assembly, include_drafts=include_drafts),
+            logo_path(),
+            organization_name(),
+        )
     return Response(
         pdf,
         media_type="application/pdf",

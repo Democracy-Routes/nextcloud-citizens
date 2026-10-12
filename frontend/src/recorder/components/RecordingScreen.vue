@@ -14,7 +14,17 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../../i18n'
-import { type TableConsent, recorderApi, type AiFacilitatorState, type AiLevel, type HelpState, type JoinResult, type RoundInfo } from '../api'
+import { clockTime } from '../../format'
+import {
+	type TableConsent,
+	recorderApi,
+	type AiFacilitatorState,
+	type AiLevel,
+	type HelpState,
+	type JoinResult,
+	type RecorderStatus,
+	type RoundInfo,
+} from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
@@ -77,6 +87,17 @@ const liveSourceLabel = ref<string | null>(null)
 const consent = ref<TableConsent | null | undefined>(props.session.consent)
 const refusedAtTable = computed(() => !!consent.value && (consent.value.refusing ?? 0) > 0)
 const takingOver = ref(false)
+
+/** This phone's own recording, finished server-side without it tapping
+ * Finish (the silence sweep, or the organizer) — or asked to finish. Kept
+ * across polls so the card stays up until OK is tapped. */
+const serverClosedNotice = ref<NonNullable<RecorderStatus['recording_notice']> | null>(null)
+// tapped away; a NEW closed_at (a later close than the one shown) reopens it
+const serverClosedHidden = ref(false)
+let lastNoticeClosedAt: string | null | undefined
+// finish() is a side effect the server already knows about — called at most
+// once per recording, whichever of the two notices triggers it first
+const finishCalledForRecording = ref<string | null>(null)
 
 // A dying phone asks for a backup while there is still time to add one. The
 // battery is read here as the heartbeat reads it (Chromium only; elsewhere
@@ -477,6 +498,7 @@ onMounted(async () => {
 			help.value = status.help
 			if (status.ai_facilitator) ai.value = status.ai_facilitator
 			if (status.consent) consent.value = status.consent
+			applyRecordingNotice(status.recording_notice ?? null)
 			const current = status.rounds.find((r) => r.id === props.round.id)
 			if (current && current.status === 'ENDED') {
 				roundEnded.value = true
@@ -546,6 +568,57 @@ async function finishRecording(): Promise<void> {
 	play('stop', sounds.value)
 	await engine.finish()
 }
+
+/** Read the status poll's recording_notice: the server may have finished
+ * this phone's recording without it noticing, or be waiting on it to. The
+ * engine itself is never told anything is different — it keeps capturing
+ * under the same id — so finishing it here, once, is this screen's whole
+ * job; showing the card is the rest. */
+function applyRecordingNotice(notice: RecorderStatus['recording_notice']): void {
+	if (!notice || notice.recording_id !== state.recordingId) {
+		serverClosedNotice.value = null
+		return
+	}
+	// a NEW close reopens a card that was tapped away for an earlier one
+	if (notice.closed_at !== lastNoticeClosedAt) {
+		lastNoticeClosedAt = notice.closed_at
+		serverClosedHidden.value = false
+	}
+	serverClosedNotice.value = notice
+	const alreadyFinished = finishCalledForRecording.value === notice.recording_id
+	if (alreadyFinished || state.phase !== 'recording') return
+	if (notice.closed_by === 'organizer' || (notice.finish_requested && notice.closed_by === null)) {
+		finishCalledForRecording.value = notice.recording_id
+		void finishRecording()
+	}
+}
+
+const showServerClosedCard = computed(
+	() =>
+		!!serverClosedNotice.value &&
+		!serverClosedHidden.value &&
+		(serverClosedNotice.value.closed_by === 'silence' || serverClosedNotice.value.closed_by === 'organizer'),
+)
+
+const serverClosedText = computed(() => {
+	const notice = serverClosedNotice.value
+	if (!notice) return ''
+	if (notice.closed_by === 'organizer') {
+		return t('recorder.recording.closedOrganizer', { time: clockTime(notice.closed_at) })
+	}
+	return notice.closed_at
+		? t('recorder.recording.closedSilence', { time: clockTime(notice.closed_at) })
+		: t('recorder.recording.closedSilenceNoTime')
+})
+
+// closed_by is null here: the organizer asked, but the server has not
+// closed it yet — once it does, the card above takes over
+const showFinishRequestedLine = computed(
+	() =>
+		!!serverClosedNotice.value &&
+		serverClosedNotice.value.closed_by === null &&
+		serverClosedNotice.value.finish_requested,
+)
 
 const startBusy = ref(false)
 const startErrorIsMicrophone = ref(true)
@@ -721,6 +794,24 @@ async function clearSynced(): Promise<void> {
 			<div v-if="refusedAtTable" class="rc-alert" role="alert" data-test="refused-alert">
 				{{ t('recorder.recording.refusedAtTable') }}
 			</div>
+			<!-- the server finished this recording without the phone noticing
+			     (the silence sweep, or the organizer from the Live tab): say so,
+			     once, until it is tapped away -->
+			<div v-if="showServerClosedCard" class="rc-alert" role="alert" data-test="server-closed">
+				{{ serverClosedText }}
+				<button
+					class="rc-btn rc-subtle"
+					style="margin-top: 8px"
+					data-test="server-closed-ok"
+					@click="serverClosedHidden = true">
+					{{ t('recorder.recording.closedOk') }}
+				</button>
+			</div>
+			<!-- the organizer asked, the server has not closed it yet: this
+			     screen is in the middle of granting it right now -->
+			<p v-else-if="showFinishRequestedLine" class="rc-note" data-test="finish-requested">
+				{{ t('recorder.recording.finishRequested') }}
+			</p>
 			<p v-if="desktop" class="rc-note" data-test="desktop-hint">
 				{{ t('recorder.recording.desktopHint') }}
 			</p>

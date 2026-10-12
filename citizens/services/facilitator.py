@@ -255,7 +255,8 @@ def _consider(
     elapsed = (now - round_.started_at).total_seconds() if round_.started_at else 0.0
     remaining = round_.duration_minutes * 60 - elapsed
     triggers: list[str] = []
-    if TIME_NUDGE_AFTER_S < remaining <= TIME_NUDGE_BEFORE_S and not any(
+    # a session with no planned time (duration 0) has no "time is running out"
+    if round_.duration_minutes and TIME_NUDGE_AFTER_S < remaining <= TIME_NUDGE_BEFORE_S and not any(
         h.kind == "time" for h in history
     ):
         triggers.append("time")
