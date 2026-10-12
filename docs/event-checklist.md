@@ -38,6 +38,12 @@ room.
   software actually does; fill in the bracketed fields (controller, contact,
   hosting, the retention you set) and collect one per participant before the
   first round. The phone's information screen stays as the second step.
+- [ ] **Keep one table that is not recorded**, and tell every facilitator: a
+  refusal blocks a table from recording until the refusing person is marked
+  **Moved to another table** there (or changes their mind) — one refusal is
+  not outvoted by the rest. The Live tab shows this blocker as
+  `PARTICIPANT_REFUSED`, worded "someone seated here refused to be
+  recorded".
 - [ ] **Take a snapshot, and rehearse the restore.** `scripts/backup-citizens-data.sh`
   (see [administration.md](administration.md) § Backups) — then restore it into
   a throwaway volume and count the assemblies. A backup nobody has restored is
@@ -65,7 +71,7 @@ room.
   models listing hid a workspace whose every chat call was refused with 403.
 - [ ] **Charge the phones, and know which ones they are.** Every table phone
   should start the day above 80%, plugged in where the venue allows, and be a
-  device you have already rehearsed with — not one somebody brought that
+  phone you have already rehearsed with — not one somebody brought that
   morning.
 - [ ] **Set every table phone so its screen cannot go off on its own.** The
   page asks the browser to keep the screen awake, but a browser can refuse
@@ -82,7 +88,7 @@ room.
   then switched off overnight can still arrive at the first round expired,
   and re-scans on the armed screen. Harmless, but do not build the morning
   around it.
-- [ ] **Run the device rehearsal below once on the real phones**, on the
+- [ ] **Run the phone rehearsal below once on the real phones**, on the
   venue's Wi-Fi, before the dress round. It takes about ninety minutes and is
   the only test that covers the browsers the event actually uses.
 
@@ -155,13 +161,13 @@ you *watch* the failure modes recover:
 2. [ ] **Export the reports and the audio, download them, and open one.** Only
    after you are holding a copy you have *opened* do you touch the next step.
 3. [ ] **Only now** "Clear audio from the table phones" — and only if that was
-   the plan for these devices. The request tells each phone to delete only
+   the plan for these phones. The request tells each phone to delete only
    what the server confirmed it holds, so it cannot destroy a last copy — but
    it is still worth reading the coverage line ("N of M table phones reported")
    and treating it as a report, not a promise; a phone already carried out of
    the building will simply not have answered.
 
-## The device rehearsal (once, on the real phones, ~90 minutes)
+## The phone rehearsal (once, on the real phones, ~90 minutes)
 
 Automated tests run on Firefox with a fake microphone; the event runs on
 iPhones and Androids over venue Wi-Fi. Nothing but this covers the difference.
@@ -243,6 +249,36 @@ stranded audio 30 min after that.
     network returns.
 
 Delete the "Prova" assembly when done.
+
+## Rehearsal on real phones
+
+A shorter rehearsal, the day before the event, for what 0.7 added to
+recorders and consent — run it on the actual phones, not a laptop tab with a
+fake microphone.
+
+- [ ] Join a second recorder phone to a table: on the table phone tap **Add
+  Recorder to this Table** and scan the code with the second phone.
+- [ ] Make sure the recorders at that table include one iPhone and one
+  Android.
+- [ ] Deliberately leave one laptop recording as a recorder, its browser tab
+  in the background, for five minutes.
+- [ ] Bring the laptop's tab back to the foreground and check it shows the
+  red "N s of the session were not captured" notice.
+- [ ] On the Live tab, check the coverage number per recorder for that
+  table; a recorder's badge turns red below 95%.
+- [ ] Take over the live captions on the second recorder phone.
+- [ ] Confirm captions keep flowing on the table after the takeover.
+- [ ] Put one recorder phone to sleep for a minute.
+- [ ] Check the Live tab turns red for that recorder with "no audio has
+  reached the server for N s" and plays its tone (the Sound button on the
+  Live tab).
+- [ ] Check the facilitator's phone shows "Recorder A has sent no audio".
+- [ ] Register two people at a table, then mark one of them as refusing.
+- [ ] Confirm the table is now blocked from recording.
+- [ ] Mark the refusing person as **Moved to another table** and confirm the
+  block clears.
+- [ ] Close the session and check the Files tab shows the coverage number
+  next to the duration.
 
 ## What this deliberately does not cover
 
