@@ -177,7 +177,7 @@ describe('the device-audio purge line', () => {
 		expect(wrapper.text()).toContain('the phones last reported no local recordings')
 		expect(wrapper.text()).toContain('2 still hold audio')
 		expect(wrapper.text()).toContain('same phone more than once')
-		expect(wrapper.text()).toContain('expired or revoked sessions may need manual cleanup')
+		expect(wrapper.text()).toContain('expired or revoked phone links may need manual cleanup')
 	})
 })
 
