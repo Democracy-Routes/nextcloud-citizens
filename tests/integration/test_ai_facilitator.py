@@ -254,6 +254,23 @@ def test_three_not_helpful_thumbs_silence_a_table(client, monkeypatch):
     monkeypatch.setattr(ai_svc, "_history", lambda session, round_id, table_number: [])
     assert ai_svc.tick() == 0
 
+    # the silence is per session: the next one at the same table is a new
+    # chance — the people may have changed, the question has
+    round1 = assembly["rounds"][0]["id"]
+    client.post(f"/api/v1/rounds/{round1}/end")
+    round2 = client.post(
+        f"/api/v1/assemblies/{assembly['id']}/rounds",
+        json={"title": "Proposals", "question": "What do we propose?", "duration_minutes": 20},
+    ).json()
+    client.post(f"/api/v1/rounds/{round2['id']}/start")
+    started = client.post(
+        "/api/v1/public/recorder/start",
+        json={"round_id": round2["id"], "mime_type": "audio/webm"}, headers=table1,
+    )
+    assert started.status_code == 201, started.text
+    monkeypatch.setattr(ai_svc, "_history", lambda session, round_id, table_number: [])
+    assert ai_svc.tick() == 1
+
 
 def test_no_key_no_call(client, monkeypatch):
     assembly = _assembly(client, ai_facilitator="normal")

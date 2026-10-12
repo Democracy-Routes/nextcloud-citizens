@@ -54,9 +54,16 @@ def add_table(session: Session, assembly: Assembly, actor: str | None = None) ->
         raise HTTPException(
             status_code=409, detail="A plenary room is one table; add phones to it instead"
         )
+    # only sessions still to come, or running: a session that has ended keeps
+    # the tables it was recorded with, or its report would list an empty one
+    open_rounds = [r for r in assembly.rounds if r.status in ("NOT_STARTED", "ACTIVE")]
+    if not open_rounds:
+        raise HTTPException(
+            status_code=409, detail="Every session has ended; there is nothing to add a table to"
+        )
     number = max(table_numbers(assembly), default=0) + 1
     color = color_for(number)
-    for round_ in assembly.rounds:
+    for round_ in open_rounds:
         round_.tables.append(Table(number=number, color_key=color))
     # rounds added later are built from this count, so they get the table too
     assembly.default_table_count = max(assembly.default_table_count, number)
@@ -70,7 +77,10 @@ def add_table(session: Session, assembly: Assembly, actor: str | None = None) ->
     card = invite_svc.issue_invite(session, assembly, number)
     record_audit_event(
         session, "table_added", "assembly", assembly.id, actor=actor,
-        data={"number": number, "color_key": color, "rounds": len(assembly.rounds)},
+        data={
+            "number": number, "color_key": color,
+            "rounds": sorted(r.position for r in open_rounds),
+        },
     )
     log.info("table_added", assembly_id=assembly.id, number=number, color_key=color)
     return schemas.TableAdded(number=number, color_key=color, invite=card)

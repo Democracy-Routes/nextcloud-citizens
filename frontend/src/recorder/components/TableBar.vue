@@ -28,6 +28,9 @@ const props = defineProps<{
 const { t } = useI18n()
 const open = ref<CapabilityPurpose | null>(null)
 const plenary = props.session.assembly.recording_mode === 'plenary'
+/** A phone grows a Session, never an Assembly: there the organizer's plan
+ * (seating, registration, the report's table list) decides the tables. */
+const canAddTable = !plenary && props.session.assembly.kind !== 'assembly'
 
 /** A screen can open a sheet itself — the battery card's "Add a backup phone"
  * is the same code as the bar's Add recorder, offered one tap closer. */
@@ -37,7 +40,7 @@ defineExpose({ show: (purpose: CapabilityPurpose) => (open.value = purpose) })
 <template>
 	<div class="rc-actions rc-bar" :class="{ 'rc-bar--plain': plenary, 'rc-bar--quiet': quiet }">
 		<button
-			v-if="!plenary"
+			v-if="canAddTable"
 			type="button"
 			class="rc-bar__side"
 			:class="{ 'rc-bar__side--open': open === 'ADD_TABLE' }"

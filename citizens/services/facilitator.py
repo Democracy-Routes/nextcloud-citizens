@@ -205,7 +205,19 @@ def _history(session: Session, round_id: str, table_number: int) -> list[Facilit
     )
 
 
-def unhelpful_count(session: Session, assembly_id: str, table_number: int) -> int:
+def unhelpful_count(
+    session: Session, assembly_id: str, table_number: int, round_id: str | None = None
+) -> int:
+    """Thumbs down on this table's advice — in THIS session when `round_id`
+    is given. Three of them silence the assistant at the table, and a new
+    session is a new chance: the people may have changed, the question has."""
+    conditions = [
+        FacilitatorIntervention.assembly_id == assembly_id,
+        FacilitatorFeedback.table_number == table_number,
+        FacilitatorFeedback.helpful.is_(False),
+    ]
+    if round_id is not None:
+        conditions.append(FacilitatorIntervention.round_id == round_id)
     return int(
         session.execute(
             select(func.count(FacilitatorFeedback.id))
@@ -213,11 +225,7 @@ def unhelpful_count(session: Session, assembly_id: str, table_number: int) -> in
                 FacilitatorIntervention,
                 FacilitatorIntervention.id == FacilitatorFeedback.intervention_id,
             )
-            .where(
-                FacilitatorIntervention.assembly_id == assembly_id,
-                FacilitatorFeedback.table_number == table_number,
-                FacilitatorFeedback.helpful.is_(False),
-            )
+            .where(*conditions)
         ).scalar_one()
         or 0
     )
@@ -235,7 +243,7 @@ def _consider(
     interval = timedelta(minutes=int(settings.get("interval_minutes", 4)))
     if history and now - history[-1].created_at < interval:
         return None
-    if unhelpful_count(session, assembly.id, table.number) >= UNHELPFUL_THROTTLE:
+    if unhelpful_count(session, assembly.id, table.number, round_.id) >= UNHELPFUL_THROTTLE:
         return None
     recording = live_source.current(session, round_.id, table.id)
     if recording is None:

@@ -154,3 +154,30 @@ def test_migration_colours_the_tables_that_existed_before(client, settings_env):
     assert [t["color_key"] for t in tables] == [
         "blue", "green", "orange", "purple", "red", "teal", "blue",
     ]
+
+
+def test_a_session_that_has_ended_keeps_its_tables_and_the_next_ones_gain_the_new_one(client):
+    """A table added between sessions belongs to the sessions still to come.
+    The one already recorded keeps exactly the tables it was recorded with —
+    its report would otherwise list an empty table."""
+    assembly = _assembly(client, tables=2, rounds=3)
+    round1, round2, round3 = assembly["rounds"]
+    client.post(f"/api/v1/rounds/{round1['id']}/start")
+    client.post(f"/api/v1/rounds/{round1['id']}/end")
+    client.post(f"/api/v1/rounds/{round2['id']}/start")
+
+    added = client.post(f"/api/v1/assemblies/{assembly['id']}/tables")
+    assert added.status_code == 201, added.text
+    assert added.json()["number"] == 3
+    numbers = {
+        r["title"]: [t["number"] for t in client.get(f"/api/v1/rounds/{r['id']}/tables").json()]
+        for r in (round1, round2, round3)
+    }
+    assert numbers == {"R1": [1, 2], "R2": [1, 2, 3], "R3": [1, 2, 3]}
+
+    # nothing still to come: there is nothing to add a table to
+    client.post(f"/api/v1/rounds/{round2['id']}/end")
+    client.post(f"/api/v1/rounds/{round3['id']}/start")
+    client.post(f"/api/v1/rounds/{round3['id']}/end")
+    refused = client.post(f"/api/v1/assemblies/{assembly['id']}/tables")
+    assert refused.status_code == 409

@@ -108,15 +108,26 @@ def test_an_action_code_is_single_use(client):
     assert "already been used" in again.json()["detail"]
 
 
-def test_add_table_creates_the_next_table_and_the_scanner_is_its_first_recorder(client):
-    assembly = _assembly(client)
-    round1 = assembly["rounds"][0]
-    phone_a = _join(client, assembly["invites"][0]["url"]).json()
+def _session(client, tables=2):
+    """An unorganized Session: the one place a phone may grow the table set."""
+    created = client.post(
+        "/api/v1/sessions",
+        json={"question": "Q", "table_count": tables, "duration_minutes": 10,
+              "recording_mode": "independent"},
+    )
+    assert created.status_code == 201, created.text
+    return created.json()
 
-    card = _capability(client, _auth(phone_a), "ADD_TABLE", round_id=round1["id"])
+
+def test_add_table_creates_the_next_table_and_the_scanner_is_its_first_recorder(client):
+    session = _session(client, tables=2)
+    round_id, container_id = session["session_id"], session["container_id"]
+    phone_a = _join(client, session["invites"][0]["url"]).json()
+
+    card = _capability(client, _auth(phone_a), "ADD_TABLE", round_id=round_id)
     assert card["purpose"] == "ADD_TABLE"
     assert card["table_number"] is None and card["color_key"] is None
-    assert card["round_id"] == round1["id"]
+    assert card["round_id"] == round_id
 
     phone_c = _join(client, card["url"], ip="10.5.0.5")
     assert phone_c.status_code == 200, phone_c.text
@@ -127,36 +138,35 @@ def test_add_table_creates_the_next_table_and_the_scanner_is_its_first_recorder(
     }
     assert body["table_number"] == 3 and body["table_color"] == "orange"
 
-    # the table exists in every round, has its own printed code, and records now
-    for round_ in assembly["rounds"]:
-        numbers = [t["number"] for t in client.get(f"/api/v1/rounds/{round_['id']}/tables").json()]
-        assert numbers == [1, 2, 3]
-    invites = client.get(f"/api/v1/assemblies/{assembly['id']}/invites").json()
+    # the table exists in the Session, has its own printed code, and records now
+    numbers = [t["number"] for t in client.get(f"/api/v1/rounds/{round_id}/tables").json()]
+    assert numbers == [1, 2, 3]
+    invites = client.get(f"/api/v1/assemblies/{container_id}/invites").json()
     assert sorted((i["table_number"], i["active"]) for i in invites) == [(1, True), (2, True), (3, True)]
     started = client.post(
         "/api/v1/public/recorder/start",
-        json={"round_id": round1["id"], "mime_type": "audio/webm"},
+        json={"round_id": round_id, "mime_type": "audio/webm"},
         headers=_auth(body),
     )
     assert started.status_code == 201, started.text
 
     # a replacement phone for table 3 rescans the table's own code, as for any table
-    links = client.get(f"/api/v1/assemblies/{assembly['id']}/invites/links").json()
+    links = client.get(f"/api/v1/assemblies/{container_id}/invites/links").json()
     [table3] = [card for card in links if card["table_number"] == 3]
     rescan = _join(client, table3["url"], ip="10.5.0.6").json()
     assert (rescan["table_number"], rescan["slot"]) == (3, 1)
 
 
 def test_two_phones_scanning_one_add_table_code_make_one_table(client):
-    assembly = _assembly(client, tables=1, rounds=1)
-    phone_a = _join(client, assembly["invites"][0]["url"]).json()
+    session = _session(client, tables=1)
+    phone_a = _join(client, session["invites"][0]["url"]).json()
     card = _capability(client, _auth(phone_a), "ADD_TABLE")
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         responses = list(pool.map(lambda i: _join(client, card["url"], ip=f"10.5.1.{i}"), range(4)))
     statuses = sorted(r.status_code for r in responses)
     assert statuses == [200, 410, 410, 410], statuses
-    numbers = [t["number"] for t in client.get(f"/api/v1/rounds/{assembly['rounds'][0]['id']}/tables").json()]
+    numbers = [t["number"] for t in client.get(f"/api/v1/rounds/{session['session_id']}/tables").json()]
     assert numbers == [1, 2]
 
 
@@ -169,11 +179,13 @@ def test_expired_and_revoked_action_codes_are_refused(client, monkeypatch):
     assert _join(client, expired["url"], ip="10.5.0.7").status_code == 401
     monkeypatch.setattr(capabilities, "CAPABILITY_TTL", timedelta(minutes=15))
 
-    revoked = _capability(client, _auth(phone_a), "ADD_TABLE")
-    client.post(f"/api/v1/assemblies/{assembly['id']}/invites/revoke")
+    session = _session(client, tables=2)
+    phone_s = _join(client, session["invites"][0]["url"], ip="10.5.0.11").json()
+    revoked = _capability(client, _auth(phone_s), "ADD_TABLE")
+    client.post(f"/api/v1/assemblies/{session['container_id']}/invites/revoke")
     assert _join(client, revoked["url"], ip="10.5.0.8").status_code == 401
     # nothing was created for a refused code
-    numbers = [t["number"] for t in client.get(f"/api/v1/rounds/{assembly['rounds'][0]['id']}/tables").json()]
+    numbers = [t["number"] for t in client.get(f"/api/v1/rounds/{session['session_id']}/tables").json()]
     assert numbers == [1, 2]
 
 
@@ -236,8 +248,8 @@ def test_a_phone_can_ask_what_a_code_means_without_spending_it(client):
 
 
 def test_creation_and_consumption_are_audited_without_the_token(client):
-    assembly = _assembly(client, tables=1, rounds=1)
-    phone_a = _join(client, assembly["invites"][0]["url"]).json()
+    session = _session(client, tables=1)
+    phone_a = _join(client, session["invites"][0]["url"]).json()
     card = _capability(client, _auth(phone_a), "ADD_TABLE")
     token = _token(card["url"])
     assert _join(client, card["url"], ip="10.5.0.10").status_code == 200
@@ -258,3 +270,25 @@ def test_creation_and_consumption_are_audited_without_the_token(client):
         invite = session.get(RecorderInvite, events[0].object_id)
         assert invite.single_use and invite.consumed_at is not None
         assert invite.created_by_session_id is not None
+
+
+def test_a_phone_grows_a_session_but_never_an_organized_assembly(client):
+    """New table from a phone is a Session feature: in an Assembly the seating,
+    the registration and the report's table list are the organizer's plan."""
+    assembly = _assembly(client)
+    phone = _auth(_join(client, assembly["invites"][0]["url"]).json())
+    refused = client.post(
+        "/api/v1/public/recorder/capabilities",
+        json={"purpose": "ADD_TABLE", "round_id": assembly["rounds"][0]["id"]}, headers=phone,
+    )
+    assert refused.status_code == 409, refused.text
+    assert refused.json()["detail"]["code"] == "ORGANIZER_ADDS_TABLES"
+    # the other codes are untouched there
+    assert _capability(client, phone, "ADD_RECORDER_TO_TABLE")["purpose"] == "ADD_RECORDER_TO_TABLE"
+
+    session = client.post(
+        "/api/v1/sessions", json={"question": "Q", "table_count": 1, "duration_minutes": 10}
+    ).json()
+    phone = _auth(_join(client, session["invites"][0]["url"], ip="10.5.0.7").json())
+    allowed = _capability(client, phone, "ADD_TABLE", round_id=session["session_id"])
+    assert allowed["purpose"] == "ADD_TABLE"

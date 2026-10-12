@@ -170,6 +170,14 @@ def mint_capability(
         round_ = session.get(Round, round_id)
         if round_ is None or round_.assembly_id != assembly.id:
             raise HTTPException(status_code=404, detail="Round not found")
+    if purpose == ADD_TABLE and assembly.kind == "assembly":
+        # seating, registration and the report's table list are the
+        # organizer's plan; a phone grows a Session, never an Assembly
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "ORGANIZER_ADDS_TABLES",
+                    "message": "In an organized assembly the organizer adds tables"},
+        )
 
     now = utcnow()
     token = generate_token()

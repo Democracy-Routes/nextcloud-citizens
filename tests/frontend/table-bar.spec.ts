@@ -86,4 +86,18 @@ describe('the table bar', () => {
 		expect(wrapper.find('.rc-bar').classes()).toContain('rc-bar--plain')
 		expect(wrapper.text()).toContain('READY')
 	})
+
+	it('offers New table in a Session and not in an organized Assembly', () => {
+		const inSession = mountWithI18n(TableBar, {
+			props: { session: { ...session, assembly: { ...session.assembly, kind: 'session' } }, roundId: 'r1' },
+			slots: { default: '<button>READY</button>' },
+		})
+		expect(inSession.findAll('.rc-bar__side').map((b) => b.text())).toEqual(['New table', 'Add recorder'])
+
+		const inAssembly = mountWithI18n(TableBar, {
+			props: { session: { ...session, assembly: { ...session.assembly, kind: 'assembly' } }, roundId: 'r1' },
+			slots: { default: '<button>READY</button>' },
+		})
+		expect(inAssembly.findAll('.rc-bar__side').map((b) => b.text())).toEqual(['Add recorder'])
+	})
 })

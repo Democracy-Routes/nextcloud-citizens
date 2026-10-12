@@ -64,6 +64,18 @@ not rewritten.
   that is never folded away as quiet. On 2026-10-11 a laptop recorder ran for
   thirty minutes and captured twenty-seven, then eighteen and captured two,
   and nothing on any screen said so.
+- **Four small corrections from the branch review.** A table added between
+  sessions joins only the sessions still to come or running; the one already
+  recorded keeps the tables it was recorded with, and when every session has
+  ended there is nothing to add to. A participant's full name is one
+  pseudonym: "Giulia Rossi", "Giulia" and "Rossi" all become the same
+  [Person A] in what the analysis model reads, where before each part got a
+  label of its own. Three thumbs down silence the AI assistant at a table for
+  THAT session only; the next session is a new chance. And New table from a
+  phone is a Session feature: in an organized assembly the seating, the
+  registration and the report's table list are the organizer's plan, so the
+  phone's code is refused there (409 `ORGANIZER_ADDS_TABLES`) and the button
+  is not shown; the organizer's own Add table on the QR codes tab is unchanged.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`
