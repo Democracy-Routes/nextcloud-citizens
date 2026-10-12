@@ -33,6 +33,7 @@ const shared = vi.hoisted(() => ({
 		captureInterrupted: false,
 		interruptedSince: 0,
 		interruptions: [] as Array<{ from: number; to: number; cause: string }>,
+		hiddenGapMs: 0,
 		segment: 0,
 	},
 	wake: { held: true, supported: true },
@@ -84,7 +85,7 @@ beforeEach(() => {
 	vi.useFakeTimers()
 	Object.assign(shared.state, {
 		phase: 'recording', micLost: false, micLostCause: '', captureInterrupted: false,
-		interruptions: [], segment: 0,
+		interruptions: [], hiddenGapMs: 0, segment: 0,
 	})
 	shared.wake.held = true
 	shared.wake.supported = true
@@ -149,5 +150,23 @@ describe('the recording screen during an interruption', () => {
 		const wrapper = await mounted()
 
 		expect(wrapper.text()).toContain('set auto-lock to Never')
+	})
+
+	it('says in red how much was lost while the page was hidden, until the table has read it', async () => {
+		shared.state.hiddenGapMs = 90_000
+		const wrapper = await mounted()
+		const alert = wrapper.find('[data-test="hidden-gap"]')
+		expect(alert.exists()).toBe(true)
+		expect(alert.classes()).toContain('rc-alert')
+		expect(alert.text()).toContain('90 s of the session were not captured while this page was in the background')
+
+		await wrapper.find('[data-test="hidden-gap-ok"]').trigger('click')
+		expect(wrapper.find('[data-test="hidden-gap"]').exists()).toBe(false)
+	})
+
+	it('tells a computer browser what it costs, and a phone nothing', async () => {
+		// jsdom's user agent has no phone marker: this is the laptop case
+		const wrapper = await mounted()
+		expect(wrapper.find('[data-test="desktop-hint"]').text()).toContain("computer's browser")
 	})
 })

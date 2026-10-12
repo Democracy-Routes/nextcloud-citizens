@@ -230,6 +230,25 @@ describe('the capture watchdog', () => {
 		expect(line[0][2]).toMatchObject({ chunksWhileHidden: 2, interrupted: false })
 	})
 
+	it('counts the audio that did not arrive while the page was hidden', async () => {
+		const engine = await started()
+		setVisibility('hidden')
+		vi.advanceTimersByTime(6 * CHUNK_INTERVAL_MS)
+		// a laptop tab in the background: no chunk at all for a minute
+		setVisibility('visible')
+		expect(engine.state.hiddenGapMs).toBe(6 * CHUNK_INTERVAL_MS)
+		expect(logged('capture_gap_while_hidden')).toHaveLength(1)
+		expect(logged('capture_gap_while_hidden')[0][2]).toMatchObject({ chunksWhileHidden: 0 })
+
+		// a phone that kept recording with the screen off: no gap to report
+		setVisibility('hidden')
+		vi.advanceTimersByTime(4 * CHUNK_INTERVAL_MS)
+		for (let i = 0; i < 4; i += 1) recorder().emit(new Blob(['a']))
+		setVisibility('visible')
+		expect(engine.state.hiddenGapMs).toBe(6 * CHUNK_INTERVAL_MS)
+		expect(logged('capture_gap_while_hidden')).toHaveLength(1)
+	})
+
 	describe('a muted track', () => {
 		it('is the microphone gone if it stays muted on screen', async () => {
 			const engine = await started()

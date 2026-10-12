@@ -24,6 +24,7 @@ import MessageBanner from './MessageBanner.vue'
 import TableBadge from './TableBadge.vue'
 import TableBar from './TableBar.vue'
 import { batteryPrompt } from '../batteryPrompt'
+import { desktopBrowser } from '../platform'
 import { play, setSoundLevel, soundLevel, type SoundLevel } from '../sounds'
 import { useTableMessages } from '../useTableMessages'
 import { MicrophoneError } from '../errors'
@@ -388,6 +389,14 @@ const interruptedSeconds = computed(() =>
 	Math.round(state.interruptions.reduce((sum, gap) => sum + (gap.to - gap.from), 0) / 1000),
 )
 
+/** Audio the phone did not capture while the page was hidden (engine
+ * hiddenGapMs): said in red until somebody at the table has read it, and
+ * said again, with the new total, if it happens again. */
+const hiddenGapSeconds = computed(() => Math.round((state.hiddenGapMs ?? 0) / 1000))
+const hiddenGapSeen = ref(0)
+/** a computer's browser: it may stop capturing when the tab is not in front */
+const desktop = desktopBrowser()
+
 /** The microphone was lost to the screen going off or the OS muting it —
  * not to a phone call — so the wording must not send people after a call
  * that never happened. */
@@ -694,6 +703,17 @@ async function clearSynced(): Promise<void> {
 			<div v-else-if="state.phase === 'recording' && interruptedSeconds > 0" class="rc-note">
 				{{ t('recorder.recording.resumedAfter', { seconds: interruptedSeconds }) }}
 			</div>
+			<!-- the page was hidden and fewer chunks came than the time called
+			     for: that audio is gone. Red, and it stays until read. -->
+			<div v-if="hiddenGapSeconds > hiddenGapSeen" class="rc-alert" role="alert" data-test="hidden-gap">
+				{{ t('recorder.recording.hiddenGap', { seconds: hiddenGapSeconds }) }}
+				<button class="rc-btn rc-subtle" style="margin-top: 8px" data-test="hidden-gap-ok" @click="hiddenGapSeen = hiddenGapSeconds">
+					{{ t('recorder.recording.gapDismiss') }}
+				</button>
+			</div>
+			<p v-if="desktop" class="rc-note" data-test="desktop-hint">
+				{{ t('recorder.recording.desktopHint') }}
+			</p>
 
 			<div class="rc-level"><div class="rc-level-fill" :style="{ width: level + '%' }"></div></div>
 

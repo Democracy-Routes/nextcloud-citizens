@@ -47,6 +47,15 @@ not rewritten.
   second of silence per second until audio returns, and subtracts that
   silence from the engine's timestamps, so the lines keep the recording's own
   clock even when they are the transcript of record.
+- **The phone says what it lost while nobody was looking.** The capture
+  watchdog never judges a hidden page (iOS mutes the microphone off-screen by
+  design), so a browser that simply stopped capturing in the background came
+  back with a climbing timer and no word of the minutes it had missed. On
+  return the recorder now counts the chunks that did not arrive against the
+  time hidden and says, in red and until somebody taps it, how many seconds
+  of the session were not captured. A computer's browser is told up front
+  that it can stop capturing when its window is not in front or the machine
+  sleeps, and that a phone is the safer recorder. Nothing is blocked.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`
