@@ -419,7 +419,8 @@
 			"leave": "Leave this table",
 			"closed": "The organizer has closed this assembly.",
 			"goneTitle": "This facilitator session has ended",
-			"goneBody": "Scan the table's facilitator code again to come back."
+			"goneBody": "Scan the table's facilitator code again to come back.",
+			"recorderSilent": "Recorder {label} has sent no audio for {seconds} s — go and look at that phone: is the recorder still open and in front?"
 		},
 		"help": {
 			"button": "Need help",

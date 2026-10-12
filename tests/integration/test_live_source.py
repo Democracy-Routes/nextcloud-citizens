@@ -288,3 +288,52 @@ def test_a_promoted_recorder_hands_the_engine_its_segments_opening_chunk(client,
     assert header is not None and header.exists(), "the backup's opening chunk is on disk"
     assert rec_b in str(header) and str(header).endswith("000000.bin")
     assert header.read_bytes() == b"b-header-chunk"
+
+
+def _backdate(recording_id: str, seconds: int) -> None:
+    from sqlalchemy import update
+
+    with session_scope() as session:
+        session.execute(
+            update(Recording)
+            .where(Recording.id == recording_id)
+            .values(updated_at=utcnow() - timedelta(seconds=seconds))
+        )
+
+
+def test_the_source_moves_to_the_phone_whose_audio_keeps_arriving(client, captions):
+    """Both phones are RECORDING, but the source's chunks stop (its tab went
+    to the background) while the backup's keep coming: after 30 s of silence
+    the backup's next chunk takes the captions, the old source's session is
+    ended, and the roles reverse again when the audio does."""
+    _, round_id, headers_a, headers_b, rec_a, rec_b = _two_recorders(client)
+    _upload(client, headers_a, rec_a, 0)
+    _upload(client, headers_b, rec_b, 0)
+    assert _sources(round_id) == [rec_a]
+    # a chunk from the backup while the source is fresh changes nothing
+    _upload(client, headers_b, rec_b, 1)
+    assert _sources(round_id) == [rec_a] and captions["fed"] == [rec_a]
+
+    _backdate(rec_a, 40)
+    _upload(client, headers_b, rec_b, 2)
+    assert _sources(round_id) == [rec_b], "the silent source kept the captions"
+    assert captions["fed"][-1] == rec_b
+    assert captions["finished"] == [rec_a], "the silent phone's caption session was not ended"
+    assert str(captions["headers"][-1]).endswith("000000.bin") and rec_b in str(captions["headers"][-1])
+    with session_scope() as session:
+        from citizens.db.models import AuditEvent
+        events = session.execute(
+            select(AuditEvent).where(AuditEvent.event == "live_source_failover")
+        ).scalars().all()
+        assert len(events) == 1 and events[0].object_id == rec_b
+        assert "stall" in (events[0].data_json or "")
+
+    # the first phone comes back: within 30 s of B's last chunk it stays a
+    # backup; once B falls silent in turn, A's next chunk takes it back
+    _upload(client, headers_a, rec_a, 1)
+    assert _sources(round_id) == [rec_b]
+    assert captions["fed"][-1] == rec_b
+    _backdate(rec_b, 40)
+    _upload(client, headers_a, rec_a, 2)
+    assert _sources(round_id) == [rec_a]
+    assert captions["finished"] == [rec_a, rec_b]

@@ -24,6 +24,22 @@ not rewritten.
   header first. Measured on real phone chunks: Chrome cuts every chunk at a
   Cluster boundary, so the 260-byte header followed by any later chunk decodes
   cleanly, with none of the first chunk's audio replayed.
+- **The captions follow the audio that actually arrives.** When the table's
+  live source has sent no chunk for 30 s while a second recorder's chunks keep
+  coming, that recorder's next chunk takes the captions over (and gives them
+  back the same way once the roles reverse); the silent phone's caption
+  session is ended and the takeover is audited. Before, the captions stayed
+  with a phone whose tab had gone to the background until it completed or was
+  replaced.
+- **"No audio has reached the server" is a readiness reason of its own.** A
+  recording still marked RECORDING from which no chunk has arrived for 30 s
+  gets `CAPTURE_SILENT` — a warning per recorder, a blocker for the table when
+  no other recorder is sending — whatever the phone reports about itself,
+  because a phone suspended in the background reports nothing. The Live tab
+  words it with the seconds, plays a short tone on the organizer's computer
+  when a table turns red or a recorder goes silent (a button switches the
+  sound off), and the facilitator's phone shows which recorder to go and look
+  at. The table phone itself stays silent.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`

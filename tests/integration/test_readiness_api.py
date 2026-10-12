@@ -112,3 +112,48 @@ def test_readiness_is_private_to_the_owner(client):
     _, round_id = _assembly(client, tables=1)
     assert client.get(f"/api/v1/rounds/{round_id}/readiness",
                       headers={"X-Test-User": "someone-else"}).status_code == 404
+
+
+def _start(client, headers, round_id):
+    response = client.post(
+        "/api/v1/public/recorder/start", headers=headers,
+        json={"round_id": round_id, "mime_type": "audio/webm"},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["recording_id"]
+
+
+def _backdate(recording_id, seconds):
+    from sqlalchemy import update
+
+    from citizens.db.models import Recording
+
+    with session_scope() as session:
+        session.execute(
+            update(Recording).where(Recording.id == recording_id)
+            .values(updated_at=utcnow() - timedelta(seconds=seconds))
+        )
+
+
+def test_a_recording_the_server_hears_nothing_from_blocks_the_table(client):
+    """The phone heartbeats and calls itself recording, but no chunk has
+    reached the server for 30 s: CAPTURE_SILENT, a blocker while it is the
+    only recorder, and the monitor shows the seconds per recorder."""
+    assembly, round_id = _assembly(client, tables=1)
+    client.post(f"/api/v1/rounds/{round_id}/start")
+    phone = _join(client, assembly["invites"][0]["url"], "10.9.0.1")
+    recording = _start(client, phone, round_id)
+    _heartbeat(client, phone, recording_active=True, recording_id=recording, capture_ok=True,
+               storage_free_mb=900, battery_level=0.9)
+    [table] = _readiness(client, round_id)["tables"]
+    assert table["status"] == "READY", table
+
+    _backdate(recording, 45)
+    [table] = _readiness(client, round_id)["tables"]
+    assert table["status"] == "BLOCKED"
+    [reason] = [r for r in table["reasons"] if r["code"] == "CAPTURE_SILENT"]
+    assert reason["severity"] == "blocker" and reason["slot"] == 1
+    assert reason["data"]["silent_seconds"] >= 45
+    monitor = client.get(f"/api/v1/rounds/{round_id}/monitor").json()
+    [entry] = monitor["tables"][0]["recorders"]
+    assert entry["recording"]["silent_seconds"] >= 45

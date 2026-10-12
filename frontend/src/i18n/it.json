@@ -419,7 +419,8 @@
 			"leave": "Lascia questo tavolo",
 			"closed": "L'organizzatore ha chiuso questa assemblea.",
 			"goneTitle": "Questa sessione del facilitatore è terminata",
-			"goneBody": "Scansiona di nuovo il codice facilitatore del tavolo per tornare."
+			"goneBody": "Scansiona di nuovo il codice facilitatore del tavolo per tornare.",
+			"recorderSilent": "Il registratore {label} non invia audio da {seconds} s — vai a vedere quel telefono: il registratore è ancora aperto e in primo piano?"
 		},
 		"help": {
 			"button": "Serve aiuto",

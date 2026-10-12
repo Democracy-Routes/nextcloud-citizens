@@ -84,6 +84,8 @@ export interface FacilitatorStatus {
 	/** the AI facilitator at this table: effective level and the table's own override */
 	ai_facilitator?: AiFacilitatorState
 	capabilities: { live_speaking_balance: boolean; ai_facilitator: boolean }
+	/** recorders of this table whose phone has sent no audio for a while (0.7) */
+	recorder_alerts?: Array<{ recording_id: string; slot: number; label: string; silent_seconds: number }>
 }
 
 export type AiLevel = 'off' | 'light' | 'normal' | 'active'

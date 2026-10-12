@@ -368,7 +368,9 @@ export interface MonitorTable {
 		connected: boolean
 		seconds_since_contact: number | null
 		status: DeviceStatus
-		recording: { id: string; state: string } | null
+		/** `silent_seconds`: how long since the server last received a chunk
+		 * from a recording still in progress (readiness CAPTURE_SILENT) */
+		recording: { id: string; state: string; live_source?: boolean; silent_seconds?: number | null } | null
 	}>
 	/** which recorder's captions the room reads; null when none */
 	live_source_slot?: number | null

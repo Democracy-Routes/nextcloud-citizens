@@ -32,6 +32,7 @@
 			"LIVE_STT_UNAVAILABLE": "live captions off at this table",
 			"HELP_REQUESTED": "the table asks for help",
 			"PARTICIPANT_CONSENT_MISSING": "nobody at the table has consented yet — register a participant on the table phone",
+			"CAPTURE_SILENT": "no audio has reached the server for {seconds} s — the phone may be asleep or in the background: open the recorder on it",
 			"recorderSuffix": "(recorder {letter})"
 		},
 		"helpKinds": {
@@ -58,6 +59,11 @@
 			"attention": "{count} table needs attention{blocked}. | {count} tables need attention{blocked}.",
 			"cannotRecord": "· {count} cannot record",
 			"quietFolded": "{count} table is fine and folded below. | {count} tables are fine and folded below."
+		},
+		"sound": {
+			"on": "Sound on",
+			"off": "Sound off",
+			"title": "A short tone on this computer when a table turns red or a recorder's audio stops arriving"
 		},
 		"advanced": {
 			"show": "Advanced diagnostics",

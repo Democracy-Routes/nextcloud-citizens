@@ -32,6 +32,7 @@
 			"LIVE_STT_UNAVAILABLE": "sottotitoli in diretta spenti a questo tavolo",
 			"HELP_REQUESTED": "il tavolo chiede aiuto",
 			"PARTICIPANT_CONSENT_MISSING": "nessuno al tavolo ha ancora acconsentito — registra un partecipante sul telefono del tavolo",
+			"CAPTURE_SILENT": "nessun audio arriva al server da {seconds} s — il telefono potrebbe essere in standby o in secondo piano: riapri il registratore",
 			"recorderSuffix": "(registratore {letter})"
 		},
 		"helpKinds": {
@@ -58,6 +59,11 @@
 			"attention": "{count} tavolo ha bisogno di attenzione{blocked}. | {count} tavoli hanno bisogno di attenzione{blocked}.",
 			"cannotRecord": "· {count} non può registrare",
 			"quietFolded": "{count} tavolo è a posto ed è ripiegato qui sotto. | {count} tavoli sono a posto e sono ripiegati qui sotto."
+		},
+		"sound": {
+			"on": "Suono attivo",
+			"off": "Suono spento",
+			"title": "Un breve segnale su questo computer quando un tavolo diventa rosso o l'audio di un registratore smette di arrivare"
 		},
 		"advanced": {
 			"show": "Diagnostica avanzata",

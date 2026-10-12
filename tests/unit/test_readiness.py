@@ -144,3 +144,27 @@ def test_the_round_summary_reports_the_worst_table():
     assert r.summarize(tables[:2])["status"] == r.NEEDS_ATTENTION
     assert r.summarize(tables[:1])["status"] == r.READY
     assert r.summarize([])["status"] == r.READY
+
+
+def test_a_recording_the_server_hears_nothing_from_is_flagged_and_blocks_a_lone_phone():
+    """The phone may still call itself RECORDING and even heartbeat; what counts
+    is that no chunk has reached the server for 30 s (a tab in the background,
+    the 2026-10-11 laptop). A backup still sending keeps the table runnable."""
+    silent = _recorder(slot=1, storage_ok=True, capture_ok=True)
+    silent["recording"]["silent_seconds"] = 41
+    result = r.table_readiness([silent])
+    assert result.status == r.BLOCKED
+    assert _codes(result) == [(r.CAPTURE_SILENT, r.BLOCKER, 1)]
+    assert result.reasons[0].data == {"silent_seconds": 41}
+
+    fine = _recorder(slot=2, storage_ok=True, capture_ok=True)
+    fine["recording"]["silent_seconds"] = 4
+    result = r.table_readiness([silent, fine])
+    assert result.status == r.NEEDS_ATTENTION
+    assert _codes(result) == [(r.CAPTURE_SILENT, r.WARNING, 1)]
+
+    # under the bar, or not recording: nothing to say
+    silent["recording"]["silent_seconds"] = 12
+    assert r.table_readiness([silent]).status == r.READY
+    armed = _recorder(slot=1, state="", storage_ok=True)
+    assert r.table_readiness([armed]).status == r.READY

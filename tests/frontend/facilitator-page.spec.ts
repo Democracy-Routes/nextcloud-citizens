@@ -200,4 +200,15 @@ describe('the facilitator page', () => {
 		const wrapper = await mountPage()
 		expect(wrapper.find('[data-test="help"]').exists()).toBe(false)
 	})
+
+	it('tells the facilitator which recorder has gone quiet', async () => {
+		facilitatorStatus.mockResolvedValue({
+			...STATUS,
+			recorder_alerts: [{ recording_id: 'rec-a', slot: 1, label: 'A', silent_seconds: 52 }],
+		})
+		const wrapper = await mountPage()
+		const alert = wrapper.find('[data-test="recorder-silent"]')
+		expect(alert.exists()).toBe(true)
+		expect(alert.text()).toContain('Recorder A has sent no audio for 52 s')
+	})
 })

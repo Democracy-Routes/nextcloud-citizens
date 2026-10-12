@@ -256,6 +256,16 @@ onBeforeUnmount(() => {
 			</div>
 
 			<p v-if="status.assembly_closed" class="rc-alert" data-test="closed">{{ t('recorder.facilitator.closed') }}</p>
+			<!-- the server hears nothing from one of this table's phones: the
+			     person at the table is the one who can go and look at it -->
+			<p
+				v-for="alert in status.recorder_alerts ?? []"
+				:key="alert.recording_id"
+				class="rc-alert"
+				role="alert"
+				data-test="recorder-silent">
+				{{ t('recorder.facilitator.recorderSilent', { label: alert.label, seconds: alert.silent_seconds }) }}
+			</p>
 
 			<!-- the session: its clock first, then what it is about -->
 			<div class="rc-card" style="text-align: left" data-test="session">

@@ -196,7 +196,11 @@ def status(session: Session, facilitator: FacilitatorSession) -> dict:
             labels_speakers = speaking_live.engine_labels_speakers(lines)
             speaking = speaking_live.live_balance(lines)
     ai_level = ai_svc.table_level_state(session, assembly, table_number)
+    recorder_alerts = _recorder_alerts(session, current, table_number)
     return {
+        # recorders of this table whose phone has sent no audio for a while —
+        # the person at the table is the one who can go and look at it
+        "recorder_alerts": recorder_alerts,
         "assembly": {
             "id": assembly.id,
             "kind": assembly.kind,
@@ -281,3 +285,40 @@ def make_code(session: Session, facilitator: FacilitatorSession, purpose: str):
         round_id=round_.id if round_ else None,
         actor=f"facilitator:{facilitator.id}",
     )
+
+
+def _recorder_alerts(session: Session, current, table_number: int) -> list[dict]:
+    """Recordings of this table still marked RECORDING whose phone has sent
+    nothing for readiness.CAPTURE_SILENT_SECONDS: the server-side signal a
+    phone suspended in the background cannot give about itself."""
+    from citizens.db.models import Recording
+    from citizens.services.readiness import CAPTURE_SILENT_SECONDS
+    from citizens.services.table_recordings import recording_slots, slot_label
+
+    if current is None or current.status != "ACTIVE":
+        return []
+    now = utcnow()
+    recordings = list(
+        session.execute(
+            select(Recording).where(
+                Recording.round_id == current.id,
+                Recording.table_number == table_number,
+                Recording.state == "RECORDING",
+                Recording.superseded_at.is_(None),
+            )
+        ).scalars()
+    )
+    slots = recording_slots(session, recordings)
+    alerts = []
+    for recording in recordings:
+        if recording.updated_at is None:
+            continue
+        silent = int((now - recording.updated_at).total_seconds())
+        if silent >= CAPTURE_SILENT_SECONDS:
+            alerts.append({
+                "recording_id": recording.id,
+                "slot": slots.get(recording.id, 1),
+                "label": slot_label(slots.get(recording.id, 1)),
+                "silent_seconds": silent,
+            })
+    return sorted(alerts, key=lambda a: a["slot"])

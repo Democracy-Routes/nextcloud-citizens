@@ -31,6 +31,7 @@ import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import SvgIcon from './ui/SvgIcon.vue'
 import { toast } from './ui/toast'
+import { play } from '../recorder/sounds'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
 const emit = defineEmits<{ changed: [] }>()
@@ -58,8 +59,10 @@ let clockTimer = 0
 async function poll(): Promise<void> {
 	if (!roundId.value) return
 	const previous = monitor.value?.status
+	const before = alarmKeys(monitor.value)
 	monitor.value = await api.roundMonitor(roundId.value)
 	error.value = ''
+	ringForNewAlarms(before, alarmKeys(monitor.value))
 	// the poll is the only thing watching the round change state, so it has to
 	// be what tells the rest of the app — otherwise the header pill, the
 	// sidebar and the Rounds tab stay on whatever they last heard
@@ -448,6 +451,7 @@ const REASON_CODES = [
 	'LOW_STORAGE',
 	'LOW_BATTERY',
 	'UPLOAD_STALLED',
+	'CAPTURE_SILENT',
 	'LIVE_STT_UNAVAILABLE',
 	'HELP_REQUESTED',
 	'PARTICIPANT_CONSENT_MISSING',
@@ -472,7 +476,9 @@ function reasonText(reason: { code: string; slot: number | null; data: Record<st
 		const kind = helpKindText(reason.data.kind)
 		return `${reasonWording('HELP_REQUESTED')}${kind ? ` — ${kind}` : ''}`
 	}
-	const base = reasonWording(reason.code)
+	const base = reason.code === 'CAPTURE_SILENT'
+		? t('organizer.live.monitor.reasons.CAPTURE_SILENT', { seconds: Number(reason.data.silent_seconds ?? 0) })
+		: reasonWording(reason.code)
 	const who = reason.slot !== null && reason.slot !== undefined && (reason.slot > 1 || reason.code !== 'NO_RECORDER')
 		? ` ${t('organizer.live.monitor.reasons.recorderSuffix', { letter: String.fromCharCode(64 + reason.slot) })}`
 		: ''
@@ -494,6 +500,44 @@ function isQuiet(table: MonitorTable): boolean {
 
 const showQuiet = ref(false)
 
+/* ---- the alarm: a short tone on the organizer's laptop when a table turns
+ * red or a recorder's audio stops reaching the server. The table phone itself
+ * stays silent (decided 2026-10-13): the room must not hear its own alarm,
+ * the organizer and the facilitator's phone must. Off with one click. */
+const SOUND_KEY = 'citizens-live-sound'
+const soundOn = ref(true)
+
+function toggleSound(): void {
+	soundOn.value = !soundOn.value
+	try {
+		localStorage.setItem(SOUND_KEY, soundOn.value ? '1' : '0')
+	} catch {
+		/* private mode */
+	}
+}
+
+/** What would ring if it were new: blocked tables, and silent recorders. */
+function alarmKeys(m: RoundMonitor | null): Set<string> {
+	const keys = new Set<string>()
+	for (const table of m?.tables ?? []) {
+		if (table.readiness?.status === 'BLOCKED') keys.add(`blocked:${table.number}`)
+		for (const reason of table.readiness?.reasons ?? []) {
+			if (reason.code === 'CAPTURE_SILENT') keys.add(`silent:${table.number}:${reason.slot ?? ''}`)
+		}
+	}
+	return keys
+}
+
+function ringForNewAlarms(before: Set<string>, after: Set<string>): void {
+	if (!soundOn.value) return
+	for (const key of after) {
+		if (!before.has(key)) {
+			play('alert', 'normal')
+			return
+		}
+	}
+}
+
 /* ---- advanced diagnostics: the numbers behind a pill, on demand ----
  * Battery, storage, upload backlog, heartbeat age, wake lock, capture — every
  * recorder's heartbeat already arrives in the monitor payload; the normal view
@@ -502,6 +546,7 @@ const ADVANCED_KEY = 'citizens-live-advanced'
 const advanced = ref(false)
 try {
 	advanced.value = localStorage.getItem(ADVANCED_KEY) === '1'
+	soundOn.value = localStorage.getItem(SOUND_KEY) !== '0'
 } catch {
 	/* private mode */
 }
@@ -727,6 +772,9 @@ function pendingChunks(table: MonitorTable): number {
 				{{ t('organizer.live.monitor.health.quietFolded', { count: quietTables.length }, quietTables.length) }}
 			</span>
 			<span style="margin-left: auto">
+				<CzButton variant="tertiary" small data-test="sound" :title="t('organizer.live.monitor.sound.title')" @click="toggleSound">
+					{{ soundOn ? t('organizer.live.monitor.sound.on') : t('organizer.live.monitor.sound.off') }}
+				</CzButton>
 				<CzButton variant="tertiary" small data-test="advanced" @click="toggleAdvanced">
 					{{ advanced ? t('organizer.live.monitor.advanced.hide') : t('organizer.live.monitor.advanced.show') }}
 				</CzButton>

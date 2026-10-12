@@ -12,6 +12,11 @@ import MonitorTab from '../../frontend/src/components/MonitorTab.vue'
 import { mountWithI18n } from './support/mount'
 
 const roundMonitor = vi.fn()
+const play = vi.fn()
+
+vi.mock('../../frontend/src/recorder/sounds', () => ({
+	play: (...args: unknown[]) => play(...args),
+}))
 
 vi.mock('../../frontend/src/api', () => ({
 	api: {
@@ -127,5 +132,48 @@ describe('the exception-first Live tab', () => {
 		expect(wrapper.find('.cz-health').exists()).toBe(false)
 		expect(wrapper.find('.cz-quietrow').exists()).toBe(false)
 		expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+	})
+
+	it('words a recorder the server hears nothing from, and rings once when it is new', async () => {
+		play.mockReset()
+		const SILENT = {
+			status: 'BLOCKED',
+			reasons: [{ code: 'CAPTURE_SILENT', severity: 'blocker', slot: 1, data: { silent_seconds: 47 } }],
+		}
+		roundMonitor.mockResolvedValue(monitor(
+			[table(1, READY), table(2, READY)],
+			{ status: 'READY', ready: 2, needs_attention: 0, blocked: 0 },
+		))
+		const wrapper = mountWithI18n(MonitorTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(play).not.toHaveBeenCalled()
+		expect(wrapper.find('[data-test="sound"]').text()).toBe('Sound on')
+
+		// the next poll: table 2 has gone silent — one tone, the reason worded with the seconds
+		roundMonitor.mockResolvedValue(monitor(
+			[table(1, READY), table(2, SILENT)],
+			{ status: 'BLOCKED', ready: 1, needs_attention: 0, blocked: 1 },
+		))
+		await (wrapper.vm as unknown as { poll: () => Promise<void> }).poll?.()
+		await vi.waitFor(() => expect(wrapper.text()).toContain('no audio has reached the server for 47 s'))
+		expect(wrapper.text()).toContain('(recorder A)')
+		expect(play).toHaveBeenCalledTimes(1)
+		expect(play).toHaveBeenCalledWith('alert', 'normal')
+
+		// the same alarm on the following poll does not ring again
+		await (wrapper.vm as unknown as { poll: () => Promise<void> }).poll?.()
+		await flushPromises()
+		expect(play).toHaveBeenCalledTimes(1)
+
+		// sound off: a new alarm stays silent
+		await wrapper.find('[data-test="sound"]').trigger('click')
+		expect(wrapper.find('[data-test="sound"]').text()).toBe('Sound off')
+		roundMonitor.mockResolvedValue(monitor(
+			[table(1, SILENT), table(2, SILENT)],
+			{ status: 'BLOCKED', ready: 0, needs_attention: 0, blocked: 2 },
+		))
+		await (wrapper.vm as unknown as { poll: () => Promise<void> }).poll?.()
+		await flushPromises()
+		expect(play).toHaveBeenCalledTimes(1)
 	})
 })

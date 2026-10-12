@@ -108,6 +108,13 @@ def _table_recorders(
                     "state": recording.state,
                     # whether this recorder feeds the table's live captions
                     "live_source": recording.live_source,
+                    # how long since the server last received a chunk from a
+                    # recording still in progress (readiness CAPTURE_SILENT)
+                    "silent_seconds": (
+                        int((now - recording.updated_at).total_seconds())
+                        if recording.state == "RECORDING" and recording.updated_at is not None
+                        else None
+                    ),
                 },
             }
         )

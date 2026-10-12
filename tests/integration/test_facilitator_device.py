@@ -221,3 +221,40 @@ def test_a_session_has_no_hand_to_raise_but_still_a_facilitator(client):
         "/api/v1/public/facilitator/help", json={"kind": "PROCESS"}, headers=facilitator
     )
     assert refused.status_code == 409
+
+
+def test_the_facilitator_is_told_which_recorder_has_gone_quiet(client):
+    """The server-side silence signal reaches the person at the table: a
+    recorder of this table that is still RECORDING but has sent nothing for
+    30 s is listed, with its letter, so they can go and look at that phone."""
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from citizens.db.models import Recording
+    from citizens.db.models.base import utcnow
+    from citizens.db.session import session_scope
+
+    assembly = _assembly(client)
+    round1 = assembly["rounds"][0]
+    table1 = _phone(client, assembly, 0, "10.20.0.1")
+    facilitator, _, _ = _facilitator(client, table1)
+    client.post(f"/api/v1/rounds/{round1['id']}/start")
+    started = client.post(
+        "/api/v1/public/recorder/start", headers=table1,
+        json={"round_id": round1["id"], "mime_type": "audio/webm"},
+    )
+    assert started.status_code == 201, started.text
+    recording_id = started.json()["recording_id"]
+    status = client.get("/api/v1/public/facilitator/status", headers=facilitator).json()
+    assert status["recorder_alerts"] == []
+
+    with session_scope() as session:
+        session.execute(
+            update(Recording).where(Recording.id == recording_id)
+            .values(updated_at=utcnow() - timedelta(seconds=50))
+        )
+    status = client.get("/api/v1/public/facilitator/status", headers=facilitator).json()
+    [alert] = status["recorder_alerts"]
+    assert alert["slot"] == 1 and alert["label"] == "A" and alert["silent_seconds"] >= 50
+    assert alert["recording_id"] == recording_id

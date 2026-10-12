@@ -18,7 +18,12 @@ Rules:
 - any recorder still recording can be promoted — by its own phone or the
   organizer — and the previous holder's caption session is ended;
 - when the holder stops (completed, replaced, gone silent, timed out) the
-  source passes to a sibling still recording, if there is one.
+  source passes to a sibling still recording, if there is one;
+- when the holder's phone has sent no chunk for STALL_SECONDS while a sibling
+  keeps sending, the sibling's next chunk takes the source (`take_over_if_stalled`),
+  and takes it back the same way when the roles reverse. A phone in the
+  background still "records" as far as its state goes, but the captions must
+  follow the audio that actually arrives (the 2026-10-11 field test).
 
 All of it runs inside the caller's write transaction, which already holds
 SQLite's single writer slot, so two promotions at once are serialised and the
@@ -30,9 +35,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from citizens.db.models import Recording
+from citizens.db.models.base import utcnow
 from citizens.logging_setup import get_logger
+from citizens.services.audit import record_audit_event
 
 log = get_logger(__name__)
+
+#: A live source whose phone has sent nothing for this long, while a sibling's
+#: chunks keep arriving, hands the captions to that sibling. Chunks come every
+#: ~10 s, so this is three missed ones — the same bar as the Live tab's
+#: CAPTURE_SILENT warning (services/readiness.py).
+STALL_SECONDS = 30
 
 
 def current(session: Session, round_id: str, table_id: str) -> Recording | None:
@@ -119,5 +132,46 @@ def promote(session: Session, recording: Recording) -> Recording | None:
         "live_source_promoted",
         recording_id=recording.id, table_number=recording.table_number,
         from_recording_id=holder.id if holder is not None else None,
+    )
+    return holder
+
+
+def take_over_if_stalled(session: Session, recording: Recording, now=None) -> Recording | None:
+    """A chunk just arrived from `recording`, a recorder that is NOT the table's
+    live source. If the source's phone has been silent for STALL_SECONDS, this
+    one takes the captions over; returns the recording it took them from, so
+    the caller can end that caption session. None when nothing changed.
+
+    `updated_at` bumps on every received chunk (and on the flag flip itself,
+    which is why a fresh handover is not undone by the next chunk from the
+    other side: the demoted holder looks "recent" for STALL_SECONDS)."""
+    if recording.live_source or recording.state != "RECORDING":
+        return None
+    holder = current(session, recording.round_id, recording.table_id)
+    if holder is None:
+        # a table whose source stopped without a successor: this one is it
+        assign_if_vacant(session, recording)
+        return None
+    if holder.id == recording.id:
+        return None
+    now = now or utcnow()
+    silent = (now - holder.updated_at).total_seconds() if holder.updated_at is not None else 0
+    if holder.state == "RECORDING" and silent < STALL_SECONDS:
+        return None
+    holder.live_source = False
+    session.flush()  # the unique index wants the old flag gone first
+    recording.live_source = True
+    session.flush()
+    log.warning(
+        "live_source_failover",
+        from_recording_id=holder.id, to_recording_id=recording.id,
+        table_number=recording.table_number, reason="stall", silent_seconds=int(silent),
+    )
+    record_audit_event(
+        session, "live_source_failover", "recording", recording.id,
+        data={
+            "from_recording_id": holder.id, "table_number": recording.table_number,
+            "reason": "stall", "silent_seconds": int(silent),
+        },
     )
     return holder

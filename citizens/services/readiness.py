@@ -31,6 +31,9 @@ MIC_UNAVAILABLE = "MIC_UNAVAILABLE"
 LOW_STORAGE = "LOW_STORAGE"
 LOW_BATTERY = "LOW_BATTERY"
 UPLOAD_STALLED = "UPLOAD_STALLED"
+# the SERVER has received no chunk from a recording that is still RECORDING:
+# the one signal a phone whose tab was suspended cannot withhold
+CAPTURE_SILENT = "CAPTURE_SILENT"
 LIVE_STT_UNAVAILABLE = "LIVE_STT_UNAVAILABLE"
 #: the table raised its hand (services/help.py); never a blocker — the phone
 #: may well be recording fine while somebody has a question
@@ -73,11 +76,17 @@ class TableReadiness:
         return {"status": self.status, "reasons": [reason.as_dict() for reason in self.reasons]}
 
 
+#: Chunks arrive every ~10 s; three missed ones is silence, not a hiccup.
+#: The same bar as live_source.STALL_SECONDS, which moves the captions.
+CAPTURE_SILENT_SECONDS = 30
+
+
 def _incapacitates(issue: Reason) -> bool:
     """Does this issue leave the recorder unable to record at all? Being
-    unreachable, having no microphone, or having nowhere to store audio do; a
-    low battery, a thin margin of storage or an upload backlog do not (yet)."""
-    if issue.code in (RECORDER_OFFLINE, MIC_UNAVAILABLE):
+    unreachable, having no microphone, sending no audio, or having nowhere to
+    store audio do; a low battery, a thin margin of storage or an upload
+    backlog do not (yet)."""
+    if issue.code in (RECORDER_OFFLINE, MIC_UNAVAILABLE, CAPTURE_SILENT):
         return True
     return issue.code == LOW_STORAGE and issue.data.get("storage_ok") is False
 
@@ -116,6 +125,11 @@ def table_readiness(
         recording = recorder.get("recording") or {}
         recording_now = recording.get("state") == "RECORDING"
         issues: list[Reason] = []
+        silent = recording.get("silent_seconds")
+        if recording_now and isinstance(silent, (int, float)) and silent >= CAPTURE_SILENT_SECONDS:
+            # whatever the phone says about itself (or cannot say, suspended
+            # in the background): no audio has reached the server
+            issues.append(Reason(CAPTURE_SILENT, WARNING, slot, {"silent_seconds": int(silent)}))
         if not recorder.get("connected"):
             issues.append(Reason(
                 RECORDER_OFFLINE, WARNING, slot,
@@ -151,7 +165,9 @@ def table_readiness(
         reasons = [
             Reason(
                 reason.code,
-                BLOCKER if reason.code in (RECORDER_OFFLINE, MIC_UNAVAILABLE, LOW_STORAGE) else WARNING,
+                BLOCKER
+                if reason.code in (RECORDER_OFFLINE, MIC_UNAVAILABLE, CAPTURE_SILENT, LOW_STORAGE)
+                else WARNING,
                 reason.slot,
                 reason.data,
             )
