@@ -31,7 +31,7 @@ second simply sees the first.
 """
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from citizens.db.models import Recording
@@ -46,6 +46,23 @@ log = get_logger(__name__)
 #: ~10 s, so this is three missed ones — the same bar as the Live tab's
 #: CAPTURE_SILENT warning (services/readiness.py).
 STALL_SECONDS = 30
+
+
+
+def _demote(session: Session, holder: Recording) -> None:
+    """Take the flag off the holder WITHOUT touching its clock. An ORM update
+    bumps `updated_at` (the row's onupdate), and that column is the silence
+    clock: the Live tab's CAPTURE_SILENT, the replacement phone's silent-device
+    path and this module's own stall rule all read it. A failover must not
+    make the phone that just fell silent look alive again."""
+    session.execute(
+        update(Recording)
+        .where(Recording.id == holder.id)
+        .values(live_source=False, updated_at=holder.updated_at)
+    )
+    holder.live_source = False
+    session.expire(holder, ["live_source", "updated_at"])
+    session.flush()
 
 
 def current(session: Session, round_id: str, table_id: str) -> Recording | None:
@@ -123,9 +140,8 @@ def promote(session: Session, recording: Recording) -> Recording | None:
     if holder is not None and holder.id == recording.id:
         return None
     if holder is not None:
-        holder.live_source = False
         # the unique index wants the old flag gone before the new one is written
-        session.flush()
+        _demote(session, holder)
     recording.live_source = True
     session.flush()
     log.info(
@@ -142,9 +158,10 @@ def take_over_if_stalled(session: Session, recording: Recording, now=None) -> Re
     one takes the captions over; returns the recording it took them from, so
     the caller can end that caption session. None when nothing changed.
 
-    `updated_at` bumps on every received chunk (and on the flag flip itself,
-    which is why a fresh handover is not undone by the next chunk from the
-    other side: the demoted holder looks "recent" for STALL_SECONDS)."""
+    `updated_at` bumps on every received chunk and is left alone by the flag
+    flip (`_demote`), so the phone that fell silent still reads as silent to
+    the Live tab and to a replacement phone; the new holder's own chunks keep
+    its clock fresh, so the roles reverse only when it stalls in turn."""
     if recording.live_source or recording.state != "RECORDING":
         return None
     holder = current(session, recording.round_id, recording.table_id)
@@ -158,8 +175,7 @@ def take_over_if_stalled(session: Session, recording: Recording, now=None) -> Re
     silent = (now - holder.updated_at).total_seconds() if holder.updated_at is not None else 0
     if holder.state == "RECORDING" and silent < STALL_SECONDS:
         return None
-    holder.live_source = False
-    session.flush()  # the unique index wants the old flag gone first
+    _demote(session, holder)  # the unique index wants the old flag gone first
     recording.live_source = True
     session.flush()
     log.warning(
