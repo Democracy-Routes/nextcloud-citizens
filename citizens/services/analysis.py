@@ -108,6 +108,7 @@ Rules:
 - "type" is one of: proposal, agreement, disagreement, concern, question,
   minority_position, new_idea.
 - "support" (optional) is one of: strong, mixed, weak, unclear.
+- Cite at most 6 evidence_segment_ids per finding: the clearest ones.
 - EVERY finding MUST cite at least one evidence_segment_ids value copied
   EXACTLY from the segment ids in the transcript. Never invent ids.
 - Only report what participants actually said. Do not invent content.
@@ -418,6 +419,7 @@ def analyze_table(
                 for block in coalesce_segments(list(transcript.segments))
             )
     kept_titles = _approved_titles(session, siblings) if keep_approved else []
+    lines = _cap_transcript_lines(lines, primary.id)
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title if round_ else ''}\n"
@@ -456,7 +458,7 @@ def analyze_table(
         if not evidence_ids:
             dropped += 1
             continue  # a finding without real evidence is INVALID (brief §38)
-        usable.append((item, evidence_ids))
+        usable.append((item, _first_evidence(evidence_ids, segments)))
 
     if not usable and _table_has_findings(session, siblings):
         # The same transcript gave findings last time and none now. At the
@@ -644,6 +646,39 @@ def _table_has_findings(session: Session, siblings: list[Recording]) -> bool:
 
 
 APPROVED_STATUSES = ("APPROVED", "EDITED_AND_APPROVED")
+
+#: quotations per finding in the report (R18): the model is asked for this
+#: many (the number is written into TABLE_SYSTEM) and anything beyond it is
+#: cut in transcript order — a theme backed by forty segments printed forty
+#: quotations and read as a transcript dump
+MAX_EVIDENCE_PER_FINDING = 6
+#: what one table's prompt may carry; a three-hour table on a verbose
+#: engine exceeded the provider's context and failed with nothing to show
+MAX_TRANSCRIPT_CHARS = 180_000
+
+
+def _first_evidence(evidence_ids: set[str], segments) -> set[str]:
+    """The first MAX_EVIDENCE_PER_FINDING of the cited segments, in the
+    order they were spoken."""
+    order = {segment.id: index for index, segment in enumerate(segments)}
+    kept = sorted(evidence_ids, key=lambda eid: order.get(eid, 0))[:MAX_EVIDENCE_PER_FINDING]
+    return set(kept)
+
+
+def _cap_transcript_lines(lines: list[str], recording_id: str) -> list[str]:
+    """Keep the prompt under MAX_TRANSCRIPT_CHARS: the beginning of the
+    discussion stays, what follows is cut and the model is told so."""
+    total = 0
+    for index, line in enumerate(lines):
+        total += len(line) + 1
+        if total > MAX_TRANSCRIPT_CHARS:
+            omitted = len(lines) - index
+            log.warning(
+                "analysis_transcript_truncated", recording_id=recording_id,
+                kept_lines=index, omitted_lines=omitted,
+            )
+            return [*lines[:index], f"[transcript truncated here: {omitted} later segments omitted]"]
+    return lines
 
 TITLE_SYSTEM = (
     "You name a recorded discussion from its summary. Answer with a title of at most "

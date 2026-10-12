@@ -26,7 +26,12 @@
 			"description": "Descrizione",
 			"language": "Lingua",
 			"languageDetected": "Rilevata dalla registrazione: questa Sessione è stata avviata con Registra ora, quindi la prima trascrizione decide la lingua dell'analisi e del report. Scegliendone una qui la si fissa invece in anticipo.",
-			"languageLocked": "Bloccata: questa assemblea ha iniziato a registrare. La lingua decide come viene trascritto l'audio, quindi cambiarla ora lascerebbe un'assemblea con trascrizioni in due lingue.",
+			"languageRetranscribes": "Cambiarla adesso ritrascrive tutte le registrazioni.",
+			"languageChangeTitle": "Cambiare la lingua?",
+			"languageChangeConfirm": "Ogni registrazione con audio verrà trascritta di nuovo in {language}. Risultati e rapporto seguiranno. Continuare?",
+			"languageChangeConfirmButton": "Continua",
+			"languageChanged": "{count} registrazioni in coda per la trascrizione in {language} | {count} registrazione in coda per la trascrizione in {language} | {count} registrazioni in coda per la trascrizione in {language}",
+			"languageSessionActive": "Prima termina la sessione in registrazione.",
 			"autoPurge": "Cancella l'audio dai telefoni dei tavoli alla chiusura della sessione",
 			"autoPurgeHint": "Ogni telefono conserva una copia dell'audio del proprio tavolo, così la registrazione sopravvive a una rete instabile. Questa opzione chiede ai telefoni di eliminarla una volta conclusa l'assemblea — cosa che conta soprattutto quando i partecipanti hanno usato i propri telefoni. Un telefono elimina solo l'audio che il server ha già confermato, quindi non può cancellare l'ultima copia. Disattivatela per conservare le copie sui telefoni finché non avrete scaricato l'esportazione.",
 			"consent": "Consenso al tavolo",
@@ -62,6 +67,14 @@
 			"placeholder": "Es. Questa assemblea riguarda la mobilità urbana. 'PUMS' è il piano della mobilità della città.",
 			"empty": "Contesto facoltativo dato all'AI quando analizza questa assemblea — tema, glossario locale, aree di interesse."
 		},
+		"retention": {
+			"label": "Conservazione dell'audio",
+			"default": "Impostazione dell'istanza",
+			"days": "Cancella l'audio {days} giorni dopo la chiusura",
+			"zero": "Zero retention: conserva solo il rapporto",
+			"zeroHelp": "Dopo la chiusura e l'elaborazione, audio e trascrizioni vengono cancellati e resta un PDF del rapporto. Non si può annullare e l'assemblea non può essere riaperta.",
+			"applied": "Zero retention applicata il {time}"
+		},
 		"sessions": {
 			"title": "Sessioni",
 			"liveView": "In diretta",
@@ -69,6 +82,9 @@
 			"untitled": "Sessione senza titolo",
 			"noQuestion": "Nessuna domanda impostata",
 			"minutes": "{minutes} min"
+		},
+		"rounds": {
+			"noPlannedTime": "Senza durata prevista"
 		},
 		"danger": {
 			"title": "Zona pericolosa",

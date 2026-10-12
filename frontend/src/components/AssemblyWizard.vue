@@ -32,6 +32,8 @@ const expectedParticipants = ref(50)
 const tableCount = ref(10)
 const analysisInstructions = ref('')
 const rounds = ref<RoundIn[]>([{ title: 'Session 1', question: '', duration_minutes: 30 }])
+const retentionMode = ref<'default' | 'days' | 'zero'>('default')
+const retentionDays = ref(30)
 
 /* The component has no <form>, so the inputs' min/max never run — they only
  * drive the spinner arrows. An assembly created with zero tables gets no Table
@@ -80,6 +82,9 @@ async function submit(): Promise<void> {
 			// an organized assembly asks for individual consent at the table
 			// before a table records; the Overview tab can relax it
 			participant_consent: 'required',
+			...(retentionMode.value === 'zero'
+				? { zero_retention: true }
+				: { zero_retention: false, audio_retention_days: retentionMode.value === 'days' ? retentionDays.value : null }),
 		})
 		emit('created', created.id, created.invites)
 	} catch (err) {
@@ -184,6 +189,31 @@ async function submit(): Promise<void> {
 					</span>
 				</div>
 			</div>
+			<div class="cz-field" data-test="retention">
+				<label>{{ t('organizer.setup.overview.retention.label') }}</label>
+				<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+					<input v-model="retentionMode" type="radio" value="default" />
+					{{ t('organizer.setup.overview.retention.default') }}
+				</label>
+				<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+					<input v-model="retentionMode" type="radio" value="days" />
+					{{ t('organizer.setup.overview.retention.days', { days: retentionDays }) }}
+				</label>
+				<input
+					v-if="retentionMode === 'days'"
+					v-model.number="retentionDays"
+					type="number"
+					min="1"
+					max="3650"
+					style="max-width: 120px; margin-left: 28px" />
+				<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+					<input v-model="retentionMode" type="radio" value="zero" />
+					{{ t('organizer.setup.overview.retention.zero') }}
+				</label>
+				<span class="cz-muted" style="font-size: 0.78rem">
+					{{ t('organizer.setup.overview.retention.zeroHelp') }}
+				</span>
+			</div>
 			<div class="cz-row" style="justify-content: flex-end; margin-top: 8px">
 				<CzButton variant="tertiary" @click="emit('cancel')">{{ t('organizer.shell.assemblyWizard.cancel') }}</CzButton>
 				<CzButton variant="primary" :disabled="!basicsValid" @click="step = 2">{{ t('organizer.shell.assemblyWizard.continue') }}</CzButton>
@@ -210,7 +240,10 @@ async function submit(): Promise<void> {
 					</div>
 					<div class="cz-field" style="max-width: 180px">
 						<label>{{ t('organizer.shell.assemblyWizard.duration') }}</label>
-						<input v-model.number="round.duration_minutes" type="number" min="1" max="600" />
+						<input v-model.number="round.duration_minutes" type="number" min="0" max="600" />
+						<span v-if="round.duration_minutes === 0" class="cz-muted" style="font-size: 0.78rem">
+							{{ t('organizer.setup.overview.rounds.noPlannedTime') }}
+						</span>
 					</div>
 				</div>
 				<div class="cz-field" style="margin-bottom: 0">

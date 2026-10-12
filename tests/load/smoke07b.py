@@ -4,7 +4,9 @@
 Consent (shared phone and own phone, refusal → moved, two boxes, quotations
 withheld), messages, help, guards' peek, event kit, participant page, the
 facilitator's phone, the AI assistant's switches, New table only in a
-Session, "Sessione N" headings — and, unless --no-captions, a three-minute
+Session, "Sessione N" headings, Block 2 (Record now without a planned time,
+the same phone on a spent code, the organizer's Finish and the late audio
+after it, change language, rename, zero retention) — and, unless --no-captions, a three-minute
 two-phone segment on the configured live engine with a caption takeover.
 
 Organizer routes: signed with the ExApp secret straight at the container.
@@ -171,6 +173,7 @@ parser.add_argument("--no-captions", action="store_true", help="skip the three-m
 ARGS = parser.parse_args()
 aid = None
 caid = None
+extra_ids: list[str] = []
 try:
     # 1. an organized assembly, consent required (as the wizard sends it)
     code, created = org("POST", "/api/v1/assemblies", {
@@ -413,6 +416,84 @@ try:
     code, files = org("GET", f"/api/v1/assemblies/{aid}/files")
     ok("files listing carries the coverage field", code == 200 and all("coverage" in e for r in files["rounds"] for e in r["tables"]), str(code))
 
+    # 9b. Block 2: Record now without a planned time, the same phone on a spent
+    #     code, the organizer's Finish and the audio that comes after it,
+    #     change language, rename, zero retention
+    code, rn = org("POST", "/api/v1/sessions/record-now", {"language": "it"})
+    ok("Record now created", code == 201, str(code))
+    extra_ids.append(rn["container_id"])
+    code, rn_detail = org("GET", f"/api/v1/sessions/{rn['session_id']}")
+    ok("Record now has no planned time (duration 0)", code == 200 and rn_detail["duration_minutes"] == 0, json.dumps(rn_detail.get("duration_minutes")))
+    code, pp = phone("POST", "/api/v1/public/join", {"token": tok(rn["recorder_url"]), "device_id": "smoke-phone-p-00000001"})
+    ok("phone P joins Record now with a device id; the status says duration 0", code == 200 and pp["rounds"][0]["duration_minutes"] == 0, str(code))
+    tP = pp["session_token"]
+    code, card_p = phone("POST", "/api/v1/public/recorder/capabilities", {"purpose": "ADD_RECORDER_TO_TABLE"}, token=tP)
+    code, pq = phone("POST", "/api/v1/public/join", {"token": tok(card_p["url"]), "device_id": "smoke-phone-q-00000001"})
+    ok("phone Q spends the add-recorder code", code == 200 and pq["joined"]["slot"] == 2, str(code))
+    code, pq2 = phone("POST", "/api/v1/public/join", {"token": tok(card_p["url"]), "device_id": "smoke-phone-q-00000001"})
+    ok("the same phone scans it again: its session comes back, fresh bearer", code == 200 and pq2["joined"]["slot"] == 2 and pq2["session_token"] != pq["session_token"], str(code))
+    code, _ = phone("POST", "/api/v1/public/join", {"token": tok(card_p["url"]), "device_id": "smoke-phone-x-00000001"})
+    ok("another phone still gets 410", code == 410, str(code))
+    code, _ = phone("GET", "/api/v1/public/recorder/status", token=pq["session_token"])
+    ok("Q's old bearer is gone", code == 401, str(code))
+    late_chunks = phone_chunks(1)[:3]
+    code, rp = phone("POST", "/api/v1/public/recorder/start", {"round_id": rn["session_id"], "mime_type": "audio/webm;codecs=opus"}, token=tP)
+    ok("P records", code == 201, str(code))
+    for seq in range(2):
+        c, _ = phone_raw(f"/api/v1/public/recorder/recordings/{rp['recording_id']}/chunks/{seq}", late_chunks[seq], tP)
+        ok(f"P's chunk {seq} accepted", c == 200, str(c))
+    code, refused = org("POST", f"/api/v1/assemblies/{rn['container_id']}/language", {"language": "en"})
+    ok("change language refused while the session records (SESSION_ACTIVE)", code == 409 and "SESSION_ACTIVE" in str(refused.get("detail")), json.dumps(refused))
+    code, fin = org("POST", f"/api/v1/recordings/{rp['recording_id']}/finish")
+    ok("organizer asks P to finish", code == 200 and fin["finish_requested_at"], json.dumps(fin))
+    code, stP = phone("GET", "/api/v1/public/recorder/status", token=tP)
+    ok("P's status carries the finish request", (stP.get("recording_notice") or {}).get("finish_requested") is True, json.dumps(stP.get("recording_notice")))
+    closed_by, waited = None, time.monotonic()
+    while time.monotonic() - waited < 240 and closed_by != "organizer":
+        time.sleep(10)
+        code, monp = org("GET", f"/api/v1/rounds/{rn['session_id']}/monitor")
+        recs = [r.get("recording") or {} for t in monp.get("tables", []) for r in t.get("recorders", [])]
+        closed_by = next((r.get("closed_by") for r in recs if r.get("closed_by")), None)
+    ok(f"P never answered: the sweep finished the recording server-side ({round(time.monotonic() - waited)} s)", closed_by == "organizer", json.dumps(recs)[:200])
+    c, late = phone_raw(f"/api/v1/public/recorder/recordings/{rp['recording_id']}/chunks/2", late_chunks[2], tP)
+    ok("P's late chunk is accepted under the old id, into the continuation", c == 200 and late.get("sequence_number") == 1, json.dumps(late))
+    code, done = phone("POST", f"/api/v1/public/recorder/recordings/{rp['recording_id']}/complete", {"total_chunks": 3}, token=tP)
+    ok("P completes with its own total", code == 200 and done["missing_sequences"] == [], json.dumps(done))
+    stat, waited = {}, time.monotonic()
+    while time.monotonic() - waited < 90 and stat.get("state") not in ("AUDIO_READY", "TRANSCRIBING", "TRANSCRIBED", "READY_FOR_REVIEW", "AUDIO_INVALID", "UPLOAD_INCOMPLETE"):
+        time.sleep(3)
+        code, stat = phone("GET", f"/api/v1/public/recorder/recordings/{rp['recording_id']}", token=tP)
+    manifest = "".join(f"{i}:{len(c)}:{hashlib.sha256(c).hexdigest()}\n" for i, c in enumerate(late_chunks))
+    ok("P verifies the whole stream it sent: 3 chunks, the manifest it would compute, audio available",
+       stat.get("total_chunks") == 3 and stat.get("audio_manifest_sha256") == hashlib.sha256(manifest.encode()).hexdigest() and stat.get("audio_available") is True and stat.get("continued_by"),
+       json.dumps({k: stat.get(k) for k in ("state", "total_chunks", "received_chunks", "audio_available")}))
+    code, rn_files = org("GET", f"/api/v1/assemblies/{rn['container_id']}/files")
+    rows = [e for r in rn_files["rounds"] for e in r["tables"]]
+    ok("Files: the closed recording says organizer, the continuation says what it is", any(e.get("closed_by") == "organizer" for e in rows) and any(e.get("continued_from_id") for e in rows), json.dumps([(e.get("closed_by"), bool(e.get("continued_from_id"))) for e in rows]))
+    code, another = phone("POST", "/api/v1/public/recorder/sessions", {"round_id": rn["session_id"]}, token=tP)
+    ok("P records another session: a new one, no planned time", code == 201 and "#/join/" in another["recorder_url"], str(code))
+    extra_ids.append(another["container_id"])
+    code, renamed = org("PUT", f"/api/v1/assemblies/{rn['container_id']}", {"name": "SMOKE renamed"})
+    ok("rename from the header", code == 200 and renamed["name"] == "SMOKE renamed", str(code))
+    code, zr = org("PUT", f"/api/v1/assemblies/{rn['container_id']}", {"zero_retention": True})
+    ok("zero retention ticked", code == 200 and zr["zero_retention"] is True, str(code))
+    code, closed = org("POST", f"/api/v1/assemblies/{rn['container_id']}/close")
+    ok("Record now closed", code == 200, str(code))
+    done_at, waited = None, time.monotonic()
+    while time.monotonic() - waited < 300 and not done_at:
+        time.sleep(10)
+        code, zrd = org("GET", f"/api/v1/assemblies/{rn['container_id']}")
+        done_at = zrd.get("zero_retention_done_at")
+    ok(f"zero retention applied once processing ended ({round(time.monotonic() - waited)} s)", bool(done_at), json.dumps({"state": zrd.get("status")}))
+    code, pdf = org("GET", f"/api/v1/assemblies/{rn['container_id']}/report.pdf", raw=True)
+    ok("the retained PDF is served", code == 200 and pdf[:4] == b"%PDF", str(code))
+    code, zr_files = org("GET", f"/api/v1/assemblies/{rn['container_id']}/files")
+    ok("no audio left", all(not e.get("audio_available") for r in zr_files["rounds"] for e in r["tables"]), str(code))
+    code, _ = org("DELETE", f"/api/v1/assemblies/{rn['container_id']}/close")
+    ok("reopen refused after zero retention", code == 409, str(code))
+    code, lang = org("POST", f"/api/v1/assemblies/{aid}/language", {"language": "en"})
+    ok("change language on the closed smoke assembly re-queues its recordings", code == 200 and lang["queued"] >= 1 and lang["closed"] is True, json.dumps(lang))
+
     # 10. live captions on the configured engine: two phones, a takeover, lines after it
     if not ARGS.no_captions:
         code, settings_ = org("GET", "/api/v1/admin/providers", user=ADMIN)
@@ -466,5 +547,8 @@ finally:
     if caid:
         code, _ = org("DELETE", f"/api/v1/assemblies/{caid}")
         STEPS.append(f"{'PASS' if code == 204 else 'WARN'} cleanup: captions Session deleted ({code})")
+    for extra in extra_ids:
+        code, _ = org("DELETE", f"/api/v1/assemblies/{extra}")
+        STEPS.append(f"{'PASS' if code == 204 else 'WARN'} cleanup: Block 2 Session deleted ({code})")
     print("\n".join(STEPS))
 print("ALL PASS")

@@ -18,7 +18,14 @@ from pathlib import Path
 
 from sqlalchemy import func, or_, select
 
-from citizens.db.models import Assembly, Recording
+from citizens.db.models import (
+    Assembly,
+    FacilitatorSession,
+    ParticipantSession,
+    RecorderInvite,
+    RecorderSession,
+    Recording,
+)
 from citizens.db.models.base import utcnow
 from citizens.db.session import session_scope
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
@@ -375,6 +382,60 @@ def sweep_stale_exports() -> int:
     return removed
 
 
+#: expired phone sessions, facilitator and participant sessions and spent
+#: action codes are kept this long past their expiry — long enough for any
+#: audit question about an event, short enough that a busy instance does not
+#: carry every phone that ever scanned a code
+CLEANUP_AFTER_DAYS = 7
+
+
+def sweep_expired_sessions() -> int:
+    """Remove what expired more than CLEANUP_AFTER_DAYS ago and nothing
+    refers to any more (R24): recorder sessions that never recorded (a
+    session with a recording keeps the recording's provenance — its slot
+    label — and stays), their device logs, facilitator and participant
+    sessions, and single-use action codes whose sessions are gone."""
+    from citizens.config import get_settings
+    from citizens.storage.paths import device_log_path
+
+    cutoff = utcnow() - timedelta(days=CLEANUP_AFTER_DAYS)
+    removed = 0
+    log_ids: list[str] = []
+    with session_scope() as session:
+        recorded = select(Recording.recorder_session_id).where(
+            Recording.recorder_session_id.is_not(None)
+        )
+        for row in session.execute(
+            select(RecorderSession).where(
+                RecorderSession.expires_at < cutoff, RecorderSession.id.not_in(recorded)
+            )
+        ).scalars():
+            log_ids.append(row.id)
+            session.delete(row)
+            removed += 1
+        for model in (FacilitatorSession, ParticipantSession):
+            for row in session.execute(select(model).where(model.expires_at < cutoff)).scalars():
+                session.delete(row)
+                removed += 1
+        session.flush()
+        used = select(RecorderSession.invite_id)
+        for invite in session.execute(
+            select(RecorderInvite).where(
+                RecorderInvite.single_use.is_(True),
+                RecorderInvite.id.not_in(used),
+                or_(RecorderInvite.consumed_at < cutoff, RecorderInvite.expires_at < cutoff),
+            )
+        ).scalars():
+            session.delete(invite)
+            removed += 1
+    root = get_settings().app_persistent_storage
+    for session_id in log_ids:
+        device_log_path(root, session_id).unlink(missing_ok=True)
+    if removed:
+        log.info("expired_sessions_cleaned", removed=removed, device_logs=len(log_ids))
+    return removed
+
+
 def _zero_retention_sweep() -> int:
     from citizens.services import zero_retention
 
@@ -403,6 +464,7 @@ def run_sweeps() -> None:
         ("missed_enqueues", sweep_missed_enqueues),
         ("expired_audio", sweep_expired_audio),
         ("zero_retention", _zero_retention_sweep),
+        ("expired_sessions", sweep_expired_sessions),
         ("stale_exports", sweep_stale_exports),
         # the AI facilitator's minute: reads the snapshot, calls the model
         # with no transaction open, writes one short delivery

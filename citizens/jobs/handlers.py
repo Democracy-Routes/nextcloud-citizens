@@ -378,9 +378,9 @@ def handle_analyze_table(session: Session, payload: dict) -> None:
     session.commit()
     store = provider_config.default_store()
     try:
-        analysis_svc.analyze_table(
-            session, store, recording, keep_approved=bool(payload.get("keep_approved"))
-        )
+        # the keyword only when set: a late-audio re-run keeps approvals
+        extra = {"keep_approved": True} if payload.get("keep_approved") else {}
+        analysis_svc.analyze_table(session, store, recording, **extra)
     except AnalysisError as exc:
         _fail_recording(session, recording, "ANALYSIS_FAILED", exc)
         log.error("analysis_failed", recording_id=recording.id, permanent=exc.permanent)

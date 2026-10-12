@@ -32,7 +32,9 @@ recording, and for organizers who want a signature on paper.
   the "Person 1 / Person 2" labelling, and lets a whole table decline.
 - Fill the retention field with the value actually set on the assembly
   (Settings, or the assembly's own override) — the phone shows the same
-  number.
+  number. If the assembly is set to **zero retention**, use the alternate
+  "How long" sentence given after each language's version below instead —
+  the phone's own notice does the same.
 - If anyone does not tick the first box, seat them at a table that is not
   recorded, or leave that table's phone on the declined screen. The second
   box is optional and ticked by default; leaving it unticked (or crossing it
@@ -96,6 +98,12 @@ France); [hosting provider]. No transfer outside the EU [confirm].
 **How long.** Audio: deleted [90] days after the assembly closes. Transcript,
 summaries and report: kept for [duration / until date] as the record of the
 assembly. Participant list: [duration].
+
+*For an assembly set to zero retention, use this sentence instead:*
+**How long.** The audio recording and the transcript are deleted as soon as
+the assembly is closed and its report is written. Only the report —
+summaries and quotations — is kept as the record of the assembly, together
+with the participant list.
 
 **Your rights.** Access, rectification, erasure, restriction, portability,
 objection, and **withdrawal of consent at any time** (it does not affect
@@ -181,6 +189,13 @@ trasferimento al di fuori dell'UE [verificare].
 dell'assemblea. Trascrizione, sintesi e rapporto: conservati per [durata /
 fino al] come documentazione dell'assemblea. Elenco dei partecipanti:
 [durata].
+
+*Per un'assemblea impostata su cancellazione totale, usa questa frase al suo
+posto:*
+**Per quanto tempo.** La registrazione audio e la trascrizione vengono
+cancellate non appena l'assemblea viene chiusa e il rapporto è scritto. Solo
+il rapporto — sintesi e citazioni — è conservato come documentazione
+dell'assemblea, insieme all'elenco dei partecipanti.
 
 **I tuoi diritti.** Accesso, rettifica, cancellazione, limitazione,
 portabilità, opposizione e **revoca del consenso in qualsiasi momento**

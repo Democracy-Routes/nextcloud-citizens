@@ -18,13 +18,14 @@ import {
 	mdiFileDocumentOutline,
 	mdiFolderMusicOutline,
 	mdiMonitorEye,
+	mdiPencilOutline,
 	mdiPlayCircleOutline,
 	mdiQrcode,
 	mdiTableFurniture,
 	mdiTimelineClockOutline,
 	mdiViewDashboardOutline,
 } from '@mdi/js'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import type { AssemblyDetail, InviteGenerated } from '../types'
@@ -38,6 +39,7 @@ import QrTab from './QrTab.vue'
 import RoundsTab from './RoundsTab.vue'
 import TablesTab from './TablesTab.vue'
 import MonitorTab from './MonitorTab.vue'
+import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzTabs from './ui/CzTabs.vue'
 import { panelId, tabId, type TabItem } from './ui/tabs'
@@ -136,6 +138,39 @@ async function reload(): Promise<void> {
 
 onMounted(reload)
 
+/** Click-to-edit the name (S9): the header shows nothing else worth a whole
+ * edit form for one field. */
+const renaming = ref(false)
+const renameDraft = ref('')
+const renameInputEl = ref<HTMLInputElement | null>(null)
+
+async function startRename(): Promise<void> {
+	if (!assembly.value) return
+	renameDraft.value = assembly.value.name
+	renaming.value = true
+	await nextTick()
+	renameInputEl.value?.focus()
+}
+
+function cancelRename(): void {
+	renaming.value = false
+}
+
+async function saveRename(): Promise<void> {
+	// guards a trailing blur fired by the input leaving the DOM after Enter
+	// or Escape already settled this — never a second save, or none at all
+	if (!renaming.value || !assembly.value) return
+	const name = renameDraft.value.trim()
+	renaming.value = false
+	if (!name || name === assembly.value.name) return
+	try {
+		await api.updateAssembly(assembly.value.id, { name })
+		await reload()
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+	}
+}
+
 async function deleteAssembly(): Promise<void> {
 	confirmDelete.value = false
 	try {
@@ -158,7 +193,28 @@ async function deleteAssembly(): Promise<void> {
 				<div style="min-width: 0">
 					<!-- a standalone Session is never presented as an assembly -->
 					<p v-if="assembly.kind === 'session'" class="cz-muted cz-eyebrow">{{ t('organizer.shell.detail.sessionEyebrow') }}</p>
-					<h2 style="overflow-wrap: anywhere">{{ assembly.name }}</h2>
+					<div class="cz-row" style="flex-wrap: nowrap; align-items: center; gap: 4px">
+						<h2 v-if="!renaming" style="overflow-wrap: anywhere; margin: 0">{{ assembly.name }}</h2>
+						<input
+							v-else
+							ref="renameInputEl"
+							v-model="renameDraft"
+							type="text"
+							maxlength="200"
+							data-test="rename-input"
+							style="font-size: 1.375rem; font-weight: 700; flex: 1; min-width: 80px; padding: 2px 6px"
+							@keyup.enter="saveRename"
+							@keyup.escape="cancelRename"
+							@blur="saveRename" />
+						<CzButton
+							v-if="!renaming"
+							variant="tertiary"
+							small
+							:icon="mdiPencilOutline"
+							data-test="rename"
+							:label="t('organizer.shell.detail.rename')"
+							@click="startRename" />
+					</div>
 					<p v-if="assembly.kind === 'session'" class="cz-muted" style="margin: 4px 0 0">
 						<template v-if="assembly.recording_mode === 'plenary'">{{ t('organizer.shell.detail.wholeRoom') }}</template>
 						<template v-else>{{ t('organizer.shell.detail.tableCount', { count: assembly.default_table_count }, assembly.default_table_count) }}</template> ·

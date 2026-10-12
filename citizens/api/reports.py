@@ -154,8 +154,26 @@ def generate_synthesis(assembly_id: str, user: CurrentUser, session: DB):
 
 @router.get("/assemblies/{assembly_id}/progress")
 def assembly_progress(assembly_id: str, user: CurrentUser, session: ReadDB):
+    from citizens.services import job_failures
+
     assembly = get_owned_assembly(session, assembly_id, user)
-    return lifecycle.assembly_progress(session, assembly)
+    # a synthesis or a session's cross-table analysis that failed used to
+    # fail silently: the Report tab just never changed (R25)
+    synthesis = job_failures.latest_job_failure(
+        session, "ANALYZE_ASSEMBLY", "assembly_id", assembly.id
+    )
+    rounds = {}
+    for round_ in assembly.rounds:
+        failure = job_failures.latest_job_failure(session, "ANALYZE_ROUND", "round_id", round_.id)
+        if failure and failure["state"] == "FAILED":
+            rounds[round_.id] = failure
+    return {
+        **lifecycle.assembly_progress(session, assembly),
+        "failures": {
+            "synthesis": synthesis if synthesis and synthesis["state"] == "FAILED" else None,
+            "rounds": rounds,
+        },
+    }
 
 
 @router.post("/assemblies/{assembly_id}/report/publish")

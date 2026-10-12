@@ -226,6 +226,16 @@ export interface JoinResult {
 	consent?: TableConsent
 }
 
+/** What starting a fresh standalone Session from a finished one's phone
+ * returns (R13 "Record another session"). */
+export interface RecordAnotherResult {
+	session_id: string
+	container_id: string
+	table_number: number
+	/** ends in #/join/<token>; followed exactly like any other QR code */
+	recorder_url: string
+}
+
 /** What the organizer said to this table and the phone has not shown yet. */
 export interface PhoneMessage {
 	id: number
@@ -486,7 +496,20 @@ export const recorderApi = {
 			`/api/v1/public/recorder/recordings/${recordingId}/chunks/${seq}/finalize`, {
 				token, headers: { 'X-Chunk-Segment': String(segment) },
 			}),
-	join: (token: string) => request<JoinResult>('POST', '/api/v1/public/join', { json: { token } }),
+	/** `deviceId`: this phone's own random id (R14) — a spent single-use code
+	 * scanned again by the same device returns the session instead of a 410. */
+	join: (token: string, deviceId?: string) =>
+		request<JoinResult>('POST', '/api/v1/public/join', { json: { token, device_id: deviceId } }),
+
+	/** From a finished standalone session's phone: start a brand-new
+	 * standalone Session, becoming its table 1 — "Record another session".
+	 * 409 when this is not a standalone independent Session, 404 for a
+	 * foreign round. */
+	recordAnother: (token: string, roundId: string) =>
+		request<RecordAnotherResult>('POST', '/api/v1/public/recorder/sessions', {
+			token,
+			json: { round_id: roundId },
+		}),
 
 	/** What a code would do if scanned, without scanning it — so the phone can
 	 * warn about an accident before a single-use code is spent. */

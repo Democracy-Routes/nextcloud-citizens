@@ -54,6 +54,26 @@ starts** — see "Consent" below.
   Individual assemblies can override the instance default.
 * Deletion runs from a periodic sweep, is audit-logged (assembly, policy,
   number of recordings, bytes freed), and never logs content.
+* **Zero retention (0.7): keep only the report.** A third choice, per
+  assembly, beside the instance default and a day count. Once the assembly is
+  **closed** and every transcription and analysis has actually finished, the
+  audio, every transcript and the live-caption files are deleted outright,
+  and a PDF of the frozen report is kept in their place — from then on the
+  report-PDF download serves that file rather than rendering a new one.
+  Nothing but the participant list and that PDF survives. **This cannot be
+  undone**: the assembly can never be reopened afterwards, because there is
+  no audio left to build anything from again. If the assembly was still being
+  transcribed or analysed at closing time, zero retention runs as soon as
+  that finishes, not necessarily the instant you close it.
+* **Audio that arrives after a recording has been closed is not lost
+  (0.7).** A recording the server finished on a phone's behalf — because the
+  phone sent nothing for five minutes, or because an organizer pressed
+  *Finish recording* on the Live tab and the phone never answered — still
+  accepts whatever that phone sends afterwards: it opens a new recording of
+  the same table and the same recorder, continuing the account, which is
+  transcribed and folded back into the table's analysis (keeping any findings
+  already approved). It is ordinary audio from there on, subject to
+  retention — including zero retention — like any other recording.
 * **Audio only.** Transcripts, findings and reports are the record of the
   assembly and are not touched by retention. Delete them explicitly from the
   Files tab of the assembly if you need to.
@@ -108,6 +128,20 @@ starts** — see "Consent" below.
     organizer.
 
   Each phone also offers the same thing to its own user at the end of a round.
+* **The device log is diagnostics, not a second recording.** Each phone ships
+  an event log of its own session (`logs/devices/`, in the table above); the
+  organizer's own report of it — `GET /api/v1/assemblies/{id}/device-report`,
+  the same thing `scripts/device-report.py` prints from the host — contains
+  event names and timestamps only: which browser, whether it held the
+  screen's wake lock, how many audio chunks it captured while the page was
+  hidden, where capture gapped. No audio and nothing spoken is in it, beyond
+  the browser's own user agent string.
+* **Sessions that never recorded, and spent single-use QR codes, are removed
+  a week after they expired (0.7).** A phone, facilitator or participant
+  session that expired without making a recording, and a single-use code
+  already spent, are deleted seven days after they expired — including that
+  phone's device log. A session that did make a recording is kept, because it
+  is that recording's record of which phone made it.
 * **Not implemented:** there is no automatic deletion of transcripts or
   findings, and no data-subject-request tooling. Both are manual today.
 

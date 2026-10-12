@@ -236,6 +236,13 @@ Choosing a self-hosted endpoint keeps transcripts on your own infrastructure.
 **Additional analysis instructions** apply to every assembly on the instance;
 each assembly can add its own instructions on top (topic context, glossary).
 
+Two limits keep one table's analysis affordable: a finding cites at most six
+quotations, and a table transcript longer than roughly 180,000 characters is
+cut for the analysis prompt — the start of the discussion is kept, the rest
+is noted as cut, and the server log says how much was left out. Long enough
+for several hours of one table talking; it only bites a very long Record-now
+session.
+
 API keys are stored in Nextcloud's app configuration marked *sensitive*. They
 are never sent to browsers, never written to logs, and never reach the phones.
 
@@ -308,12 +315,45 @@ built from live captions is marked `live` in the same list, so it is clear which
 tables are worth redoing. Quotes inside existing findings referred to the old
 text, so they are marked as removed rather than left pointing at nothing.
 
+**Device report.** Each phone keeps an event log of its own session —
+browser, whether it held the wake lock, how many chunks it captured while
+hidden, any gap in capture. `GET /api/v1/assemblies/{id}/device-report`
+(through the proxy, signed in as the assembly's organizer; JSON by default,
+`?format=text` for the same analysis as plain text) answers "does this phone
+record properly with the screen off" without needing shell access to the
+server — the same analysis `scripts/device-report.py` prints from the host
+(used in the phone rehearsal, [event-checklist.md](event-checklist.md)), both
+built on `citizens/services/device_report.py`. It never contains audio —
+only event names, timestamps and the phone's user agent.
+
 **Automatic retention.** Settings → General sets how many days after an assembly
 is **closed** its audio is deleted; `0` keeps it indefinitely, and an individual
 assembly can override the instance default. Deletion runs from a periodic sweep
 and is audit-logged. It removes **audio only** — transcripts, findings and
 reports are the record of the assembly and are never touched by retention.
 Deleting those is still manual, from the Files tab.
+
+**Zero retention (0.7).** A third choice on the same Overview control, and in
+the assembly-creation wizard, beside the instance default and a day count:
+*Zero retention — keep only the report*. Once the assembly is **closed** and
+every transcription and analysis has finished, the audio, every transcript
+and the live-caption files are all deleted, and a PDF of the frozen report is
+kept in their place — from then on **Report → report.pdf** serves that
+file instead of rendering one. This is irreversible: the Overview tab shows
+when it ran ("Zero retention applied on …") instead of the retention
+controls, and the assembly can never be reopened (it answers
+`ZERO_RETENTION_APPLIED`). Choose it only for an assembly where the report
+really is the only thing worth keeping afterwards — a throwaway rehearsal, or
+an organisation that does not want to hold recorded speech any longer than it
+has to.
+
+**Housekeeping.** Phone, facilitator and participant sessions that never
+amounted to a recording, and single-use QR codes already spent, are removed a
+week after they expired — long enough to still answer an audit question about
+the event, short enough that a busy instance does not carry every phone that
+ever scanned a code. A recorder session that made a recording is kept for
+good, since it is that recording's provenance. Nothing to configure; it runs
+with the other periodic sweeps.
 
 ## 6. Backups
 
@@ -355,7 +395,87 @@ an older version upgrades itself. Ownership is repaired at start as well — the
 entrypoint hands the volume to the service user (uid 10001) if a restore left
 it owned by root.
 
-## 7. Troubleshooting
+## 7. Upgrading
+
+Migrations run automatically, forward only, at every startup
+(`citizens/db/migrate.py`, called from `main.py` on every boot): the
+container upgrades its database to `head` before it answers requests. There
+is no automatic downgrade — rolling back the schema is a deliberate, by-hand
+step (below).
+
+**0.7 Block 2** adds two migrations: `0037` (on `recordings` — `closed_by`,
+`finish_requested_at`, `audio_added_at`, `continued_from_id`,
+`continued_by_id`, `late_seq_shift`, `late_header_chunks`; on
+`recorder_sessions` — `device_id`) and `0038` (on `assemblies` —
+`zero_retention`, `zero_retention_done_at`). Both are additive and nullable
+or default-valued, so upgrading never touches existing rows.
+
+**Updating another instance.** The same steps as a fresh install (§ 2), run
+again against the new tag:
+
+1. Back up first: `scripts/backup-citizens-data.sh` — see § 6.
+2. AppAPI-managed install: re-run
+   `occ app_api:app:register citizens <daemon> --wait-finish --info-xml <url
+   to the new tag's info.xml>`. AppAPI pulls the new image, replaces the
+   container, and the container's own startup runs the migrations — there is
+   no separate migration step to remember.
+   Hand-run install: pull the new commit/tag and run `scripts/event-up.sh`
+   again (it refuses a dirty checkout: commit or stash first).
+3. Confirm: `occ app_api:app:list` shows the new version, and
+   `GET /api/v1/health` reports a healthy database.
+
+**Rolling back.** Re-register (AppAPI-managed) or check out (hand-run) the
+*previous* tag's `info.xml`/commit the same way, then downgrade the schema to
+match it — `alembic downgrade 0036` undoes both `0037` and `0038` in one call.
+The app itself never runs a downgrade, so do it by invoking Alembic directly
+against the volume, the same way `migrate.py` does, with the *old* image (it
+carries the matching migration scripts):
+
+```
+docker run --rm -v <data-volume>:/data --entrypoint python3 \
+  ghcr.io/democracy-routes/citizens:<previous-version> -c "
+from alembic import command
+from alembic.config import Config
+cfg = Config()
+cfg.set_main_option('script_location', 'citizens/db/migrations')
+cfg.set_main_option('sqlalchemy.url', 'sqlite:////data/citizens.db')
+command.downgrade(cfg, '0036')"
+```
+
+Then start the old image. Going forward again later just means starting the
+new image once more — its own startup runs `upgrade head` by itself.
+
+**Rehearse the restore, including the schema round-trip**, before you need
+it for real — not just the restore itself (§ 6), but that a downgrade and a
+re-upgrade leave the data alone:
+
+```
+# ...restore the backup into citizens_restore as in § 6, then:
+docker run --rm -v citizens_restore:/data --entrypoint python3 \
+  ghcr.io/democracy-routes/citizens:<version> -c "
+from alembic import command; from alembic.config import Config
+cfg = Config()
+cfg.set_main_option('script_location', 'citizens/db/migrations')
+cfg.set_main_option('sqlalchemy.url', 'sqlite:////data/citizens.db')
+command.downgrade(cfg, '0036')
+command.upgrade(cfg, 'head')"
+sqlite3 "file:$(docker volume inspect citizens_restore --format '{{.Mountpoint}}')/citizens.db?mode=ro" \
+  'select count(*) from assemblies; select count(*) from recordings'
+```
+
+Compare the row counts against the same query run before the round-trip —
+they must be identical. A backup and a migration path nobody has exercised
+together are each only half rehearsed.
+
+**Testing before a freeze.** `scripts/pytest-chunks.sh` runs the whole Python
+suite across six containers at once, against an rsynced snapshot of the tree
+(`/tmp/citizens-pytest-snapshot` by default, so editing the checkout mid-run
+is safe; `LIVE=1` runs against the live tree instead): `sh
+scripts/pytest-chunks.sh` runs all six chunks, `sh scripts/pytest-chunks.sh 3
+5` runs just those two. Useful to get a full, fast green run before cutting
+the release commit in [event-checklist.md](event-checklist.md).
+
+## 8. Troubleshooting
 
 **The app is not in the top menu.** Check External Apps shows it enabled, then
 look at the container logs — the app logs `missing_environment` if AppAPI did
@@ -392,16 +512,37 @@ and press **Hand over table** on that table. The recording so far is finished
 and transcribed — usually most of the round — and the table carries on by
 scanning the same QR code on any phone. If nobody presses it, a replacement
 phone is let in automatically after two minutes of silence; in that case the
-first recording is left open, so a phone that was merely offline rather than
-dead can still upload what it recorded while disconnected.
+first recording is left open — and since 0.7 Block 2 it no longer just sits
+there: if it then goes quiet too, the five-minute silent close below finishes
+it and transcribes what it has, rather than leaving it open indefinitely.
 
-**A table's phone died and nobody replaced it.** After twenty minutes of
-silence the recording shows UPLOAD_INCOMPLETE with "upload timed out"; the
-audio that reached the server is on disk. Thirty minutes later it is
-assembled and transcribed by itself. To not wait, press **Retry** on that
-table (Live tab, next to Hand over table, or Files tab): it assembles the
-contiguous part that arrived. `scripts/event-status.sh` lists such
-recordings under "needs a decision".
+**A table's phone died and nobody replaced it.** Since 0.7 Block 2 this
+resolves in five minutes, not twenty — see the next entry. What's left of the
+old twenty-minute path is narrower: it is for a recording that has already
+left RECORDING (a phone's own Finish, or the server's, is in progress) and
+then stalls **mid-upload**, with its last chunks never arriving. After twenty
+minutes of no progress it shows UPLOAD_INCOMPLETE with "upload timed out";
+the audio that did reach the server is on disk, and thirty minutes later it
+is assembled and transcribed by itself regardless. To not wait, press
+**Retry** on that table (Live tab, next to Hand over table, or Files tab): it
+assembles the contiguous part that arrived. `scripts/event-status.sh` lists
+such recordings under "needs a decision".
+
+**A table went quiet and its recording finished by itself — or I finished
+it from the Live tab, and the phone was still recording.** Two things end a
+recording without the phone's own Finish (0.7): five minutes with no chunk
+from that phone at all — the Live tab says *Finished by the server after 5
+minutes of silence*, the Files tab *finished by the server after 5 min of
+silence* — or pressing **Finish recording** next to that recorder on the
+Live tab, which asks the phone first and only finishes it server-side after
+ninety seconds of no answer (*finished from the Live tab*). Either way the
+audio already received becomes a transcript now, rather than waiting on a
+phone that may never come back. If that phone keeps recording afterwards —
+it has no way to know its recording was closed — nothing it sends is lost:
+the next chunk opens a new recording of the same table and slot (Live tab:
+*Audio that arrived after the close, kept*; Files tab: *audio added at
+HH:MM*), which is transcribed and folds back into the table's analysis,
+keeping whatever findings you had already approved.
 
 **A table's phone lost the microphone mid-round — the screen went off, a
 call came in — and the round was still going.** Nothing to do. The phone
@@ -441,11 +582,26 @@ someone mid-read. Press **Update the published version** on the Report tab to
 push the current content. The same applies after renaming an assembly: the name
 inside the frozen report changes only when you update it.
 
-**The assembly name or language is wrong.** Both are on the Overview tab under
-*Assembly details*. The language locks once any table has recorded, because it
-decides how audio is transcribed and which model is used — changing it then
-would leave one assembly with transcripts in two languages. Fix it before the
-first round, or create the assembly again.
+**The assembly or session name is wrong.** Click the pencil beside the name in
+its own header and type the new one; Enter or clicking away saves it, Escape
+cancels. Works the same for a standalone Session.
+
+**The language is wrong, even though recording has already begun (0.7).**
+The Overview tab's language select stays open the whole time now. Choosing a
+different language once a table has recorded asks you to confirm — *every
+recording with audio is transcribed again in it*, and the findings and the
+report follow — rather than locking the field as before. It is refused while
+a session is being recorded (finish it first) and, once zero retention has
+run, refused for good: there is no audio left to transcribe again. Choosing a
+language by hand always turns off automatic detection.
+
+**A Record-now session came out in the wrong language.** Record-now detects
+the spoken language from the first final transcript; when the speech engine
+names none itself (seen with Mistral), the analysis model reads the first
+1,500 characters of that transcript and decides instead. Detection only runs
+once, before the assembly has any transcript — every later table in the same
+assembly follows whatever language that first one settled on, live captions
+included.
 
 **A round ran past its time.** The Live tab counts up once the planned time
 has passed and offers to end the round after a minute, with **Extend 5 min** and
@@ -458,6 +614,19 @@ tab, so with that tab closed nothing ends by itself.
 shows how long each table has been recording, and highlights any table that
 started more than a minute after the earliest one — usually a table that armed
 late or whose phone was replaced.
+
+**A Record-now session shows no countdown and never offers to end.** By
+design (0.7): Record-now has no planned time, so neither the Live tab nor the
+phone counts down or finishes it automatically — the table finishes when the
+people at it are done and press Finish. Its done screen then offers **Record
+another session**: a fresh standalone session on the same phone, started the
+same way. A single-use code scanned again by the phone that already used it
+(same browser, same device) returns that phone to its existing session
+instead of "This code has already been used" — a different phone scanning the
+same spent code still gets that error. And once its first table is analysed,
+a Record-now session nobody named gets a short title from the AI based on
+what was actually said, so the sidebar reads that instead of the default
+"Recording 2026-10-15 09:12 UTC"-style name.
 
 **Reviewing findings one at a time is slow.** The Analysis tab has filters for
 review status and finding type, and **Approve N draft(s)** approves everything
@@ -473,6 +642,13 @@ regenerated automatically every time another table finishes its analysis, so
 review those after the last table has come in, not while tables are still
 arriving. A re-run that comes back with no findings for a table that had some
 is refused and the previous findings are kept; the table's failure note says so.
+
+**A synthesis or a session's cross-table analysis failed and nothing on
+screen says why.** `GET /api/v1/assemblies/{id}/progress` carries a
+`failures` block — the synthesis job's state and error, and the same for any
+session's cross-table analysis — so a failed AI call need not be chased
+through the container logs. Re-run it the same way as any other failed
+analysis once the cause (a rejected key, a model that refused) is fixed.
 
 **A table shows "low battery".** Only Chromium reports this, so a table showing
 nothing is unknown rather than fine. Swap the phone between rounds; a phone

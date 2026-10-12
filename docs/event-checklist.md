@@ -17,6 +17,48 @@ software's own failure modes are ones you have already watched happen in a
 dress round, not ones you meet for the first time with fifty citizens in the
 room.
 
+## After the deploy of 0.7 Block 2 (once, ~15 minutes)
+
+Run this once against an instance you have just upgraded to a build carrying
+Block 2 (auto-close by silence, Finish from the Live tab, language change
+after recording, zero retention), before trusting it with a real event. On a
+throwaway assembly, deleted when done — not the "This week" rehearsal below,
+which is about a specific event.
+
+- [ ] **Record now, no countdown.** Home → Record now. Confirm neither the
+  phone nor the Live tab shows a countdown or finishes it for you — only
+  Finish ends it. On the done screen, tap **Record another session** and
+  confirm a fresh session starts the same way, on the same phone.
+- [ ] **Same-device resume.** Join a table with a single-use code (Add
+  recorder, Add new Table, or a registration link), then reload that phone's
+  page and scan the exact same code again, on the same phone. It returns to
+  the session it already joined rather than "This code has already been
+  used" — scanning the same code from a different phone still gets that
+  error.
+- [ ] **Silence auto-close and late audio.** Start a recording, then put that
+  phone to sleep (or airplane mode) for just over five minutes. The Live tab
+  should show *Finished by the server after 5 minutes of silence* and the
+  Files tab *finished by the server after 5 min of silence*. Wake the phone
+  and let it keep recording: the Live tab should show *Audio that arrived
+  after the close, kept*, the Files tab a second recording for the table with
+  *audio added at HH:MM*, and that second recording should transcribe and the
+  table's analysis should run again.
+- [ ] **Finish from the Live tab.** While a table is recording, press
+  **Finish recording** next to its recorder. On a phone that is actually
+  listening, it finishes within a few seconds by itself; on a phone you
+  deliberately leave unresponsive, confirm the server finishes it instead,
+  about ninety seconds later.
+- [ ] **Changing the language.** While a session is recording, try to change
+  the assembly's language on the Overview tab and confirm it is refused.
+  Finish the session, change the language, confirm you are asked to confirm
+  the retranscription first, and that the table's recording is transcribed
+  again afterwards.
+- [ ] **Zero retention.** Create a throwaway assembly with *Zero retention:
+  keep only the report*, record a short table on it, close the assembly, and
+  wait for processing to finish. Confirm `report.pdf` is still served once the
+  audio is gone, and that reopening the assembly is refused. Delete the
+  assembly when done.
+
 ## This week, before the day
 
 - [ ] **Settings is configured and *proven*.** Citizens → Settings: the STT

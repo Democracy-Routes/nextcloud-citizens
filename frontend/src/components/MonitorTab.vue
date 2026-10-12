@@ -230,6 +230,8 @@ const autoEndCancelled = ref(false)
 /** Seconds until the round's planned end. Negative once it has overrun. */
 const secondsLeft = computed(() => {
 	if (!monitor.value || monitor.value.status !== 'ACTIVE' || !monitor.value.started_at) return null
+	// no planned time: there is no end to count down to, and never an overrun
+	if (monitor.value.duration_minutes === 0) return null
 	const endAt =
 		new Date(monitor.value.started_at).getTime() +
 		(monitor.value.duration_minutes + extraMinutes.value) * 60_000
@@ -320,6 +322,7 @@ watch(roundId, () => {
 
 const progress = computed(() => {
 	if (!monitor.value || monitor.value.status !== 'ACTIVE' || !monitor.value.started_at) return 0
+	if (monitor.value.duration_minutes === 0) return 0
 	const total = (monitor.value.duration_minutes + extraMinutes.value) * 60_000
 	const elapsed = now.value - new Date(monitor.value.started_at).getTime()
 	return Math.min(100, Math.max(0, (elapsed / total) * 100))
@@ -916,14 +919,19 @@ function pendingChunks(table: MonitorTable): number {
 					style="text-transform: none">
 					{{ t('organizer.live.monitor.countbar.tablesReady', { ready: monitor.tables_ready, total: monitor.tables_total }) }}
 				</span>
-				<div class="cz-countbar__track">
-					<div class="cz-countbar__fill" :style="{ width: progress + '%' }"></div>
-				</div>
-				<span
-					v-if="remaining"
-					class="cz-countbar__time"
-					:class="{ 'cz-drifted': overrunning }">
-					{{ remaining }}
+				<template v-if="monitor.duration_minutes > 0">
+					<div class="cz-countbar__track">
+						<div class="cz-countbar__fill" :style="{ width: progress + '%' }"></div>
+					</div>
+					<span
+						v-if="remaining"
+						class="cz-countbar__time"
+						:class="{ 'cz-drifted': overrunning }">
+						{{ remaining }}
+					</span>
+				</template>
+				<span v-else class="cz-muted" style="font-size: 0.8125rem">
+					{{ t('organizer.setup.overview.rounds.noPlannedTime') }}
 				</span>
 				<template v-if="monitor.recording_mode !== 'independent'">
 					<!-- time is up: end it on time, but let the facilitator take the

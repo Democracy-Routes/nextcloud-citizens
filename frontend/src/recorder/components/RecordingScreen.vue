@@ -455,9 +455,12 @@ onMounted(async () => {
 	clockTimer = window.setInterval(() => {
 		now.value = Date.now()
 		// independent tables run on the round's planned time: when it elapses,
-		// finish automatically (with the same cancellable grace countdown)
+		// finish automatically (with the same cancellable grace countdown).
+		// duration_minutes === 0 means no planned time at all: never finish
+		// this one by itself.
 		if (
 			!orchestrated &&
+			props.round.duration_minutes > 0 &&
 			state.phase === 'recording' &&
 			!keepTalking.value &&
 			state.startedAt &&
@@ -680,6 +683,29 @@ async function recheck(): Promise<void> {
 async function clearSynced(): Promise<void> {
 	const cleared = await clearSynchronizedRecordings(props.session.assembly.id)
 	clearedNote.value = t('recorder.recording.clearedNote', { count: cleared }, cleared)
+}
+
+const recordAnotherBusy = ref(false)
+const recordAnotherError = ref('')
+
+/** R13 "Record another session": a standalone independent Session only ever
+ * has this one round, so once it is finished the natural next step is a
+ * brand-new Session, not another round of this container. The new link is
+ * followed exactly like any QR code — see RecorderApp's own #/join/<token>
+ * handling — leaving this finished recording (already synced) untouched. */
+async function recordAnother(): Promise<void> {
+	if (recordAnotherBusy.value) return
+	recordAnotherBusy.value = true
+	recordAnotherError.value = ''
+	try {
+		const result = await recorderApi.recordAnother(props.session.session_token, props.round.id)
+		const match = result.recorder_url.match(/#\/join\/(.+)$/)
+		if (match) window.location.hash = `#/join/${match[1]}`
+	} catch (err) {
+		recordAnotherError.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		recordAnotherBusy.value = false
+	}
 }
 </script>
 
@@ -1094,6 +1120,9 @@ async function clearSynced(): Promise<void> {
 						{{ t('recorder.recording.resumedAfter', { seconds: interruptedSeconds }) }}
 					</p>
 					<p v-if="clearedNote" class="rc-muted">{{ clearedNote }}</p>
+					<p v-if="recordAnotherError" class="rc-alert" role="alert" data-test="record-another-error">
+						{{ recordAnotherError }}
+					</p>
 
 					<div
 						v-if="currentRoundOpen && orchestrated && !nextRound"
@@ -1115,7 +1144,11 @@ async function clearSynced(): Promise<void> {
 					</div>
 					<div v-else-if="nextRound" class="rc-card" style="text-align: left; margin-top: 20px">
 						<p class="rc-eyebrow" style="margin-bottom: 4px">
-							{{ t('recorder.recording.nextRound', { position: nextRound.position, minutes: nextRound.duration_minutes }) }}
+							{{
+								nextRound.duration_minutes > 0
+									? t('recorder.recording.nextRound', { position: nextRound.position, minutes: nextRound.duration_minutes })
+									: t('recorder.recording.noPlannedTime')
+							}}
 						</p>
 						<p class="rc-question" style="margin: 0">
 							{{ nextRound.question || nextRound.title }}
@@ -1166,6 +1199,16 @@ async function clearSynced(): Promise<void> {
 				</button>
 				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('viewReport')">
 					{{ t('recorder.armed.viewReport') }}
+				</button>
+				<!-- a standalone Record now session, finished: the next discussion
+				     is a brand-new one, not another round of this container -->
+				<button
+					v-if="session.assembly.kind === 'session' && session.assembly.recording_mode === 'independent'"
+					class="rc-btn rc-record"
+					data-test="record-another"
+					:disabled="recordAnotherBusy"
+					@click="recordAnother">
+					{{ t('recorder.recording.recordAnother') }}
 				</button>
 				<!-- only when the SERVER confirmed it: this deletes the copy that
 				     would otherwise be the last one -->

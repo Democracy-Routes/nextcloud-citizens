@@ -132,6 +132,39 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
     return {"state": recording.state}
 
 
+@router.get("/assemblies/{assembly_id}/device-report")
+def device_report(
+    assembly_id: str, user: CurrentUser, session: ReadDB,
+    format: Annotated[str, Query(pattern="^(json|text)$")] = "json",
+):
+    """What each phone's own log says about how it behaved (R17): browser,
+    wake lock, chunks captured while hidden, gaps, watchdog events — the
+    host script scripts/device-report.py, as the Files tab reads it."""
+    from fastapi.responses import PlainTextResponse
+
+    from citizens.services import device_report as report_svc
+    from citizens.services.table_recordings import slot_label
+
+    assembly = get_owned_assembly(session, assembly_id, user)
+    rows = session.execute(
+        select(RecorderSession)
+        .where(RecorderSession.assembly_id == assembly.id)
+        .order_by(RecorderSession.created_at.desc())
+    ).scalars()
+    sessions = [
+        {
+            "id": row.id, "table_number": row.table_number, "slot": row.slot,
+            "label": slot_label(row.slot), "assembly": assembly.name,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+    report = report_svc.report_for_sessions(get_settings().app_persistent_storage, sessions)
+    if format == "text":
+        return PlainTextResponse(report["text"] or "no phone has sent a log yet")
+    return report
+
+
 @router.post("/recordings/{recording_id}/finish")
 def finish_recording(recording_id: str, user: CurrentUser, session: DB):
     """Finish a table's recording from the Live tab.

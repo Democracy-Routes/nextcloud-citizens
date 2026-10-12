@@ -10,13 +10,16 @@ import {
 	mdiTableFurniture,
 	mdiTimelineClockOutline,
 } from '@mdi/js'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
+import { clockTime } from '../format'
 import type { AssemblyDetail, ConsentMode, Invite } from '../types'
 import CzButton from './ui/CzButton.vue'
+import CzConfirm from './ui/CzConfirm.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import SvgIcon from './ui/SvgIcon.vue'
+import { toast } from './ui/toast'
 
 const { t } = useI18n()
 
@@ -41,9 +44,12 @@ const draft = ref<{
 	redactNames: string
 	participantConsent: ConsentMode
 	aiFacilitator: 'default' | 'off' | 'light' | 'normal' | 'active'
+	retentionMode: 'default' | 'days' | 'zero'
+	retentionDays: number
 }>({
 	name: '', description: '', language: 'en', autoPurge: true, redactNames: '',
 	participantConsent: 'optional', aiFacilitator: 'default',
+	retentionMode: 'default', retentionDays: 30,
 })
 
 /** The languages an assembly can be held in: the code is the API value, the
@@ -70,9 +76,70 @@ function startEditDetails(): void {
 		redactNames: props.assembly.redact_names,
 		participantConsent: props.assembly.participant_consent ?? 'optional',
 		aiFacilitator: (props.assembly.ai_facilitator ?? 'default') as 'default' | 'off' | 'light' | 'normal' | 'active',
+		retentionMode: props.assembly.zero_retention
+			? 'zero'
+			: props.assembly.audio_retention_days != null
+				? 'days'
+				: 'default',
+		retentionDays: props.assembly.audio_retention_days ?? 30,
 	}
 	detailsError.value = ''
 	editingDetails.value = true
+}
+
+/** The language select stays enabled once recording has begun (S8), but a
+ * change there can no longer ride the general Save: the old PUT keeps
+ * refusing `language` once audio exists, and committing it re-transcribes
+ * every recording with audio. So a change is confirmed on its own, through
+ * the dedicated route, and the select is put back until it is. */
+const pendingLanguage = ref('')
+const confirmLanguageDialog = ref(false)
+const languageChanging = ref(false)
+
+async function onLanguageSelect(): Promise<void> {
+	if (!recordingHasBegun.value || draft.value.language === props.assembly.language) return
+	pendingLanguage.value = draft.value.language
+	// v-model's own <select> directive ignores a same-tick write-back while it
+	// is still applying the user's own change (it tracks this with a DOM flag
+	// cleared only on the next tick) — so the select would keep showing the
+	// picked language even once the ref is already put back. Waiting a tick
+	// lets that flag clear before the revert, so the browser actually follows.
+	await nextTick()
+	draft.value.language = props.assembly.language
+	detailsError.value = ''
+	confirmLanguageDialog.value = true
+}
+
+function cancelLanguageChange(): void {
+	confirmLanguageDialog.value = false
+	pendingLanguage.value = ''
+}
+
+async function confirmLanguageChangeNow(): Promise<void> {
+	confirmLanguageDialog.value = false
+	const language = pendingLanguage.value
+	languageChanging.value = true
+	try {
+		const result = await api.changeLanguage(props.assembly.id, language)
+		// the committed language, now that the server has it — the draft was
+		// put back to the old one until this resolved
+		draft.value.language = language
+		toast(
+			t(
+				'organizer.setup.overview.details.languageChanged',
+				{ count: result.queued, language: t(`organizer.setup.overview.languages.${language}`) },
+				result.queued,
+			),
+		)
+		emit('changed')
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		detailsError.value = message.includes('SESSION_ACTIVE')
+			? t('organizer.setup.overview.details.languageSessionActive')
+			: message
+	} finally {
+		languageChanging.value = false
+	}
 }
 
 async function saveDetails(): Promise<void> {
@@ -87,12 +154,22 @@ async function saveDetails(): Promise<void> {
 			participant_consent: draft.value.participantConsent,
 			ai_facilitator: draft.value.aiFacilitator,
 			// never sent once recording has begun, so a stale form cannot
-			// change it behind the guard
+			// change it behind the guard — by then a change goes through
+			// confirmLanguageChangeNow() instead, which the draft already reflects
 			...(recordingHasBegun.value ? {} : { language: draft.value.language }),
 			// a language chosen by hand ends Record now's detection
 			...(props.assembly.language_auto && draft.value.language !== props.assembly.language
 				? { language_auto: false }
 				: {}),
+			// zero retention is irreversible and never undone by this form, so
+			// audio_retention_days is left alone rather than resent — the
+			// assembly's own value stands until Settings' default changes it
+			...(draft.value.retentionMode === 'zero'
+				? { zero_retention: true }
+				: {
+						zero_retention: false,
+						audio_retention_days: draft.value.retentionMode === 'days' ? draft.value.retentionDays : null,
+					}),
 		})
 		editingDetails.value = false
 		emit('changed')
@@ -232,16 +309,17 @@ const nextStep = computed<NextStep | null>(() => {
 					<select
 						id="cz-assembly-language"
 						v-model="draft.language"
-						:disabled="recordingHasBegun">
+						:disabled="languageChanging"
+						@change="onLanguageSelect">
 						<option v-for="code in LANGUAGES" :key="code" :value="code">
 							{{ t(`organizer.setup.overview.languages.${code}`) }}
 						</option>
 					</select>
-					<span v-if="assembly.language_auto && !recordingHasBegun" class="cz-muted" style="font-size: 0.78rem">
+					<span v-if="assembly.language_auto" class="cz-muted" style="font-size: 0.78rem">
 						{{ t('organizer.setup.overview.details.languageDetected') }}
 					</span>
 					<span v-if="recordingHasBegun" class="cz-muted" style="font-size: 0.78rem">
-						{{ t('organizer.setup.overview.details.languageLocked') }}
+						{{ t('organizer.setup.overview.details.languageRetranscribes') }}
 					</span>
 				</div>
 				<div class="cz-field">
@@ -252,6 +330,36 @@ const nextStep = computed<NextStep | null>(() => {
 					<span class="cz-muted" style="font-size: 0.78rem">
 						{{ t('organizer.setup.overview.details.autoPurgeHint') }}
 					</span>
+				</div>
+				<div class="cz-field" data-test="retention">
+					<label>{{ t('organizer.setup.overview.retention.label') }}</label>
+					<span v-if="assembly.zero_retention_done_at" class="cz-muted" style="font-size: 0.8125rem">
+						{{ t('organizer.setup.overview.retention.applied', { time: clockTime(assembly.zero_retention_done_at) }) }}
+					</span>
+					<template v-else>
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+							<input v-model="draft.retentionMode" type="radio" value="default" />
+							{{ t('organizer.setup.overview.retention.default') }}
+						</label>
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+							<input v-model="draft.retentionMode" type="radio" value="days" />
+							{{ t('organizer.setup.overview.retention.days', { days: draft.retentionDays }) }}
+						</label>
+						<input
+							v-if="draft.retentionMode === 'days'"
+							v-model.number="draft.retentionDays"
+							type="number"
+							min="1"
+							max="3650"
+							style="max-width: 120px; margin-left: 28px" />
+						<label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+							<input v-model="draft.retentionMode" type="radio" value="zero" />
+							{{ t('organizer.setup.overview.retention.zero') }}
+						</label>
+						<span class="cz-muted" style="font-size: 0.78rem">
+							{{ t('organizer.setup.overview.retention.zeroHelp') }}
+						</span>
+					</template>
 				</div>
 				<div class="cz-field">
 					<label>{{ t('organizer.setup.overview.details.consent') }}</label>
@@ -363,7 +471,13 @@ const nextStep = computed<NextStep | null>(() => {
 					</div>
 				</div>
 				<div class="cz-row" style="flex-wrap: nowrap">
-					<span class="cz-muted" style="font-size: 0.8125rem">{{ t('organizer.setup.overview.sessions.minutes', { minutes: round.duration_minutes }) }}</span>
+					<span class="cz-muted" style="font-size: 0.8125rem">
+						{{
+							round.duration_minutes > 0
+								? t('organizer.setup.overview.sessions.minutes', { minutes: round.duration_minutes })
+								: t('organizer.setup.overview.rounds.noPlannedTime')
+						}}
+					</span>
 					<CzStatusPill :status="round.status" />
 				</div>
 			</div>
@@ -381,6 +495,14 @@ const nextStep = computed<NextStep | null>(() => {
 				{{ t('organizer.setup.overview.danger.delete') }}
 			</CzButton>
 		</div>
+
+		<CzConfirm
+			v-if="confirmLanguageDialog"
+			:title="t('organizer.setup.overview.details.languageChangeTitle')"
+			:message="t('organizer.setup.overview.details.languageChangeConfirm', { language: t(`organizer.setup.overview.languages.${pendingLanguage}`) })"
+			:confirm-label="t('organizer.setup.overview.details.languageChangeConfirmButton')"
+			@confirm="confirmLanguageChangeNow"
+			@cancel="cancelLanguageChange" />
 	</div>
 </template>
 

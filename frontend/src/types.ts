@@ -33,6 +33,14 @@ export interface Assembly {
 	language_auto?: boolean
 	/** the AI facilitator's level; 'default' (or null) follows Settings */
 	ai_facilitator?: 'default' | 'off' | 'light' | 'normal' | 'active' | null
+	/** null: the instance default; 0: keep indefinitely (0.7) */
+	audio_retention_days?: number | null
+	/** once closed and processed, audio and transcripts are deleted and only
+	 * the report PDF is kept — irreversible, and the assembly cannot reopen
+	 * (0.7); absent from a server older than 0.7 */
+	zero_retention?: boolean
+	/** when the zero-retention sweep ran, if it has; null before (0.7) */
+	zero_retention_done_at?: string | null
 	name: string
 	description: string
 	language: string
@@ -154,6 +162,7 @@ export interface AssemblyUpdate {
 	auto_purge_device_audio?: boolean
 	redact_names?: string
 	audio_retention_days?: number | null
+	zero_retention?: boolean
 	participant_consent?: ConsentMode
 	language_auto?: boolean
 	/** the AI facilitator's level; 'default' (or null) follows Settings */

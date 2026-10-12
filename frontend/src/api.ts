@@ -91,6 +91,9 @@ export const api = {
 		rounds: RoundIn[]
 		/** the organizer's wizard sends 'required'; the server defaults to 'optional' */
 		participant_consent?: 'required' | 'optional'
+		/** null: the instance default; 0: keep indefinitely */
+		audio_retention_days?: number | null
+		zero_retention?: boolean
 	}) => request<AssemblyCreated>('POST', '/api/v1/assemblies', data),
 	getAssembly: (id: string) => request<AssemblyDetail>('GET', `/api/v1/assemblies/${id}`),
 
@@ -108,6 +111,16 @@ export const api = {
 	updateAssembly: (id: string, data: AssemblyUpdate) =>
 		request<AssemblyDetail>('PUT', `/api/v1/assemblies/${id}`, data),
 	deleteAssembly: (id: string) => request<void>('DELETE', `/api/v1/assemblies/${id}`),
+	/** Change the language after recording has begun (S8): the old PUT keeps
+	 * refusing it once audio exists. Every recording with audio is queued to
+	 * be transcribed again. 409 with detail SESSION_ACTIVE while a session is
+	 * being recorded, or ZERO_RETENTION_APPLIED. */
+	changeLanguage: (id: string, language: string) =>
+		request<{ language: string; queued: number; skipped_no_audio: number; closed: boolean }>(
+			'POST',
+			`/api/v1/assemblies/${id}/language`,
+			{ language },
+		),
 
 	addRound: (assemblyId: string, data: RoundIn) =>
 		request<Round>('POST', `/api/v1/assemblies/${assemblyId}/rounds`, data),

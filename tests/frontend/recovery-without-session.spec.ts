@@ -71,7 +71,8 @@ it('a QR fragment opened in the same recovery tab joins again without a reload',
 	history.replaceState(null, '', '/#/join/new-qr')
 	window.dispatchEvent(new HashChangeEvent('hashchange'))
 	await flushPromises()
-	expect(recorderApi.join).toHaveBeenCalledWith('new-qr')
+	// R14: every join now also carries this phone's own random device id
+	expect(recorderApi.join).toHaveBeenCalledWith('new-qr', expect.stringMatching(/^[A-Za-z0-9_-]{8,64}$/))
 	expect(resume).toHaveBeenCalledWith('fresh', expect.objectContaining({ recordingId: 'rec' }))
 	expect(window.location.hash).toBe('')
 	wrapper.unmount()

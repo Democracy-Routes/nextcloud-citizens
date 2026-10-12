@@ -68,6 +68,29 @@ let heartbeatTimer = 0
 const nextRound = computed(() => rounds.value.find((r) => !r.recorded_state) ?? null)
 const allRecorded = computed(() => rounds.value.length > 0 && !nextRound.value)
 
+const recordAnotherBusy = ref(false)
+const recordAnotherError = ref('')
+
+/** R13 "Record another session": a standalone independent Session has only
+ * this one round, so once it is recorded the next step is a brand-new
+ * Session, not another round here. Followed exactly like any QR code — see
+ * RecorderApp's own #/join/<token> handling. */
+async function recordAnother(): Promise<void> {
+	const round = rounds.value[0]
+	if (!round || recordAnotherBusy.value) return
+	recordAnotherBusy.value = true
+	recordAnotherError.value = ''
+	try {
+		const result = await recorderApi.recordAnother(props.session.session_token, round.id)
+		const match = result.recorder_url.match(/#\/join\/(.+)$/)
+		if (match) window.location.hash = `#/join/${match[1]}`
+	} catch (err) {
+		recordAnotherError.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		recordAnotherBusy.value = false
+	}
+}
+
 /** Recording states in which the table has declared the round finished. */
 const FINISHED_STATES = [
 	'ASSEMBLING', 'AUDIO_READY', 'TRANSCRIBING', 'TRANSCRIBED', 'TRANSCRIPTION_FAILED',
@@ -257,6 +280,19 @@ onBeforeUnmount(() => {
 					<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 						{{ t('recorder.armed.viewReport') }}
 					</button>
+					<!-- a standalone Record now session, finished: offer a brand-new
+					     one rather than another round of this container -->
+					<button
+						v-if="session.assembly.kind === 'session' && session.assembly.recording_mode === 'independent'"
+						class="rc-btn rc-record"
+						data-test="record-another"
+						:disabled="recordAnotherBusy"
+						@click="recordAnother">
+						{{ t('recorder.recording.recordAnother') }}
+					</button>
+					<p v-if="recordAnotherError" class="rc-alert" role="alert" data-test="record-another-error">
+						{{ recordAnotherError }}
+					</p>
 				</div>
 			</template>
 
@@ -280,10 +316,12 @@ onBeforeUnmount(() => {
 				<div v-if="nextRound && (nextRound.question || nextRound.title)" class="rc-card">
 					<p class="rc-eyebrow" style="margin-bottom: 4px">
 						{{
-							t('recorder.common.roundAndDuration', {
-								position: nextRound.position,
-								minutes: nextRound.duration_minutes,
-							})
+							nextRound.duration_minutes > 0
+								? t('recorder.common.roundAndDuration', {
+										position: nextRound.position,
+										minutes: nextRound.duration_minutes,
+									})
+								: t('recorder.recording.noPlannedTime')
 						}}
 					</p>
 					<p class="rc-question" style="margin: 0">{{ nextRound.question || nextRound.title }}</p>

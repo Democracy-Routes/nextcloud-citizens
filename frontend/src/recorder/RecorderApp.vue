@@ -32,6 +32,29 @@ import { idb, type StoredRecording } from './idb'
 import { initLogger } from './logger'
 
 const SESSION_KEY = 'citizens-recorder-session'
+const DEVICE_KEY = 'citizens-recorder-device'
+
+/** This phone's own random id (R14), made once and kept in localStorage.
+ *
+ * Sent on every join so a single-use code already spent — scanned again
+ * after a reload, or by "Record another session" — returns the same
+ * session instead of a 410. Wrapped in try/catch: private mode or blocked
+ * storage must still let the phone join, just without this. */
+function deviceId(): string | undefined {
+	try {
+		const stored = window.localStorage.getItem(DEVICE_KEY)
+		if (stored) return stored
+		const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'
+		const bytes = new Uint8Array(24)
+		crypto.getRandomValues(bytes)
+		// 64 letters in the alphabet divide 256 evenly, so byte % 64 is unbiased
+		const id = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('')
+		window.localStorage.setItem(DEVICE_KEY, id)
+		return id
+	} catch {
+		return undefined
+	}
+}
 
 type Screen =
 	| 'joining'
@@ -75,7 +98,7 @@ const orchestrated = computed(() => session.value?.assembly.recording_mode !== '
 async function joinWithRetry(token: string): Promise<JoinResult> {
 	for (let attempt = 0; ; attempt++) {
 		try {
-			return await recorderApi.join(token)
+			return await recorderApi.join(token, deviceId())
 		} catch (err) {
 			const status = err instanceof RecorderApiError ? err.status : 0
 			if ((status !== 429 && status < 500) || attempt >= 5) throw err

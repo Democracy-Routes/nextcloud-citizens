@@ -26,7 +26,12 @@
 			"description": "Description",
 			"language": "Language",
 			"languageDetected": "Detected from the recording: this Session was started with Record now, so the first transcript decides the language of the analysis and the report. Choosing one here fixes it instead.",
-			"languageLocked": "Locked: this assembly has started recording. The language decides how audio is transcribed, so changing it now would leave one assembly with transcripts in two languages.",
+			"languageRetranscribes": "Changing it now transcribes every recording again.",
+			"languageChangeTitle": "Change the language?",
+			"languageChangeConfirm": "Every recording with audio will be transcribed again in {language}. Findings and the report follow. Continue?",
+			"languageChangeConfirmButton": "Continue",
+			"languageChanged": "{count} recordings queued for transcription in {language} | {count} recording queued for transcription in {language} | {count} recordings queued for transcription in {language}",
+			"languageSessionActive": "Finish the session being recorded first.",
 			"autoPurge": "Clear the audio off the table phones when the session is closed",
 			"autoPurgeHint": "Every phone keeps a copy of its table's audio so that recording survives a bad network. This asks them to delete it once the assembly is finished — which matters most when participants used their own phones. A phone only ever deletes audio the server has already confirmed, so this cannot remove a last copy. Turn it off to keep the phones' copies until you have downloaded the export.",
 			"consent": "Consent at the table",
@@ -62,6 +67,14 @@
 			"placeholder": "E.g. This assembly is about urban mobility. 'PUMS' means the city's mobility plan.",
 			"empty": "Optional context given to the AI when analyzing this assembly — topic, local glossary, focus areas."
 		},
+		"retention": {
+			"label": "Audio retention",
+			"default": "Instance default",
+			"days": "Delete audio {days} days after closing",
+			"zero": "Zero retention: keep only the report",
+			"zeroHelp": "Once the assembly is closed and processed, audio and transcripts are deleted and a PDF of the report is kept. This cannot be undone and the assembly cannot be reopened.",
+			"applied": "Zero retention applied on {time}"
+		},
 		"sessions": {
 			"title": "Sessions",
 			"liveView": "Live view",
@@ -69,6 +82,9 @@
 			"untitled": "Untitled session",
 			"noQuestion": "No question set",
 			"minutes": "{minutes} min"
+		},
+		"rounds": {
+			"noPlannedTime": "No planned time"
 		},
 		"danger": {
 			"title": "Danger zone",

@@ -137,7 +137,10 @@ const add = () =>
 					<div class="cz-fieldgrid">
 						<div class="cz-field"><label>{{ t('organizer.setup.rounds.title') }}</label><input v-model="editTitle" type="text" /></div>
 						<div class="cz-field" style="max-width: 160px">
-							<label>{{ t('organizer.setup.rounds.duration') }}</label><input v-model.number="editDuration" type="number" min="1" />
+							<label>{{ t('organizer.setup.rounds.duration') }}</label><input v-model.number="editDuration" type="number" min="0" />
+							<span v-if="editDuration === 0" class="cz-muted" style="font-size: 0.78rem">
+								{{ t('organizer.setup.overview.rounds.noPlannedTime') }}
+							</span>
 						</div>
 					</div>
 					<div class="cz-field">
@@ -159,7 +162,13 @@ const add = () =>
 							<div style="min-width: 0">
 								<div class="cz-row" style="gap: 8px">
 									<strong>{{ round.title || t('organizer.setup.rounds.untitled') }}</strong>
-									<span class="cz-muted" style="font-size: 0.8125rem">{{ t('organizer.setup.rounds.minutes', { minutes: round.duration_minutes }) }}</span>
+									<span class="cz-muted" style="font-size: 0.8125rem">
+										{{
+											round.duration_minutes > 0
+												? t('organizer.setup.rounds.minutes', { minutes: round.duration_minutes })
+												: t('organizer.setup.overview.rounds.noPlannedTime')
+										}}
+									</span>
 									<CzStatusPill :status="round.status" />
 								</div>
 								<p style="margin: 6px 0 0; font-size: 0.9375rem">
