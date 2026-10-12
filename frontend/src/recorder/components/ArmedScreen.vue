@@ -179,6 +179,10 @@ onBeforeUnmount(() => {
 				<HelpButton :token="session.session_token" :help="help" />
 			</div>
 			<div class="rc-center"><ParticipantsLine :consent="consent" @open="emit('participants')" /></div>
+			<!-- someone seated here refused: the server will not start this table -->
+			<p v-if="consent && (consent.refusing ?? 0) > 0" class="rc-alert" role="alert" data-test="refused-alert">
+				{{ t('recorder.recording.refusedAtTable') }}
+			</p>
 			<div class="rc-center">
 				<button type="button" class="rc-facilitator-link" data-test="add-facilitator" @click="emit('facilitator')">
 					<SvgIcon :path="mdiAccountVoice" :size="16" />

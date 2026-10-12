@@ -55,7 +55,7 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 			recording_consent: yes,
 			transcription_consent: yes,
 			analysis_consent: yes,
-			publication_consent: yes,
+			publication_consent: yes && value.quotations,
 		})
 		emit('registered', result.participant_token)
 	} catch (err) {
@@ -98,6 +98,7 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 				:busy="busy"
 				:failed="failed"
 				:acceptance="notice.acceptance"
+				:acceptance-quotations="notice.acceptance_quotations"
 				@confirm="(value) => submit(value, false)"
 				@refuse="(value) => submit(value, true)"
 				@cancel="view = 'notice'" />

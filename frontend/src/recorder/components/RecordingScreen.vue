@@ -14,7 +14,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../../i18n'
-import { recorderApi, type AiFacilitatorState, type AiLevel, type HelpState, type JoinResult, type RoundInfo } from '../api'
+import { type TableConsent, recorderApi, type AiFacilitatorState, type AiLevel, type HelpState, type JoinResult, type RoundInfo } from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
@@ -72,6 +72,10 @@ const showAddDevice = ref(false)
 const tableInfo = ref(props.session.table ?? null)
 // which recorder carries the captions while this phone is a backup
 const liveSourceLabel = ref<string | null>(null)
+/** this table's consent state from the status poll: a refusal seated here
+ * after recording began is said on screen until it is resolved */
+const consent = ref<TableConsent | null | undefined>(props.session.consent)
+const refusedAtTable = computed(() => !!consent.value && (consent.value.refusing ?? 0) > 0)
 const takingOver = ref(false)
 
 // A dying phone asks for a backup while there is still time to add one. The
@@ -472,6 +476,7 @@ onMounted(async () => {
 			messages.ingest(status)
 			help.value = status.help
 			if (status.ai_facilitator) ai.value = status.ai_facilitator
+			if (status.consent) consent.value = status.consent
 			const current = status.rounds.find((r) => r.id === props.round.id)
 			if (current && current.status === 'ENDED') {
 				roundEnded.value = true
@@ -710,6 +715,11 @@ async function clearSynced(): Promise<void> {
 				<button class="rc-btn rc-subtle" style="margin-top: 8px" data-test="hidden-gap-ok" @click="hiddenGapSeen = hiddenGapSeconds">
 					{{ t('recorder.recording.gapDismiss') }}
 				</button>
+			</div>
+			<!-- someone who refused is at this table: persistent until they are
+			     marked as moved (participants screen) or the table stops -->
+			<div v-if="refusedAtTable" class="rc-alert" role="alert" data-test="refused-alert">
+				{{ t('recorder.recording.refusedAtTable') }}
 			</div>
 			<p v-if="desktop" class="rc-note" data-test="desktop-hint">
 				{{ t('recorder.recording.desktopHint') }}

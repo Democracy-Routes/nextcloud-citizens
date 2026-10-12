@@ -19,7 +19,8 @@ const { t } = useI18n()
 
 <template>
 	<button v-if="consent" type="button" class="rc-participants" :class="{ 'rc-participants--blocked': !consent.can_record }" @click="emit('open')">
-		<template v-if="!consent.can_record">{{ t('recorder.consent.linkRequired') }}</template>
+		<template v-if="!consent.can_record && (consent.refusing ?? 0) > 0">{{ t('recorder.consent.linkRefused') }}</template>
+		<template v-else-if="!consent.can_record">{{ t('recorder.consent.linkRequired') }}</template>
 		<template v-else-if="consent.registered">{{ t('recorder.consent.link', { count: consent.registered }) }}</template>
 		<template v-else>{{ t('recorder.consent.linkNone') }}</template>
 	</button>

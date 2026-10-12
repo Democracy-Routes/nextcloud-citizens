@@ -136,7 +136,13 @@ onBeforeUnmount(() => window.clearInterval(poll))
 					class="rc-consent-line"
 					:class="status.consent.recording ? 'rc-yes' : 'rc-no'"
 					data-test="consent">
-					{{ status.consent.recording ? t('recorder.participant.consentedAll') : t('recorder.participant.refusedAll') }}
+					{{
+						!status.consent.recording
+							? t('recorder.participant.refusedAll')
+							: status.consent.publication
+								? t('recorder.participant.consentedAll')
+								: t('recorder.participant.consentedNoQuotes')
+					}}
 				</p>
 				<p class="rc-muted" style="font-size: 0.8125rem; margin: 10px 0 0">
 					{{

@@ -2,12 +2,15 @@
 	SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 	SPDX-License-Identifier: AGPL-3.0-or-later
 
-	One person's registration: name (required), email (optional), one
-	acceptance. The same form on the table's shared phone (ConsentScreen) and
-	on a person's own phone (RegisterPage); the parent sends it. The box's
-	sentence is the notice's own acceptance paragraph, so what is ticked is
-	exactly what the stored hash covers; Confirm needs the name and the box.
-	"This person does not consent" needs only the name and records a refusal.
+	One person's registration: name (required), email (optional), the
+	required acceptance (recording, transcription, analysis) and the optional
+	quotations box, ticked by default. The same form on the table's shared
+	phone (ConsentScreen) and on a person's own phone (RegisterPage); the
+	parent sends it. Each box's sentence is the notice's own paragraph, so what
+	is ticked is exactly what the stored hash covers; Confirm needs the name
+	and the required box. "This person does not consent" needs only the name
+	and records a refusal. With `fixedName` the form records a change of mind
+	for someone already on the roster: the name is theirs, not editable.
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -17,6 +20,8 @@ export interface ConsentFormValue {
 	name: string
 	email: string
 	accepted: boolean
+	/** short anonymous quotations in the report: optional, default yes */
+	quotations: boolean
 }
 
 const props = defineProps<{
@@ -26,15 +31,22 @@ const props = defineProps<{
 	self?: boolean
 	/** the notice's acceptance sentence; the catalogue's when absent */
 	acceptance?: string
+	/** the notice's quotations sentence; the catalogue's when absent */
+	acceptanceQuotations?: string
+	/** a person already on the roster who changed their mind: no refusal, no email */
+	fixedName?: string
 }>()
 const emit = defineEmits<{ confirm: [value: ConsentFormValue]; refuse: [value: ConsentFormValue]; cancel: [] }>()
 
 const { t } = useI18n()
 
-const form = ref<ConsentFormValue>({ name: '', email: '', accepted: false })
+const form = ref<ConsentFormValue>({ name: props.fixedName ?? '', email: '', accepted: false, quotations: true })
 
 const canConfirm = computed(() => form.value.name.trim().length > 0 && form.value.accepted)
 const sentence = computed(() => props.acceptance || t('recorder.consent.form.accept'))
+const sentenceQuotations = computed(
+	() => props.acceptanceQuotations || t('recorder.consent.form.acceptQuotations'),
+)
 
 function value(): ConsentFormValue {
 	return { ...form.value, name: form.value.name.trim(), email: form.value.email.trim() }
@@ -45,9 +57,9 @@ function value(): ConsentFormValue {
 	<div>
 		<label class="rc-field">
 			<span>{{ t('recorder.consent.form.name') }}</span>
-			<input v-model="form.name" type="text" autocomplete="name" maxlength="200" data-test="name" />
+			<input v-model="form.name" type="text" autocomplete="name" maxlength="200" :disabled="!!fixedName" data-test="name" />
 		</label>
-		<label class="rc-field">
+		<label v-if="!fixedName" class="rc-field">
 			<span>{{ t('recorder.consent.form.email') }}</span>
 			<input v-model="form.email" type="email" autocomplete="email" maxlength="200" data-test="email" />
 		</label>
@@ -56,12 +68,17 @@ function value(): ConsentFormValue {
 				<input v-model="form.accepted" type="checkbox" data-test="accept" />
 				<span>{{ sentence }}</span>
 			</label>
+			<!-- optional, ticked by default: declining withholds the table's quotations -->
+			<label class="rc-tick">
+				<input v-model="form.quotations" type="checkbox" data-test="quotations" />
+				<span>{{ sentenceQuotations }}</span>
+			</label>
 		</div>
 		<p v-if="failed" class="rc-alert">{{ failed }}</p>
 		<button class="rc-btn rc-primary" :disabled="!canConfirm || busy" data-test="confirm" @click="emit('confirm', value())">
 			{{ t('recorder.consent.form.confirm') }}
 		</button>
-		<button class="rc-btn" :disabled="!form.name.trim() || busy" data-test="refuse" @click="emit('refuse', value())">
+		<button v-if="!fixedName" class="rc-btn" :disabled="!form.name.trim() || busy" data-test="refuse" @click="emit('refuse', value())">
 			{{ self ? t('recorder.consent.form.refuseSelf') : t('recorder.consent.form.refuse') }}
 		</button>
 		<button class="rc-btn rc-subtle" :disabled="busy" @click="emit('cancel')">

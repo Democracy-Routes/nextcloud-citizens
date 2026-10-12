@@ -17,6 +17,8 @@ const consentNotice = vi.fn()
 const registerParticipant = vi.fn()
 const searchParticipants = vi.fn()
 const seatParticipant = vi.fn()
+const changeConsent = vi.fn()
+const markMoved = vi.fn()
 
 vi.mock('../../frontend/src/recorder/api', () => ({
 	recorderApi: {
@@ -24,6 +26,8 @@ vi.mock('../../frontend/src/recorder/api', () => ({
 		registerParticipant: (...args: unknown[]) => registerParticipant(...args),
 		searchParticipants: (...args: unknown[]) => searchParticipants(...args),
 		seatParticipant: (...args: unknown[]) => seatParticipant(...args),
+		changeConsent: (...args: unknown[]) => changeConsent(...args),
+		markMoved: (...args: unknown[]) => markMoved(...args),
 	},
 }))
 
@@ -185,5 +189,63 @@ describe('the participants line', () => {
 		expect(blocked.text()).toBe('Register a participant before recording')
 		expect(blocked.find('button').classes()).toContain('rc-participants--blocked')
 		expect(mountWithI18n(ParticipantsLine, { props: { consent: undefined } }).find('button').exists()).toBe(false)
+	})
+
+	it('offers the roster its actions: moved, changed their mind, withdraws', async () => {
+		changeConsent.mockReset()
+		markMoved.mockReset()
+		const anna = { id: 'p1', label: 'P001', name: 'Anna', recording_consent: true, publication_consent: false, refused: false }
+		const bruno = { id: 'p2', label: 'P002', name: 'Bruno', recording_consent: false, publication_consent: false, refused: true }
+		consentNotice.mockResolvedValue({ ...NOTICE, participants: [anna, bruno] })
+		const wrapper = mountScreen()
+		await flushPromises()
+		// a refusal seated here blocks Continue, and says what to do
+		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeDefined()
+		expect(wrapper.find('[data-test="refused-hint"]').text()).toContain('Mark them as moved')
+		expect(wrapper.find('[data-test="roster"]').text()).toContain('no quotations')
+
+		// Bruno is moved to a table that is not recorded
+		markMoved.mockResolvedValue({ participant: { id: 'p2', label: 'P002', name: 'Bruno' }, table: { mode: 'required', registered: 1, consenting: 1, refusing: 0, can_record: true } })
+		consentNotice.mockResolvedValue({ ...NOTICE, participants: [anna] })
+		await wrapper.find('[data-test="moved"]').trigger('click')
+		await flushPromises()
+		expect(markMoved).toHaveBeenCalledWith('tok', 'p2')
+		expect(wrapper.find('[data-test="refused-hint"]').exists()).toBe(false)
+		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeUndefined()
+
+		// Anna withdraws: a confirm first, then every flag false
+		await wrapper.find('[data-test="withdraw"]').trigger('click')
+		expect(wrapper.find('[data-test="withdraw-confirm"]').text()).toContain('Anna withdraws consent')
+		changeConsent.mockResolvedValue({ participant: { id: 'p1', label: 'P001', name: 'Anna' }, table: { mode: 'required', registered: 1, consenting: 0, refusing: 1, can_record: false } })
+		consentNotice.mockResolvedValue({ ...NOTICE, participants: [{ ...anna, recording_consent: false, refused: true }] })
+		await wrapper.find('[data-test="withdraw-yes"]').trigger('click')
+		await flushPromises()
+		expect(changeConsent).toHaveBeenCalledWith('tok', 'p1', {
+			notice_hash: 'a'.repeat(64), notice_read: true, recording_consent: false,
+			transcription_consent: false, analysis_consent: false, publication_consent: false,
+		})
+		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeDefined()
+
+		// ...and changes her mind: the form with her name fixed, then a new act
+		await wrapper.find('[data-test="changed-mind"]').trigger('click')
+		expect(wrapper.text()).toContain('Anna changed their mind')
+		expect(wrapper.find('[data-test="refuse"]').exists()).toBe(false)
+		await wrapper.find('[data-test="accept"]').setValue(true)
+		await wrapper.find('[data-test="quotations"]').setValue(false)
+		consentNotice.mockResolvedValue({ ...NOTICE, participants: [anna] })
+		await wrapper.find('[data-test="confirm"]').trigger('click')
+		await flushPromises()
+		expect(changeConsent).toHaveBeenLastCalledWith('tok', 'p1', {
+			notice_hash: 'a'.repeat(64), notice_read: true, recording_consent: true,
+			transcription_consent: true, analysis_consent: true, publication_consent: false,
+		})
+		expect(wrapper.find('[data-test="roster"]').text()).toContain('Anna')
+	})
+
+	it('says on the participants line that someone who refused is at the table', () => {
+		const blocked = mountWithI18n(ParticipantsLine, {
+			props: { consent: { mode: 'required', registered: 2, consenting: 1, refusing: 1, can_record: false } },
+		})
+		expect(blocked.text()).toContain('Someone who refused is at this table')
 	})
 })

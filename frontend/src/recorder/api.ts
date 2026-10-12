@@ -256,6 +256,9 @@ export interface TableConsent {
 	mode: 'required' | 'optional'
 	registered: number
 	consenting: number
+	/** seated people whose newest act refuses or withdraws: one blocks a
+	 * required table until marked as moved (0.7.0-alpha.1 stabilisation) */
+	refusing?: number
 	can_record: boolean
 }
 
@@ -269,8 +272,30 @@ export interface ConsentNotice {
 	/** the sentence the one acceptance box carries (the last paragraph);
 	 * absent from a 0.7.0 server, where the catalogue's sentence is used */
 	acceptance?: string
+	/** the optional quotations sentence (notice 2026-10.3); absent earlier */
+	acceptance_quotations?: string
 	mode: 'required' | 'optional'
-	participants: Array<{ label: string; name: string; recording_consent: boolean }>
+	participants: Array<{
+		/** absent from a server older than the stabilisation pass */
+		id?: string
+		label: string
+		name: string
+		recording_consent: boolean
+		publication_consent?: boolean
+		/** the newest act refuses or withdraws */
+		refused?: boolean
+	}>
+}
+
+/** A further act by someone already on the roster: a change of mind after a
+ * refusal, or a withdrawal (every flag false). */
+export interface ConsentChangeIn {
+	notice_hash: string
+	notice_read: boolean
+	recording_consent: boolean
+	transcription_consent: boolean
+	analysis_consent: boolean
+	publication_consent: boolean
 }
 
 export interface ConsentActIn {
@@ -478,6 +503,22 @@ export const recorderApi = {
 	/** One person registers at this table on the shared phone. */
 	registerParticipant: (token: string, act: ConsentActIn) =>
 		request<RegisterResult>('POST', '/api/v1/public/recorder/participants', { token, json: act }),
+
+	/** Changed their mind, or withdraws consent: a further act for someone on this table's roster. */
+	changeConsent: (token: string, participantId: string, act: ConsentChangeIn) =>
+		request<{ participant: { id: string; label: string; name: string }; table: TableConsent }>(
+			'POST',
+			`/api/v1/public/recorder/participants/${participantId}/consent`,
+			{ token, json: act },
+		),
+
+	/** Marked as moved to another table (the room's procedure for a refusal). */
+	markMoved: (token: string, participantId: string) =>
+		request<{ participant: { id: string; label: string; name: string }; table: TableConsent }>(
+			'POST',
+			`/api/v1/public/recorder/participants/${participantId}/moved`,
+			{ token },
+		),
 
 	/** A registration code's event, table and notice — on the person's own phone. */
 	registerNotice: (token: string) =>

@@ -121,12 +121,95 @@ onBeforeUnmount(() => window.clearInterval(roster))
 const consenting = computed(
 	() => notice.value?.participants.filter((p) => p.recording_consent).length ?? 0,
 )
+/** seated people whose newest act refuses or withdraws: one blocks a
+ * required table until marked as moved, or until they change their mind */
+const refusing = computed(() => notice.value?.participants.filter((p) => p.refused).length ?? 0)
 const required = computed(() => notice.value?.mode === 'required')
-const canContinue = computed(() => legacy.value || !required.value || consenting.value > 0)
+const canContinue = computed(
+	() => legacy.value || !required.value || (consenting.value > 0 && refusing.value === 0),
+)
+
+/* ---- the roster's actions: changed their mind, withdraws, moved ---- */
+const changing = ref<{ id: string; name: string } | null>(null)
+const withdrawing = ref<{ id: string; name: string } | null>(null)
+const acting = ref('')
 
 function startForm(): void {
 	failed.value = ''
+	changing.value = null
 	view.value = 'form'
+}
+
+function startChange(person: { id: string; name: string }): void {
+	failed.value = ''
+	changing.value = person
+	view.value = 'form'
+}
+
+/** A refusal reversed on the same phone: a further act, their name fixed. */
+async function confirmChange(value: ConsentFormValue): Promise<void> {
+	if (!notice.value || !changing.value || busy.value) return
+	busy.value = true
+	failed.value = ''
+	try {
+		const result = await recorderApi.changeConsent(props.token, changing.value.id, {
+			notice_hash: notice.value.hash,
+			notice_read: true,
+			recording_consent: value.accepted,
+			transcription_consent: value.accepted,
+			analysis_consent: value.accepted,
+			publication_consent: value.accepted && value.quotations,
+		})
+		table.value = result.table
+		changing.value = null
+		await load()
+		view.value = 'notice'
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		const stale = /NOTICE_CHANGED|notice has changed/i.test(message)
+		failed.value = stale ? t('recorder.consent.form.stale') : t('recorder.consent.form.failed')
+		if (stale) await load()
+	} finally {
+		busy.value = false
+	}
+}
+
+/** Withdraws consent: every flag false; the recording so far is kept. */
+async function withdraw(): Promise<void> {
+	if (!notice.value || !withdrawing.value || acting.value) return
+	acting.value = withdrawing.value.id
+	try {
+		const result = await recorderApi.changeConsent(props.token, withdrawing.value.id, {
+			notice_hash: notice.value.hash,
+			notice_read: true,
+			recording_consent: false,
+			transcription_consent: false,
+			analysis_consent: false,
+			publication_consent: false,
+		})
+		table.value = result.table
+		withdrawing.value = null
+		await load()
+	} catch {
+		failed.value = t('recorder.consent.form.failed')
+	} finally {
+		acting.value = ''
+	}
+}
+
+/** Moved to another table — one that is not recorded. */
+async function moved(person: { id: string }): Promise<void> {
+	if (acting.value) return
+	acting.value = person.id
+	try {
+		const result = await recorderApi.markMoved(props.token, person.id)
+		table.value = result.table
+		await load()
+	} catch {
+		failed.value = t('recorder.consent.form.failed')
+	} finally {
+		acting.value = ''
+	}
 }
 
 async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
@@ -134,7 +217,8 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 	busy.value = true
 	failed.value = ''
 	try {
-		// one acceptance covers the four recorded flags; a refusal clears them all
+		// the required box covers recording, transcription and analysis; the
+		// quotations box is its own answer; a refusal clears them all
 		const yes = !refuse && value.accepted
 		const result = await recorderApi.registerParticipant(props.token, {
 			name: value.name,
@@ -144,7 +228,7 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 			recording_consent: yes,
 			transcription_consent: yes,
 			analysis_consent: yes,
-			publication_consent: yes,
+			publication_consent: yes && value.quotations,
 		})
 		table.value = result.table
 		added.value = { name: result.participant.name, consented: result.can_record }
@@ -153,7 +237,14 @@ async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
 			...notice.value,
 			participants: [
 				...notice.value.participants,
-				{ label: result.participant.label, name: result.participant.name, recording_consent: result.can_record },
+				{
+					id: result.participant.id,
+					label: result.participant.label,
+					name: result.participant.name,
+					recording_consent: result.can_record,
+					publication_consent: yes && value.quotations,
+					refused: !result.can_record,
+				},
 			],
 		}
 		view.value = 'added'
@@ -204,13 +295,26 @@ const retention = computed(() => {
 <template>
 	<div class="rc-scroll">
 		<!-- one person registering -->
-		<div v-if="view === 'form' && notice" class="rc-pad">
+		<div v-if="view === 'form' && notice && changing" class="rc-pad">
+			<h1>{{ t('recorder.consent.form.changedMindTitle', { name: changing.name }) }}</h1>
+			<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.changedMindLead') }}</p>
+			<ConsentForm
+				:busy="busy"
+				:failed="failed"
+				:acceptance="notice.acceptance"
+				:acceptance-quotations="notice.acceptance_quotations"
+				:fixed-name="changing.name"
+				@confirm="confirmChange"
+				@cancel="view = 'notice'" />
+		</div>
+		<div v-else-if="view === 'form' && notice" class="rc-pad">
 			<h1>{{ t('recorder.consent.form.title') }}</h1>
 			<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.lead') }}</p>
 			<ConsentForm
 				:busy="busy"
 				:failed="failed"
 				:acceptance="notice.acceptance"
+				:acceptance-quotations="notice.acceptance_quotations"
 				@confirm="(value) => submit(value, false)"
 				@refuse="(value) => submit(value, true)"
 				@cancel="view = 'notice'" />
@@ -229,7 +333,9 @@ const retention = computed(() => {
 			<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
 				{{ t('recorder.consent.continue') }}
 			</button>
-			<p v-if="!canContinue" class="rc-muted rc-consent__hint">{{ t('recorder.consent.requiredHint') }}</p>
+			<p v-if="!canContinue" class="rc-muted rc-consent__hint">
+				{{ refusing > 0 ? t('recorder.consent.requiredHintRefused') : t('recorder.consent.requiredHint') }}
+			</p>
 		</div>
 
 		<!-- the legacy table-level screen: somebody objected -->
@@ -261,10 +367,41 @@ const retention = computed(() => {
 						<span>{{ person.name }}</span>
 						<span :class="person.recording_consent ? 'rc-roster__yes' : 'rc-roster__no'">
 							{{ person.recording_consent ? t('recorder.consent.consented') : t('recorder.consent.refusedNote') }}
+							<template v-if="person.recording_consent && person.publication_consent === false">
+								· {{ t('recorder.consent.quotationsNo') }}
+							</template>
+						</span>
+						<!-- the newest act counts: a refusal can be reversed here, a
+						     refuser marked as moved, a consent withdrawn -->
+						<span v-if="person.id && person.refused" class="rc-roster__actions">
+							<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" data-test="changed-mind" @click="startChange({ id: person.id, name: person.name })">
+								{{ t('recorder.consent.changedMind') }}
+							</button>
+							<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" data-test="moved" @click="moved({ id: person.id })">
+								{{ t('recorder.consent.moved') }}
+							</button>
+						</span>
+						<span v-else-if="person.id && person.recording_consent" class="rc-roster__actions">
+							<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" data-test="withdraw" @click="withdrawing = { id: person.id, name: person.name }">
+								{{ t('recorder.consent.withdraw') }}
+							</button>
 						</span>
 					</li>
 				</ul>
 				<p v-else class="rc-muted" style="margin: 0">{{ t('recorder.consent.none') }}</p>
+				<p v-if="refusing > 0" class="rc-alert" role="alert" data-test="refused-hint">
+					{{ t('recorder.consent.requiredHintRefused') }}
+				</p>
+				<div v-if="withdrawing" class="rc-card" role="dialog" style="text-align: left" data-test="withdraw-confirm">
+					<p>{{ t('recorder.consent.withdrawConfirm', { name: withdrawing.name }) }}</p>
+					<button type="button" class="rc-btn rc-primary" :disabled="!!acting" data-test="withdraw-yes" @click="withdraw">
+						{{ t('recorder.consent.withdrawYes') }}
+					</button>
+					<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" @click="withdrawing = null">
+						{{ t('recorder.consent.form.cancel') }}
+					</button>
+				</div>
+				<p v-if="failed && view === 'notice'" class="rc-alert">{{ failed }}</p>
 
 				<button class="rc-btn" style="margin-top: 16px" data-test="add" @click="startForm">
 					{{ t('recorder.consent.add') }}
@@ -368,6 +505,8 @@ const retention = computed(() => {
 }
 .rc-roster__yes { color: #1e6b3a; font-weight: 600; }
 .rc-roster__no { color: #8c1d18; font-weight: 600; }
+.rc-roster__actions { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; margin-top: 6px; }
+.rc-roster__actions .rc-btn { margin: 0; padding: 8px 10px; font-size: 0.8125rem; min-height: 36px; }
 .rc-consent__hint { margin: 8px 0 0; font-size: 0.875rem; }
 .rc-find { margin: 6px 0 0; }
 .rc-find__input {

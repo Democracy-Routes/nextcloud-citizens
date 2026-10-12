@@ -120,4 +120,34 @@ describe('ParticipantPage', () => {
 		expect(later.text()).toContain('Bologna')
 		expect(later.find('[data-test="report"]').exists()).toBe(false)
 	})
+
+	it('registers a person who declines quotations, and says so on their page', async () => {
+		registerNotice.mockResolvedValue({ ...NOTICE, acceptance_quotations: 'I also agree to quotations in the report.' })
+		registerSelf.mockResolvedValue({
+			participant_token: 'ptok', participant: { id: 'p', label: 'P001', name: 'Giulia' },
+			consent: { method: 'SELF_PHONE', recording: true }, table_number: 7, color_key: 'blue',
+		})
+		const wrapper = mountWithI18n(RegisterPage, { props: { token: 'code' } })
+		await flushPromises()
+		await wrapper.find('[data-test="register"]').trigger('click')
+		expect(wrapper.findAll('.rc-tick')[1].text()).toBe('I also agree to quotations in the report.')
+		await wrapper.find('[data-test="name"]').setValue('Giulia')
+		await wrapper.find('[data-test="accept"]').setValue(true)
+		await wrapper.find('[data-test="quotations"]').setValue(false)
+		await wrapper.find('[data-test="confirm"]').trigger('click')
+		await flushPromises()
+		expect(registerSelf).toHaveBeenCalledWith('code', expect.objectContaining({
+			recording_consent: true, analysis_consent: true, publication_consent: false,
+		}))
+
+		participantStatus.mockResolvedValue({
+			assembly: { id: 'a1', name: 'Bologna', language: 'en', recording_mode: 'orchestrated' },
+			participant: { label: 'P001', name: 'Giulia' }, table_number: 7, color_key: 'blue',
+			consent: { recording: true, transcription: true, analysis: true, publication: false, confirmed_at: 'now' },
+			report_available: false, contact: 'privacy@example.org', controller: 'Comune',
+		})
+		const page = mountWithI18n(ParticipantPage, { props: { token: 'ptok' } })
+		await flushPromises()
+		expect(page.find('[data-test="consent"]').text()).toContain('but not to quotations in the report')
+	})
 })
