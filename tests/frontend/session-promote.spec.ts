@@ -56,7 +56,7 @@ describe('adding a second session', () => {
 		await flushPromises()
 
 		expect(promoteSession).toHaveBeenCalledWith('r1', 'Milan Mobility')
-		expect(addRound).toHaveBeenCalledWith('c1', { title: 'Round 2', question: '', duration_minutes: 30 })
+		expect(addRound).toHaveBeenCalledWith('c1', { title: 'Session 2', question: '', duration_minutes: 30 })
 		expect(wrapper.emitted('changed')).toBeTruthy()
 	})
 

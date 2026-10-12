@@ -238,7 +238,7 @@ def test_an_italian_report_is_drawn_in_italian(monkeypatch):
     ), "the cover meta line should carry an Italian date"
     assert "Metodo" in seen
     assert "Sintesi esecutiva" in seen
-    assert "Turno 1" in seen  # section banner and executive summary heading
+    assert "Sessione 1" in seen  # section banner and executive summary heading
     assert "Equilibrio degli interventi" in seen
     assert any(t.startswith("Voce A — 70%") for t in seen)
     assert any(t.startswith("Altri — 30%") for t in seen)
@@ -251,7 +251,7 @@ def test_an_italian_report_is_drawn_in_italian(monkeypatch):
     assert "Tavolo 1" in seen
 
     for english in (
-        "Assembly Report", "FINAL REPORT", "Method", "Executive summary", "Round 1",
+        "Assembly Report", "FINAL REPORT", "Method", "Executive summary", "Round 1", "Session 1",
         "Speaking balance", "Proposals", "Proposal", "draft — not reviewed", "Table detail",
         "Table 1", "Others — 30%",
     ):

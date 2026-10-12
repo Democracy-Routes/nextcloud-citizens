@@ -81,27 +81,33 @@ LIVE_TRANSCRIPT_NOTE = " " + text("en", "live_transcript_note")
 DEVICE_REPLACED_NOTE = " " + text("en", "device_replaced_note")
 
 
-def round_heading(position: int, title: str, language: str | None = "en") -> str:
-    """How a round is named wherever it is shown.
+#: The titles the app itself pre-fills, in every spelling it has used: an
+#: untouched one is the default heading, not "Session 2 — Round 2".
+DEFAULT_TITLE_WORDS = ("session", "round", "sessione", "turno")
 
-    The app manufactures its own redundancy here: both round-creation paths
-    pre-fill the title with "Round N", so an organizer who edits it to
-    "Round 1 - design" gets "Round 1 — Round 1 - design" on every screen and in
-    every export. When the title already opens with this round's number, it is
-    the whole heading.
+
+def round_heading(position: int, title: str, language: str | None = "en") -> str:
+    """How a session is named wherever it is shown.
+
+    The app manufactures its own redundancy here: both creation paths pre-fill
+    the title with "Session N" (before 0.7: "Round N"), so an organizer who
+    edits it to "Session 1 - design" would get "Session 1 — Session 1 - design"
+    on every screen and in every export. When the title already opens with
+    this session's number, it is the whole heading.
 
     The pre-filled default is English whatever the assembly's language, so an
-    untouched "Round 2" in an Italian assembly is rendered as "Turno 2"; a
-    title the organizer wrote is theirs and is printed as written.
+    untouched "Session 2" (or a pre-0.7 "Round 2") in an Italian assembly is
+    rendered as "Sessione 2"; a title the organizer wrote is theirs and is
+    printed as written.
     """
     name = (title or "").strip()
     default = text(language, "round", position=position)
-    if not name or name == f"Round {position}":
+    lowered = name.lower()
+    if not name or lowered in {f"{word} {position}" for word in DEFAULT_TITLE_WORDS}:
         return default
     first = name.split()[0].rstrip(".:-–—") if name.split() else ""
-    lowered = name.lower()
     if (
-        lowered.startswith(f"round {position}")
+        any(lowered.startswith(f"{word} {position}") for word in DEFAULT_TITLE_WORDS)
         or lowered.startswith(default.lower())
         or first == str(position)
     ):

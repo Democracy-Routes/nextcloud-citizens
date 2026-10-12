@@ -105,7 +105,7 @@
 		"roundPrompt": "AGGREGAZIONE DELLA SESSIONE (di sola lettura)"
 	},
 	"facilitator": {
-		"title": "Facilitatore IA",
+		"title": "Assistente IA",
 		"lead": "Una voce discreta accanto a ogni tavolo durante una sessione: una breve domanda o un promemoria quando il tempo finisce, la sala resta in silenzio, la discussione divaga oppure — dove il motore etichetta chi parla — una voce prevale sulle altre. Arriva prima al telefono del facilitatore e ai telefoni del tavolo solo quando nessun telefono del facilitatore è collegato. Ogni assemblea può scegliere il proprio livello; questo è quello predefinito.",
 		"level": "Livello predefinito per le nuove assemblee",
 		"levels": {

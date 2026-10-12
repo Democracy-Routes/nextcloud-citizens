@@ -61,7 +61,7 @@
 			"key": "API key (optional)",
 			"keyHint": "Required by OpenAI; most self-hosted servers need none.",
 			"noDiarizationTitle": "No speaker separation.",
-			"noDiarization": "Standard Whisper returns text with timestamps but does not say who spoke, so transcripts and report quotes appear without speaker labels. Servers that add diarization (WhisperX-based, or OpenAI's diarizing model) are used automatically when they provide it."
+			"noDiarization": "Standard Whisper returns text with timestamps but does not say who spoke, so transcripts and report quotations appear without speaker labels. Servers that add diarization (WhisperX-based, or OpenAI's diarizing model) are used automatically when they provide it."
 		},
 		"vosk": {
 			"url": "Vosk server URL",
@@ -105,7 +105,7 @@
 		"roundPrompt": "SESSION AGGREGATION (read-only)"
 	},
 	"facilitator": {
-		"title": "AI facilitator",
+		"title": "AI assistant",
 		"lead": "A quiet voice beside each table during a session: one short question or reminder when time runs out, the room goes silent, the discussion drifts or — where the engine labels speakers — one voice dominates. It reaches the facilitator's own phone first and the table's phones only when no facilitator phone is connected. Each assembly can pick its own level; this is the default.",
 		"level": "Default level for new assemblies",
 		"levels": {

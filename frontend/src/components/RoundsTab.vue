@@ -78,7 +78,7 @@ const saveEdit = () =>
 /** The pre-filled title of a new round. Deliberately not translated: it is
  * data, and roundHeading() (and round_heading() in the report service) spot
  * exactly this "Round N" prefix to avoid printing "Round 1 — Round 1". */
-const prefilledTitle = () => `Round ${props.assembly.rounds.length + 1}`
+const prefilledTitle = () => `Session ${props.assembly.rounds.length + 1}`
 
 /* A standalone Session growing into an Assembly.
  *

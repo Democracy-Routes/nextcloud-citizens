@@ -58,32 +58,40 @@ def _report(participants: int = 48, title: str = "Design", language: str = "en")
 
 
 class TestRoundHeading:
-    """Both round-creation paths pre-fill the title with "Round N", so an
-    organizer who edits it to "Round 1 - design" used to get
-    "Round 1 — Round 1 - design" on every screen and in every export."""
+    """Both creation paths pre-fill the title with "Session N" (before 0.7:
+    "Round N"), so an organizer who edits it to "Session 1 - design" would
+    get "Session 1 — Session 1 - design" on every screen and in every export."""
 
-    def test_a_title_repeating_the_round_number_is_used_alone(self):
+    def test_a_title_repeating_the_session_number_is_used_alone(self):
+        assert round_heading(1, "Session 1 - design") == "Session 1 - design"
         assert round_heading(1, "Round 1 - design") == "Round 1 - design"
 
-    def test_the_untouched_default_is_not_doubled_either(self):
-        assert round_heading(2, "Round 2") == "Round 2"
+    def test_the_untouched_default_is_the_plain_heading_in_every_spelling(self):
+        assert round_heading(2, "Session 2") == "Session 2"
+        assert round_heading(2, "Round 2") == "Session 2"  # pre-0.7 pre-fill
+        assert round_heading(2, "round 2") == "Session 2"
+        assert round_heading(2, "Round 2", "it") == "Sessione 2"
+        assert round_heading(2, "Turno 2", "it") == "Sessione 2"
+        assert round_heading(2, "Sessione 2", "it") == "Sessione 2"
 
     def test_a_real_title_still_gets_its_number(self):
-        assert round_heading(3, "Mobility") == "Round 3 — Mobility"
+        assert round_heading(3, "Mobility") == "Session 3 — Mobility"
+        assert round_heading(3, "Mobilità", "it") == "Sessione 3 — Mobilità"
 
     def test_an_empty_title_falls_back_to_the_number(self):
-        assert round_heading(4, "") == "Round 4"
-        assert round_heading(4, "   ") == "Round 4"
+        assert round_heading(4, "") == "Session 4"
+        assert round_heading(4, "   ") == "Session 4"
 
-    def test_a_bare_number_prefix_counts_as_the_round_number(self):
+    def test_a_bare_number_prefix_counts_as_the_session_number(self):
         assert round_heading(5, "5. Housing") == "5. Housing"
 
-    def test_a_different_number_is_not_mistaken_for_this_round(self):
-        # "Round 2" as the title of round 1 is a mistake, but not ours to hide
-        assert round_heading(1, "Round 2 - design") == "Round 1 — Round 2 - design"
+    def test_a_different_number_is_not_mistaken_for_this_session(self):
+        # "Round 2" as the title of session 1 is a mistake, but not ours to hide
+        assert round_heading(1, "Round 2 - design") == "Session 1 — Round 2 - design"
 
-    def test_a_title_merely_starting_with_the_word_round(self):
-        assert round_heading(1, "Rounding up the evidence") == "Round 1 — Rounding up the evidence"
+    def test_a_title_merely_starting_with_the_word(self):
+        assert round_heading(1, "Rounding up the evidence") == "Session 1 — Rounding up the evidence"
+        assert round_heading(1, "Sessions of the past") == "Session 1 — Sessions of the past"
 
 
 class TestCoverParticipants:
@@ -283,7 +291,7 @@ How people move.
 
 In-person citizens' assembly.
 
-## Round 1 — Design
+## Session 1 — Design
 
 > What can improve?
 
@@ -323,7 +331,7 @@ A shared fleet.
 
 > [11:02] SPEAKER_02: “Why not cargo bikes?”
 
-## Round 2
+## Session 2
 
 _No findings for this round yet._
 
@@ -447,14 +455,15 @@ class TestDates:
 
 class TestRoundHeadingInItalian:
     def test_an_empty_title_is_the_localized_default(self):
-        assert round_heading(3, "", "it") == "Turno 3"
+        assert round_heading(3, "", "it") == "Sessione 3"
 
     def test_the_untouched_english_prefill_is_translated(self):
-        # both round-creation paths pre-fill "Round N" whatever the language
-        assert round_heading(2, "Round 2", "it") == "Turno 2"
+        # both creation paths pre-fill "Session N" (before 0.7 "Round N") whatever the language
+        assert round_heading(2, "Round 2", "it") == "Sessione 2"
+        assert round_heading(2, "Session 2", "it") == "Sessione 2"
 
     def test_a_real_title_gets_the_localized_number(self):
-        assert round_heading(1, "Mobilità", "it") == "Turno 1 — Mobilità"
+        assert round_heading(1, "Mobilità", "it") == "Sessione 1 — Mobilità"
 
     def test_a_title_already_naming_the_turno_is_used_alone(self):
         assert round_heading(1, "Turno 1 - mobilità", "it") == "Turno 1 - mobilità"
@@ -467,8 +476,8 @@ class TestRoundHeadingInItalian:
         assert round_heading(5, "5. Casa", "it") == "5. Casa"
 
     def test_english_is_untouched_by_the_language_argument(self):
-        assert round_heading(2, "Round 2", "en") == "Round 2"
-        assert round_heading(3, "Mobility", "en") == "Round 3 — Mobility"
+        assert round_heading(2, "Round 2", "en") == "Session 2"
+        assert round_heading(3, "Mobility", "en") == "Session 3 — Mobility"
 
 
 class TestItalianMarkdown:
@@ -493,8 +502,8 @@ class TestItalianMarkdown:
 
     def test_rounds_and_tables(self):
         md = render_markdown(_rich_report("it"))
-        assert "## Turno 1 — Design" in md
-        assert "## Turno 2\n" in md  # the untouched "Round 2" pre-fill
+        assert "## Sessione 1 — Design" in md
+        assert "## Sessione 2\n" in md  # the untouched "Round 2" pre-fill
         assert "*Sintesi IA:* Tables focused on buses." in md
         assert "### In tutti i tavoli" in md
         assert "### Tavolo 1" in md
@@ -544,7 +553,7 @@ class TestItalianMarkdown:
         md = render_markdown(_rich_report("it"))
         for english in (
             "Assembly Report", "INTERIM REPORT", "Tables contributing", "Participants:",
-            "Language:", "## Method", "Round 1", "AI summary", "Across all tables",
+            "Language:", "## Method", "Round 1", "Session 1", "AI summary", "Across all tables",
             "### Table", "table(s)", "DRAFT", "Speaker:", "Evidence removed",
             "No findings", "Other findings", "Proposals",
         ):
@@ -593,7 +602,7 @@ class TestBuildReportInItalian:
         finding = report["rounds"][0]["tables"][0]["findings"][0]
         assert finding["type"] == "proposal"
         assert finding["type_label"] == "Proposta"
-        assert report["rounds"][0]["heading"].startswith("Turno 1"), report["rounds"][0]
+        assert report["rounds"][0]["heading"].startswith("Sessione 1"), report["rounds"][0]
 
     def test_both_renderers_take_the_payload(self, database):
         with session_scope() as session:
@@ -602,7 +611,7 @@ class TestBuildReportInItalian:
 
         md = render_markdown(report)
         assert "# Assemblea di Bologna — Rapporto dell'assemblea" in md
-        assert "## Turno 1\n" in md
+        assert "## Sessione 1\n" in md
         assert "**Proposta: Autobus serali**" in md
         assert re.search(r"^_L'IA è stata utilizzata.*_$", md, re.MULTILINE)
         assert render_pdf(report).startswith(b"%PDF")

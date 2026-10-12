@@ -17,7 +17,7 @@ import { api, BASE } from '../api'
 import { downloadBlob, downloadFromApi } from '../download'
 import { SLOW_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
-import { groupByType, roundHeading, typeLabel } from '../labels'
+import { groupByType, kindNoun, roundHeading, typeLabel } from '../labels'
 import type { AssemblyDetail, ReportData } from '../types'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzButton from './ui/CzButton.vue'
@@ -27,6 +27,8 @@ import CzSkeleton from './ui/CzSkeleton.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
+/** what Close / Reopen act on: the assembly, or the standalone Session */
+const noun = computed(() => kindNoun(props.assembly.kind))
 const emit = defineEmits<{ changed: [] }>()
 const { t } = useI18n()
 
@@ -57,7 +59,7 @@ async function closeSession(): Promise<void> {
 	closing.value = true
 	try {
 		await api.closeSession(props.assembly.id)
-		toast(t('organizer.results.report.toast.closed'))
+		toast(t('organizer.results.report.toast.closed', noun.value))
 		await reload()
 		emit('changed')
 	} catch (err) {
@@ -71,7 +73,7 @@ async function reopenSession(): Promise<void> {
 	closing.value = true
 	try {
 		await api.reopenSession(props.assembly.id)
-		toast(t('organizer.results.report.toast.reopened'))
+		toast(t('organizer.results.report.toast.reopened', noun.value))
 		await reload()
 		emit('changed')
 	} catch (err) {
@@ -203,19 +205,19 @@ const hasContent = () =>
 				<template v-if="isFinal">
 					<strong>{{ t('organizer.results.report.finalTitle', { date: closedDate() }) }}</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-						{{ t('organizer.results.report.finalHint') }}
+						{{ t('organizer.results.report.finalHint', noun) }}
 					</span>
 				</template>
 				<template v-else-if="progress?.complete">
 					<strong style="color: var(--cz-green)">{{ t('organizer.results.report.allDoneTitle', { count: progress.tables_expected }, progress.tables_expected) }}</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-						{{ t('organizer.results.report.allDoneHint') }}
+						{{ t('organizer.results.report.allDoneHint', noun) }}
 					</span>
 				</template>
 				<template v-else>
 					<strong>{{ t('organizer.results.report.interimTitle', { complete: progress?.tables_complete ?? 0, expected: progress?.tables_expected ?? 0 }) }}</strong>
 					<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-						{{ t('organizer.results.report.interimHint') }}
+						{{ t('organizer.results.report.interimHint', noun) }}
 					</span>
 				</template>
 			</div>
@@ -225,7 +227,7 @@ const hasContent = () =>
 				:icon="mdiCheckCircleOutline"
 				:disabled="closing"
 				@click="confirmClose = true">
-				{{ t('organizer.results.report.close') }}
+				{{ t('organizer.results.report.close', noun) }}
 			</CzButton>
 			<div v-else class="cz-row" style="flex-wrap: nowrap">
 				<CzButton
@@ -240,7 +242,7 @@ const hasContent = () =>
 					:icon="mdiLockOpenVariantOutline"
 					:disabled="closing"
 					@click="confirmReopen = true">
-					{{ t('organizer.results.report.reopen') }}
+					{{ t('organizer.results.report.reopen', noun) }}
 				</CzButton>
 			</div>
 		</div>
@@ -305,7 +307,7 @@ const hasContent = () =>
 			</div>
 		</div>
 		<p v-if="!isFinal" class="cz-muted" style="margin: -8px 0 16px; font-size: 0.8125rem; text-align: right">
-			{{ t('organizer.results.report.downloadsLocked') }}
+			{{ t('organizer.results.report.downloadsLocked', noun) }}
 		</p>
 
 		<div v-if="report" class="cz-card" style="margin-bottom: 16px">
@@ -458,11 +460,11 @@ const hasContent = () =>
 
 		<CzConfirm
 			v-if="confirmClose && report"
-			:title="t('organizer.results.report.confirmClose.title')"
+			:title="t('organizer.results.report.confirmClose.title', noun)"
 			:message="(progress?.tables_missing?.length
 				? t('organizer.results.report.confirmClose.missingTables', { tables: progress.tables_missing.join(', ') })
-				: '') + t('organizer.results.report.confirmClose.body')"
-			:confirm-label="t('organizer.results.report.confirmClose.confirm')"
+				: '') + t('organizer.results.report.confirmClose.body', noun)"
+			:confirm-label="t('organizer.results.report.confirmClose.confirm', noun)"
 			:danger="false"
 			@confirm="closeSession"
 			@cancel="confirmClose = false" />
@@ -478,9 +480,9 @@ const hasContent = () =>
 
 		<CzConfirm
 			v-if="confirmReopen"
-			:title="t('organizer.results.report.confirmReopen.title')"
-			:message="t('organizer.results.report.confirmReopen.message')"
-			:confirm-label="t('organizer.results.report.confirmReopen.confirm')"
+			:title="t('organizer.results.report.confirmReopen.title', noun)"
+			:message="t('organizer.results.report.confirmReopen.message', noun)"
+			:confirm-label="t('organizer.results.report.confirmReopen.confirm', noun)"
 			@confirm="confirmReopen = false; reopenSession()"
 			@cancel="confirmReopen = false" />
 

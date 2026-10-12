@@ -31,7 +31,7 @@ const recordingMode = ref<'orchestrated' | 'independent' | 'plenary'>('orchestra
 const expectedParticipants = ref(50)
 const tableCount = ref(10)
 const analysisInstructions = ref('')
-const rounds = ref<RoundIn[]>([{ title: 'Round 1', question: '', duration_minutes: 30 }])
+const rounds = ref<RoundIn[]>([{ title: 'Session 1', question: '', duration_minutes: 30 }])
 
 /* The component has no <form>, so the inputs' min/max never run — they only
  * drive the spinner arrows. An assembly created with zero tables gets no Table
@@ -47,7 +47,7 @@ watch(recordingMode, (mode) => {
 
 function addRound(): void {
 	rounds.value.push({
-		title: `Round ${rounds.value.length + 1}`,
+		title: `Session ${rounds.value.length + 1}`,
 		question: '',
 		duration_minutes: 30,
 	})

@@ -202,7 +202,7 @@
 			"screenLockHint": "Questo telefono potrebbe spegnere lo schermo da solo — impostate il blocco automatico su Mai nelle impostazioni del telefono fino alla fine della sessione.",
 			"badge": "REGISTRAZIONE",
 			"startedBanner": "● Registrazione avviata",
-			"aiTitle": "Facilitatore AI",
+			"aiTitle": "Assistente IA",
 			"aiHint": "Una voce discreta accanto al tavolo: una breve domanda o un promemoria sui telefoni quando il tempo finisce, cala il silenzio o la discussione divaga.",
 			"aiOff": "Spento",
 			"aiLight": "Leggero",
@@ -272,7 +272,7 @@
 		},
 		"purged": {
 			"title": "La registrazione è stata rimossa da questo telefono",
-			"body": "L'organizzatore ha concluso questa assemblea, quindi l'audio è stato eliminato da questo dispositivo. Il server conserva la registrazione: non è andato perso nulla.",
+			"body": "L'organizzatore ha concluso questa assemblea, quindi l'audio è stato eliminato da questo telefono. Il server conserva la registrazione: non è andato perso nulla.",
 			"kept": "Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono all'organizzatore. | Una registrazione NON è stata eliminata perché il server non l'ha ancora confermata. Mostrate questo telefono all'organizzatore. | {count} registrazioni NON sono state eliminate perché il server non le ha ancora confermate. Mostrate questo telefono all'organizzatore.",
 			"dismiss": "OK"
 		},
@@ -301,7 +301,7 @@
 			"minutes": "{minutes} minuti | {minutes} minuto | {minutes} minuti"
 		},
 		"addDevice": {
-			"button": "Aggiungi un altro dispositivo",
+			"button": "Aggiungi un altro telefono",
 			"title": "Scansiona per unirti a questa sala",
 			"hint": "Ogni telefono che scansiona questo codice registra la stessa discussione.",
 			"unavailable": "Il codice di accesso non è più disponibile — chiedi all'organizzatore."
@@ -335,7 +335,7 @@
 		"message": {
 			"from": "Dall'organizzatore",
 			"fromFacilitator": "Dal facilitatore",
-			"fromAi": "Facilitatore AI",
+			"fromAi": "Assistente IA",
 			"helpful": "Utile",
 			"notHelpful": "Non utile",
 			"thanks": "Grazie — annotato.",
@@ -402,9 +402,9 @@
 			"speakingTitle": "EQUILIBRIO DEGLI INTERVENTI",
 			"speakingUnavailable": "Non disponibile con questo motore di trascrizione.",
 			"voice": "Voce {letter}",
-			"adviceTitle": "FACILITATORE AI",
-			"adviceNone": "I suggerimenti del facilitatore AI compariranno qui, perché tu li valuti.",
-			"adviceOff": "Il facilitatore AI è spento per questo tavolo.",
+			"adviceTitle": "ASSISTENTE IA",
+			"adviceNone": "I suggerimenti dell'assistente IA compariranno qui, perché tu li valuti.",
+			"adviceOff": "L'assistente IA è spento per questo tavolo.",
 			"adviceLevel": "Livello: {level}",
 			"helpful": "Utile",
 			"notHelpful": "Non utile",
@@ -421,7 +421,7 @@
 			"cancel": "Annulla",
 			"leave": "Lascia questo tavolo",
 			"closed": "L'organizzatore ha chiuso questa assemblea.",
-			"goneTitle": "Questa sessione del facilitatore è terminata",
+			"goneTitle": "Questo collegamento del facilitatore è scaduto",
 			"goneBody": "Scansiona di nuovo il codice facilitatore del tavolo per tornare.",
 			"recorderSilent": "Il registratore {label} non invia audio da {seconds} s — vai a vedere quel telefono: il registratore è ancora aperto e in primo piano?"
 		},

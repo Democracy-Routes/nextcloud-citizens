@@ -19,8 +19,8 @@
 			"new_idea": "Emerging ideas"
 		},
 		"otherFindings": "Other findings",
-		"round": "Round {position}",
-		"roundTitled": "Round {position} — {title}"
+		"round": "Session {position}",
+		"roundTitled": "Session {position} — {title}"
 	},
 	"analysis": {
 		"pausedWhileEditing": "Paused while you edit",
@@ -102,8 +102,8 @@
 	},
 	"report": {
 		"toast": {
-			"closed": "Session closed — the final report is ready",
-			"reopened": "Session reopened — tables can record again",
+			"closed": "{Thing} is closed — the final report is ready",
+			"reopened": "{Thing} is reopened — tables can record again",
 			"unpublished": "Report is no longer visible on table phones",
 			"published": "Report published — table phones can now view and download it",
 			"synthesisQueued": "Synthesis queued — it appears here in a minute or two",
@@ -111,15 +111,15 @@
 			"downloadFailed": "The report could not be downloaded — check the pop-up blocker"
 		},
 		"finalTitle": "Final report · closed {date}",
-		"finalHint": "The session is closed: tables can no longer record, and this is the definitive report. Participants keep reading this version even if you reopen — approve more findings and press Update to push them.",
+		"finalHint": "{Thing} is closed: tables can no longer record, and this is the definitive report. Participants keep reading this version even if you reopen — approve more findings and press Update to push them.",
 		"allDoneTitle": "All {count} tables have finished.",
-		"allDoneHint": "Close the session to create the final report and enable the downloads.",
+		"allDoneHint": "Close {thing} to create the final report and enable the downloads.",
 		"interimTitle": "Interim report — {complete} of {expected} tables have completed all sessions",
-		"interimHint": "This is a preview of an assembly still in progress. Closing the session creates the final report and enables the downloads — you can reopen later.",
-		"close": "Close session & create final report",
+		"interimHint": "This is a preview of {thing} still in progress. Closing it creates the final report and enables the downloads — you can reopen later.",
+		"close": "Close {thing} & create the final report",
 		"updating": "Updating…",
 		"updatePublished": "Update the published version",
-		"reopen": "Reopen session",
+		"reopen": "Reopen {thing}",
 		"synthesis": {
 			"title": "How the discussion developed",
 			"haveLead": "A chapter across the sessions, written from their summaries and approved cross-table findings",
@@ -135,7 +135,7 @@
 		"pdf": "PDF",
 		"markdown": "Markdown",
 		"json": "JSON",
-		"downloadsLocked": "Downloads become available once the session is closed.",
+		"downloadsLocked": "Downloads become available once {thing} is closed.",
 		"publishedTitle": "Published to table phones",
 		"unpublishedTitle": "Not yet published to table phones",
 		"publishedHint": "Recording phones can view this report and download the PDF (approved findings and AI summaries only — drafts stay private).",
@@ -158,10 +158,10 @@
 		"looksRight": "✓ {count} looks right",
 		"flaggedMissing": "· ⚠ {count} flagged something missing",
 		"confirmClose": {
-			"title": "Close the session and create the final report?",
+			"title": "Close {thing} and create the final report?",
 			"missingTables": "Tables {tables} never recorded — they will not appear in the final report. ",
-			"body": "Tables can no longer record after closing, and the report becomes final. You can reopen the session later if a late table needs to record.",
-			"confirm": "Close session"
+			"body": "Tables can no longer record after closing, and the report becomes final. You can reopen {thing} later if a late table needs to record.",
+			"confirm": "Close {thing}"
 		},
 		"confirmUnpublish": {
 			"title": "Stop sharing the report with the tables?",
@@ -169,9 +169,9 @@
 			"confirm": "Unpublish"
 		},
 		"confirmReopen": {
-			"title": "Reopen this session?",
-			"message": "Tables can record again and the report stops being final. Participants keep reading the version that was frozen when the session closed, until you close it again.",
-			"confirm": "Reopen session"
+			"title": "Reopen {thing}?",
+			"message": "Tables can record again and the report stops being final. Participants keep reading the version that was frozen when {thing} closed, until you close it again.",
+			"confirm": "Reopen {thing}"
 		},
 		"confirmPublish": {
 			"title": "Publish report to table phones?",
@@ -189,7 +189,7 @@
 		"approve": "Approve",
 		"reject": "Reject",
 		"edit": "Edit",
-		"excerpts": "{count} evidence excerpt(s)",
+		"excerpts": "{count} supporting quotation(s)",
 		"speaker": "SPEAKER",
 		"status": {
 			"DRAFT": "draft",
@@ -235,7 +235,7 @@
 			"UPLOAD_TIMED_OUT": "The phone stopped uploading and did not come back. Whatever reached the server is kept; the table can record again.",
 			"UPLOAD_ABANDONED": "Waiting for this upload was stopped by an organizer. The audio already received is kept.",
 			"RATE_LIMITED": "The provider is rate-limiting requests (HTTP 429). The job waits and retries by itself — do not start another run.",
-			"LIVE_CAPTIONS_MISSING": "Final transcription is off and the caption session never wrote a transcript. Re-transcribe from the stored audio.",
+			"LIVE_CAPTIONS_MISSING": "Final transcription is off and the live captions never produced a transcript. Re-transcribe from the stored audio.",
 			"LIVE_CAPTIONS_UNREADABLE": "Final transcription is off and the caption file could not be read. Re-transcribe from the stored audio.",
 			"LIVE_CAPTIONS_EMPTY": "Final transcription is off and the captions contained no text. Re-transcribe from the stored audio.",
 			"DEVICE_SILENT": "The phone went silent mid-session and the table was released. Whatever reached the server is kept.",

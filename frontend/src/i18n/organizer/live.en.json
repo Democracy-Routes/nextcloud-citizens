@@ -3,8 +3,8 @@
 		"tableN": "Table {number}",
 		"toast": {
 			"acknowledged": "Table {number}: acknowledged",
-			"aiPaused": "Table {number}: AI facilitator paused",
-			"aiResumed": "Table {number}: AI facilitator resumed",
+			"aiPaused": "Table {number}: AI assistant paused",
+			"aiResumed": "Table {number}: AI assistant resumed",
 			"extended": "Session extended by {minutes} minutes",
 			"started": "Session started — armed tables are now recording",
 			"ended": "Session ended",
@@ -73,7 +73,7 @@
 			"armed": "armed",
 			"background": "in background",
 			"connected": "connected",
-			"none": "no device"
+			"none": "no phone"
 		},
 		"prior": {
 			"continued": "earlier part — the table continued",
@@ -101,7 +101,7 @@
 			"send": "Send"
 		},
 		"ai": {
-			"title": "AI facilitator",
+			"title": "AI assistant",
 			"nudges": "{count} nudge this session | {count} nudges this session",
 			"nothingYet": "nothing said yet",
 			"show": "Show",
@@ -136,7 +136,7 @@
 		},
 		"columns": {
 			"table": "Table",
-			"device": "Device",
+			"device": "Phone",
 			"recording": "Recording",
 			"elapsed": "Elapsed",
 			"upload": "Upload",
@@ -171,15 +171,15 @@
 			"transcript": "Transcript",
 			"acknowledgeTitle": "The table raised its hand — tell it you have seen it",
 			"acknowledge": "Acknowledge",
-			"pauseAiTitle": "Pause the AI facilitator at this table",
+			"pauseAiTitle": "Pause the AI assistant at this table",
 			"pauseAi": "Pause AI",
-			"resumeAiTitle": "Let the AI facilitator speak at this table again (the assembly's level)",
+			"resumeAiTitle": "Let the AI assistant speak at this table again (the assembly's level)",
 			"resumeAi": "Resume AI",
 			"handOverTitle": "This table's phone has stopped responding — hand the table to another phone",
 			"handOver": "Hand over table",
 			"retryTitle": "Assemble and transcribe the audio that reached the server before the phone stopped",
 			"retry": "Retry",
-			"deviceLog": "Device log"
+			"deviceLog": "Phone log"
 		},
 		"noTables": "This session has no tables.",
 		"transcript": {
@@ -187,8 +187,8 @@
 			"empty": "The transcript is empty (no speech detected)."
 		},
 		"deviceLog": {
-			"title": "Table {number} — device log (latest 50)",
-			"empty": "No device log received yet."
+			"title": "Table {number} — phone log (latest 50)",
+			"empty": "No phone log received yet."
 		}
 	},
 	"files": {
@@ -216,10 +216,10 @@
 		"coverage": {
 			"askedOnClose": "The phones were asked to clear this assembly's audio when the session was closed.",
 			"cleared": "{cleared} of {devices}",
-			"reported": "recorder sessions last reported no local recordings.",
+			"reported": "the phones last reported no local recordings.",
 			"stillHolding": "{count} still hold audio.",
 			"unknown": "{count} have not reported a local recording count.",
-			"note": "These counts include older sessions. Joining again can count the same phone more than once; expired or revoked sessions may need manual cleanup."
+			"note": "These counts include phones that joined earlier. Joining again can count the same phone more than once; expired or revoked phone links may need manual cleanup."
 		},
 		"keptPastRetention": "{count} recording was kept past the retention period because no transcript exists for it — for it, the audio is the only record of the discussion. Retry transcription, or delete it deliberately. | {count} recordings were kept past the retention period because no transcript exists for them — for those, the audio is the only record of the discussion. Retry transcription, or delete them deliberately.",
 		"exportHint": "The full session export bundles metadata, audio, transcripts and the report — enough to move this assembly to another server. Deleting audio keeps transcripts, findings and the report.",
@@ -253,7 +253,7 @@
 		},
 		"confirmRetranscribe": {
 			"title": "Transcribe this table again?",
-			"message": "Table {number} will be transcribed again from its stored audio{replacing}. Quotes inside existing findings refer to the old text, so they are marked as removed, and the analysis runs again. The audio is not touched.",
+			"message": "Table {number} will be transcribed again from its stored audio{replacing}. Quotations inside existing findings refer to the old text, so they are marked as removed, and the analysis runs again. The audio is not touched.",
 			"replacingLive": ", replacing the transcript taken from the live captions",
 			"replacingCurrent": ", replacing the current transcript",
 			"confirm": "Transcribe again"
@@ -265,7 +265,7 @@
 		},
 		"confirmDeleteTranscript": {
 			"title": "Delete this table's transcript?",
-			"message": "The verbatim text of table {number} will be permanently erased — including the quotes shown inside findings and in the published report. The findings and AI summaries stay. {audioNote}",
+			"message": "The verbatim text of table {number} will be permanently erased — including the quotations shown inside findings and in the published report. The findings and AI summaries stay. {audioNote}",
 			"audioStillHere": "The audio is still here, so this recording can be transcribed again.",
 			"audioGone": "Its audio is already deleted, so the transcript cannot be recreated.",
 			"confirm": "Delete transcript"
@@ -277,7 +277,7 @@
 		},
 		"confirmAllTranscripts": {
 			"title": "Delete all transcripts of this session?",
-			"message": "Every table's verbatim text will be permanently erased, including the quotes inside findings and in the published report. Findings and AI summaries stay. Tables whose audio is still here can be transcribed again.",
+			"message": "Every table's verbatim text will be permanently erased, including the quotations inside findings and in the published report. Findings and AI summaries stay. Tables whose audio is still here can be transcribed again.",
 			"confirm": "Delete all transcripts"
 		},
 		"confirmAllAudio": {

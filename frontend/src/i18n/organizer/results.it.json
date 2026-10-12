@@ -19,8 +19,8 @@
 			"new_idea": "Idee emergenti"
 		},
 		"otherFindings": "Altri risultati",
-		"round": "Turno {position}",
-		"roundTitled": "Turno {position} — {title}"
+		"round": "Sessione {position}",
+		"roundTitled": "Sessione {position} — {title}"
 	},
 	"analysis": {
 		"pausedWhileEditing": "In pausa mentre modifichi",
@@ -102,8 +102,8 @@
 	},
 	"report": {
 		"toast": {
-			"closed": "Assemblea chiusa — il report finale è pronto",
-			"reopened": "Assemblea riaperta — i tavoli possono registrare di nuovo",
+			"closed": "{Thing} è chiusa — il report finale è pronto",
+			"reopened": "{Thing} è riaperta — i tavoli possono registrare di nuovo",
 			"unpublished": "Il report non è più visibile sui telefoni dei tavoli",
 			"published": "Report pubblicato — i telefoni dei tavoli possono ora vederlo e scaricarlo",
 			"synthesisQueued": "Sintesi in coda — comparirà qui tra un minuto o due",
@@ -111,15 +111,15 @@
 			"downloadFailed": "Non è stato possibile scaricare il report — controlla il blocco dei pop-up"
 		},
 		"finalTitle": "Report finale · chiuso il {date}",
-		"finalHint": "L'assemblea è chiusa: i tavoli non possono più registrare e questo è il report definitivo. I partecipanti continuano a leggere questa versione anche se riapri — approva altri risultati e premi Aggiorna per inviarli.",
+		"finalHint": "{Thing} è chiusa: i tavoli non possono più registrare e questo è il report definitivo. I partecipanti continuano a leggere questa versione anche se riapri — approva altri risultati e premi Aggiorna per inviarli.",
 		"allDoneTitle": "Tutti i {count} tavoli hanno finito.",
-		"allDoneHint": "Chiudi l'assemblea per creare il report finale e abilitare i download.",
+		"allDoneHint": "Chiudi {thing} per creare il report finale e abilitare i download.",
 		"interimTitle": "Report provvisorio — {complete} tavoli su {expected} hanno completato tutte le sessioni",
-		"interimHint": "Questa è un'anteprima di un'assemblea ancora in corso. Chiudendo l'assemblea si crea il report finale e si abilitano i download — potrai riaprirla in seguito.",
-		"close": "Chiudi l'assemblea e crea il report finale",
+		"interimHint": "Questa è un'anteprima di {thing} ancora in corso. Chiudendola si crea il report finale e si abilitano i download — potrai riaprirla in seguito.",
+		"close": "Chiudi {thing} e crea il report finale",
 		"updating": "Aggiornamento…",
 		"updatePublished": "Aggiorna la versione pubblicata",
-		"reopen": "Riapri l'assemblea",
+		"reopen": "Riapri {thing}",
 		"synthesis": {
 			"title": "Come si è sviluppata la discussione",
 			"haveLead": "Un capitolo che attraversa le sessioni, scritto a partire dalle loro sintesi e dai risultati tra i tavoli approvati",
@@ -135,7 +135,7 @@
 		"pdf": "PDF",
 		"markdown": "Markdown",
 		"json": "JSON",
-		"downloadsLocked": "I download diventano disponibili quando l'assemblea è chiusa.",
+		"downloadsLocked": "I download diventano disponibili quando {thing} è chiusa.",
 		"publishedTitle": "Pubblicato sui telefoni dei tavoli",
 		"unpublishedTitle": "Non ancora pubblicato sui telefoni dei tavoli",
 		"publishedHint": "I telefoni che registrano possono vedere questo report e scaricare il PDF (solo risultati approvati e sintesi AI — le bozze restano private).",
@@ -158,10 +158,10 @@
 		"looksRight": "✓ {count} dicono che va bene | ✓ {count} dice che va bene | ✓ {count} dicono che va bene",
 		"flaggedMissing": "· ⚠ {count} hanno segnalato che manca qualcosa | · ⚠ {count} ha segnalato che manca qualcosa | · ⚠ {count} hanno segnalato che manca qualcosa",
 		"confirmClose": {
-			"title": "Chiudere l'assemblea e creare il report finale?",
+			"title": "Chiudere {thing} e creare il report finale?",
 			"missingTables": "I tavoli {tables} non hanno mai registrato — non compariranno nel report finale. ",
-			"body": "Dopo la chiusura i tavoli non possono più registrare e il report diventa definitivo. Potrai riaprire l'assemblea in seguito se un tavolo in ritardo deve registrare.",
-			"confirm": "Chiudi l'assemblea"
+			"body": "Dopo la chiusura i tavoli non possono più registrare e il report diventa definitivo. Potrai riaprire {thing} in seguito se un tavolo in ritardo deve registrare.",
+			"confirm": "Chiudi {thing}"
 		},
 		"confirmUnpublish": {
 			"title": "Smettere di condividere il report con i tavoli?",
@@ -169,9 +169,9 @@
 			"confirm": "Ritira la pubblicazione"
 		},
 		"confirmReopen": {
-			"title": "Riaprire questa assemblea?",
-			"message": "I tavoli possono registrare di nuovo e il report smette di essere definitivo. I partecipanti continuano a leggere la versione congelata alla chiusura, finché non la chiudi di nuovo.",
-			"confirm": "Riapri l'assemblea"
+			"title": "Riaprire {thing}?",
+			"message": "I tavoli possono registrare di nuovo e il report smette di essere definitivo. I partecipanti continuano a leggere la versione congelata quando {thing} è stata chiusa, finché non la chiudi di nuovo.",
+			"confirm": "Riapri {thing}"
 		},
 		"confirmPublish": {
 			"title": "Pubblicare il report sui telefoni dei tavoli?",
@@ -189,7 +189,7 @@
 		"approve": "Approva",
 		"reject": "Scarta",
 		"edit": "Modifica",
-		"excerpts": "{count} estratti a sostegno | {count} estratto a sostegno | {count} estratti a sostegno",
+		"excerpts": "{count} citazioni a sostegno | {count} citazione a sostegno | {count} citazioni a sostegno",
 		"speaker": "PARTECIPANTE",
 		"status": {
 			"DRAFT": "bozza",
@@ -235,7 +235,7 @@
 			"UPLOAD_TIMED_OUT": "Il telefono ha smesso di caricare e non è più tornato. Quanto è arrivato al server è conservato; il tavolo può registrare di nuovo.",
 			"UPLOAD_ABANDONED": "Un organizzatore ha interrotto l'attesa di questo caricamento. L'audio già ricevuto è conservato.",
 			"RATE_LIMITED": "Il fornitore sta limitando le richieste (HTTP 429). L'operazione attende e riprova da sola — non avviarne un'altra.",
-			"LIVE_CAPTIONS_MISSING": "La trascrizione finale è disattivata e la sessione dei sottotitoli non ha mai scritto una trascrizione. Trascrivi di nuovo dall'audio conservato.",
+			"LIVE_CAPTIONS_MISSING": "La trascrizione finale è disattivata e i sottotitoli dal vivo non hanno mai prodotto una trascrizione. Trascrivi di nuovo dall'audio conservato.",
 			"LIVE_CAPTIONS_UNREADABLE": "La trascrizione finale è disattivata e il file dei sottotitoli non è leggibile. Trascrivi di nuovo dall'audio conservato.",
 			"LIVE_CAPTIONS_EMPTY": "La trascrizione finale è disattivata e i sottotitoli non contenevano testo. Trascrivi di nuovo dall'audio conservato.",
 			"DEVICE_SILENT": "Il telefono è rimasto muto a metà sessione e il tavolo è stato liberato. Quanto è arrivato al server è conservato.",

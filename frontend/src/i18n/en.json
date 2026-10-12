@@ -202,7 +202,7 @@
 			"screenLockHint": "This phone may switch its screen off by itself — set auto-lock to Never in the phone's settings until the session ends.",
 			"badge": "RECORDING",
 			"startedBanner": "● Recording started",
-			"aiTitle": "AI facilitator",
+			"aiTitle": "AI assistant",
 			"aiHint": "A quiet voice beside the table: a short question or reminder on the phones when time runs out, the room goes silent or the discussion drifts.",
 			"aiOff": "Off",
 			"aiLight": "Light",
@@ -272,7 +272,7 @@
 		},
 		"purged": {
 			"title": "The recording was removed from this phone",
-			"body": "The organizer has finished with this assembly, so its audio has been deleted from this device. The server keeps the recording; nothing has been lost.",
+			"body": "The organizer has finished with this assembly, so its audio has been deleted from this phone. The server keeps the recording; nothing has been lost.",
 			"kept": "One recording was NOT deleted, because the server has not confirmed it yet. Please show this phone to the facilitator. | One recording was NOT deleted, because the server has not confirmed it yet. Please show this phone to the facilitator. | {count} recordings were NOT deleted, because the server has not confirmed them yet. Please show this phone to the facilitator.",
 			"dismiss": "OK"
 		},
@@ -301,7 +301,7 @@
 			"minutes": "{minutes} minutes | {minutes} minute | {minutes} minutes"
 		},
 		"addDevice": {
-			"button": "Add another device",
+			"button": "Add another phone",
 			"title": "Scan to join this room",
 			"hint": "Any phone that scans this code records the same discussion.",
 			"unavailable": "The join code is no longer available — ask the organizer."
@@ -335,7 +335,7 @@
 		"message": {
 			"from": "From the organizer",
 			"fromFacilitator": "From the facilitator",
-			"fromAi": "AI facilitator",
+			"fromAi": "AI assistant",
 			"helpful": "Helpful",
 			"notHelpful": "Not helpful",
 			"thanks": "Thanks — noted.",
@@ -402,9 +402,9 @@
 			"speakingTitle": "SPEAKING BALANCE",
 			"speakingUnavailable": "Not available with this transcription engine.",
 			"voice": "Voice {letter}",
-			"adviceTitle": "AI FACILITATOR",
-			"adviceNone": "Advice from the AI facilitator will appear here, for you to judge.",
-			"adviceOff": "The AI facilitator is off for this table.",
+			"adviceTitle": "AI ASSISTANT",
+			"adviceNone": "Advice from the AI assistant will appear here, for you to judge.",
+			"adviceOff": "The AI assistant is off for this table.",
 			"adviceLevel": "Level: {level}",
 			"helpful": "Helpful",
 			"notHelpful": "Not helpful",
@@ -421,7 +421,7 @@
 			"cancel": "Cancel",
 			"leave": "Leave this table",
 			"closed": "The organizer has closed this assembly.",
-			"goneTitle": "This facilitator session has ended",
+			"goneTitle": "This facilitator link has expired",
 			"goneBody": "Scan the table's facilitator code again to come back.",
 			"recorderSilent": "Recorder {label} has sent no audio for {seconds} s — go and look at that phone: is the recorder still open and in front?"
 		},

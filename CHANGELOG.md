@@ -76,6 +76,19 @@ not rewritten.
   registration and the report's table list are the organizer's plan, so the
   phone's code is refused there (409 `ORGANIZER_ADDS_TABLES`) and the button
   is not shown; the organizer's own Add table on the QR codes tab is unchanged.
+- **One vocabulary, on screen and in the report.** The report headings and
+  the pre-filled titles say Session N / Sessione N (a pre-0.7 "Round N" or
+  "Turno N" title is still recognised as the untouched default and printed
+  as the plain heading). The software that sends advice to tables is the
+  "AI assistant" (Assistente IA); "facilitator" is only ever the person at
+  the table. Quotations, never excerpts or quotes. The Report tab closes and
+  reopens "the assembly" or "the Session" by name in both languages (English
+  used to say session for both, Italian assemblea for both). The Home screen
+  defines the two words: a Session is one discussion of the tables on one
+  question, an Assembly a programme of Sessions with the same people and one
+  report. Reseating between sessions is "New seating"; a phone is a phone,
+  not a device; a facilitator's code that stopped working is an expired
+  link, not an ended session.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`

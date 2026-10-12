@@ -131,8 +131,8 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "human-reviewed findings follow."
         ),
         # rounds
-        "round": "Round {position}",
-        "round_titled": "Round {position} — {title}",
+        "round": "Session {position}",
+        "round_titled": "Session {position} — {title}",
         "ai_summary": "AI summary",
         "speaking_balance": "Speaking balance",
         "recorder_changed_caveat": (
@@ -256,8 +256,8 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "Panoramica generata dall'IA di ciascun turno in tutti i tavoli; seguono i "
             "dettagli e i risultati revisionati da una persona."
         ),
-        "round": "Turno {position}",
-        "round_titled": "Turno {position} — {title}",
+        "round": "Sessione {position}",
+        "round_titled": "Sessione {position} — {title}",
         "ai_summary": "Sintesi IA",
         "speaking_balance": "Equilibrio degli interventi",
         "recorder_changed_caveat": (

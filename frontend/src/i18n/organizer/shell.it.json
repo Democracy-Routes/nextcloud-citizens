@@ -10,9 +10,15 @@
 		"showList": "Mostra l'elenco",
 		"hideList": "Nascondi l'elenco"
 	},
+	"kind": {
+		"assembly": "l'assemblea",
+		"assemblyCap": "L'assemblea",
+		"session": "la Sessione",
+		"sessionCap": "La Sessione"
+	},
 	"home": {
 		"title": "Citizens",
-		"hint": "Una sola discussione, o un programma di più incontri con le stesse persone? Tutto il resto — tavoli, codici QR, vista in diretta, trascrizioni, report — è uguale, e una Sessione può diventare un'Assemblea in seguito.",
+		"hint": "Una Sessione è una discussione dei tavoli su una domanda. Un'Assemblea è un programma di Sessioni con le stesse persone e un unico report. Tutto il resto — tavoli, codici QR, vista dal vivo, trascrizioni, report — è identico, e una Sessione può diventare un'Assemblea in seguito.",
 		"readyTitle": "Il registratore è pronto.",
 		"readyBody": "Il browser non lo ha aperto da solo — aprilo da qui, su questo telefono.",
 		"openRecorder": "Apri il registratore",

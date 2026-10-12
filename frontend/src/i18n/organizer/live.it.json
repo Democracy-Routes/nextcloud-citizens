@@ -3,8 +3,8 @@
 		"tableN": "Tavolo {number}",
 		"toast": {
 			"acknowledged": "Tavolo {number}: preso in carico",
-			"aiPaused": "Tavolo {number}: facilitatore AI in pausa",
-			"aiResumed": "Tavolo {number}: facilitatore AI riattivato",
+			"aiPaused": "Tavolo {number}: assistente IA in pausa",
+			"aiResumed": "Tavolo {number}: assistente IA riattivato",
 			"extended": "Sessione prolungata di {minutes} minuti",
 			"started": "Sessione avviata — i tavoli pronti stanno registrando",
 			"ended": "Sessione terminata",
@@ -101,7 +101,7 @@
 			"send": "Invia"
 		},
 		"ai": {
-			"title": "Facilitatore AI",
+			"title": "Assistente IA",
 			"nudges": "{count} intervento in questa sessione | {count} interventi in questa sessione",
 			"nothingYet": "non ha ancora detto nulla",
 			"show": "Mostra",
@@ -171,9 +171,9 @@
 			"transcript": "Trascrizione",
 			"acknowledgeTitle": "Il tavolo ha alzato la mano — fagli sapere che l'hai visto",
 			"acknowledge": "Preso in carico",
-			"pauseAiTitle": "Metti in pausa il facilitatore AI a questo tavolo",
+			"pauseAiTitle": "Metti in pausa l'assistente IA a questo tavolo",
 			"pauseAi": "Pausa AI",
-			"resumeAiTitle": "Lascia che il facilitatore AI intervenga di nuovo a questo tavolo (al livello dell'assemblea)",
+			"resumeAiTitle": "Lascia che l'assistente IA intervenga di nuovo a questo tavolo (al livello dell'assemblea)",
 			"resumeAi": "Riattiva AI",
 			"handOverTitle": "Il telefono di questo tavolo ha smesso di rispondere — passa il tavolo a un altro telefono",
 			"handOver": "Passa il tavolo",
@@ -216,10 +216,10 @@
 		"coverage": {
 			"askedOnClose": "Alla chiusura dell'assemblea è stato chiesto ai telefoni di cancellare l'audio.",
 			"cleared": "{cleared} su {devices}",
-			"reported": "sessioni del registratore hanno riferito di non avere più registrazioni locali.",
+			"reported": "i telefoni hanno riferito di non avere più registrazioni locali.",
 			"stillHolding": "{count} conservano ancora audio.",
 			"unknown": "{count} non hanno riferito quante registrazioni locali hanno.",
-			"note": "Questi conteggi includono anche le sessioni più vecchie. Un nuovo accesso può contare lo stesso telefono più volte; le sessioni scadute o revocate potrebbero richiedere una pulizia manuale."
+			"note": "Questi conteggi includono anche i telefoni collegati in precedenza. Un nuovo accesso può contare lo stesso telefono più volte; i collegamenti scaduti o revocati potrebbero richiedere una pulizia manuale."
 		},
 		"keptPastRetention": "{count} registrazione è stata conservata oltre il periodo previsto perché non ne esiste la trascrizione — l'audio è l'unica traccia della discussione. Riprova la trascrizione, oppure eliminala di proposito. | {count} registrazioni sono state conservate oltre il periodo previsto perché non ne esiste la trascrizione — per queste, l'audio è l'unica traccia della discussione. Riprova la trascrizione, oppure eliminale di proposito.",
 		"exportHint": "L'esportazione completa raccoglie metadati, audio, trascrizioni e report — quanto basta per spostare questa assemblea su un altro server. Eliminare l'audio conserva trascrizioni, risultati e report.",

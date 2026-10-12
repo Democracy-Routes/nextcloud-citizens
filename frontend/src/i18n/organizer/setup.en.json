@@ -28,12 +28,12 @@
 			"languageDetected": "Detected from the recording: this Session was started with Record now, so the first transcript decides the language of the analysis and the report. Choosing one here fixes it instead.",
 			"languageLocked": "Locked: this assembly has started recording. The language decides how audio is transcribed, so changing it now would leave one assembly with transcripts in two languages.",
 			"autoPurge": "Clear the audio off the table phones when the session is closed",
-			"autoPurgeHint": "Every phone keeps a copy of its table's audio so that recording survives a bad network. This asks them to delete it once the assembly is finished — which matters most when participants used their own devices. A phone only ever deletes audio the server has already confirmed, so this cannot remove a last copy. Turn it off to keep the phones' copies until you have downloaded the export.",
+			"autoPurgeHint": "Every phone keeps a copy of its table's audio so that recording survives a bad network. This asks them to delete it once the assembly is finished — which matters most when participants used their own phones. A phone only ever deletes audio the server has already confirmed, so this cannot remove a last copy. Turn it off to keep the phones' copies until you have downloaded the export.",
 			"consent": "Consent at the table",
 			"consentRequired": "Required — a table records only once one person registered there has consented",
 			"consentOptional": "Optional — the notice is shown and registration offered, nothing is blocked",
 			"consentHint": "Each person registers individually on the table's phone or their own (name, optional email, explicit ticks against the notice the server renders). The record — who, what, which notice — is kept with the assembly and exported. Required is the setting for an organized assembly; Optional suits a spontaneous session.",
-			"aiFacilitator": "AI facilitator",
+			"aiFacilitator": "AI assistant",
 			"aiLevel": {
 				"default": "Default from Settings ({level})",
 				"off": "Off",
@@ -172,7 +172,7 @@
 			"random": "Random",
 			"continuity": "Keep previous seating"
 		},
-		"remix": "Remix",
+		"remix": "New seating",
 		"copyPrevious": "Copy previous session",
 		"emptyTitle": "No tables in this session",
 		"emptyHint": "Tables are created with the session, from the assembly's table count. If that count was zero this session has no tables and no QR codes, and adding another session will not help — the assembly needs to be created again.",

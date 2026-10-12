@@ -10,9 +10,15 @@
 		"showList": "Show the list",
 		"hideList": "Hide the list"
 	},
+	"kind": {
+		"assembly": "the assembly",
+		"assemblyCap": "The assembly",
+		"session": "the Session",
+		"sessionCap": "The Session"
+	},
 	"home": {
 		"title": "Citizens",
-		"hint": "One discussion, or a programme of several with the same people? Everything underneath — tables, QR codes, live view, transcripts, report — is the same, and a Session can become an Assembly later.",
+		"hint": "A Session is one discussion of the tables on one question. An Assembly is a programme of Sessions with the same people and one report across them. Everything underneath — tables, QR codes, live view, transcripts, report — is the same, and a Session can become an Assembly later.",
 		"readyTitle": "Your recorder is ready.",
 		"readyBody": "The browser did not open it by itself — open it here, on this phone.",
 		"openRecorder": "Open the recorder",

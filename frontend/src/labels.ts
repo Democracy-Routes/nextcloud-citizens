@@ -68,23 +68,35 @@ export function groupByType<T extends { type: string }>(
  * this reads the matching organizer.results.labels keys through t(), which
  * follows the UI's own current locale.
  *
- * The app manufactures its own redundancy here: both round-creation paths
- * pre-fill the title with "Round N" (English, regardless of the assembly's
- * language), so an organizer who edits it to "Round 1 - design" got
- * "Round 1 — Round 1 - design" everywhere.
+ * The app manufactures its own redundancy here: both creation paths pre-fill
+ * the title with "Session N" (before 0.7: "Round N"; English, regardless of
+ * the assembly's language), so an organizer who edits it to "Session 1 -
+ * design" would get "Session 1 — Session 1 - design" everywhere.
  */
+/** The titles the app itself pre-fills, in every spelling it has used. */
+const DEFAULT_TITLE_WORDS = ['session', 'round', 'sessione', 'turno']
+
 export function roundHeading(position: number, title: string): string {
 	const name = (title ?? '').trim()
 	const defaultHeading = t('organizer.results.labels.round', { position })
-	if (!name || name === `Round ${position}`) return defaultHeading
-	const first = name.split(/\s+/)[0]?.replace(/[.:\-–—]+$/, '') ?? ''
 	const lowered = name.toLowerCase()
+	if (!name || DEFAULT_TITLE_WORDS.some((word) => lowered === `${word} ${position}`)) return defaultHeading
+	const first = name.split(/\s+/)[0]?.replace(/[.:\-–—]+$/, '') ?? ''
 	if (
-		lowered.startsWith(`round ${position}`) ||
+		DEFAULT_TITLE_WORDS.some((word) => lowered.startsWith(`${word} ${position}`)) ||
 		lowered.startsWith(defaultHeading.toLowerCase()) ||
 		first === String(position)
 	) {
 		return name
 	}
 	return t('organizer.results.labels.roundTitled', { position, title: name })
+}
+
+/** The thing the Report tab closes and reopens, with its article: an
+ * organized assembly, or a standalone Session (which is the container's
+ * `kind`). Both spellings, so a sentence can start with it. Before 0.7 the
+ * English said "session" for both and the Italian "assemblea" for both. */
+export function kindNoun(kind: string | null | undefined): { thing: string; Thing: string } {
+	const key = kind === 'session' ? 'session' : 'assembly'
+	return { thing: t(`organizer.shell.kind.${key}`), Thing: t(`organizer.shell.kind.${key}Cap`) }
 }
