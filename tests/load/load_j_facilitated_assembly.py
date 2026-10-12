@@ -190,14 +190,27 @@ def real_recordings() -> list[tuple[float, str]]:
     return found
 
 
-def cluster_chunks(blob: bytes, duration: float, start_seconds: float, seconds: int) -> list[bytes]:
-    """~10 s chunks cut at WebM Cluster boundaries, the first with the
-    container header — what a phone's MediaRecorder produces."""
+def cluster_offsets(blob: bytes) -> list[int]:
+    """Offsets of the real WebM Clusters. The four id bytes can occur inside
+    Opus data by chance; a real Cluster is followed by its size (an EBML
+    vint) and then the Timecode element (id 0xE7)."""
     offsets = []
     at = blob.find(WEBM_CLUSTER_ID)
     while at >= 0:
-        offsets.append(at)
+        i = at + 4
+        if i < len(blob):
+            first = blob[i]
+            length = next((n for n in range(1, 9) if first & (0x80 >> (n - 1))), 9)
+            if length <= 8 and i + length < len(blob) and blob[i + length] == 0xE7:
+                offsets.append(at)
         at = blob.find(WEBM_CLUSTER_ID, at + 1)
+    return offsets
+
+
+def cluster_chunks(blob: bytes, duration: float, start_seconds: float, seconds: int) -> list[bytes]:
+    """~10 s chunks cut at WebM Cluster boundaries, the first with the
+    container header — what a phone's MediaRecorder produces."""
+    offsets = cluster_offsets(blob)
     header = blob[: offsets[0]]
     bps = len(blob) / duration
     start = next((i for i, o in enumerate(offsets) if o >= start_seconds * bps), 0)
@@ -610,6 +623,10 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
                         with _LOCK:
                             FAILURES.append(f"phone thread: {type(exc).__name__}: {exc}")
             org_thread.join(timeout=30)
+            # one last read on every phone: a banner sent in the final minute
+            # lands here rather than being missed by the 30 s poll cadence
+            for p in phones:
+                p.poll_status()
 
             # the stall chain, read from the samples of this session
             if s == 0 and any(p.stall for p in phones):

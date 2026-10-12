@@ -60,6 +60,13 @@ class _ReportPDF(FPDF):
         if regular.is_file() and bold.is_file():
             self.add_font("DejaVu", "", str(regular))
             self.add_font("DejaVu", "B", str(bold))
+            # fonts-dejavu-core ships no oblique Sans: an italic style must
+            # still resolve, or the first session with an objective (printed
+            # in italics) made every report PDF a 500. Upright stands in.
+            oblique = _FONT_DIR / "DejaVuSans-Oblique.ttf"
+            bold_oblique = _FONT_DIR / "DejaVuSans-BoldOblique.ttf"
+            self.add_font("DejaVu", "I", str(oblique if oblique.is_file() else regular))
+            self.add_font("DejaVu", "BI", str(bold_oblique if bold_oblique.is_file() else bold))
             self.family = "DejaVu"
 
     def footer(self) -> None:

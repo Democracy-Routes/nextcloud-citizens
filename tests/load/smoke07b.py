@@ -99,6 +99,23 @@ def phone_raw(path, body: bytes, token: str, segment: int = 0):
 WEBM_CLUSTER_ID = b"\x1f\x43\xb6\x75"
 
 
+def cluster_offsets(blob: bytes) -> list[int]:
+    """Offsets of the real WebM Clusters. The four id bytes can occur inside
+    Opus data by chance; a real Cluster is followed by its size (an EBML
+    vint) and then the Timecode element (id 0xE7)."""
+    offsets = []
+    at = blob.find(WEBM_CLUSTER_ID)
+    while at >= 0:
+        i = at + 4
+        if i < len(blob):
+            first = blob[i]
+            length = next((n for n in range(1, 9) if first & (0x80 >> (n - 1))), 9)
+            if length <= 8 and i + length < len(blob) and blob[i + length] == 0xE7:
+                offsets.append(at)
+        at = blob.find(WEBM_CLUSTER_ID, at + 1)
+    return offsets
+
+
 def phone_chunks(minutes: int, offset_minutes: int = 0) -> list[bytes]:
     """Ten-second-ish chunks cut at WebM Cluster boundaries from a real past
     recording — what a phone's MediaRecorder produces, so a decoder seeded
@@ -121,11 +138,7 @@ def phone_chunks(minutes: int, offset_minutes: int = 0) -> list[bytes]:
     if not local.exists():
         subprocess.check_call(["docker", "cp", f"nc_app_citizens:{path}", str(local)])
     blob = local.read_bytes()
-    offsets = []
-    at = blob.find(WEBM_CLUSTER_ID)
-    while at >= 0:
-        offsets.append(at)
-        at = blob.find(WEBM_CLUSTER_ID, at + 1)
+    offsets = cluster_offsets(blob)
     header = blob[: offsets[0]]
     bytes_per_second = len(blob) / duration
     # clusters grouped into ~10 s of bytes, starting `offset_minutes` in

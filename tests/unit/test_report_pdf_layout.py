@@ -265,3 +265,15 @@ def test_an_italian_report_lays_out_like_an_english_one():
     for number, page in enumerate(_pages(pdf), start=1):
         for height in _vertical_bars(page):
             assert height < A4_HEIGHT_PT * 0.6, f"page {number}: {height:.0f}pt bar"
+
+
+def test_a_session_with_an_objective_still_renders_when_only_two_dejavu_faces_exist():
+    """The objective line is italic. fonts-dejavu-core ships DejaVuSans and
+    DejaVuSans-Bold only, and an italic style that is not registered is an
+    FPDFException — which turned the report PDF of every assembly whose
+    sessions had an objective into a 500 (found by the 2026-10-12 rehearsal)."""
+    from citizens.services.report_pdf import render_pdf
+
+    report = _report("A quotation long enough to count as evidence here.")
+    report["rounds"][0]["objective"] = "Three concrete problems"
+    assert render_pdf(report).startswith(b"%PDF")
