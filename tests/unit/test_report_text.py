@@ -628,3 +628,103 @@ class TestBuildReportInItalian:
         assert finding["type_label"] == "Proposal"
         assert report["methodology_note"] == METHODOLOGY_NOTE
         assert report["method"].startswith("In-person citizens' assembly")
+
+
+def _seed_quoted_assembly(session, *, decline_at_table: int | None) -> str:
+    """Two tables with one quoted finding each and a cross-table finding
+    built from both; optionally a participant seated at a table who did not
+    consent to being quoted."""
+    from citizens.db.models import FindingEvidence, Participant, Transcript, TranscriptSegment
+    from citizens.db.models.consent import ConsentNotice, ParticipantConsent
+
+    assembly = Assembly(name="Quoted", created_by="tester", language="en", default_table_count=2,
+                        participant_consent="required")
+    session.add(assembly)
+    session.flush()
+    round_ = Round(assembly_id=assembly.id, position=1, title="Session 1", question="Q")
+    session.add(round_)
+    session.flush()
+    sources = []
+    for number in (1, 2):
+        table = Table(round_id=round_.id, number=number)
+        session.add(table)
+        session.flush()
+        recording = Recording(assembly_id=assembly.id, round_id=round_.id, table_id=table.id,
+                              table_number=number, state="READY_FOR_REVIEW")
+        session.add(recording)
+        session.flush()
+        transcript = Transcript(recording_id=recording.id, provider="test")
+        session.add(transcript)
+        session.flush()
+        segment = TranscriptSegment(
+            transcript_id=transcript.id, sequence=1, speaker_label="SPEAKER_00",
+            start_seconds=10.0, end_seconds=14.0,
+            text=f"A long enough quotation from table {number} to count as evidence.",
+        )
+        session.add(segment)
+        session.flush()
+        finding = Finding(
+            assembly_id=assembly.id, round_id=round_.id, table_id=table.id, scope="table",
+            type="proposal", title=f"Proposal {number}", summary="Summary.", status="APPROVED",
+        )
+        session.add(finding)
+        session.flush()
+        session.add(FindingEvidence(finding_id=finding.id, transcript_segment_id=segment.id))
+        sources.append(finding.id)
+    import json as _json
+
+    session.add(Finding(
+        assembly_id=assembly.id, round_id=round_.id, table_id=None, scope="round",
+        type="proposal", title="Across", summary="Both tables.", status="APPROVED",
+        source_finding_ids=_json.dumps(sources), mentioned_table_count=2,
+    ))
+    if decline_at_table is not None:
+        person = Participant(assembly_id=assembly.id, label="P001", name="Anna",
+                             source="TABLE_DEVICE", registered_table_number=decline_at_table)
+        session.add(person)
+        session.add(ConsentNotice(hash="0" * 64, version="t", language="en", text="t"))
+        session.flush()
+        session.add(ParticipantConsent(
+            assembly_id=assembly.id, participant_id=person.id, table_number=decline_at_table,
+            method="TABLE_DEVICE", notice_hash="0" * 64, notice_version="t", notice_language="en",
+            notice_read=True, recording_consent=True, transcription_consent=True,
+            analysis_consent=True, publication_consent=False,
+        ))
+    session.flush()
+    return assembly.id
+
+
+class TestQuotationsWithheld:
+    """Someone seated at a table declined to be quoted: the table's findings
+    stand, their verbatim quotations do not reach the report — nor does a
+    cross-table finding borrow one from that table."""
+
+    def test_the_tables_quotations_are_withheld_and_the_report_says_so(self, database):
+        with session_scope() as session:
+            assembly_id = _seed_quoted_assembly(session, decline_at_table=1)
+            report = build_report(session, session.get(Assembly, assembly_id))
+        [round_] = report["rounds"]
+        tables = {t["table_number"]: t for t in round_["tables"]}
+        assert tables[1]["quotations_withheld"] is True and tables[2]["quotations_withheld"] is False
+        assert tables[1]["findings"][0]["evidence"] == []
+        assert tables[1]["findings"][0]["quotations_withheld"] is True
+        assert tables[1]["findings"][0]["evidence_removed"] is False
+        assert len(tables[2]["findings"][0]["evidence"]) == 1
+        [cross] = round_["cross_table"]
+        assert [e["table_number"] for e in cross["evidence"]] == [2]
+        assert "did not consent to being quoted" in report["methodology_note"]
+
+        md = render_markdown(report)
+        assert "_Quotations from this table are withheld" in md
+        assert "quotation from table 1" not in md and "quotation from table 2" in md
+        assert render_pdf(report).startswith(b"%PDF")
+
+    def test_nothing_is_withheld_when_everyone_agreed_to_be_quoted(self, database):
+        with session_scope() as session:
+            assembly_id = _seed_quoted_assembly(session, decline_at_table=None)
+            report = build_report(session, session.get(Assembly, assembly_id))
+        [round_] = report["rounds"]
+        assert all(t["quotations_withheld"] is False for t in round_["tables"])
+        assert sorted(e["table_number"] for e in round_["cross_table"][0]["evidence"]) == [1, 2]
+        assert "did not consent to being quoted" not in report["methodology_note"]
+        assert "withheld" not in render_markdown(report)

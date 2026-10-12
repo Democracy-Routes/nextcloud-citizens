@@ -156,6 +156,14 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "mentioned_at_one_table": "Mentioned at {count} table(s)",
         "speaker": "Speaker",
         "evidence_removed": "Evidence removed with the transcript.",
+        "quotations_withheld": (
+            "Quotations from this table are withheld: a participant seated here did not "
+            "consent to being quoted."
+        ),
+        "quotations_withheld_note": (
+            "Verbatim quotations are withheld from tables where a seated participant did not "
+            "consent to being quoted; the findings of those tables stand on the analysis alone."
+        ),
         "type_plural.proposal": "Proposals",
         "type_plural.agreement": "Points of consensus",
         "type_plural.disagreement": "Points of divergence",
@@ -281,6 +289,14 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "mentioned_at_one_table": "Menzionato in {count} tavolo",
         "speaker": "Partecipante",
         "evidence_removed": "Prove rimosse con la trascrizione.",
+        "quotations_withheld": (
+            "Le citazioni di questo tavolo non sono incluse: un partecipante seduto qui non ha "
+            "acconsentito a essere citato."
+        ),
+        "quotations_withheld_note": (
+            "Le citazioni testuali sono omesse per i tavoli in cui un partecipante seduto non ha "
+            "acconsentito a essere citato; i risultati di quei tavoli si basano sulla sola analisi."
+        ),
         "type_plural.proposal": "Proposte",
         "type_plural.agreement": "Punti di consenso",
         "type_plural.disagreement": "Punti di divergenza",

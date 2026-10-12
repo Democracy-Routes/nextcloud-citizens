@@ -471,6 +471,10 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             for table in tables_with_content:
                 # per table: summary → speaking balance → findings
                 pdf.eyebrow(text(language, "table", number=table["table_number"]), ACCENT)
+                if table.get("quotations_withheld"):
+                    pdf.text_block(text(language, "quotations_withheld"), size=9, color=MUTED,
+                                   height=4.6)
+                    pdf.ln(1)
                 if table["summary"]:
                     pdf.text_block(table["summary"], size=9.5, color=MUTED, height=4.8)
                     pdf.ln(1)

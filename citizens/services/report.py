@@ -127,7 +127,8 @@ MIN_QUOTE_CHARS = 25
 
 
 def _cross_table_evidence(
-    session: Session, finding: Finding, table_numbers: dict[str, int]
+    session: Session, finding: Finding, table_numbers: dict[str, int],
+    withheld: set[int] = frozenset(),
 ) -> list[dict]:
     """Quotes for a cross-table finding, borrowed from the table findings it
     clustered and labelled with the table each came from.
@@ -164,7 +165,9 @@ def _cross_table_evidence(
     per_table: dict[int, list[TranscriptSegment]] = {}
     for source in sources:
         number = table_numbers.get(source.table_id or "")
-        if number is None:
+        if number is None or number in withheld:
+            # a table where someone declined to be quoted lends no quotation
+            # to a cross-table finding either
             continue
         cited = [segments[e.transcript_segment_id] for e in source.evidence
                  if e.transcript_segment_id in segments]
@@ -234,10 +237,14 @@ def _quotes(cited: list[TranscriptSegment]) -> list[dict]:
     ]
 
 
-def _methodology_note(session: Session, assembly: Assembly) -> str:
+def _methodology_note(
+    session: Session, assembly: Assembly, quotations_withheld: bool = False
+) -> str:
     """The standing note, plus whatever was unusual about THIS assembly."""
     language = assembly.language
     parts = [text(language, "methodology_note")]
+    if quotations_withheld:
+        parts.append(text(language, "quotations_withheld_note"))
     engines = _transcript_engines(session, assembly)
     if engines:
         parts.append(text(language, "transcript_engines", engines=engines))
@@ -400,7 +407,13 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
 
     language = assembly.language
 
-    def finding_payload(finding: Finding, table_numbers: dict[str, int]) -> dict:
+    from citizens.services import consent as consent_svc
+
+    def finding_payload(
+        finding: Finding, table_numbers: dict[str, int], withheld: set[int] = frozenset()
+    ) -> dict:
+        own_table = table_numbers.get(finding.table_id or "")
+        quotations_withheld = finding.scope != "round" and own_table in withheld
         return {
             "id": finding.id,
             "type": finding.type,
@@ -417,11 +430,15 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             # the quotes went away with a deleted/replaced transcript — say so
             # rather than rendering a finding that looks unsupported
             "evidence_removed": finding.evidence_removed_at is not None,
+            # someone seated at this table declined to be quoted: the finding
+            # stands, its verbatim quotations do not reach the report
+            "quotations_withheld": quotations_withheld,
             "evidence": (
                 # a cross-table finding has no evidence of its own; borrow it
                 # from the table findings it clustered, labelled per table
-                _cross_table_evidence(session, finding, table_numbers)
+                _cross_table_evidence(session, finding, table_numbers, withheld)
                 if finding.scope == "round"
+                else [] if quotations_withheld
                 else _quotes(
                     [
                         segments[e.transcript_segment_id]
@@ -436,22 +453,30 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
 
     validations = validation_svc.by_table(session, assembly.id)
     rounds_payload = []
+    any_withheld = False
     for round_ in assembly.rounds:
         table_numbers = {table.id: table.number for table in round_.tables}
+        # tables where a seated participant did not consent to being quoted
+        withheld = consent_svc.quotations_withheld_tables(session, assembly, round_.id)
+        any_withheld = any_withheld or bool(withheld)
         # talk-time per detected voice, PER TABLE (services/speaking.py): the
         # renderers show it only when diarization produced >= 2 voices
         balances = {
             table.number: table_speaking_balance(session, round_, table) for table in round_.tables
         }
         round_findings = [f for f in findings if f.round_id == round_.id]
-        cross = [finding_payload(f, table_numbers) for f in round_findings if f.scope == "round"]
+        cross = [
+            finding_payload(f, table_numbers, withheld) for f in round_findings if f.scope == "round"
+        ]
         per_table: dict[int, list[dict]] = {}
         for finding in round_findings:
             if finding.scope != "table":
                 continue
             number = table_numbers.get(finding.table_id or "")
             if number is not None:
-                per_table.setdefault(number, []).append(finding_payload(finding, table_numbers))
+                per_table.setdefault(number, []).append(
+                    finding_payload(finding, table_numbers, withheld)
+                )
         # tables with an AI summary or a measured balance appear even without findings
         round_table_numbers = sorted(
             set(per_table)
@@ -485,6 +510,7 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                         "summary": table_summaries.get((round_.id, number), ""),
                         "speaking_balance": balances.get(number),
                         "findings": per_table.get(number, []),
+                        "quotations_withheld": number in withheld,
                         # participants' word on the summary: counts for
                         # everyone, the notes only for the organizer's view
                         "validations": _validation_payload(
@@ -518,7 +544,7 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
         "synthesis": _synthesis_payload(assembly),
         # built by accumulation rather than a ternary: there are three notes
         # now, and "(A + B) if cond else A" does not extend to a third
-        "methodology_note": _methodology_note(session, assembly),
+        "methodology_note": _methodology_note(session, assembly, quotations_withheld=any_withheld),
         "include_drafts": include_drafts,
         # when set, table phones can view/download this report
         "published_at": (
@@ -635,6 +661,8 @@ def render_markdown(report: dict) -> str:
                 continue
             # per table: summary → speaking balance → findings
             lines += [f"### {text(language, 'table', number=table['table_number'])}", ""]
+            if table.get("quotations_withheld"):
+                lines += [f"_{text(language, 'quotations_withheld')}_", ""]
             if table["summary"]:
                 lines += [f"*{ai_summary}:* {table['summary']}", ""]
             lines += balance_lines

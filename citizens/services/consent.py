@@ -455,6 +455,20 @@ def guard_recording(
         )
 
 
+def quotations_withheld_tables(session: Session, assembly: Assembly, round_id: str) -> set[int]:
+    """Tables, in this session, where someone seated did not consent to being
+    quoted (newest act, publication_consent false): no verbatim quotation
+    from that table reaches the report. The whole table, not one voice:
+    voices are not separated in the recording."""
+    latest = latest_consents(session, assembly.id)
+    withheld: set[int] = set()
+    for participant_id, number in _seats(session, assembly.id, round_id).items():
+        consent = latest.get(participant_id)
+        if consent is not None and not consent.publication_consent:
+            withheld.add(number)
+    return withheld
+
+
 def participant_at_table(
     session: Session, assembly: Assembly, participant_id: str, table_number: int
 ) -> Participant:
