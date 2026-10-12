@@ -346,10 +346,13 @@ class Phone:
             if message["id"] in self.seen:
                 continue
             self.seen.add(message["id"])
-            if message.get("author") == "ai":
+            if message.get("author") in ("ai", "facilitator"):
+                # "ai": the assistant's banner when no facilitator phone is
+                # connected; "facilitator": a card the facilitator sent on
                 with _LOCK:
                     BANNERS.setdefault(self.table, []).append(
-                        {"id": message["id"], "slot": self.slot, "at": time.time()})
+                        {"id": message["id"], "slot": self.slot, "at": time.time(),
+                         "author": message.get("author")})
             phone("POST", "/api/v1/public/recorder/messages/seen", {"message_id": message["id"]},
                   token=self.token, phase="seen", timeout=30)
 
@@ -681,12 +684,14 @@ def run(tables: int, phones_per_table: list[int], people: int, sessions: int, mi
                     check(f"session {s + 1} table {table}: advice went to the facilitator's phone as cards, not banners",
                           len(to_table) == 0, f"cards={len(to_fac)} banners={len(to_table)}")
                 else:
+                    ai_banners = [b for b in BANNERS.get(table, []) if b["author"] == "ai"]
                     check(f"session {s + 1} table {table}: with no facilitator phone the advice reached the table phones",
-                          len(to_table) >= 1 and len(BANNERS.get(table, [])) >= 1,
-                          f"banners={len(to_table)} seen on phones={len(BANNERS.get(table, []))}")
+                          len(to_table) >= 1 and len(ai_banners) >= 1,
+                          f"banners={len(to_table)} seen on phones={len(ai_banners)}")
             if s == 0 and 1 in CARDS and facilitators[1].sent_one:
-                check("table 1: Send to table turned a card into a banner on the table phones",
-                      len(BANNERS.get(1, [])) >= 1, str(len(BANNERS.get(1, []))))
+                sent = [b for b in BANNERS.get(1, []) if b["author"] == "facilitator"]
+                check("table 1: Send to table turned a card into the facilitator's prompt on the table phones",
+                      len(sent) >= 1, str(len(sent)))
             if s + 1 < sessions:
                 status, mixed = org("POST", f"/api/v1/rounds/{rounds[s + 1]['id']}/assignments/remix", {"goal": "new_people"})
                 check("New seating between the sessions", status == 200 and mixed.get("seated", 0) >= tables * (people - 1) - 2,
