@@ -176,4 +176,28 @@ describe('the exception-first Live tab', () => {
 		await flushPromises()
 		expect(play).toHaveBeenCalledTimes(1)
 	})
+
+	it('shows each recorder\'s coverage on the row and keeps a sleeping phone in view', async () => {
+		const sleepy = table(2, READY, {
+			recorders: [
+				{ slot: 1, label: 'A', connected: true, seconds_since_contact: 3, status: {},
+					recording: { id: 'rec2', state: 'RECORDING', live_source: true, coverage: { audio_seconds: 140, wall_seconds: 600, percent: 23 } } },
+				{ slot: 2, label: 'B', connected: true, seconds_since_contact: 2, status: {},
+					recording: { id: 'rec2b', state: 'RECORDING', live_source: false, coverage: { audio_seconds: 600, wall_seconds: 600, percent: 100 } } },
+			],
+		})
+		roundMonitor.mockResolvedValue(monitor(
+			[table(1, READY), sleepy],
+			{ status: 'READY', ready: 2, needs_attention: 0, blocked: 0 },
+		))
+		const wrapper = mountWithI18n(MonitorTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		// table 2 is READY for the server, but a 23 % recorder is not quiet
+		const numbers = wrapper.findAll('tbody tr:not(.cz-quietrow) .cz-posbadge').map((b) => b.text())
+		expect(numbers).toEqual(['2'])
+		const badges = wrapper.findAll('[data-test="coverage"] .cz-coverage')
+		expect(badges.map((b) => b.text())).toEqual(['A 23 %', 'B 100 %'])
+		expect(badges[0].classes()).toContain('cz-coverage--low')
+		expect(badges[1].classes()).not.toContain('cz-coverage--low')
+	})
 })

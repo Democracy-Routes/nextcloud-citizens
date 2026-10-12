@@ -64,3 +64,34 @@ def test_export_names_tell_the_recorders_apart():
     assert audio_filename(assembly, recording, 1, slot=1) == (
         "Milan-Mobility-round1-table7-part1-rid.webm"
     )
+
+
+def test_coverage_is_audio_against_the_clock_and_red_territory_is_the_callers_call():
+    from datetime import timedelta
+
+    from citizens.db.models import Recording
+    from citizens.db.models.base import utcnow
+    from citizens.services.table_recordings import coverage
+
+    now = utcnow()
+    done = Recording(state="READY_FOR_REVIEW", started_at=now - timedelta(seconds=1821),
+                     ended_at=now, duration_seconds=1613.5, received_chunks=162)
+    assert coverage(done) == {"audio_seconds": 1614, "wall_seconds": 1821, "percent": 89}
+
+    # still recording: the chunks received stand in for the duration
+    live = Recording(state="RECORDING", started_at=now - timedelta(seconds=600),
+                     ended_at=None, duration_seconds=None, received_chunks=14)
+    assert coverage(live, now) == {"audio_seconds": 140, "wall_seconds": 600, "percent": 23}
+
+    # too early to say, never started, or a state with no audio to measure
+    young = Recording(state="RECORDING", started_at=now - timedelta(seconds=12),
+                      received_chunks=1, duration_seconds=None)
+    assert coverage(young, now) is None
+    assert coverage(Recording(state="RECORDING", started_at=None), now) is None
+    failed = Recording(state="UPLOAD_INCOMPLETE", started_at=now - timedelta(seconds=300),
+                       ended_at=now, duration_seconds=None, received_chunks=3)
+    assert coverage(failed) is None
+    # a duration that overruns the clock (a phone's clock drift) caps at 100
+    long = Recording(state="READY_FOR_REVIEW", started_at=now - timedelta(seconds=100),
+                     ended_at=now, duration_seconds=104.0)
+    assert coverage(long)["percent"] == 100

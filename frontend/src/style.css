@@ -1206,3 +1206,26 @@
    hand per table, so they end at different times — participants reported that
    as unfair, and the facilitator had no way to see the drift. */
 #citizens-app .cz-drifted { color: var(--cz-amber); font-weight: 600; }
+
+/* audio against the clock (Files tab, Live tab): red below 95 % */
+#citizens-app .cz-coverage {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 1px 6px;
+	border-radius: 8px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	background: var(--cz-bg-dark);
+	color: var(--cz-text-maxcontrast, var(--cz-muted));
+	white-space: nowrap;
+}
+#citizens-app .cz-coverage--low {
+	background: var(--cz-error-light, #fde8e6);
+	color: var(--cz-error, #b3261e);
+}
+#citizens-app .cz-coverage-line {
+	margin-top: 4px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}

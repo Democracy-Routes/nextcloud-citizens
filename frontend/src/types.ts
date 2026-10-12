@@ -70,6 +70,16 @@ export interface JobInfo {
 	failure_detail: string | null
 }
 
+/** Audio against wall clock: the number that says a phone slept through a
+ * discussion. Red territory, by convention everywhere, is below 95 %. */
+export interface Coverage {
+	audio_seconds: number
+	wall_seconds: number
+	percent: number
+}
+
+export const COVERAGE_LOW_PERCENT = 95
+
 export interface FileEntry {
 	recording_id: string
 	table_number: number
@@ -81,6 +91,9 @@ export interface FileEntry {
 	can_retry_assembly?: boolean
 	mime_type: string
 	duration_seconds: number | null
+	/** audio captured against the wall clock the recording ran for; null
+	 * until there is half a minute to measure (0.7) */
+	coverage?: Coverage | null
 	size_bytes: number
 	sha256: string
 	created_at: string | null
@@ -370,7 +383,13 @@ export interface MonitorTable {
 		status: DeviceStatus
 		/** `silent_seconds`: how long since the server last received a chunk
 		 * from a recording still in progress (readiness CAPTURE_SILENT) */
-		recording: { id: string; state: string; live_source?: boolean; silent_seconds?: number | null } | null
+		recording: {
+			id: string
+			state: string
+			live_source?: boolean
+			silent_seconds?: number | null
+			coverage?: Coverage | null
+		} | null
 	}>
 	/** which recorder's captions the room reads; null when none */
 	live_source_slot?: number | null

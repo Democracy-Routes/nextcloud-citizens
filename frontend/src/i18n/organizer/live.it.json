@@ -151,6 +151,7 @@
 			"summary": "{count} registratori · collegati: {labels}",
 			"none": "nessuno"
 		},
+		"coverageTitle": "Audio registrato rispetto al tempo in cui questo registratore è rimasto attivo — rosso sotto il 95 %: quel telefono ha perso parte della discussione",
 		"pills": {
 			"captureInterrupted": "registrazione interrotta",
 			"storageError": "errore di memoria",
@@ -226,6 +227,8 @@
 			"title": "Nessuna registrazione",
 			"hint": "I file audio compaiono qui appena i tavoli registrano e sincronizzano."
 		},
+		"captured": "{percent} %",
+		"capturedTitle": "{audio} di audio in {wall} di registrazione",
 		"columns": {
 			"table": "Tavolo",
 			"duration": "Durata",

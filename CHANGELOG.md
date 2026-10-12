@@ -56,6 +56,14 @@ not rewritten.
   of the session were not captured. A computer's browser is told up front
   that it can stop capturing when its window is not in front or the machine
   sleeps, and that a phone is the safer recorder. Nothing is blocked.
+- **How much of the clock the audio covers.** Each recording now carries its
+  coverage — audio captured against the wall-clock time it ran for, from the
+  chunks received while recording and from the assembled duration afterwards.
+  The Live tab shows it per recorder on the table's row and the Files tab
+  beside the duration, red below 95 %, and a table with a recorder below
+  that is never folded away as quiet. On 2026-10-11 a laptop recorder ran for
+  thirty minutes and captured twenty-seven, then eighteen and captured two,
+  and nothing on any screen said so.
 - **A Session can stand on its own.** `POST /api/v1/sessions` starts one from
   a question, an optional objective, a duration and a table count — no
   assembly to name or configure first — and `POST /api/v1/sessions/record-now`

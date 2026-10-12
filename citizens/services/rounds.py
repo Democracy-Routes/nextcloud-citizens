@@ -17,7 +17,7 @@ from citizens.services import help as help_svc
 from citizens.services import job_failures, readiness
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import live_stt_snapshot
-from citizens.services.table_recordings import slot_label
+from citizens.services.table_recordings import coverage, slot_label
 
 log = get_logger(__name__)
 
@@ -115,6 +115,8 @@ def _table_recorders(
                         if recording.state == "RECORDING" and recording.updated_at is not None
                         else None
                     ),
+                    # audio captured against the time it has been recording
+                    "coverage": coverage(recording, now),
                 },
             }
         )

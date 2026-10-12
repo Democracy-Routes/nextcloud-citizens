@@ -25,6 +25,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from citizens.db.models import RecorderSession, Recording
+from citizens.db.models.base import utcnow
+
+#: the recorder's CHUNK_INTERVAL_MS: one chunk is ten seconds of audio
+CHUNK_SECONDS = 10
+#: below this, audio against wall clock is noise, not a measurement
+COVERAGE_MIN_WALL_SECONDS = 30
 
 
 def recordings_for_table(session: Session, round_id: str, table_id: str) -> list[Recording]:
@@ -89,3 +95,31 @@ def recordings_overlap(recordings: list[Recording]) -> bool:
             if start_a < end_b and start_b < end_a:
                 return True
     return False
+
+
+def coverage(recording: Recording, now=None) -> dict | None:
+    """Audio captured against the wall clock the recording ran for.
+
+    The 2026-10-11 field test: a laptop recorder ran for 30 minutes and
+    captured 27, then 18 minutes and captured 2, with nothing on any screen
+    saying so. This is that number — from the assembled duration once there
+    is one, from the chunks received while still recording — so the Live tab
+    and the Files tab can show it, red below 95 %. None until there is half a
+    minute to measure, and for a recording that never produced audio."""
+    if recording.started_at is None:
+        return None
+    end = recording.ended_at or now or utcnow()
+    wall = (end - recording.started_at).total_seconds()
+    if wall < COVERAGE_MIN_WALL_SECONDS:
+        return None
+    if recording.duration_seconds:
+        audio = float(recording.duration_seconds)
+    elif recording.state in ("RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS"):
+        audio = (recording.received_chunks or 0) * CHUNK_SECONDS
+    else:
+        return None
+    return {
+        "audio_seconds": int(round(audio)),
+        "wall_seconds": int(round(wall)),
+        "percent": min(100, int(round(100 * audio / wall))),
+    }

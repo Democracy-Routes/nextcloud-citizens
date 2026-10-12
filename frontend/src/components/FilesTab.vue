@@ -22,6 +22,7 @@ import { bytes, duration } from '../format'
 import { BACKGROUND_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, FileEntry, FilesListing } from '../types'
+import { COVERAGE_LOW_PERCENT } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
@@ -383,7 +384,18 @@ async function deleteAll(): Promise<void> {
 						<tbody>
 							<tr v-for="entry in round.tables" :key="entry.recording_id">
 								<td><span class="cz-posbadge">{{ entry.table_number }}</span></td>
-								<td>{{ duration(entry.duration_seconds) }}</td>
+								<td>
+									{{ duration(entry.duration_seconds) }}
+									<!-- audio against the clock: a phone that slept shows here -->
+									<span
+										v-if="entry.coverage"
+										class="cz-coverage"
+										:class="{ 'cz-coverage--low': entry.coverage.percent < COVERAGE_LOW_PERCENT }"
+										:title="t('organizer.live.files.capturedTitle', { audio: duration(entry.coverage.audio_seconds), wall: duration(entry.coverage.wall_seconds) })"
+										data-test="coverage">
+										{{ t('organizer.live.files.captured', { percent: entry.coverage.percent }) }}
+									</span>
+								</td>
 								<td>
 									<template v-if="entry.audio_deleted_at">
 										<span class="cz-muted">{{ t('organizer.live.files.audioDeleted') }}</span>

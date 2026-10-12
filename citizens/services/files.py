@@ -33,7 +33,7 @@ from citizens.services import job_failures
 from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
-from citizens.services.table_recordings import recording_slots, slot_label
+from citizens.services.table_recordings import coverage, recording_slots, slot_label
 from citizens.services.transcription import transcript_payload, transcript_provenance
 from citizens.storage.exports import build_target
 from citizens.storage.paths import (
@@ -139,6 +139,8 @@ def list_files(session: Session, assembly: Assembly) -> dict:
                 "state": recording.state,
                 "mime_type": recording.mime_type,
                 "duration_seconds": recording.duration_seconds,
+                # audio against the wall clock it ran for (table_recordings.coverage)
+                "coverage": coverage(recording),
                 "size_bytes": size,
                 "sha256": recording.sha256,
                 "created_at": recording.created_at.isoformat() if recording.created_at else None,

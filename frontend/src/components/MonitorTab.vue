@@ -22,6 +22,7 @@ import { relativeAge, timestamp } from '../format'
 import { LIVE_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, Intervention, MonitorTable, RoundMonitor, SessionMessage, TranscriptData } from '../types'
+import { COVERAGE_LOW_PERCENT } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
@@ -485,10 +486,18 @@ function reasonText(reason: { code: string; slot: number | null; data: Record<st
 	return base + who
 }
 
+/** One badge per recorder with a measurable coverage (table_recordings.coverage). */
+function coverageBadges(table: MonitorTable): Array<{ label: string; percent: number }> {
+	return (table.recorders ?? [])
+		.filter((r) => r.recording?.coverage)
+		.map((r) => ({ label: r.label, percent: r.recording!.coverage!.percent }))
+}
+
 /** Nothing the server or this screen would point at. */
 function isQuiet(table: MonitorTable): boolean {
 	if (!table.readiness || table.readiness.status !== 'READY') return false
 	return !(
+		coverageBadges(table).some((b) => b.percent < COVERAGE_LOW_PERCENT) ||
 		captureInterrupted(table) ||
 		lowBattery(table) ||
 		lowStorage(table) ||
@@ -978,6 +987,18 @@ function pendingChunks(table: MonitorTable): number {
 						:class="{ 'cz-row--quiet': isQuiet(table) }">
 						<td>
 							<span class="cz-posbadge">{{ table.number }}</span>
+							<!-- audio against the clock, per recorder: the phone that
+							     slept through ten minutes is red here, nowhere else -->
+							<div v-if="coverageBadges(table).length" class="cz-coverage-line" data-test="coverage">
+								<span
+									v-for="badge in coverageBadges(table)"
+									:key="badge.label"
+									class="cz-coverage"
+									:class="{ 'cz-coverage--low': badge.percent < COVERAGE_LOW_PERCENT }"
+									:title="t('organizer.live.monitor.coverageTitle')">
+									{{ badge.label }} {{ t('organizer.live.files.captured', { percent: badge.percent }) }}
+								</span>
+							</div>
 							<!-- a table with more than one recorder phone: say so, and
 							     which of them are reachable -->
 							<div

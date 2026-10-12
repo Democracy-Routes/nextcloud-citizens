@@ -151,6 +151,7 @@
 			"summary": "{count} recorders · {labels} connected",
 			"none": "none"
 		},
+		"coverageTitle": "Audio captured against the time this recorder has been recording — red below 95 %: that phone missed part of the discussion",
 		"pills": {
 			"captureInterrupted": "capture interrupted",
 			"storageError": "storage error",
@@ -226,6 +227,8 @@
 			"title": "No recordings yet",
 			"hint": "Audio files appear here as soon as the tables record and synchronize."
 		},
+		"captured": "{percent} %",
+		"capturedTitle": "{audio} of audio in {wall} of recording",
 		"columns": {
 			"table": "Table",
 			"duration": "Duration",
