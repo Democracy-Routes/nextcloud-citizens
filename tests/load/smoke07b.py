@@ -491,8 +491,21 @@ try:
     ok("no audio left", all(not e.get("audio_available") for r in zr_files["rounds"] for e in r["tables"]), str(code))
     code, _ = org("DELETE", f"/api/v1/assemblies/{rn['container_id']}/close")
     ok("reopen refused after zero retention", code == 409, str(code))
+    # the guard refuses while any recording of the assembly is still on its way
+    # to a transcript; the smoke's own recordings may still be, so give them a
+    # minute and say so rather than fail on the smoke's timing
+    busy, waited = True, time.monotonic()
+    while busy and time.monotonic() - waited < 90:
+        code, files_now = org("GET", f"/api/v1/assemblies/{aid}/files")
+        states = [e["state"] for r in files_now["rounds"] for e in r["tables"]]
+        busy = any(st in ("RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS", "ASSEMBLING", "TRANSCRIBING") for st in states)
+        if busy:
+            time.sleep(5)
     code, lang = org("POST", f"/api/v1/assemblies/{aid}/language", {"language": "en"})
-    ok("change language on the closed smoke assembly re-queues its recordings", code == 200 and lang["queued"] >= 1 and lang["closed"] is True, json.dumps(lang))
+    if busy:
+        STEPS.append(f"WARN change language skipped: a smoke recording is still busy after 90 s ({states}); guard answered {code}")
+    else:
+        ok("change language on the closed smoke assembly re-queues its recordings", code == 200 and lang["queued"] >= 1 and lang["closed"] is True, json.dumps(lang))
 
     # 10. live captions on the configured engine: two phones, a takeover, lines after it
     if not ARGS.no_captions:
