@@ -228,7 +228,10 @@ onBeforeUnmount(() => {
 			:message="messages.current.value"
 			@dismiss="messages.dismiss"
 			@feedback="recorderApi.messageFeedback(session.session_token, messages.current.value.id, $event).catch(() => undefined)" />
-		<div class="rc-scroll">
+		<!-- rc-scroll--centered: a single waiting column, never split like
+		     RecordingScreen — it just stays centred on a wide shell instead
+		     of stretching (see style.css; a no-op at phone width). -->
+		<div class="rc-scroll rc-scroll--centered">
 			<div class="rc-hero" style="padding-top: 16px; padding-bottom: 8px">
 				<p class="rc-eyebrow">{{ session.assembly.name }}</p>
 				<div class="rc-hero__table">

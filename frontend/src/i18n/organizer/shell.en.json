@@ -1,11 +1,21 @@
 {
 	"app": {
 		"home": "Home",
-		"sessions": "Sessions",
-		"assemblies": "Assemblies",
+		"recordings": "Recordings",
 		"settings": "Settings",
 		"sessionMeta": "Session · {count} tables | Session · {count} table | Session · {count} tables",
 		"assemblyMeta": "{participants} participants · {tables} tables",
+		"badge": {
+			"session": "Session",
+			"assembly": "Assembly"
+		},
+		"filter": {
+			"all": "All",
+			"sessions": "Sessions",
+			"assemblies": "Assemblies",
+			"closed": "Closed"
+		},
+		"search": "Search",
 		"empty": "No sessions or assemblies yet.",
 		"showList": "Show the list",
 		"hideList": "Hide the list"

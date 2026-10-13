@@ -1,11 +1,21 @@
 {
 	"app": {
 		"home": "Home",
-		"sessions": "Sessioni",
-		"assemblies": "Assemblee",
+		"recordings": "Registrazioni",
 		"settings": "Impostazioni",
 		"sessionMeta": "Sessione · {count} tavoli | Sessione · {count} tavolo | Sessione · {count} tavoli",
 		"assemblyMeta": "{participants} partecipanti · {tables} tavoli",
+		"badge": {
+			"session": "Sessione",
+			"assembly": "Assemblea"
+		},
+		"filter": {
+			"all": "Tutte",
+			"sessions": "Sessioni",
+			"assemblies": "Assemblee",
+			"closed": "Chiuse"
+		},
+		"search": "Cerca",
 		"empty": "Non ci sono ancora sessioni o assemblee.",
 		"showList": "Mostra l'elenco",
 		"hideList": "Nascondi l'elenco"

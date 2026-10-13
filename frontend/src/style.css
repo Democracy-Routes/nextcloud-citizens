@@ -177,11 +177,34 @@
 
 #citizens-app .cz-navitem__body { min-width: 0; flex: 1; }
 
+/* badge + name on one line, so the kind is visible without a per-kind group
+   heading now that Sessions and Assemblies share one list */
+#citizens-app .cz-navitem__title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+#citizens-app .cz-kind-badge {
+	flex-shrink: 0;
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: var(--cz-bg-dark);
+	color: var(--cz-text-muted);
+	font-size: 0.625rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
 #citizens-app .cz-navitem__name {
 	display: block;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	min-width: 0;
+	flex: 1;
 }
 
 #citizens-app .cz-navitem__meta {
@@ -745,14 +768,59 @@
 #citizens-app .cz-reasons__blocker { color: var(--cz-danger); font-weight: 600; }
 #citizens-app .cz-reasons__warning { color: var(--cz-amber); }
 
-/* "Sessions" / "Assemblies" headings in the sidebar list */
-#citizens-app .cz-sidebar__group {
-	margin: 10px 14px 4px;
-	font-size: 0.75rem;
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
+/* All / Sessions / Assemblies / Closed above the recordings list, and the
+   name search beneath them */
+#citizens-app .cz-sidebar__filterbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 0 12px 8px;
+}
+
+#citizens-app .cz-sidebar__search {
+	display: block;
+	width: 100%;
+	margin: 0 0 8px;
+	padding: 7px 12px;
+	border: 1px solid var(--cz-border-dark);
+	border-radius: var(--cz-radius);
+	background: var(--cz-bg);
+	color: var(--cz-text);
+	font-size: 0.8125rem;
+	font-family: inherit;
+}
+
+#citizens-app .cz-sidebar__search:focus-visible {
+	outline: 2px solid var(--cz-primary);
+	outline-offset: 1px;
+}
+
+#citizens-app .cz-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 5px 13px;
+	border: 1px solid var(--cz-border-dark);
+	border-radius: 999px;
+	background: var(--cz-bg);
 	color: var(--cz-text-muted);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+#citizens-app .cz-chip:hover { background: var(--cz-bg-hover); color: var(--cz-text); }
+
+#citizens-app .cz-chip:focus-visible {
+	outline: 2px solid var(--cz-primary);
+	outline-offset: 1px;
+}
+
+#citizens-app .cz-chip--active {
+	background: var(--cz-primary);
+	border-color: var(--cz-primary);
+	color: var(--cz-primary-text);
 }
 
 /* a small label above a page heading ("Session") */

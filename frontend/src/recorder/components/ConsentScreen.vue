@@ -19,15 +19,21 @@
  * ones continue at once. A server older than 0.7 has no notice endpoint:
  * the screen then falls back to the table-level text it always showed.
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, type ComponentPublicInstance, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { setLocale } from '../../i18n'
 import {
 	recorderApi,
+	RecorderApiError,
+	type AssemblyInfo,
 	type ConsentNotice,
 	type DataHandling,
+	type Joined,
+	type RecorderLanguage,
 	type TableConsent,
 	type UnseatedParticipant,
 } from '../api'
+import { slotLabel } from '../slots'
 import CapabilityQr from './CapabilityQr.vue'
 import ConsentForm, { type ConsentFormValue } from './ConsentForm.vue'
 import TableBadge from './TableBadge.vue'
@@ -37,10 +43,26 @@ const props = defineProps<{
 	handling: DataHandling | null
 	tableNumber: number
 	colorKey?: string | null
+	/** needed for the language switch (kind === 'session' && language_changeable) */
+	assembly?: AssemblyInfo | null
+	/** what the code this phone just scanned made it, shown once as a line
+	 * above the notice (0.8: folded in from the old JoinedScreen) */
+	pendingJoined?: Joined | null
+	/** this device already consented for this assembly — the heavy notice is
+	 * skipped; only the joined line (if any) and a way through are shown */
+	alreadyConsented?: boolean
 }>()
-const emit = defineEmits<{ accept: [table: TableConsent | null] }>()
+const emit = defineEmits<{ accept: [table: TableConsent | null]; deny: [] }>()
 
 const { t } = useI18n()
+
+const joinedLine = computed(() => {
+	const joined = props.pendingJoined
+	if (!joined) return ''
+	return joined.table_created
+		? t('recorder.joined.newTable')
+		: t('recorder.joined.asRecorder', { label: slotLabel(joined.slot) })
+})
 
 const notice = ref<ConsentNotice | null>(null)
 const legacy = ref(false)
@@ -110,13 +132,89 @@ async function load(): Promise<void> {
 	}
 }
 onMounted(() => {
+	// the minimal card (already consented) never shows the notice, so there is
+	// nothing here worth fetching
+	if (props.alreadyConsented) return
 	void load()
 	// people registering on their own phones appear here as they do
 	roster = window.setInterval(() => {
 		if (view.value === 'notice') void load()
 	}, 10_000)
 })
-onBeforeUnmount(() => window.clearInterval(roster))
+onBeforeUnmount(() => {
+	window.clearInterval(roster)
+	frameObserver?.disconnect()
+})
+
+/* ---- scroll-gated Accept: the notice must be read to its end, not just
+ * glanced at, before the one acceptance box can be ticked away by a tap ---- */
+const frameEl = ref<HTMLElement | null>(null)
+const readToEnd = ref(false)
+let frameObserver: ResizeObserver | undefined
+
+function checkReadToEnd(): void {
+	const el = frameEl.value
+	if (!el) return
+	readToEnd.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 8
+}
+
+/** A function ref, not a plain one: the frame mounts fresh every time this
+ * view is re-entered (returning from the registration form, say), and only a
+ * mount callback — not a watcher on `notice` — fires every one of those
+ * times, including the very first. Typed loosely to match Vue's own function
+ * ref signature; this is always a plain <div>, never a component. */
+function attachFrame(el: Element | ComponentPublicInstance | null): void {
+	frameObserver?.disconnect()
+	frameObserver = undefined
+	frameEl.value = el as HTMLElement | null
+	if (!frameEl.value) return
+	checkReadToEnd()
+	// a notice short enough to fit needs no scrolling at all; a resize (the
+	// keyboard opening, a rotate) can turn a scrollable notice into one that
+	// already fits, or back — recheck either way. Absent in some test
+	// environments, so this stays optional.
+	if (typeof ResizeObserver === 'undefined') return
+	frameObserver = new ResizeObserver(checkReadToEnd)
+	frameObserver.observe(frameEl.value)
+}
+
+/* ---- the language switch: a Record-now Session only, before any recording
+ * exists (assembly.language_changeable) ---- */
+const LANGUAGE_FLAGS: Record<RecorderLanguage, string> = {
+	en: '🇬🇧', it: '🇮🇹', de: '🇩🇪', fr: '🇫🇷', es: '🇪🇸',
+}
+const LANGUAGE_CODES = Object.keys(LANGUAGE_FLAGS) as RecorderLanguage[]
+
+const showLanguage = computed(
+	() => props.assembly?.kind === 'session' && props.assembly?.language_changeable === true,
+)
+const selectedLanguage = ref<RecorderLanguage>((props.assembly?.language as RecorderLanguage) ?? 'en')
+const languageBusy = ref(false)
+
+async function changeLanguage(code: string): Promise<void> {
+	const language = code as RecorderLanguage
+	const previous = selectedLanguage.value
+	if (language === previous || languageBusy.value) return
+	selectedLanguage.value = language
+	languageBusy.value = true
+	failed.value = ''
+	try {
+		await recorderApi.changeLanguage(props.token, language)
+		setLocale(language)
+		readToEnd.value = false // new text in a new language: read it again
+		await load() // the notice itself is rendered server-side, in that language
+		// the frame's DOM node survives this (notice is reassigned, not toggled
+		// away), so nothing remounts it — recheck once the new text has rendered
+		await nextTick()
+		checkReadToEnd()
+	} catch (err) {
+		selectedLanguage.value = previous // the table stays in the language everyone was told about
+		failed.value =
+			err instanceof RecorderApiError ? err.message : err instanceof Error ? err.message : String(err)
+	} finally {
+		languageBusy.value = false
+	}
+}
 
 const consenting = computed(
 	() => notice.value?.participants.filter((p) => p.recording_consent).length ?? 0,
@@ -293,70 +391,95 @@ const retention = computed(() => {
 </script>
 
 <template>
-	<div class="rc-scroll">
-		<!-- one person registering -->
-		<div v-if="view === 'form' && notice && changing" class="rc-pad">
-			<h1>{{ t('recorder.consent.form.changedMindTitle', { name: changing.name }) }}</h1>
-			<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.changedMindLead') }}</p>
-			<ConsentForm
-				:busy="busy"
-				:failed="failed"
-				:acceptance="notice.acceptance"
-				:acceptance-quotations="notice.acceptance_quotations"
-				:fixed-name="changing.name"
-				@confirm="confirmChange"
-				@cancel="view = 'notice'" />
-		</div>
-		<div v-else-if="view === 'form' && notice" class="rc-pad">
-			<h1>{{ t('recorder.consent.form.title') }}</h1>
-			<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.lead') }}</p>
-			<ConsentForm
-				:busy="busy"
-				:failed="failed"
-				:acceptance="notice.acceptance"
-				:acceptance-quotations="notice.acceptance_quotations"
-				@confirm="(value) => submit(value, false)"
-				@refuse="(value) => submit(value, true)"
-				@cancel="view = 'notice'" />
-		</div>
-
-		<!-- one person done -->
-		<div v-else-if="view === 'added' && added" class="rc-pad rc-center">
-			<h1 style="margin-top: 10vh">
-				{{ added.consented ? t('recorder.consent.added.title') : t('recorder.consent.added.refused') }}
-			</h1>
-			<p class="rc-lead">{{ added.name }}</p>
-			<p v-if="!added.consented" class="rc-muted">{{ t('recorder.consent.added.refusedBody') }}</p>
-			<button class="rc-btn" style="margin-top: 22px" @click="startForm">
-				{{ t('recorder.consent.added.another') }}
-			</button>
-			<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
-				{{ t('recorder.consent.continue') }}
-			</button>
-			<p v-if="!canContinue" class="rc-muted rc-consent__hint">
-				{{ refusing > 0 ? t('recorder.consent.requiredHintRefused') : t('recorder.consent.requiredHint') }}
-			</p>
-		</div>
-
-		<!-- the legacy table-level screen: somebody objected -->
-		<div v-else-if="legacy && declined" class="rc-pad">
-			<h1>{{ t('recorder.consent.declinedTitle') }}</h1>
-			<p class="rc-lead">{{ t('recorder.consent.declinedBody') }}</p>
-			<button class="rc-btn" @click="declined = false">
-				{{ t('recorder.consent.declinedBack') }}
+	<!-- this device already consented for this assembly: skip the heavy
+	     notice, relay only what the scanned code decided -->
+	<div v-if="alreadyConsented" class="rc-scroll">
+		<div class="rc-hero" style="padding-top: 16vh">
+			<TableBadge :number="tableNumber" :color-key="colorKey" hero />
+			<h1 v-if="pendingJoined" style="margin-top: 18px" data-test="joined-line">{{ joinedLine }}</h1>
+			<button class="rc-btn rc-primary" style="margin-top: 22px" data-test="continue" @click="accept">
+				{{ t('recorder.joined.continue') }}
 			</button>
 		</div>
+	</div>
 
-		<!-- the notice -->
-		<div v-else class="rc-pad">
-			<div class="rc-consent__head">
-				<TableBadge :number="tableNumber" :color-key="colorKey" />
+	<!-- one person registering -->
+	<div v-else-if="view === 'form' && notice && changing" class="rc-scroll rc-pad">
+		<h1>{{ t('recorder.consent.form.changedMindTitle', { name: changing.name }) }}</h1>
+		<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.changedMindLead') }}</p>
+		<ConsentForm
+			:busy="busy"
+			:failed="failed"
+			:acceptance="notice.acceptance"
+			:acceptance-quotations="notice.acceptance_quotations"
+			:fixed-name="changing.name"
+			@confirm="confirmChange"
+			@cancel="view = 'notice'" />
+	</div>
+	<div v-else-if="view === 'form' && notice" class="rc-scroll rc-pad">
+		<h1>{{ t('recorder.consent.form.title') }}</h1>
+		<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.lead') }}</p>
+		<ConsentForm
+			:busy="busy"
+			:failed="failed"
+			:acceptance="notice.acceptance"
+			:acceptance-quotations="notice.acceptance_quotations"
+			@confirm="(value) => submit(value, false)"
+			@refuse="(value) => submit(value, true)"
+			@cancel="view = 'notice'" />
+	</div>
+
+	<!-- one person done -->
+	<div v-else-if="view === 'added' && added" class="rc-scroll rc-pad rc-center">
+		<h1 style="margin-top: 10vh">
+			{{ added.consented ? t('recorder.consent.added.title') : t('recorder.consent.added.refused') }}
+		</h1>
+		<p class="rc-lead">{{ added.name }}</p>
+		<p v-if="!added.consented" class="rc-muted">{{ t('recorder.consent.added.refusedBody') }}</p>
+		<button class="rc-btn" style="margin-top: 22px" @click="startForm">
+			{{ t('recorder.consent.added.another') }}
+		</button>
+		<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
+			{{ t('recorder.consent.continue') }}
+		</button>
+		<p v-if="!canContinue" class="rc-muted rc-consent__hint">
+			{{ refusing > 0 ? t('recorder.consent.requiredHintRefused') : t('recorder.consent.requiredHint') }}
+		</p>
+	</div>
+
+	<!-- the legacy table-level screen: somebody objected -->
+	<div v-else-if="legacy && declined" class="rc-scroll rc-pad">
+		<h1>{{ t('recorder.consent.declinedTitle') }}</h1>
+		<p class="rc-lead">{{ t('recorder.consent.declinedBody') }}</p>
+		<button class="rc-btn" @click="declined = false">
+			{{ t('recorder.consent.declinedBack') }}
+		</button>
+	</div>
+
+	<!-- the notice: a fixed column (header, a scroll-gated frame, a pinned
+	     footer) so Accept cannot be reached without scrolling to the end -->
+	<div v-else class="rc-fill">
+		<div class="rc-consent__head">
+			<TableBadge :number="tableNumber" :color-key="colorKey" />
+			<div v-if="showLanguage" class="rc-lang">
+				<span class="rc-lang__flag" aria-hidden="true">{{ LANGUAGE_FLAGS[selectedLanguage] }}</span>
+				<select
+					data-test="language"
+					:aria-label="t('recorder.consent.language')"
+					:value="selectedLanguage"
+					:disabled="languageBusy"
+					@change="changeLanguage(($event.target as HTMLSelectElement).value)">
+					<option v-for="code in LANGUAGE_CODES" :key="code" :value="code">{{ code.toUpperCase() }}</option>
+				</select>
 			</div>
-			<h1>{{ t('recorder.consent.title', { number: tableNumber }) }}</h1>
-			<p class="rc-lead">{{ t('recorder.consent.lead') }}</p>
+		</div>
+		<p v-if="pendingJoined" class="rc-eyebrow" data-test="joined-line">{{ joinedLine }}</p>
+		<h1>{{ t('recorder.consent.title', { number: tableNumber }) }}</h1>
+		<p class="rc-lead">{{ t('recorder.consent.lead') }}</p>
 
-			<p v-if="loading" class="rc-muted">…</p>
-			<template v-else-if="notice">
+		<p v-if="loading" class="rc-muted">…</p>
+		<template v-else-if="notice">
+			<div :ref="attachFrame" class="rc-notice-frame" data-test="notice-frame" @scroll="checkReadToEnd">
 				<div class="rc-notice" data-test="notice">
 					<p v-for="(paragraph, index) in notice.paragraphs" :key="index">{{ paragraph }}</p>
 				</div>
@@ -434,42 +557,57 @@ const retention = computed(() => {
 						{{ t('recorder.consent.nobodyFound') }}
 					</p>
 				</div>
-				<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
-					{{ t('recorder.consent.continue') }}
-				</button>
-				<p v-if="!canContinue" class="rc-muted rc-consent__hint">{{ t('recorder.consent.requiredHint') }}</p>
-			</template>
-
-			<!-- a server without the notice endpoint: the table-level text -->
-			<template v-else>
-				<ul class="rc-consent">
-					<li>{{ t('recorder.consent.records') }}</li>
-					<li>{{ audioDestination }}</li>
-					<li v-if="transcriptDestination">{{ transcriptDestination }}</li>
-					<li>{{ retention }}</li>
-					<li>{{ t('recorder.consent.speakers') }}</li>
-					<li>{{ t('recorder.consent.reviewed') }}</li>
-				</ul>
-				<p class="rc-muted rc-consent__ask">{{ t('recorder.consent.ask') }}</p>
-				<button class="rc-btn rc-primary" data-test="continue" @click="accept">
-					{{ t('recorder.consent.agree') }}
-				</button>
-				<button class="rc-btn rc-subtle" @click="declined = true">
-					{{ t('recorder.consent.decline') }}
-				</button>
-			</template>
-		</div>
-
-		<!-- the table's registration code, for people's own phones -->
-		<div v-if="ownPhone" class="rc-sheet-scrim" @click.self="ownPhone = false">
-			<div class="rc-sheet" role="dialog" aria-modal="true">
-				<CapabilityQr
-					:token="token"
-					purpose="REGISTER_PARTICIPANT"
-					:table-number="tableNumber"
-					:color-key="colorKey"
-					@close="ownPhone = false" />
 			</div>
+
+			<div class="rc-consent__footer">
+				<p v-if="!readToEnd" class="rc-muted rc-consent__hint" data-test="scroll-hint">{{ t('recorder.consent.scrollToEnd') }}</p>
+				<div class="rc-consent__actions">
+					<button
+						class="rc-btn"
+						:class="{ 'rc-primary': readToEnd }"
+						:disabled="!readToEnd || !canContinue"
+						data-test="continue"
+						@click="accept">
+						{{ t('recorder.consent.continue') }}
+					</button>
+					<button class="rc-btn rc-subtle" data-test="deny" @click="emit('deny')">
+						{{ t('recorder.consent.deny') }}
+					</button>
+				</div>
+				<p v-if="!canContinue" class="rc-muted rc-consent__hint">{{ t('recorder.consent.requiredHint') }}</p>
+			</div>
+		</template>
+
+		<!-- a server without the notice endpoint: the table-level text, free
+		     to scroll on its own — this device predates the scroll gate -->
+		<div v-else class="rc-scroll">
+			<ul class="rc-consent">
+				<li>{{ t('recorder.consent.records') }}</li>
+				<li>{{ audioDestination }}</li>
+				<li v-if="transcriptDestination">{{ transcriptDestination }}</li>
+				<li>{{ retention }}</li>
+				<li>{{ t('recorder.consent.speakers') }}</li>
+				<li>{{ t('recorder.consent.reviewed') }}</li>
+			</ul>
+			<p class="rc-muted rc-consent__ask">{{ t('recorder.consent.ask') }}</p>
+			<button class="rc-btn rc-primary" data-test="continue" @click="accept">
+				{{ t('recorder.consent.agree') }}
+			</button>
+			<button class="rc-btn rc-subtle" @click="declined = true">
+				{{ t('recorder.consent.decline') }}
+			</button>
+		</div>
+	</div>
+
+	<!-- the table's registration code, for people's own phones -->
+	<div v-if="ownPhone" class="rc-sheet-scrim" @click.self="ownPhone = false">
+		<div class="rc-sheet" role="dialog" aria-modal="true">
+			<CapabilityQr
+				:token="token"
+				purpose="REGISTER_PARTICIPANT"
+				:table-number="tableNumber"
+				:color-key="colorKey"
+				@close="ownPhone = false" />
 		</div>
 	</div>
 </template>
@@ -483,7 +621,47 @@ const retention = computed(() => {
 	line-height: 1.5;
 	margin: 8px 0 0;
 }
-.rc-consent__head { margin: 4px 0 10px; }
+/* the notice view: a fixed column, not a page that scrolls — only the frame
+   below does. Scoped, so this leaves every other screen's .rc-fill alone. */
+.rc-fill { padding: 6px 2px calc(12px + env(safe-area-inset-bottom, 0px)); }
+.rc-notice-frame {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+.rc-consent__footer { flex-shrink: 0; padding-top: 10px; }
+.rc-consent__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.rc-consent__actions .rc-btn { width: auto; flex: 0 1 auto; margin-top: 0; padding: 10px 20px; }
+.rc-consent__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin: 4px 0 10px;
+}
+.rc-lang {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	border: 1px solid var(--rc-border);
+	border-radius: 999px;
+	padding: 4px 10px 4px 12px;
+	font-size: 0.8125rem;
+	background: var(--rc-surface);
+	flex-shrink: 0;
+}
+.rc-lang__flag { font-size: 1rem; line-height: 1; }
+.rc-lang select {
+	border: none;
+	background: transparent;
+	font: inherit;
+	font-weight: 700;
+	color: inherit;
+	cursor: pointer;
+	padding: 0;
+}
+.rc-lang select:focus { outline: none; }
 .rc-consent__roster-title {
 	font-size: 0.75rem;
 	letter-spacing: 0.1em;

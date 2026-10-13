@@ -715,3 +715,57 @@ body {
 	color: inherit;
 	margin: 6px 0 4px;
 }
+
+/* ================= wide screens: tablet and desktop (0.8) ================= */
+
+/* The phone column widens in two steps rather than stretching edge to edge:
+   720px matches a tablet held upright, 1100px leaves RecordingScreen's
+   two-up split (below) room to breathe on a laptop/monitor without the
+   line length on either side getting silly. Below 720px this is untouched —
+   the phone gets exactly the 480px column it always had. */
+@media (min-width: 720px) {
+	#recorder-app { max-width: 720px; }
+}
+@media (min-width: 900px) {
+	#recorder-app { max-width: 1100px; }
+}
+
+/* ArmedScreen is a single waiting column whatever the shell's width — there
+   is nothing to split it with, so it just centres instead of stretching. At
+   phone width the shell is already narrower than 720px, so this is a no-op
+   there: the phone layout is unaffected. */
+.rc-scroll--centered {
+	max-width: 720px;
+	margin: 0 auto;
+	width: 100%;
+}
+
+/* RecordingScreen's two logical regions: `.rc-main` (what the table is here
+   to read — captions, the transcript toggle) and `.rc-side` (the phone's own
+   telemetry — timer, level, tech bar, alerts, the finish countdown). Below
+   900px both are `display: contents`, so the wrapper contributes no box and
+   the DOM order IS the phone layout, pixel for pixel, exactly as before this
+   split existed. */
+.rc-main,
+.rc-side {
+	display: contents;
+}
+
+@media (min-width: 900px) {
+	.rc-scroll--split {
+		display: grid;
+		grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+		gap: 16px;
+		align-items: start;
+	}
+	.rc-scroll--split > .rc-main { display: block; grid-column: 1; }
+	.rc-scroll--split > .rc-side { display: block; grid-column: 2; }
+}
+
+/* Touchscreens (phones, most tablets) keep today's generous tap targets —
+   this is the default, unconditional .rc-btn padding above. A mouse/trackpad
+   doesn't need 15px of padding to hit reliably, so pointer:fine reuses the
+   compact padding .rc-subtle already defines for its quieter buttons. */
+@media (pointer: fine) {
+	.rc-btn { padding: 10px; }
+}

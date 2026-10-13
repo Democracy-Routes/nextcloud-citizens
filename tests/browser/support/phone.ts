@@ -88,7 +88,18 @@ export async function newPhone(browser: Browser, token: string): Promise<Phone> 
 		// is enabled without registering anyone.
 		const agree = page.getByRole('button', { name: /continue/ })
 		await agree.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined)
-		if (await agree.isVisible()) await agree.click()
+		if (await agree.isVisible()) {
+			// Accept is scroll-gated to the end of the notice (0.8): the frame
+			// itself scrolls, never the page, so jump it to the bottom first.
+			const frame = page.locator('.rc-notice-frame')
+			if (await frame.count()) {
+				await frame.evaluate((el) => {
+					el.scrollTop = el.scrollHeight
+				})
+			}
+			await expect(agree).toBeEnabled({ timeout: 20_000 })
+			await agree.click()
+		}
 		await expect(page.getByText('Microphone test')).toBeVisible({ timeout: 20_000 })
 	}
 

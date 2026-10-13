@@ -3,7 +3,8 @@
 /**
  * Home is where everyone lands: Record now, Start a Session, Create an
  * Assembly. Nobody is made to configure an assembly to record a discussion,
- * and a standalone Session is listed as a Session, never as an assembly.
+ * and a standalone Session is listed as a Session, never as an assembly —
+ * the sidebar now says which with a kind badge rather than a group heading.
  */
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -118,26 +119,27 @@ describe('the home screen', () => {
 		expect(wrapper.find('h2').text()).toBe('Create assembly')
 	})
 
-	it('lists a standalone Session as a Session under its question, apart from assemblies', async () => {
+	it('lists a standalone Session as a Session under its question, badged apart from assemblies', async () => {
 		listAssemblies.mockResolvedValue([session, assembly])
 		const wrapper = mountWithI18n(App)
 		await flushPromises()
 
-		const groups = wrapper.findAll('.cz-sidebar__group').map((g) => g.text())
-		expect(groups).toEqual(['Sessions', 'Assemblies'])
 		const items = wrapper.findAll('.cz-navitem')
+		expect(items[0].find('.cz-kind-badge').text()).toBe('Session')
 		expect(items[0].find('.cz-navitem__name').text()).toBe('How should local mobility improve?')
 		expect(items[0].find('.cz-navitem__meta').text()).toBe('Session · 3 tables')
 		expect(items[0].text()).not.toContain('participants')
+		expect(items[1].find('.cz-kind-badge').text()).toBe('Assembly')
 		expect(items[1].find('.cz-navitem__name').text()).toBe('Milan Mobility')
 		expect(items[1].find('.cz-navitem__meta').text()).toContain('50 participants')
 	})
 
-	it('needs no group heading when there are only assemblies', async () => {
+	it('badges a lone assembly even with no Session alongside it', async () => {
 		listAssemblies.mockResolvedValue([assembly])
 		const wrapper = mountWithI18n(App)
 		await flushPromises()
 
-		expect(wrapper.findAll('.cz-sidebar__group')).toHaveLength(0)
+		const items = wrapper.findAll('.cz-navitem')
+		expect(items[0].find('.cz-kind-badge').text()).toBe('Assembly')
 	})
 })

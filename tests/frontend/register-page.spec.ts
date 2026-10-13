@@ -78,6 +78,50 @@ describe('RegisterPage', () => {
 	})
 })
 
+describe('RegisterPage — scroll gate and deny (0.8)', () => {
+	function setFrame(
+		frame: { element: Element },
+		opts: { scrollTop: number; clientHeight: number; scrollHeight: number },
+	) {
+		const el = frame.element as HTMLElement
+		Object.defineProperty(el, 'scrollTop', { value: opts.scrollTop, configurable: true })
+		Object.defineProperty(el, 'clientHeight', { value: opts.clientHeight, configurable: true })
+		Object.defineProperty(el, 'scrollHeight', { value: opts.scrollHeight, configurable: true })
+	}
+
+	it('keeps Register disabled until the notice is scrolled to its end', async () => {
+		registerNotice.mockResolvedValue(NOTICE)
+		const wrapper = mountWithI18n(RegisterPage, { props: { token: 'code' } })
+		await flushPromises()
+		const frame = wrapper.find('[data-test="notice-frame"]')
+		setFrame(frame, { scrollTop: 0, clientHeight: 100, scrollHeight: 500 })
+		await frame.trigger('scroll')
+		expect(wrapper.find('[data-test="register"]').attributes('disabled')).toBeDefined()
+		expect(wrapper.find('[data-test="scroll-hint"]').exists()).toBe(true)
+
+		setFrame(frame, { scrollTop: 400, clientHeight: 100, scrollHeight: 500 })
+		await frame.trigger('scroll')
+		expect(wrapper.find('[data-test="register"]').attributes('disabled')).toBeUndefined()
+		expect(wrapper.find('[data-test="scroll-hint"]').exists()).toBe(false)
+	})
+
+	it('denies without contacting the server, then reads the notice again or goes to scan a code', async () => {
+		registerNotice.mockResolvedValue(NOTICE)
+		const wrapper = mountWithI18n(RegisterPage, { props: { token: 'code' } })
+		await flushPromises()
+		await wrapper.find('[data-test="deny"]').trigger('click')
+		expect(registerSelf).not.toHaveBeenCalled()
+		expect(wrapper.text()).toContain('No recording on this phone.')
+
+		await wrapper.find('[data-test="read-again"]').trigger('click')
+		expect(wrapper.find('[data-test="notice"]').exists()).toBe(true)
+
+		await wrapper.find('[data-test="deny"]').trigger('click')
+		await wrapper.find('[data-test="scan-again"]').trigger('click')
+		expect(wrapper.emitted('scan-again')).toBeTruthy()
+	})
+})
+
 describe('ParticipantPage', () => {
 	it('shows where the person is registered, their consent, and the report once out', async () => {
 		participantStatus.mockResolvedValue({

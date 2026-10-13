@@ -17,6 +17,9 @@
 			"ask": "Please make sure everyone at the table has heard this before you begin.",
 			"agree": "Everyone at this table agrees — continue",
 			"decline": "Someone does not agree",
+			"deny": "Deny",
+			"scrollToEnd": "Scroll to the end to accept",
+			"language": "Language",
 			"declinedTitle": "This table will not record",
 			"declinedBody": "Please tell the facilitator. Nothing has been recorded, and the discussion can still go ahead without this phone.",
 			"declinedBack": "Go back",
@@ -481,8 +484,14 @@
 		"joined": {
 			"asRecorder": "You join as Recorder {label}",
 			"newTable": "This phone is the recorder of the new table",
-			"body": "The code you scanned decided this. Continue to set up the recording.",
 			"continue": "Continue"
+		},
+		"declined": {
+			"title": "No recording on this phone.",
+			"body": "Without your consent this phone cannot record, transcribe or summarise what the table says, so the table's discussion will not appear in the report. You can still take part in the discussion. If you change your mind, scan the table's code again.",
+			"noticeHint": "The notice you were shown explains who records, what is kept and for how long.",
+			"readAgain": "Read it again",
+			"scanAgain": "Scan the code again"
 		},
 		"assembly": {
 			"overTitle": "The assembly has ended",

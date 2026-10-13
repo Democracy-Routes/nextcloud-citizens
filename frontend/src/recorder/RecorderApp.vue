@@ -20,8 +20,8 @@ import ArmedScreen from './components/ArmedScreen.vue'
 import CapabilityQr from './components/CapabilityQr.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
 import ConfirmJoinScreen from './components/ConfirmJoinScreen.vue'
+import DeclinedScreen from './components/DeclinedScreen.vue'
 import FacilitatorPage from './components/FacilitatorPage.vue'
-import JoinedScreen from './components/JoinedScreen.vue'
 import ParticipantPage from './components/ParticipantPage.vue'
 import Preflight from './components/Preflight.vue'
 import RegisterPage from './components/RegisterPage.vue'
@@ -63,7 +63,7 @@ type Screen =
 	| 'purged'
 	| 'recovery'
 	| 'confirm-join'
-	| 'joined'
+	| 'declined'
 	| 'consent'
 	| 'preflight'
 	| 'armed'
@@ -83,6 +83,10 @@ const selectedRound = ref<RoundInfo | null>(null)
 // What a code other than the printed table code made this phone — shown once,
 // right after the scan, before consent; a resumed session never sees it again.
 const pendingJoined = ref<Joined | null>(null)
+// The token behind the most recent #/join/<token>, kept only in memory — so
+// "Read it again" on the declined screen can rejoin after the session itself
+// was forgotten (0.8).
+const lastJoinToken = ref<string | null>(null)
 const recoveryRecording = ref<StoredRecording | null>(null)
 const skippedRecovery = new Set<string>()
 
@@ -205,22 +209,17 @@ async function enterWithSession(joined: JoinResult): Promise<void> {
 	// audio from a previous event, and that must not stand between them and
 	// recording this one.
 	if (await scanForRecovery(joined.assembly.id)) return
-	// the code this phone just scanned made it a recorder of a table it did not
-	// pick (another recorder, or a brand-new table): say so, once, first
-	if (pendingJoined.value) {
-		screen.value = 'joined'
-		return
-	}
 	afterJoined()
 }
 
-/** Past the joined screen (or straight here for a printed table code). */
+/** Past recovery and any purge. */
 function afterJoined(): void {
-	pendingJoined.value = null
 	// people are about to be recorded: tell them what happens to the audio
 	// before it starts. Once per device — an interrupted round must not make
-	// the table read it again mid-assembly.
-	if (!consentGiven()) {
+	// the table read it again mid-assembly. A pendingJoined code still needs
+	// showing even once consent is already on file — ConsentScreen folds that
+	// line into its own screen rather than this app routing to a separate one.
+	if (!consentGiven() || pendingJoined.value) {
 		screen.value = 'consent'
 		return
 	}
@@ -236,7 +235,11 @@ async function finishRecovery(): Promise<void> {
 	if (recoveryRecording.value) skippedRecovery.add(recoveryRecording.value.recordingId)
 	recoveryRecording.value = null
 	if (await scanForRecovery(session.value?.assembly.id)) return
-	screen.value = session.value ? (consentGiven() ? 'preflight' : 'consent') : 'no-invite'
+	if (!session.value) {
+		screen.value = 'no-invite'
+		return
+	}
+	afterJoined()
 }
 
 function consentGiven(): boolean {
@@ -257,7 +260,39 @@ function acceptConsent(table: TableConsent | null = null): void {
 	// is right without another round-trip (registration is per person, and
 	// the screen stays reachable from there for a late arrival)
 	if (session.value && table) session.value = { ...session.value, consent: table }
+	// shown once, right after the scan; cleared only once actually dismissed —
+	// not the instant it arrives, or the "already consented" relay (0.8) would
+	// never get a chance to show it
+	pendingJoined.value = null
 	screen.value = 'preflight'
+}
+
+/** This device declines to let this phone record at all. Nothing is sent to
+ * the server — it is purely a local choice — but the session this phone was
+ * about to use is forgotten, so a reload does not quietly resume it. */
+function denyConsent(): void {
+	sessionStorageClear()
+	history.replaceState(null, '', window.location.pathname + window.location.search + '#/declined')
+	screen.value = 'declined'
+}
+
+/** Back to the start screen: scanning a fresh code is the only way forward
+ * from here, same as a facilitator or participant forgetting their phone. */
+function returnToStart(): void {
+	history.replaceState(null, '', window.location.pathname + window.location.search)
+	screen.value = 'no-invite'
+}
+
+/** "Read it again" from the declined screen: the code's token is kept in
+ * memory (never persisted — this phone just said it does not consent) so
+ * re-joining shows the same notice afresh. deviceId makes this idempotent
+ * even though the code may already be spent. */
+function declinedReadAgain(): void {
+	if (lastJoinToken.value) {
+		void joinToken(lastJoinToken.value)
+		return
+	}
+	returnToStart()
 }
 
 /** How often a joined phone asks whether the organizer has cleared it.
@@ -510,9 +545,18 @@ function participantFromHash(): boolean {
 	return false
 }
 
+/** Reachable directly, not only via a fresh deny: a reload while declined
+ * must not silently fall through to 'no-invite'. */
+function declinedFromHash(): boolean {
+	if (!/^#\/declined$/.test(window.location.hash) || capturing.value) return false
+	screen.value = 'declined'
+	return true
+}
+
 async function joinFromHash(): Promise<boolean> {
 	if (participantFromHash()) return true
 	if (facilitatorFromHash()) return true
+	if (declinedFromHash()) return true
 	// A QR opened in this same tab can be a fragment-only navigation: Vue
 	// remains mounted. Do not tear down a live microphone to switch sessions.
 	const match = window.location.hash.match(/#\/join\/(.+)$/)
@@ -532,6 +576,7 @@ async function joinFromHash(): Promise<boolean> {
 async function joinToken(token: string): Promise<void> {
 	if (joinInProgress) return
 	joinInProgress = true
+	lastJoinToken.value = token
 	screen.value = 'joining'
 	try {
 		const joined = await joinWithRetry(token)
@@ -712,10 +757,10 @@ function sessionStorageClear(): void {
 			@join="confirmGuardedJoin"
 			@cancel="cancelGuardedJoin" />
 
-		<JoinedScreen
-			v-else-if="screen === 'joined' && pendingJoined"
-			:joined="pendingJoined"
-			@continue="afterJoined" />
+		<DeclinedScreen
+			v-else-if="screen === 'declined'"
+			@read-again="declinedReadAgain"
+			@scan-again="returnToStart" />
 
 		<ConsentScreen
 			v-else-if="screen === 'consent' && session"
@@ -723,7 +768,11 @@ function sessionStorageClear(): void {
 			:handling="session.data_handling ?? null"
 			:table-number="session.table_number"
 			:color-key="session.table_color"
-			@accept="acceptConsent" />
+			:assembly="session.assembly"
+			:pending-joined="pendingJoined"
+			:already-consented="consentGiven() && pendingJoined !== null"
+			@accept="acceptConsent"
+			@deny="denyConsent" />
 
 		<Preflight
 			v-else-if="screen === 'preflight' && session"
@@ -756,7 +805,8 @@ function sessionStorageClear(): void {
 		<RegisterPage
 			v-else-if="screen === 'register' && registerToken"
 			:token="registerToken"
-			@registered="participantRegistered" />
+			@registered="participantRegistered"
+			@scan-again="returnToStart" />
 
 		<ParticipantPage
 			v-else-if="screen === 'participant' && participantToken"

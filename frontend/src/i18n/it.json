@@ -17,6 +17,9 @@
 			"ask": "Assicuratevi che tutte le persone al tavolo abbiano sentito queste informazioni prima di iniziare.",
 			"agree": "Tutti al tavolo sono d'accordo — continua",
 			"decline": "Qualcuno non è d'accordo",
+			"deny": "Rifiuta",
+			"scrollToEnd": "Scorri fino in fondo per accettare",
+			"language": "Lingua",
 			"declinedTitle": "Questo tavolo non registrerà",
 			"declinedBody": "Avvisate l'organizzatore. Non è stato registrato nulla e la discussione può comunque proseguire senza questo telefono.",
 			"declinedBack": "Torna indietro",
@@ -481,8 +484,14 @@
 		"joined": {
 			"asRecorder": "Ti unisci come Registratore {label}",
 			"newTable": "Questo telefono è il registratore del nuovo tavolo",
-			"body": "Lo ha deciso il codice che hai scansionato. Continua per preparare la registrazione.",
 			"continue": "Continua"
+		},
+		"declined": {
+			"title": "Nessuna registrazione su questo telefono.",
+			"body": "Senza il tuo consenso questo telefono non può registrare, trascrivere né riassumere ciò che dice il tavolo, quindi la discussione del tavolo non comparirà nel rapporto. Puoi comunque partecipare alla discussione. Se cambi idea, inquadra di nuovo il codice del tavolo.",
+			"noticeHint": "L'informativa che hai visto spiega chi registra, cosa viene conservato e per quanto tempo.",
+			"readAgain": "Rileggila",
+			"scanAgain": "Inquadra di nuovo il codice"
 		},
 		"assembly": {
 			"overTitle": "L'assemblea è terminata",

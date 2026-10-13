@@ -23,6 +23,9 @@ export interface RoundInfo {
 	 * to the TABLE, so without this a phone cannot tell its own recording from
 	 * the one left behind by a device it replaced. */
 	recorded_by_this_device?: boolean
+	/** when the first recorder at this table started (ISO), so a planned
+	 * duration counts from there on every phone (R5); null before anyone did */
+	table_started_at?: string | null
 	/** this table's AI summary for the round ('' until analysis lands) */
 	table_summary?: string
 }
@@ -34,7 +37,12 @@ export interface AssemblyInfo {
 	name: string
 	language: string
 	recording_mode: 'orchestrated' | 'independent' | 'plenary'
+	/** true only for a Record-now Session before any recording exists — the
+	 * language can still change, so the consent screen offers the switch */
+	language_changeable?: boolean
 }
+
+export type RecorderLanguage = 'en' | 'it' | 'de' | 'fr' | 'es'
 
 export type CapabilityPurpose =
 	| 'ADD_RECORDER_TO_TABLE'
@@ -523,6 +531,12 @@ export const recorderApi = {
 	/** The notice people read before registering, and who already has. */
 	consentNotice: (token: string) =>
 		request<ConsentNotice>('GET', '/api/v1/public/recorder/consent-notice', { token }),
+
+	/** Switch a Record-now Session's language before any recording exists.
+	 * 409 once that is no longer true — the table must stay in the language
+	 * everyone was told about. */
+	changeLanguage: (token: string, language: RecorderLanguage) =>
+		request<{ language: string }>('POST', '/api/v1/public/recorder/language', { token, json: { language } }),
 
 	/** The door's "find your name": people registered ahead, no table yet. */
 	searchParticipants: (token: string, q: string) =>

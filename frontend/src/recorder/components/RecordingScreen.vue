@@ -399,9 +399,23 @@ let roundPollTimer = 0
 let livePollTimer = 0
 let audioContext: AudioContext | null = null
 
+/** When the TABLE started: the first recorder's start at this table, from the
+ * status poll (R5), so a phone added later shows the same clock and finishes
+ * with the others — never later than this phone's own start. */
+const tableStartedAt = ref<number | null>(parseTableStart(props.round.table_started_at))
+function parseTableStart(value: string | null | undefined): number | null {
+	if (!value) return null
+	const ms = Date.parse(value)
+	return Number.isFinite(ms) ? ms : null
+}
+const clockStart = computed(() => {
+	if (!state.startedAt) return null
+	return tableStartedAt.value !== null ? Math.min(tableStartedAt.value, state.startedAt) : state.startedAt
+})
+
 const elapsed = computed(() => {
-	if (!state.startedAt) return '00:00'
-	const seconds = Math.max(0, Math.floor((now.value - state.startedAt) / 1000))
+	if (!clockStart.value) return '00:00'
+	const seconds = Math.max(0, Math.floor((now.value - clockStart.value) / 1000))
 	const minutes = Math.floor(seconds / 60)
 	return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 })
@@ -463,8 +477,8 @@ onMounted(async () => {
 			props.round.duration_minutes > 0 &&
 			state.phase === 'recording' &&
 			!keepTalking.value &&
-			state.startedAt &&
-			now.value - state.startedAt >= props.round.duration_minutes * 60_000
+			clockStart.value &&
+			now.value - clockStart.value >= props.round.duration_minutes * 60_000
 		) {
 			roundEnded.value = true
 			beginFinishCountdown()
@@ -503,6 +517,7 @@ onMounted(async () => {
 			if (status.consent) consent.value = status.consent
 			applyRecordingNotice(status.recording_notice ?? null)
 			const current = status.rounds.find((r) => r.id === props.round.id)
+			if (current) tableStartedAt.value = parseTableStart(current.table_started_at)
 			if (current && current.status === 'ENDED') {
 				roundEnded.value = true
 				if (orchestrated) beginFinishCountdown()
@@ -739,7 +754,7 @@ async function recordAnother(): Promise<void> {
 			}}
 		</p>
 
-		<div v-if="startError" class="rc-scroll">
+		<div v-if="startError" class="rc-scroll rc-scroll--centered">
 			<div class="rc-alert">
 				<strong>
 					{{ startErrorIsMicrophone ? t('recorder.mic.failedTitle') : t('recorder.mic.serverTitle') }}
@@ -780,7 +795,12 @@ async function recordAnother(): Promise<void> {
 				<p class="rc-qbar__q">{{ round.question || round.title }}</p>
 			</button>
 
-			<div class="rc-scroll">
+			<div class="rc-scroll rc-scroll--split">
+			<!-- rc-side: the phone’s own telemetry — timer, connection, storage,
+			     alerts — grouped so a tablet/desktop can show it beside the
+			     captions rather than above them. display:contents on a phone
+			     keeps this exact DOM order (see style.css). -->
+			<div class="rc-side">
 			<div class="rc-timer-wrap">
 				<div
 					class="rc-timer-ring"
@@ -985,8 +1005,11 @@ async function recordAnother(): Promise<void> {
 					</button>
 				</template>
 			</div>
+			</div>
 
 			<template v-if="state.phase === 'recording'">
+				<!-- rc-main: what the table is here to read -->
+				<div class="rc-main">
 				<div v-if="showLive" class="rc-card">
 					<p class="rc-eyebrow">{{ t('recorder.recording.liveTranscript') }}</p>
 					<!-- a backup recorder: another phone at the table carries the
@@ -1027,13 +1050,16 @@ async function recordAnother(): Promise<void> {
 							: t('recorder.recording.showTranscript')
 					}}
 				</button>
+				</div>
 				<!-- plenary: the room shares one code, so the nearest copy of it
 				     is this phone — the next device joins by scanning it here -->
-				<button v-if="plenary" class="rc-btn rc-subtle" @click="showAddDevice = !showAddDevice">
+				<div v-if="plenary" class="rc-side">
+				<button class="rc-btn rc-subtle" @click="showAddDevice = !showAddDevice">
 					<SvgIcon :path="mdiQrcode" :size="18" />
 					{{ t('recorder.addDevice.button') }}
 				</button>
-				<AddDeviceQr v-if="plenary && showAddDevice" :token="props.session.session_token" />
+				<AddDeviceQr v-if="showAddDevice" :token="props.session.session_token" />
+				</div>
 			</template>
 			</div>
 
@@ -1065,7 +1091,7 @@ async function recordAnother(): Promise<void> {
 		</template>
 
 		<template v-else-if="state.phase === 'syncing'">
-			<div class="rc-scroll">
+			<div class="rc-scroll rc-scroll--centered">
 				<div v-if="state.micLost" class="rc-alert" role="alert">
 					{{ lostToScreen ? t('recorder.recording.micLostScreenOff') : t('recorder.recording.micLost') }}
 				</div>
@@ -1088,7 +1114,7 @@ async function recordAnother(): Promise<void> {
 		</template>
 
 		<template v-else-if="state.phase === 'done' || state.phase === 'uploaded'">
-			<div class="rc-scroll">
+			<div class="rc-scroll rc-scroll--centered">
 				<div class="rc-hero">
 					<div
 						class="rc-hero__icon"
@@ -1222,7 +1248,7 @@ async function recordAnother(): Promise<void> {
 		</template>
 
 		<template v-else-if="state.phase === 'failed'">
-			<div class="rc-scroll">
+			<div class="rc-scroll rc-scroll--centered">
 				<div class="rc-alert" style="margin-top: 30px">
 					<strong>{{ t('recorder.recording.syncFailed') }}</strong><br />{{ state.error }}
 					<br /><br />

@@ -19,6 +19,7 @@ const searchParticipants = vi.fn()
 const seatParticipant = vi.fn()
 const changeConsent = vi.fn()
 const markMoved = vi.fn()
+const changeLanguage = vi.fn()
 
 vi.mock('../../frontend/src/recorder/api', () => ({
 	recorderApi: {
@@ -28,7 +29,9 @@ vi.mock('../../frontend/src/recorder/api', () => ({
 		seatParticipant: (...args: unknown[]) => seatParticipant(...args),
 		changeConsent: (...args: unknown[]) => changeConsent(...args),
 		markMoved: (...args: unknown[]) => markMoved(...args),
+		changeLanguage: (...args: unknown[]) => changeLanguage(...args),
 	},
+	RecorderApiError: class extends Error {},
 }))
 
 const ACCEPT = 'By registering you declare that you have read this notice and you consent to everything in it.'
@@ -169,6 +172,113 @@ describe('the notice screen', () => {
 		const agree = wrapper.find('button.rc-primary')
 		expect(agree.text()).toBe('Everyone at this table agrees — continue')
 		await agree.trigger('click')
+		expect(wrapper.emitted('accept')).toBeTruthy()
+	})
+})
+
+describe('the scroll-gated accept, deny, language switch and joined line (0.8)', () => {
+	/** happy-dom defaults every layout metric to 0, where "fits already" is
+	 * trivially true — these tests set real ones so the gate has something to
+	 * gate on. */
+	function setFrame(
+		frame: { element: Element },
+		opts: { scrollTop: number; clientHeight: number; scrollHeight: number },
+	) {
+		const el = frame.element as HTMLElement
+		Object.defineProperty(el, 'scrollTop', { value: opts.scrollTop, configurable: true })
+		Object.defineProperty(el, 'clientHeight', { value: opts.clientHeight, configurable: true })
+		Object.defineProperty(el, 'scrollHeight', { value: opts.scrollHeight, configurable: true })
+	}
+
+	it('keeps Accept disabled until the notice is scrolled to its end', async () => {
+		consentNotice.mockResolvedValue({ ...NOTICE, mode: 'optional' }) // isolate the scroll gate from the roster gate
+		const wrapper = mountScreen()
+		await flushPromises()
+		const frame = wrapper.find('[data-test="notice-frame"]')
+		setFrame(frame, { scrollTop: 0, clientHeight: 100, scrollHeight: 500 })
+		await frame.trigger('scroll')
+		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeDefined()
+		expect(wrapper.find('[data-test="scroll-hint"]').exists()).toBe(true)
+
+		setFrame(frame, { scrollTop: 400, clientHeight: 100, scrollHeight: 500 })
+		await frame.trigger('scroll')
+		expect(wrapper.find('[data-test="continue"]').attributes('disabled')).toBeUndefined()
+		expect(wrapper.find('[data-test="scroll-hint"]').exists()).toBe(false)
+	})
+
+	it('denies without contacting the server', async () => {
+		const wrapper = mountScreen()
+		await flushPromises()
+		await wrapper.find('[data-test="deny"]').trigger('click')
+		expect(wrapper.emitted('deny')).toBeTruthy()
+		expect(registerParticipant).not.toHaveBeenCalled()
+	})
+
+	it('shows a language switch only for a Record-now Session that can still change it, and re-fetches on change', async () => {
+		const assembly = {
+			id: 'a1', kind: 'session', name: 'Session', language: 'en',
+			recording_mode: 'independent', language_changeable: true,
+		}
+		consentNotice.mockReset()
+		consentNotice.mockResolvedValueOnce(NOTICE).mockResolvedValueOnce({ ...NOTICE, language: 'it' })
+		changeLanguage.mockReset().mockResolvedValue({ language: 'it' })
+		const wrapper = mountWithI18n(ConsentScreen, {
+			props: { token: 'tok', handling: null, tableNumber: 3, colorKey: 'orange', assembly },
+		})
+		await flushPromises()
+		expect(wrapper.find('[data-test="language"]').exists()).toBe(true)
+		await wrapper.find('[data-test="language"]').setValue('it')
+		await flushPromises()
+		expect(changeLanguage).toHaveBeenCalledWith('tok', 'it')
+		expect(consentNotice).toHaveBeenCalledTimes(2)
+	})
+
+	it('does not offer the language switch outside a Record-now Session', async () => {
+		const wrapper = mountScreen()
+		await flushPromises()
+		expect(wrapper.find('[data-test="language"]').exists()).toBe(false)
+	})
+
+	it('reverts the language and shows the server message when the switch is refused', async () => {
+		const assembly = {
+			id: 'a1', kind: 'session', name: 'Session', language: 'en',
+			recording_mode: 'independent', language_changeable: true,
+		}
+		consentNotice.mockResolvedValue(NOTICE)
+		changeLanguage.mockReset().mockRejectedValue(new Error('This table has already started recording.'))
+		const wrapper = mountWithI18n(ConsentScreen, {
+			props: { token: 'tok', handling: null, tableNumber: 3, colorKey: 'orange', assembly },
+		})
+		await flushPromises()
+		await wrapper.find('[data-test="language"]').setValue('it')
+		await flushPromises()
+		expect(wrapper.text()).toContain('This table has already started recording.')
+		expect((wrapper.find('[data-test="language"]').element as HTMLSelectElement).value).toBe('en')
+	})
+
+	it('shows the joined line above the notice when a scanned code decided this table', async () => {
+		consentNotice.mockResolvedValue(NOTICE)
+		const wrapper = mountWithI18n(ConsentScreen, {
+			props: {
+				token: 'tok', handling: null, tableNumber: 9, colorKey: 'blue',
+				pendingJoined: { purpose: 'ADD_TABLE', table_number: 9, color_key: 'blue', slot: 1, table_created: true },
+			},
+		})
+		await flushPromises()
+		expect(wrapper.find('[data-test="joined-line"]').text()).toBe('This phone is the recorder of the new table')
+	})
+
+	it('relays a newly-scanned code without the full notice once this device already consented', async () => {
+		const wrapper = mountWithI18n(ConsentScreen, {
+			props: {
+				token: 'tok', handling: null, tableNumber: 2, colorKey: 'green', alreadyConsented: true,
+				pendingJoined: { purpose: 'ADD_RECORDER_TO_TABLE', table_number: 2, color_key: 'green', slot: 2, table_created: false },
+			},
+		})
+		await flushPromises()
+		expect(consentNotice).not.toHaveBeenCalled()
+		expect(wrapper.find('[data-test="joined-line"]').text()).toBe('You join as Recorder B')
+		await wrapper.find('[data-test="continue"]').trigger('click')
 		expect(wrapper.emitted('accept')).toBeTruthy()
 	})
 })

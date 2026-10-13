@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiChevronLeft, mdiChevronRight, mdiCog, mdiHomeOutline, mdiMenu } from '@mdi/js'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { describeError, type UiError } from './errors'
 import { api, ApiError } from './api'
@@ -12,6 +12,7 @@ import HomeView from './components/HomeView.vue'
 import SessionWizard from './components/SessionWizard.vue'
 import SettingsView from './components/SettingsView.vue'
 import CzButton from './components/ui/CzButton.vue'
+import CzChip from './components/ui/CzChip.vue'
 import CzError from './components/ui/CzError.vue'
 import CzToasts from './components/ui/CzToasts.vue'
 import SvgIcon from './components/ui/SvgIcon.vue'
@@ -52,6 +53,34 @@ function toggleSidebar(): void {
 		/* preference simply not remembered */
 	}
 }
+
+type SidebarFilter = 'all' | 'sessions' | 'assemblies' | 'closed'
+
+// Which chip is chosen and what the facilitator typed into the search box,
+// remembered per browser like the collapse state above — losing either on a
+// reload was annoying mid-event, when the same filter gets reopened a dozen
+// times over an afternoon.
+const sidebarFilter = ref<SidebarFilter>('all')
+const sidebarSearch = ref('')
+try {
+	const saved = JSON.parse(localStorage.getItem('citizens-sidebar-filter') ?? 'null') as
+		| { chip?: string; search?: string }
+		| null
+	if (saved && (['all', 'sessions', 'assemblies', 'closed'] as const).includes(saved.chip as SidebarFilter)) {
+		sidebarFilter.value = saved.chip as SidebarFilter
+	}
+	if (typeof saved?.search === 'string') sidebarSearch.value = saved.search
+} catch {
+	/* default: All, no search text */
+}
+
+watch([sidebarFilter, sidebarSearch], ([chip, search]) => {
+	try {
+		localStorage.setItem('citizens-sidebar-filter', JSON.stringify({ chip, search }))
+	} catch {
+		/* preference simply not remembered */
+	}
+})
 /** QR codes from a just-created assembly or Session, handed to the detail view.
  *
  * Keyed by container, because it is app-level state consumed by whatever
@@ -75,9 +104,52 @@ function statusLabel(status: string): string {
 const selectedId = computed(() => (view.value.name === 'detail' ? view.value.id : ''))
 
 // A standalone Session is stored behind a container row of kind "session";
-// the list shows it as a Session, under its question, never as an assembly.
-const sessions = computed(() => assemblies.value.filter((a) => a.kind === 'session'))
-const events = computed(() => assemblies.value.filter((a) => a.kind !== 'session'))
+// rows show it as a Session, under its question, never as an assembly.
+function isSession(item: Assembly): boolean {
+	return item.kind === 'session'
+}
+
+/** True once an assembly or Session is done: closed, or a server that never
+ * sets closed_at but reached the terminal COMPLETE status. */
+function isClosed(item: Assembly): boolean {
+	return Boolean(item.closed_at) || item.status === 'COMPLETE'
+}
+
+// One list from the same api.listAssemblies() call: in-progress rows first,
+// each group newest first, so the facilitator's current work is always at
+// the top regardless of kind.
+const recordings = computed(() =>
+	[...assemblies.value].sort((a, b) => {
+		const aOpen = !isClosed(a)
+		const bOpen = !isClosed(b)
+		if (aOpen !== bOpen) return aOpen ? -1 : 1
+		return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+	}),
+)
+
+// Chip + search narrow that list. Closed rows are hidden for All/Sessions/
+// Assemblies UNLESS hiding them would leave nothing to show for that kind —
+// an assembly wrapping up its only Session must not vanish from "Sessions".
+const visibleRecordings = computed(() => {
+	let scoped = recordings.value
+	if (sidebarFilter.value === 'sessions') scoped = scoped.filter((item) => isSession(item))
+	else if (sidebarFilter.value === 'assemblies') scoped = scoped.filter((item) => !isSession(item))
+
+	let list: Assembly[]
+	if (sidebarFilter.value === 'closed') {
+		list = scoped.filter((item) => isClosed(item))
+	} else {
+		const open = scoped.filter((item) => !isClosed(item))
+		list = open.length > 0 ? open : scoped
+	}
+
+	const query = sidebarSearch.value.trim().toLowerCase()
+	return query ? list.filter((item) => item.name.toLowerCase().includes(query)) : list
+})
+
+function setSidebarFilter(chip: SidebarFilter): void {
+	sidebarFilter.value = chip
+}
 
 const loadError = ref<UiError | null>(null)
 
@@ -188,45 +260,54 @@ async function recordNow(): Promise<void> {
 		<div class="cz-sidebar__top">
 			<CzButton variant="primary" :icon="mdiHomeOutline" wide @click="goHome">{{ t('organizer.shell.app.home') }}</CzButton>
 		</div>
+		<div class="cz-sidebar__filterbar">
+			<CzChip :active="sidebarFilter === 'all'" @click="setSidebarFilter('all')">
+				{{ t('organizer.shell.app.filter.all') }}
+			</CzChip>
+			<CzChip :active="sidebarFilter === 'sessions'" @click="setSidebarFilter('sessions')">
+				{{ t('organizer.shell.app.filter.sessions') }}
+			</CzChip>
+			<CzChip :active="sidebarFilter === 'assemblies'" @click="setSidebarFilter('assemblies')">
+				{{ t('organizer.shell.app.filter.assemblies') }}
+			</CzChip>
+			<CzChip :active="sidebarFilter === 'closed'" @click="setSidebarFilter('closed')">
+				{{ t('organizer.shell.app.filter.closed') }}
+			</CzChip>
+		</div>
+		<input
+			v-model="sidebarSearch"
+			type="search"
+			class="cz-sidebar__search"
+			:placeholder="t('organizer.shell.app.search')"
+			:aria-label="t('organizer.shell.app.search')">
 		<nav class="cz-sidebar__list">
-			<p v-if="sessions.length" class="cz-sidebar__group">{{ t('organizer.shell.app.sessions') }}</p>
 			<button
-				v-for="session in sessions"
-				:key="session.id"
+				v-for="item in visibleRecordings"
+				:key="item.id"
 				class="cz-navitem"
-				:class="{ 'cz-navitem--active': session.id === selectedId }"
-				@click="open(session.id)">
+				:class="{ 'cz-navitem--active': item.id === selectedId }"
+				@click="open(item.id)">
+				<!-- the assembly's or Session's state was conveyed by hue and nothing else -->
 				<span
 					class="cz-dot"
-					:class="`cz-dot--${STATUS_TONE[session.status] ?? 'gray'}`"
+					:class="`cz-dot--${STATUS_TONE[item.status] ?? 'gray'}`"
 					role="img"
-					:aria-label="statusLabel(session.status)"
-					:title="statusLabel(session.status)"></span>
+					:aria-label="statusLabel(item.status)"
+					:title="statusLabel(item.status)"></span>
 				<span class="cz-navitem__body">
-					<span class="cz-navitem__name">{{ session.name }}</span>
-					<span class="cz-navitem__meta">
-						{{ t('organizer.shell.app.sessionMeta', { count: session.default_table_count }, session.default_table_count) }}
+					<span class="cz-navitem__title">
+						<span class="cz-kind-badge">
+							{{ isSession(item) ? t('organizer.shell.app.badge.session') : t('organizer.shell.app.badge.assembly') }}
+						</span>
+						<span class="cz-navitem__name">{{ item.name }}</span>
 					</span>
-				</span>
-			</button>
-			<p v-if="events.length && sessions.length" class="cz-sidebar__group">{{ t('organizer.shell.app.assemblies') }}</p>
-			<button
-				v-for="assembly in events"
-				:key="assembly.id"
-				class="cz-navitem"
-				:class="{ 'cz-navitem--active': assembly.id === selectedId }"
-				@click="open(assembly.id)">
-				<!-- the assembly's state was conveyed by hue and nothing else -->
-				<span
-					class="cz-dot"
-					:class="`cz-dot--${STATUS_TONE[assembly.status] ?? 'gray'}`"
-					role="img"
-					:aria-label="statusLabel(assembly.status)"
-					:title="statusLabel(assembly.status)"></span>
-				<span class="cz-navitem__body">
-					<span class="cz-navitem__name">{{ assembly.name }}</span>
 					<span class="cz-navitem__meta">
-						{{ t('organizer.shell.app.assemblyMeta', { participants: assembly.expected_participants, tables: assembly.default_table_count }) }}
+						<template v-if="isSession(item)">
+							{{ t('organizer.shell.app.sessionMeta', { count: item.default_table_count }, item.default_table_count) }}
+						</template>
+						<template v-else>
+							{{ t('organizer.shell.app.assemblyMeta', { participants: item.expected_participants, tables: item.default_table_count }) }}
+						</template>
 					</span>
 				</span>
 			</button>
@@ -263,7 +344,7 @@ async function recordNow(): Promise<void> {
 			<SvgIcon :path="sidebarCollapsed ? mdiChevronRight : mdiChevronLeft" :size="20" />
 		</button>
 		<div class="cz-mobilebar">
-			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">{{ t('organizer.shell.app.sessions') }}</CzButton>
+			<CzButton :icon="mdiMenu" small @click="sidebarOpen = true">{{ t('organizer.shell.app.recordings') }}</CzButton>
 		</div>
 
 		<HomeView
