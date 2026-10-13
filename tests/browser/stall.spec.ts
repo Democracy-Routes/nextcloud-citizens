@@ -16,7 +16,7 @@
  * resolve themselves, with nothing for the organizer to press.
  */
 import { expect, test, type Page } from '@playwright/test'
-import { CHUNK_MS, newPhone, organizerApi, seed, tableOne, waitForState } from './support/phone'
+import { CHUNK_MS, newPhone, organizerApi, seed, tableOne, waitForState, acceptNotice } from './support/phone'
 
 async function finish(page: Page): Promise<void> {
 	await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
@@ -40,12 +40,9 @@ async function bearerOf(page: Page): Promise<string> {
  * helper, since no other spec joins through a capability. */
 async function joinAsAddedRecorder(page: Page, token: string): Promise<void> {
 	await page.goto(`/recorder.html?chunkms=${CHUNK_MS}#/join/${encodeURIComponent(token)}`)
-	const joinedScreen = page.getByRole('button', { name: 'Continue', exact: true })
-	await joinedScreen.waitFor({ state: 'visible', timeout: 20_000 })
-	await joinedScreen.click()
-	const agree = page.getByRole('button', { name: /continue/ })
-	await agree.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined)
-	if (await agree.isVisible()) await agree.click()
+	// since 0.8 "You join as Recorder B" is one line on the notice itself,
+	// not a screen of its own: one gated Accept, as for any phone
+	await acceptNotice(page)
 	await expect(page.getByText('Microphone test')).toBeVisible({ timeout: 20_000 })
 	await expect(page.getByRole('button', { name: 'READY' })).toBeEnabled({ timeout: 20_000 })
 	await page.getByRole('button', { name: 'READY' }).click()

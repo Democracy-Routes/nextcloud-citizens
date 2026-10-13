@@ -10,7 +10,7 @@
  * `sh scripts/browser-test-env.sh start` then `npx playwright test`.
  */
 import { expect, test } from '@playwright/test'
-import { CHUNK_MS, newPhone, organizerApi, seed, tableOne, waitForState } from './support/phone'
+import { CHUNK_MS, acceptNotice, newPhone, organizerApi, seed, tableOne, waitForState } from './support/phone'
 
 test('the organizer hands a dead table to another phone', async ({ browser }) => {
 	const fixture = seed()
@@ -34,9 +34,7 @@ test('the organizer hands a dead table to another phone', async ({ browser }) =>
 	await phoneB.page.goto(
 		`/recorder.html?chunkms=${CHUNK_MS}#/join/${encodeURIComponent(fixture.token)}`,
 	)
-	const agree = phoneB.page.getByRole('button', { name: /continue/ })
-	await agree.waitFor({ state: 'visible', timeout: 20_000 })
-	await agree.click()
+	await acceptNotice(phoneB.page)
 	await expect(phoneB.page.getByRole('button', { name: 'READY' })).toBeEnabled({ timeout: 20_000 })
 	await phoneB.page.getByRole('button', { name: 'READY' }).click()
 

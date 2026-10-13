@@ -74,6 +74,25 @@ export interface Phone {
 	die(): Promise<void>
 }
 
+/** Get past the notice the way a person does: read to the end, then accept.
+ *
+ * Accept is scroll-gated to the end of the notice (0.8): the frame itself
+ * scrolls, never the page, so jump it to the bottom first. Tolerant of no
+ * notice at all (a device that already consented, a server before 0.7). */
+export async function acceptNotice(page: Page): Promise<void> {
+	const agree = page.getByRole('button', { name: /continue/ })
+	await agree.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined)
+	if (!(await agree.isVisible())) return
+	const frame = page.locator('.rc-notice-frame')
+	if (await frame.count()) {
+		await frame.evaluate((el) => {
+			el.scrollTop = el.scrollHeight
+		})
+	}
+	await expect(agree).toBeEnabled({ timeout: 20_000 })
+	await agree.click()
+}
+
 export async function newPhone(browser: Browser, token: string): Promise<Phone> {
 	const context = await browser.newContext()
 	const page = await context.newPage()
@@ -86,20 +105,7 @@ export async function newPhone(browser: Browser, token: string): Promise<Phone> 
 		// the app's first render and silently skips the click. Assemblies made
 		// here are 'optional' (the API default), so "Everyone added — continue"
 		// is enabled without registering anyone.
-		const agree = page.getByRole('button', { name: /continue/ })
-		await agree.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined)
-		if (await agree.isVisible()) {
-			// Accept is scroll-gated to the end of the notice (0.8): the frame
-			// itself scrolls, never the page, so jump it to the bottom first.
-			const frame = page.locator('.rc-notice-frame')
-			if (await frame.count()) {
-				await frame.evaluate((el) => {
-					el.scrollTop = el.scrollHeight
-				})
-			}
-			await expect(agree).toBeEnabled({ timeout: 20_000 })
-			await agree.click()
-		}
+		await acceptNotice(page)
 		await expect(page.getByText('Microphone test')).toBeVisible({ timeout: 20_000 })
 	}
 
