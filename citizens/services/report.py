@@ -238,11 +238,15 @@ def _quotes(cited: list[TranscriptSegment]) -> list[dict]:
 
 
 def _methodology_note(
-    session: Session, assembly: Assembly, quotations_withheld: bool = False
+    session: Session, assembly: Assembly, quotations_withheld: bool = False,
+    reviewed: bool = False,
 ) -> str:
-    """The standing note, plus whatever was unusual about THIS assembly."""
+    """The standing note, plus whatever was unusual about THIS assembly.
+    "Findings were reviewed by a human organizer" only when one was."""
     language = assembly.language
     parts = [text(language, "methodology_note")]
+    if reviewed:
+        parts.insert(1, text(language, "methodology_reviewed"))
     if quotations_withheld:
         parts.append(text(language, "quotations_withheld_note"))
     engines = _transcript_engines(session, assembly)
@@ -492,7 +496,12 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                 "title": round_.title,
                 # the phone's report screen shows this as-is, so it follows the
                 # assembly's language without a dictionary of its own
-                "heading": round_heading(round_.position, round_.title, assembly.language),
+                "heading": (
+                    # a Session on its own has one discussion: its name is the
+                    # page's title, so a "Session 1 — …" line under it repeats it
+                    "" if assembly.kind == "session" and len(assembly.rounds) == 1
+                    else round_heading(round_.position, round_.title, assembly.language)
+                ),
                 "question": round_.question,
                 # NULL on every round made before 0.7: the renderers print
                 # nothing for an empty objective
@@ -525,6 +534,9 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
     return {
         "assembly": {
             "name": assembly.name,
+            # "session" for a Session on its own: the readers drop the table
+            # badge and the participant line that mean nothing for one table
+            "kind": assembly.kind,
             "description": assembly.description,
             "language": assembly.language,
             "status": assembly.status,
@@ -544,7 +556,10 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
         "synthesis": _synthesis_payload(assembly),
         # built by accumulation rather than a ternary: there are three notes
         # now, and "(A + B) if cond else A" does not extend to a third
-        "methodology_note": _methodology_note(session, assembly, quotations_withheld=any_withheld),
+        "methodology_note": _methodology_note(
+            session, assembly, quotations_withheld=any_withheld,
+            reviewed=any(f.status in APPROVED for f in findings),
+        ),
         "include_drafts": include_drafts,
         # when set, table phones can view/download this report
         "published_at": (

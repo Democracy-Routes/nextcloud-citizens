@@ -8,6 +8,7 @@ endpoints that read and write provider API keys — see its docstring.
 
 import base64
 import binascii
+import time
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -59,6 +60,8 @@ def require_admin(
     closed for everyone and silently removes Settings from real admins.
     `nc_app` already binds this client to the requesting user.
     """
+    if _admin_until.get(user, 0.0) > time.monotonic():
+        return user
     try:
         groups = nc.ocs("GET", "/ocs/v1.php/cloud/user").get("groups") or []
     except Exception:
@@ -69,8 +72,14 @@ def require_admin(
     if "admin" not in groups:
         log.warning("admin_route_refused", user=user)
         raise HTTPException(status_code=403, detail="Administrator rights are required")
+    _admin_until[user] = time.monotonic() + ADMIN_CHECK_TTL_SECONDS
     return user
 
+
+#: a positive admin check is remembered this long: the OCS call behind it
+#: cost about a second on every Settings request. A refusal is never cached.
+ADMIN_CHECK_TTL_SECONDS = 300
+_admin_until: dict[str, float] = {}
 
 AdminUser = Annotated[str, Depends(require_admin)]
 

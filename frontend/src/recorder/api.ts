@@ -365,6 +365,8 @@ export interface RecorderStatus {
 export interface PublishedReport {
 	assembly: {
 		name: string
+		/** "session" for a Session on its own (absent before 0.7.0-beta.1) */
+		kind?: string
 		description: string
 		language: string
 		participants: number

@@ -626,7 +626,8 @@ class TestBuildReportInItalian:
 
         finding = report["rounds"][0]["tables"][0]["findings"][0]
         assert finding["type_label"] == "Proposal"
-        assert report["methodology_note"] == METHODOLOGY_NOTE
+        # the seeded finding is approved, so the note says a human reviewed it
+        assert report["methodology_note"] == f"{METHODOLOGY_NOTE} {text('en', 'methodology_reviewed')}"
         assert report["method"].startswith("In-person citizens' assembly")
 
 

@@ -200,7 +200,8 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
     global _snapshot, _refresh_failed
     with _refresh_lock:
         try:
-            store = default_store()
+            # one round trip for every key, not one per key (bulk_view)
+            store = bulk_view(default_store())
             analysis_enabled = get_setting(store, "analysis_enabled") == "1"
             previous_summary = dict(_snapshot.summary) if _snapshot else {}
             fresh = ConfigSnapshot(
@@ -216,7 +217,7 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 facilitator=_read_facilitator(store),
                 refreshed_at=time.monotonic(),
                 ok=True,
-                store_id=id(store),
+                store_id=id(default_store()),
             )
         except Exception:
             if not _refresh_failed:
@@ -290,11 +291,16 @@ def settings_summary(store: "ConfigStore") -> dict:
     after that. A store swapped in by a test is read afresh, like the rest of
     the snapshot."""
     snapshot = config_snapshot()
-    if snapshot.summary and (not snapshot.store_id or snapshot.store_id == id(store)):
+    # Any AppConfigStore reads the same Nextcloud, so the cached summary
+    # speaks for all of them. Until 2026-10-13 this compared object identity,
+    # and the admin routes build a fresh store per request — so the check
+    # never matched and every open of Settings made ~40 OCS calls (13 s).
+    if snapshot.summary and (
+        isinstance(store, AppConfigStore) or not snapshot.store_id or snapshot.store_id == id(store)
+    ):
         return copy.deepcopy(snapshot.summary)
-    if id(store) != id(default_store()):
-        # a per-request store that is not the background one (tests): no
-        # cache can speak for it
+    if not isinstance(store, AppConfigStore) and id(store) != id(default_store()):
+        # a store swapped in by a test: no cache can speak for it
         return providers_summary(store)
     return copy.deepcopy(refresh_config_snapshot(with_summary=True).summary)
 
@@ -614,11 +620,65 @@ class AppConfigStore:
     def get_value(self, key: str) -> str | None:
         return self._nc.appconfig_ex.get_value(key)
 
+    def get_values(self, keys: list[str]) -> dict[str, str]:
+        """Every stored key among `keys`, in one OCS call."""
+        return {
+            record.key: record.value for record in self._nc.appconfig_ex.get_values(list(keys))
+        }
+
     def set_value(self, key: str, value: str, sensitive: bool = False) -> None:
         self._nc.appconfig_ex.set_value(key, value, sensitive=sensitive)
 
     def delete_value(self, key: str) -> None:
         self._nc.appconfig_ex.delete(key)
+
+
+#: every key a snapshot or a Settings summary reads
+def _all_known_keys() -> list[str]:
+    keys = set(DEFAULTS) | set(LEGACY_KEYS.values())
+    keys |= {
+        f"{name}_api_key"
+        for name in ("mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator")
+    }
+    return sorted(keys)
+
+
+class _BulkStore:
+    """A read-only ConfigStore over values fetched in one call. A key the
+    bulk read did not cover is asked of the real store, so a reader of a key
+    nobody listed still works — one call slower, never wrong."""
+
+    def __init__(self, values: dict[str, str], covered: set[str], fallback: ConfigStore):
+        self._values = values
+        # a key that was asked for and came back absent IS answered: None.
+        # Only a key nobody listed goes to the real store.
+        self._covered = covered
+        self._fallback = fallback
+
+    def get_value(self, key: str) -> str | None:
+        if key in self._covered:
+            return self._values.get(key)
+        return self._fallback.get_value(key)
+
+    def set_value(self, key: str, value: str, sensitive: bool = False) -> None:
+        self._fallback.set_value(key, value, sensitive=sensitive)
+
+    def delete_value(self, key: str) -> None:
+        self._fallback.delete_value(key)
+
+
+def bulk_view(store: ConfigStore) -> ConfigStore:
+    """The store, with every known key read up front in ONE request where
+    the store can (AppConfigStore); any other store is returned as it is."""
+    getter = getattr(store, "get_values", None)
+    if getter is None:
+        return store
+    keys = _all_known_keys()
+    try:
+        return _BulkStore(getter(keys), set(keys), store)
+    except Exception:
+        log.warning("config_bulk_read_failed", exc_info=True)
+        return store
 
 
 def get_setting(store: ConfigStore, key: str) -> str:

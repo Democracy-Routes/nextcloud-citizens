@@ -124,7 +124,8 @@ def test_the_table_code_remembers_the_phone_too(client):
 
 def test_the_model_names_a_record_now_session_once(client, monkeypatch):
     made = client.post("/api/v1/sessions/record-now", json={}).json()
-    answers = iter(['"Parcheggi nel centro storico."', "Should not be used"])
+    # the analysis provider runs in JSON mode, so the usual answer is an object
+    answers = iter(['{"title": "Parcheggi nel centro storico."}', "Should not be used"])
     monkeypatch.setattr(analysis, "_chat", lambda *args: next(answers))
     with session_scope() as session:
         container = session.get(Assembly, made["container_id"])
@@ -142,6 +143,28 @@ def test_the_model_names_a_record_now_session_once(client, monkeypatch):
         assert container.name == "Parcheggi nel centro storico"
     shown = client.get(f"/api/v1/assemblies/{made['container_id']}").json()
     assert shown["name"] == "Parcheggi nel centro storico"
+
+
+def test_the_title_parser_takes_json_or_text_and_refuses_the_rest():
+    parse = analysis._title_from_answer
+    assert parse('{"title": "Parcheggi nel centro storico."}') == "Parcheggi nel centro storico"
+    assert parse('"Bike lanes downtown"') == "Bike lanes downtown"
+    assert parse("  Mobilità   dolce.  ") == "Mobilità dolce"
+    assert parse('{"name": "x"}') == ""
+    assert parse("{not json") == ""
+    assert parse('{"title": {"x": 1}}') == ""
+    assert parse("") == ""
+
+
+def test_a_record_now_report_has_no_session_heading_and_says_its_kind(client):
+    from citizens.services.report import build_report
+
+    made = client.post("/api/v1/sessions/record-now", json={}).json()
+    with session_scope() as session:
+        report = build_report(session, session.get(Assembly, made["container_id"]))
+    assert report["assembly"]["kind"] == "session" and report["assembly"]["tables"] == 1
+    assert report["rounds"][0]["heading"] == ""
+    assert "reviewed by a human" not in report["methodology_note"]
 
 
 def test_a_planned_session_keeps_the_name_it_was_given(client, monkeypatch):

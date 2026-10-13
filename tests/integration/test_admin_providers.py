@@ -4,6 +4,7 @@
 
 import pytest
 
+from citizens.api import admin as admin_module
 from citizens.api.admin import get_config_store, require_admin
 from citizens.services import provider_config
 
@@ -54,6 +55,15 @@ class FakeNextcloud:
         if self._error is not None:
             raise self._error
         return {"id": "someone", "groups": self._groups, "displayname": "Someone"}
+
+
+@pytest.fixture(autouse=True)
+def _forget_admin_checks():
+    """A positive admin check is remembered for a while (admin_module._admin_until);
+    every test here starts with nobody remembered."""
+    admin_module._admin_until.clear()
+    yield
+    admin_module._admin_until.clear()
 
 
 def test_admin_check_uses_the_endpoint_an_exapp_is_allowed_to_call():

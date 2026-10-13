@@ -84,11 +84,12 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_note": (
             "AI was used to assist transcription and analysis. "
-            "Findings were reviewed by a human organizer; discussion summaries are "
-            "AI-generated neutral descriptions. "
+            "Discussion summaries are AI-generated neutral descriptions. "
             "“Mentioned at N tables” describes how many discussion tables raised a topic; "
             "it is not a measure of participant support."
         ),
+        # only when at least one finding was approved (report._methodology_note)
+        "methodology_reviewed": "Findings were reviewed by a human organizer.",
         "transcript_engines": "Speech-to-text: {engines}.",
         "source_live": "live captions",
         "live_transcript_note": (
@@ -216,11 +217,11 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_note": (
             "L'IA è stata utilizzata a supporto della trascrizione e dell'analisi. "
-            "I risultati sono stati revisionati da un organizzatore; le sintesi delle "
-            "discussioni sono descrizioni neutrali generate dall'IA. "
+            "Le sintesi delle discussioni sono descrizioni neutrali generate dall'IA. "
             "«Menzionato in N tavoli» indica in quanti tavoli di discussione è emerso "
             "un tema; non è una misura del sostegno dei partecipanti."
         ),
+        "methodology_reviewed": "I risultati sono stati revisionati da un organizzatore.",
         "transcript_engines": "Trascrizione automatica: {engines}.",
         "source_live": "sottotitoli in tempo reale",
         "live_transcript_note": (

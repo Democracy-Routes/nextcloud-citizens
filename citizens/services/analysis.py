@@ -681,9 +681,29 @@ def _cap_transcript_lines(lines: list[str], recording_id: str) -> list[str]:
     return lines
 
 TITLE_SYSTEM = (
-    "You name a recorded discussion from its summary. Answer with a title of at most "
-    "eight words in {language}, no quotation marks, no final period — the title only."
+    "You name a recorded discussion from its summary. Answer with a JSON object "
+    '{{"title": "..."}} whose title has at most eight words in {language}, no final period.'
 )
+
+
+def _title_from_answer(answer: str) -> str:
+    """The title out of what the model said: a JSON object (the analysis
+    provider runs in JSON mode, so that is the usual shape — stored raw it
+    read {"title": ...} in the sidebar on 2026-10-13), or plain text."""
+    import json
+
+    raw = (answer or "").strip()
+    if raw.startswith("{"):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return ""
+        value = parsed.get("title") if isinstance(parsed, dict) else None
+        raw = value if isinstance(value, str) else ""
+    title = " ".join(raw.strip().strip('"\u201c\u201d\'').rstrip(".").split())
+    if not title or len(title) > 120 or title.startswith("{") or '":' in title:
+        return ""
+    return title
 
 
 def _name_record_now_session(
@@ -710,8 +730,8 @@ def _name_record_now_session(
     except Exception:
         log.warning("session_title_failed", assembly_id=assembly.id, exc_info=True)
         return
-    title = " ".join((answer or "").strip().strip('"\u201c\u201d\'').rstrip(".").split())
-    if not title or len(title) > 120:
+    title = _title_from_answer(answer)
+    if not title:
         return
     round_.title = title
     assembly.name = title
