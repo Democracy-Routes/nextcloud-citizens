@@ -59,6 +59,13 @@ def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate
     return assembly
 
 
+#: a recording in one of these is still on its way to a transcript in the
+#: current language; the language cannot change under it
+BUSY_RECORDING_STATES = (
+    "RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS", "ASSEMBLING", "TRANSCRIBING",
+)
+
+
 def change_language(session: Session, assembly: Assembly, language: str) -> dict:
     """Set the assembly's language after recording began and transcribe every
     recording that still has audio again in it (S8).
@@ -71,9 +78,21 @@ def change_language(session: Session, assembly: Assembly, language: str) -> dict
     """
     from citizens.services.retranscription import RETRANSCRIBABLE, queue_final_transcription
 
-    if any(round_.status == "ACTIVE" for round_ in assembly.rounds):
+    # the round's status is not enough: in an independent Session a phone
+    # records without anybody starting the round (seen on the dev instance,
+    # 2026-10-13), and a recording still being transcribed would keep the old
+    # language — its live job is never re-queued
+    busy = session.execute(
+        select(Recording.id).where(
+            Recording.assembly_id == assembly.id,
+            Recording.state.in_(BUSY_RECORDING_STATES),
+        ).limit(1)
+    ).first()
+    if any(round_.status == "ACTIVE" for round_ in assembly.rounds) or busy is not None:
         raise HTTPException(
-            status_code=409, detail="SESSION_ACTIVE: finish the session being recorded first"
+            status_code=409,
+            detail="SESSION_ACTIVE: finish the session being recorded (and let its "
+                   "transcription end) first",
         )
     if assembly.zero_retention_done_at is not None:
         raise HTTPException(

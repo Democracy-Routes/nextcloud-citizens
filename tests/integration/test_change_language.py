@@ -117,6 +117,22 @@ def test_changing_the_language_transcribes_every_recording_again(client, tmp_pat
     assert unknown.status_code == 422
 
 
+def test_refused_while_a_phone_records_even_if_nobody_started_the_round(client, monkeypatch):
+    """An independent Session: the phone records without the round ever being
+    ACTIVE (seen on the dev instance on 2026-10-13)."""
+    made = client.post("/api/v1/sessions/record-now", json={"language": "en"}).json()
+    token = re.search(r"#/join/(.+)$", made["recorder_url"]).group(1)
+    joined = client.post("/api/v1/public/join", json={"token": token},
+                         headers={"X-Forwarded-For": "10.12.0.9"}).json()
+    headers = {"Authorization": f"Bearer {joined['session_token']}"}
+    started = client.post("/api/v1/public/recorder/start",
+                          json={"round_id": made["session_id"], "mime_type": "audio/webm"}, headers=headers)
+    assert started.status_code == 201, started.text
+    assert client.get(f"/api/v1/sessions/{made['session_id']}").json()["status"] != "ACTIVE"
+    refused = client.post(f"/api/v1/assemblies/{made['container_id']}/language", json={"language": "it"})
+    assert refused.status_code == 409 and "SESSION_ACTIVE" in refused.json()["detail"]
+
+
 def test_a_recording_without_audio_is_skipped(client, tmp_path, monkeypatch):
     seen: list[str] = []
     assembly, round_id, recording_id, headers = _recorded_assembly(client, tmp_path, monkeypatch, seen)
