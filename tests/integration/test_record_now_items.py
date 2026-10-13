@@ -177,3 +177,60 @@ def test_a_planned_session_keeps_the_name_it_was_given(client, monkeypatch):
             session, "https://llm.test", "k", "m", container, round_, "Bikes.", "English"
         )
         assert round_.title == "" and container.name == "Where should the bike lanes go?"
+
+
+def test_the_table_picks_the_language_until_the_first_recording(client):
+    made = client.post("/api/v1/sessions/record-now", json={"language": "en"}).json()
+    joined = _join(client, made["recorder_url"]).json()
+    headers = _auth(joined)
+    assert joined["assembly"]["language_changeable"] is True
+    changed = client.post("/api/v1/public/recorder/language", json={"language": "it"}, headers=headers)
+    assert changed.status_code == 200 and changed.json() == {"language": "it"}
+    status = client.get("/api/v1/public/recorder/status", headers=headers).json()
+    assert status["assembly"]["language"] == "it"
+    detail = client.get(f"/api/v1/assemblies/{made['container_id']}").json()
+    assert detail["language"] == "it" and detail["language_auto"] is False
+    # a recording exists: the phone can no longer change it
+    started = client.post("/api/v1/public/recorder/start",
+                          json={"round_id": made["session_id"], "mime_type": "audio/webm"}, headers=headers)
+    assert started.status_code == 201
+    later = client.get("/api/v1/public/recorder/status", headers=headers).json()
+    assert later["assembly"]["language_changeable"] is False
+    change = "/api/v1/public/recorder/language"
+    assert client.post(change, json={"language": "fr"}, headers=headers).status_code == 409
+    assert client.post(change, json={"language": "xx"}, headers=headers).status_code == 422
+
+
+def test_an_organized_assembly_never_lets_a_phone_pick_the_language(client):
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={"name": "TEST Lang", "default_table_count": 1,
+              "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}]},
+    ).json()
+    joined = _join(client, assembly["invites"][0]["url"]).json()
+    assert joined["assembly"]["language_changeable"] is False
+    refused = client.post("/api/v1/public/recorder/language", json={"language": "it"}, headers=_auth(joined))
+    assert refused.status_code == 409
+
+
+def test_the_table_clock_is_the_first_recorders_start(client):
+    assembly = client.post(
+        "/api/v1/assemblies",
+        json={"name": "TEST Clock", "default_table_count": 1,
+              "rounds": [{"title": "R1", "question": "Q?", "duration_minutes": 30}]},
+    ).json()
+    round_id = assembly["rounds"][0]["id"]
+    client.post(f"/api/v1/rounds/{round_id}/start")
+    phone_a = _join(client, assembly["invites"][0]["url"]).json()
+    before = client.get("/api/v1/public/recorder/status", headers=_auth(phone_a)).json()
+    assert before["rounds"][0]["table_started_at"] is None
+    started = client.post("/api/v1/public/recorder/start",
+                          json={"round_id": round_id, "mime_type": "audio/webm"}, headers=_auth(phone_a))
+    assert started.status_code == 201
+    card = client.post("/api/v1/public/recorder/capabilities",
+                       json={"purpose": "ADD_RECORDER_TO_TABLE"}, headers=_auth(phone_a)).json()
+    phone_b = _join(client, card["url"], ip="10.9.0.7").json()
+    status_a = client.get("/api/v1/public/recorder/status", headers=_auth(phone_a)).json()
+    first = status_a["rounds"][0]["table_started_at"]
+    assert first
+    assert phone_b["rounds"][0]["table_started_at"] == first, "the second phone reads the first one's start"

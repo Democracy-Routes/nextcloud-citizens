@@ -7,6 +7,7 @@ recordings for its own table, upload chunks, and complete recordings.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -21,6 +22,7 @@ from citizens.config import get_settings
 from citizens.db.models import Assembly, ParticipantSession, RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
+from citizens.domain.schemas import Language
 from citizens.domain.tables import color_for
 from citizens.security.rate_limit import (
     CAPABILITY_LIMITER,
@@ -39,6 +41,7 @@ from citizens.services import live_source, provider_config
 from citizens.services import messages as messages_svc
 from citizens.services import recording as rec_svc
 from citizens.services import validation as validation_svc
+from citizens.services.audit import record_audit_event
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import data_handling_summary, live_stt_snapshot
 from citizens.services.recording import MAX_CHUNK_BYTES, RERECORDABLE_STATES
@@ -147,6 +150,48 @@ def create_capability(data: CapabilityIn, recorder_session: RecorderSess, sessio
 
 class RecordAnotherIn(BaseModel):
     round_id: str
+
+
+class PhoneLanguageIn(BaseModel):
+    language: Language
+
+
+def _language_changeable(session: Session, assembly: Assembly) -> bool:
+    """A Record-now Session before anything was recorded: the phone that
+    opened it is the only one who knows what language the table speaks."""
+    if assembly.kind != "session" or assembly.recording_mode != "independent":
+        return False
+    if assembly.closed_at is not None:
+        return False
+    return session.execute(
+        select(Recording.id).where(Recording.assembly_id == assembly.id).limit(1)
+    ).first() is None
+
+
+@router.post("/recorder/language")
+def set_language(data: PhoneLanguageIn, recorder_session: RecorderSess, session: DB):
+    """The table picks its language on the consent screen of a Record-now
+    Session (Block 2): allowed until the first recording exists; after that
+    the organizer's change-language is the path (it re-transcribes)."""
+    CAPABILITY_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    if not _language_changeable(session, assembly):
+        raise HTTPException(
+            status_code=409,
+            detail="The language can no longer be changed from a phone; ask the organizer",
+        )
+    previous = assembly.language
+    assembly.language = data.language
+    # chosen by a person: detection stops
+    assembly.language_auto = False
+    record_audit_event(
+        session, "language_changed", "assembly", assembly.id,
+        actor=f"recorder-session:{recorder_session.id}",
+        data={"from": previous, "to": data.language, "by": "phone"},
+    )
+    return {"language": assembly.language}
 
 
 @router.post("/recorder/sessions", status_code=201)
@@ -958,6 +1003,18 @@ def _assembly_state(
     # is scoped to the table, not the session, so "this round is being recorded"
     # was read as "...by somebody else" even when the somebody was itself.
     own_rounds: set[str] = set()
+    table_started: dict[str, datetime] = {
+        round_id: started
+        for round_id, started in session.execute(
+            select(Recording.round_id, func.min(Recording.started_at)).where(
+                Recording.assembly_id == assembly.id,
+                Recording.table_number == recorder_session.table_number,
+                Recording.started_at.is_not(None),
+                Recording.state.notin_(("CREATED", "UPLOAD_INCOMPLETE", "AUDIO_INVALID")),
+            ).group_by(Recording.round_id)
+        )
+        if started is not None
+    }
     # In plenary the whole room is recorded by many phones at once, so a round
     # is "recorded" only from THIS phone's point of view — another device
     # recording the same round must not lock it out. Every other mode scopes to
@@ -1014,6 +1071,8 @@ def _assembly_state(
             "kind": assembly.kind,
             "name": assembly.name,
             "language": assembly.language,
+            # the consent screen offers a language control only while it works
+            "language_changeable": _language_changeable(session, assembly),
             "recording_mode": assembly.recording_mode,
         },
         # phones learn about report availability through the status poll
@@ -1075,6 +1134,13 @@ def _assembly_state(
                 # needs an answer about itself, not another device's identifier.
                 "recorded_by_this_device": round_.id in own_rounds,
                 "table_summary": table_summaries.get(round_.id, ""),
+                # when the FIRST recorder at this table started (R5): a planned
+                # duration counts from there on every phone, so a phone added
+                # later finishes with the others instead of running its own clock
+                "table_started_at": (
+                    table_started[round_.id].isoformat()
+                    if round_.id in table_started else None
+                ),
             }
             for round_ in assembly.rounds
         ],

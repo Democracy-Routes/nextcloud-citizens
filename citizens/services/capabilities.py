@@ -40,7 +40,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from citizens.db.models import Assembly, RecorderInvite, RecorderSession, Round
+from citizens.db.models import Assembly, RecorderInvite, RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
@@ -145,6 +145,20 @@ def create_capability(
     )
 
 
+def _discussion_over(session: Session, assembly: Assembly, table_number: int | None) -> bool:
+    """No session still to come or running — and, for a table-scoped code,
+    nothing being recorded at that table right now."""
+    if any(round_.status in ("NOT_STARTED", "ACTIVE") for round_ in assembly.rounds):
+        return False
+    live = select(Recording.id).where(
+        Recording.assembly_id == assembly.id,
+        Recording.state.in_(rec_svc.OPEN_STATES),
+    )
+    if table_number is not None:
+        live = live.where(Recording.table_number == table_number)
+    return session.execute(live.limit(1)).first() is None
+
+
 def mint_capability(
     session: Session,
     assembly: Assembly,
@@ -177,6 +191,18 @@ def mint_capability(
             status_code=409,
             detail={"code": "ORGANIZER_ADDS_TABLES",
                     "message": "In an organized assembly the organizer adds tables"},
+        )
+
+    if purpose in (ADD_TABLE, ADD_RECORDER_TO_TABLE) and _discussion_over(
+        session, assembly, table_number
+    ):
+        # R15: no new table or recorder once no session is still to come or
+        # running at that table — a code made after the last discussion would
+        # only produce a phone with nothing to record
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "DISCUSSION_OVER",
+                    "message": "The discussion is over; nothing is left to record here"},
         )
 
     now = utcnow()

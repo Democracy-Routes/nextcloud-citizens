@@ -292,3 +292,31 @@ def test_a_phone_grows_a_session_but_never_an_organized_assembly(client):
     phone = _auth(_join(client, session["invites"][0]["url"], ip="10.5.0.7").json())
     allowed = _capability(client, phone, "ADD_TABLE", round_id=session["session_id"])
     assert allowed["purpose"] == "ADD_TABLE"
+
+
+def test_no_new_table_or_recorder_once_the_discussion_is_over(client):
+    """R15: a code made after the last session ended would only produce a
+    phone with nothing to record."""
+    assembly = _assembly(client, tables=1, rounds=1)
+    phone_a = _join(client, assembly["invites"][0]["url"]).json()
+    round_id = assembly["rounds"][0]["id"]
+    assert _capability(client, _auth(phone_a), "ADD_RECORDER_TO_TABLE")["url"]
+    client.post(f"/api/v1/rounds/{round_id}/start")
+    assert _capability(client, _auth(phone_a), "ADD_RECORDER_TO_TABLE")["url"]
+    client.post(f"/api/v1/rounds/{round_id}/end")
+    refused = client.post("/api/v1/public/recorder/capabilities",
+                          json={"purpose": "ADD_RECORDER_TO_TABLE"}, headers=_auth(phone_a))
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "DISCUSSION_OVER"
+    # a Session a phone may grow: same rule for a new table
+    session_ = _session(client, tables=1)
+    phone_s = _join(client, session_["invites"][0]["url"], ip="10.5.0.9").json()
+    assert _capability(client, _auth(phone_s), "ADD_TABLE", round_id=session_["session_id"])["url"]
+    # a round never started is still "to come": only a finished one closes the door
+    client.post(f"/api/v1/rounds/{session_['session_id']}/start")
+    assert _capability(client, _auth(phone_s), "ADD_TABLE", round_id=session_["session_id"])["url"]
+    client.post(f"/api/v1/rounds/{session_['session_id']}/end")
+    refused = client.post(
+        "/api/v1/public/recorder/capabilities",
+        json={"purpose": "ADD_TABLE", "round_id": session_["session_id"]}, headers=_auth(phone_s),
+    )
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "DISCUSSION_OVER"

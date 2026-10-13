@@ -219,6 +219,13 @@ try:
     ok("Anna marked as moved to a table that is not recorded", code == 200 and moved["table"]["can_record"] is True and moved["table"]["refusing"] == 0, json.dumps(moved))
     code, started = phone("POST", "/api/v1/public/recorder/start", {"round_id": rid, "mime_type": "audio/webm"}, token=tA)
     ok("start allowed now", code == 201, str(code))
+    # ...and the recording is finished properly, so nothing of the smoke's own
+    # stays RECORDING (the change-language guard at the end would refuse)
+    [first_chunk] = phone_chunks(1)[:1]
+    code, _ = phone_raw(f"/api/v1/public/recorder/recordings/{started['recording_id']}/chunks/0", first_chunk, tA)
+    ok("A's chunk accepted", code == 200, str(code))
+    code, _ = phone("POST", f"/api/v1/public/recorder/recordings/{started['recording_id']}/complete", {"total_chunks": 1}, token=tA)
+    ok("A completes its recording", code == 200, str(code))
     # Bruno withdraws and changes his mind again: two further acts, newest counts
     code, withdrawn = phone("POST", f"/api/v1/public/recorder/participants/{agreed['participant']['id']}/consent",
                             {"notice_hash": notice["hash"], "notice_read": True}, token=tA)
