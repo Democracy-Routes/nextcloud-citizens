@@ -38,6 +38,23 @@ describe('the session wizard', () => {
 		expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
 	})
 
+	it('allows a duration of 0 — no planned time — and does not block starting', async () => {
+		const wrapper = mountWithI18n(SessionWizard)
+		await wrapper.find('#cz-session-question').setValue('Q')
+		await wrapper.find('#cz-session-duration').setValue(0)
+
+		expect(wrapper.text()).toContain('No planned time')
+		expect(submitButton(wrapper).attributes('disabled')).toBeUndefined()
+
+		createSession.mockResolvedValue({
+			session_id: 'r', container_id: 'c', question: 'Q', objective: null,
+			recording_mode: 'orchestrated', table_count: 1, invites: [],
+		})
+		await submitButton(wrapper).trigger('click')
+		await flushPromises()
+		expect(createSession.mock.calls[0][0]).toMatchObject({ duration_minutes: 0 })
+	})
+
 	it('sends question, objective, duration, tables and mode, then hands over the QR codes', async () => {
 		createSession.mockResolvedValue({
 			session_id: 'r-1', container_id: 'c-1', question: 'Q', objective: 'O',

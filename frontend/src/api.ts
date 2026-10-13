@@ -7,6 +7,7 @@ import type {
 	AssemblyDetail,
 	AssemblyProgress,
 	AssemblyUpdate,
+	DeviceReport,
 	FilesListing,
 	Invite,
 	InviteGenerated,
@@ -240,6 +241,12 @@ export const api = {
 			'GET',
 			`/api/v1/assemblies/${assemblyId}/report?include_drafts=${includeDrafts}`,
 		),
+	/** Progress plus the newest FAILED synthesis/cross-table job, if any (R25).
+	 * A separate endpoint from the report itself: lifecycle.assembly_progress()
+	 * never carried failures, so the Report tab just looked unchanged forever
+	 * when one of those jobs gave up. */
+	assemblyProgress: (assemblyId: string) =>
+		request<AssemblyProgress>('GET', `/api/v1/assemblies/${assemblyId}/progress`),
 	publishReport: (assemblyId: string) =>
 		request<{ published_at: string }>('POST', `/api/v1/assemblies/${assemblyId}/report/publish`),
 	unpublishReport: (assemblyId: string) =>
@@ -259,6 +266,12 @@ export const api = {
 
 	listFiles: (assemblyId: string) =>
 		request<FilesListing>('GET', `/api/v1/assemblies/${assemblyId}/files`),
+	/** Each table phone's own log, read back after the fact (R17) — loaded on
+	 * demand from the Files tab, never on its regular poll: it re-reads every
+	 * phone's log file on the server and is only useful when something
+	 * already looks wrong. */
+	deviceReport: (assemblyId: string) =>
+		request<DeviceReport>('GET', `/api/v1/assemblies/${assemblyId}/device-report`),
 	deleteRecordingAudio: (recordingId: string) =>
 		request<{ freed_bytes: number }>('DELETE', `/api/v1/recordings/${recordingId}/audio`),
 	deleteAssemblyAudio: (assemblyId: string) =>

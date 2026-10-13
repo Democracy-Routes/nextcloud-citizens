@@ -25,11 +25,11 @@ ownership, retention and export paths are extended, not rewritten.
   once zero retention has run.
 - Tables can be added mid-event, coloured for the room, and remixed between
   sessions (new people, continuity, or a plain shuffle).
-- A device report per phone — browser, wake lock, chunks captured while
-  hidden, gaps — from `GET /assemblies/{id}/device-report`, the same analysis
-  the host script used in rehearsals prints.
-- A failed synthesis or cross-table analysis is reported through the
-  assembly's progress instead of failing silently.
+- A phone report on the Files tab — browser, wake lock, chunks captured
+  while hidden, gaps — also as `GET /assemblies/{id}/device-report`, the same
+  analysis the host script used in rehearsals prints.
+- A failed synthesis or cross-table analysis is shown on the Report tab, with
+  its reason, instead of failing silently.
 - Narrative synthesis across sessions, and speaking balance per table and
   across tables, on the Report and Analysis tabs.
 - A pre-registration link for participants to register ahead of the table,

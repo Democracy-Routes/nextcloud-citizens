@@ -116,7 +116,9 @@
 			"badge": "PRONTO",
 			"continueTitle": "La sessione {position} è ancora aperta",
 			"continueBody": "Questo tavolo ne ha già registrato una parte. Se la discussione continua, registrate il resto: si aggiunge a quanto registrato prima.",
-			"continueButton": "Registra il resto della sessione {position}"
+			"continueButton": "Registra il resto della sessione {position}",
+			"a2hsHint": "Consiglio: aggiungi questa pagina alla schermata Home (Condividi → Aggiungi a Home su iPhone, menu → Aggiungi a schermata Home su Android). Così va a schermo intero e regge meglio il cambio di app.",
+			"a2hsDismiss": "Capito"
 		},
 		"preflight": {
 			"level": "Livello audio — parlate al tavolo",

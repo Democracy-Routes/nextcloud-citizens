@@ -300,6 +300,25 @@
 			"scaleAll": "Tutto l'audio registrato",
 			"message": "{scale} verranno eliminati definitivamente e non potranno essere recuperati. Trascrizioni, risultati e report restano. Scarica o esporta prima, se ti serve una copia.",
 			"confirm": "Elimina tutto l'audio"
+		},
+		"deviceReport": {
+			"title": "Rapporto dei telefoni",
+			"load": "Carica il rapporto",
+			"loading": "Caricamento…",
+			"summary": "{phones} telefoni con un registro su {sessions}; {gaps} con un vuoto oltre 15 s",
+			"empty": "Nessun telefono ha ancora inviato un registro",
+			"showText": "Mostra come testo",
+			"hideText": "Nascondi il testo",
+			"row": "Tavolo {number} · Registratore {letter}",
+			"rowNoTable": "Registratore {letter}",
+			"standalone": "installata come app",
+			"chunks": "{count} frammento salvato | {count} frammenti salvati",
+			"uploadFailures": "{count} caricamento non riuscito | {count} caricamenti non riusciti",
+			"hiddenWindow": "nascosto per {seconds} s, {count} frammento catturato | nascosto per {seconds} s, {count} frammenti catturati",
+			"hiddenWindowOngoing": "ancora nascosto, {count} frammento catturato | ancora nascosto, {count} frammenti catturati",
+			"gap": "vuoto di {seconds} s prima del frammento {seq}",
+			"gapNoSeq": "vuoto di {seconds} s",
+			"notableTitle": "Eventi notevoli"
 		}
 	}
 }

@@ -116,7 +116,9 @@
 			"badge": "ARMED",
 			"continueTitle": "Session {position} is still open",
 			"continueBody": "This table has already recorded part of it. If the discussion is still going on, record the rest — it is added to what was recorded before.",
-			"continueButton": "Record the rest of session {position}"
+			"continueButton": "Record the rest of session {position}",
+			"a2hsHint": "Tip: add this page to your home screen (Share → Add to Home Screen on iPhone, menu → Add to Home screen on Android). It then runs full-screen and survives switching apps better.",
+			"a2hsDismiss": "Got it"
 		},
 		"preflight": {
 			"level": "Audio level — speak at the table",

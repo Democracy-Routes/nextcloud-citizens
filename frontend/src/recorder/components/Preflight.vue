@@ -369,7 +369,11 @@ const STATE_CLASS: Record<CheckState, string> = {
 			<div v-if="selectedRound" class="rc-card">
 				<p class="rc-eyebrow" style="margin-bottom: 4px">
 					{{ t('recorder.common.roundOf', { position: selectedRound.position, total: session.rounds.length }) }} ·
-					{{ t('recorder.common.minutes', { minutes: selectedRound.duration_minutes }, selectedRound.duration_minutes) }}
+					{{
+						selectedRound.duration_minutes > 0
+							? t('recorder.common.minutes', { minutes: selectedRound.duration_minutes }, selectedRound.duration_minutes)
+							: t('recorder.recording.noPlannedTime')
+					}}
 				</p>
 				<p class="rc-question" style="margin: 0">{{ selectedRound.question || selectedRound.title }}</p>
 				<div v-if="openRounds.length > 1" style="margin-top: 14px">

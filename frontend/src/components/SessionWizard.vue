@@ -26,8 +26,10 @@ const tableCount = ref(1)
 const recordingMode = ref<RecordingMode>('orchestrated')
 const language = ref('en')
 
-// no <form>, so min/max on the inputs only drive the spinner arrows
-const valid = computed(() => !!question.value.trim() && tableCount.value >= 1 && duration.value >= 1)
+// no <form>, so min/max on the inputs only drive the spinner arrows.
+// duration 0 is a real choice: no planned time, the table decides when it is
+// done — not an unfilled field, so it must not block starting.
+const valid = computed(() => !!question.value.trim() && tableCount.value >= 1 && duration.value >= 0)
 
 // plenary is the whole room as one table (the server enforces this too)
 watch(recordingMode, (mode) => {
@@ -121,7 +123,10 @@ async function submit(): Promise<void> {
 			<div class="cz-fieldgrid">
 				<div class="cz-field" style="max-width: 180px">
 					<label for="cz-session-duration">{{ t('organizer.shell.sessionWizard.duration') }}</label>
-					<input id="cz-session-duration" v-model.number="duration" type="number" min="1" max="600" />
+					<input id="cz-session-duration" v-model.number="duration" type="number" min="0" max="600" />
+					<span v-if="duration === 0" class="cz-muted" style="font-size: 0.78rem">
+						{{ t('organizer.setup.overview.rounds.noPlannedTime') }}
+					</span>
 				</div>
 				<div v-if="recordingMode !== 'plenary'" class="cz-field" style="max-width: 180px">
 					<label for="cz-session-tables">{{ t('organizer.shell.sessionWizard.tables') }}</label>

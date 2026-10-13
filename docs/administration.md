@@ -317,7 +317,9 @@ text, so they are marked as removed rather than left pointing at nothing.
 
 **Device report.** Each phone keeps an event log of its own session —
 browser, whether it held the wake lock, how many chunks it captured while
-hidden, any gap in capture. `GET /api/v1/assemblies/{id}/device-report`
+hidden, any gap in capture. The Files tab shows it under "Phone report"
+(loaded on demand, with a plain-text view to copy), and
+`GET /api/v1/assemblies/{id}/device-report`
 (through the proxy, signed in as the assembly's organizer; JSON by default,
 `?format=text` for the same analysis as plain text) answers "does this phone
 record properly with the screen off" without needing shell access to the
@@ -643,9 +645,9 @@ review those after the last table has come in, not while tables are still
 arriving. A re-run that comes back with no findings for a table that had some
 is refused and the previous findings are kept; the table's failure note says so.
 
-**A synthesis or a session's cross-table analysis failed and nothing on
-screen says why.** `GET /api/v1/assemblies/{id}/progress` carries a
-`failures` block — the synthesis job's state and error, and the same for any
+**A synthesis or a session's cross-table analysis failed.** The Report tab
+says so in red, with the reason; `GET /api/v1/assemblies/{id}/progress`
+carries the same `failures` block — the synthesis job's state and error, and the same for any
 session's cross-table analysis — so a failed AI call need not be chased
 through the container logs. Re-run it the same way as any other failed
 analysis once the cause (a rejected key, a model that refused) is fixed.

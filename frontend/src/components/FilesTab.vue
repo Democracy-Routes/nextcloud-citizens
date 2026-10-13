@@ -4,6 +4,8 @@
 import { roundHeading } from '../labels'
 import {
 	mdiCellphoneRemove,
+	mdiChevronDown,
+	mdiChevronUp,
 	mdiDeleteOutline,
 	mdiDownloadOutline,
 	mdiFolderZipOutline,
@@ -21,7 +23,8 @@ import { describeError } from '../errors'
 import { bytes, clockTime, duration } from '../format'
 import { BACKGROUND_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
-import type { AssemblyDetail, FileEntry, FilesListing } from '../types'
+import { slotLabel } from '../recorder/slots'
+import type { AssemblyDetail, DeviceReport, FileEntry, FilesListing } from '../types'
 import { COVERAGE_LOW_PERCENT } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
@@ -30,6 +33,7 @@ import CzFailureNote from './ui/CzFailureNote.vue'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
+import SvgIcon from './ui/SvgIcon.vue'
 import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
@@ -265,6 +269,36 @@ async function deleteAll(): Promise<void> {
 		busy.value = false
 	}
 }
+
+/** What each table phone's own log says about how it behaved (R17): loaded
+ * on demand, never on the tab's regular poll — it re-reads every phone's log
+ * file on the server and is only useful once something already looks wrong. */
+const deviceReportExpanded = ref(false)
+const deviceReport = ref<DeviceReport | null>(null)
+const deviceReportLoading = ref(false)
+const deviceReportError = ref('')
+const deviceReportShowText = ref(false)
+
+async function loadDeviceReport(): Promise<void> {
+	deviceReportLoading.value = true
+	deviceReportError.value = ''
+	try {
+		deviceReport.value = await api.deviceReport(props.assembly.id)
+	} catch (err) {
+		deviceReportError.value = describeError(err).message
+	} finally {
+		deviceReportLoading.value = false
+	}
+}
+
+/** HH:MM:SS for one notable log line. format.ts's clockTime() only has
+ * hour:minute — not fine enough to tell two events a few seconds apart
+ * apart — so this reads the (unix-second) timestamp directly. */
+function eventClock(ts: number): string {
+	return new Date(ts * 1000).toLocaleTimeString(undefined, {
+		hour: '2-digit', minute: '2-digit', second: '2-digit',
+	})
+}
 </script>
 
 <template>
@@ -361,6 +395,103 @@ async function deleteAll(): Promise<void> {
 				<p class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
 					{{ t('organizer.live.files.exportHint') }}
 				</p>
+			</div>
+
+			<!-- each table phone's own log, read back after the fact (R17) — a
+			     collapsible, load-on-demand section: it re-reads every phone's log
+			     file on the server, which is only worth doing once something
+			     already looks wrong -->
+			<div class="cz-card">
+				<div
+					class="cz-row cz-row--spread"
+					style="cursor: pointer"
+					data-test="device-report-toggle"
+					@click="deviceReportExpanded = !deviceReportExpanded">
+					<h3 style="margin: 0">{{ t('organizer.live.files.deviceReport.title') }}</h3>
+					<SvgIcon :path="deviceReportExpanded ? mdiChevronUp : mdiChevronDown" :size="20" />
+				</div>
+				<template v-if="deviceReportExpanded">
+					<CzButton
+						v-if="!deviceReport"
+						small
+						data-test="device-report-load"
+						:disabled="deviceReportLoading"
+						style="margin-top: 10px"
+						@click="loadDeviceReport">
+						{{ deviceReportLoading ? t('organizer.live.files.deviceReport.loading') : t('organizer.live.files.deviceReport.load') }}
+					</CzButton>
+					<p v-if="deviceReportError" class="cz-error" style="margin: 10px 0 0">{{ deviceReportError }}</p>
+
+					<template v-if="deviceReport">
+						<p v-if="deviceReport.phones.length === 0" class="cz-muted" style="margin: 10px 0 0" data-test="device-report-empty">
+							{{ t('organizer.live.files.deviceReport.empty') }}
+						</p>
+						<template v-else>
+							<p class="cz-muted" style="margin: 10px 0; font-size: 0.845rem" data-test="device-report-summary">
+								{{ t('organizer.live.files.deviceReport.summary', {
+									phones: deviceReport.phones.length,
+									sessions: deviceReport.sessions,
+									gaps: deviceReport.with_gaps,
+								}) }}
+							</p>
+							<div
+								v-for="phone in deviceReport.phones"
+								:key="phone.session_id"
+								class="cz-card"
+								style="margin: 0 0 10px; box-shadow: none; border: 1px solid var(--cz-border)"
+								data-test="device-report-row">
+								<p style="margin: 0; font-weight: 600">
+									{{ phone.table_number
+										? t('organizer.live.files.deviceReport.row', { number: phone.table_number, letter: slotLabel(phone.slot) })
+										: t('organizer.live.files.deviceReport.rowNoTable', { letter: slotLabel(phone.slot) }) }}
+								</p>
+								<p class="cz-muted" style="margin: 2px 0; font-size: 0.8125rem">
+									{{ phone.family }}
+									<template v-if="phone.standalone">· {{ t('organizer.live.files.deviceReport.standalone') }}</template>
+								</p>
+								<p class="cz-muted" style="margin: 2px 0; font-size: 0.8125rem">
+									{{ t('organizer.live.files.deviceReport.chunks', { count: phone.chunks }, phone.chunks) }}
+									<template v-if="phone.upload_failures">
+										· {{ t('organizer.live.files.deviceReport.uploadFailures', { count: phone.upload_failures }, phone.upload_failures) }}
+									</template>
+								</p>
+								<p
+									v-for="(hiddenWindow, index) in phone.hidden_windows"
+									:key="'hidden-' + index"
+									class="cz-muted"
+									style="margin: 2px 0; font-size: 0.8125rem">
+									{{ hiddenWindow.seconds !== null
+										? t('organizer.live.files.deviceReport.hiddenWindow', { seconds: hiddenWindow.seconds, count: hiddenWindow.chunks }, hiddenWindow.chunks)
+										: t('organizer.live.files.deviceReport.hiddenWindowOngoing', { count: hiddenWindow.chunks }, hiddenWindow.chunks) }}
+								</p>
+								<p
+									v-for="(gap, index) in phone.gaps"
+									:key="'gap-' + index"
+									class="cz-muted"
+									style="margin: 2px 0; font-size: 0.8125rem">
+									{{ gap.seq !== null
+										? t('organizer.live.files.deviceReport.gap', { seconds: gap.seconds, seq: gap.seq })
+										: t('organizer.live.files.deviceReport.gapNoSeq', { seconds: gap.seconds }) }}
+								</p>
+								<template v-if="phone.notable.length">
+									<p class="cz-muted" style="margin: 8px 0 2px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em">
+										{{ t('organizer.live.files.deviceReport.notableTitle') }}
+									</p>
+									<ul class="cz-muted" style="margin: 0; padding-left: 18px; font-size: 0.78rem">
+										<li v-for="(entry, index) in phone.notable" :key="'notable-' + index">
+											{{ eventClock(entry.ts) }} — {{ entry.event }}
+										</li>
+									</ul>
+								</template>
+							</div>
+
+							<CzButton small variant="tertiary" data-test="device-report-text" @click="deviceReportShowText = !deviceReportShowText">
+								{{ t('organizer.live.files.deviceReport.showText') }}
+							</CzButton>
+							<pre v-if="deviceReportShowText" style="white-space: pre-wrap; font-size: 0.75rem; margin-top: 10px">{{ deviceReport.text }}</pre>
+						</template>
+					</template>
+				</template>
 			</div>
 
 			<CzEmptyState

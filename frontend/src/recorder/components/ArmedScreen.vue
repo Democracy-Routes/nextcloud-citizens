@@ -39,6 +39,46 @@ const emit = defineEmits<{
 	facilitator: []
 }>()
 
+/** A2HS key: whether this device has already been shown the hint (R31).
+ * try/catch throughout — private browsing can throw on every access, and a
+ * hint nobody can dismiss for good is worse than one shown twice. */
+const A2HS_SEEN_KEY = 'citizens-recorder-a2hs-seen'
+
+function isStandalone(): boolean {
+	try {
+		if (window.matchMedia?.('(display-mode: standalone)').matches) return true
+	} catch {
+		/* matchMedia unsupported */
+	}
+	return !!(navigator as Navigator & { standalone?: boolean }).standalone
+}
+
+/** A phone running in the ordinary mobile browser tab — not standalone, and
+ * not a desktop or tablet-as-facilitator session — is the one that benefits
+ * from being added to the home screen: it survives switching apps better. */
+function isPhoneBrowser(): boolean {
+	return /iPhone|iPad|Android/.test(navigator.userAgent)
+}
+
+function a2hsAlreadySeen(): boolean {
+	try {
+		return localStorage.getItem(A2HS_SEEN_KEY) === '1'
+	} catch {
+		return false
+	}
+}
+
+const showA2hsHint = ref(!isStandalone() && isPhoneBrowser() && !a2hsAlreadySeen())
+
+function dismissA2hsHint(): void {
+	showA2hsHint.value = false
+	try {
+		localStorage.setItem(A2HS_SEEN_KEY, '1')
+	} catch {
+		/* private mode: shown again next visit, which is fine */
+	}
+}
+
 const rounds = ref<RoundInfo[]>(props.session.rounds)
 const offline = ref(false)
 // plenary: the armed screen is where phones sit between rounds, so it is the
@@ -210,6 +250,15 @@ onBeforeUnmount(() => {
 				<button type="button" class="rc-facilitator-link" data-test="add-facilitator" @click="emit('facilitator')">
 					<SvgIcon :path="mdiAccountVoice" :size="16" />
 					{{ t('recorder.table.addFacilitator') }}
+				</button>
+			</div>
+
+			<!-- shown once per device: a phone running in the browser tab rather
+			     than installed survives switching apps worse (R31) -->
+			<div v-if="showA2hsHint" class="rc-note" data-test="a2hs-hint">
+				{{ t('recorder.armed.a2hsHint') }}
+				<button type="button" class="rc-btn rc-subtle" style="margin-top: 8px" @click="dismissA2hsHint">
+					{{ t('recorder.armed.a2hsDismiss') }}
 				</button>
 			</div>
 

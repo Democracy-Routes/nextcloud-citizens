@@ -65,6 +65,13 @@ export interface AssemblyProgress {
 	rounds_total: number
 	rounds_analyzed: number
 	complete: boolean
+	/** only present from GET .../progress: a synthesis or a session's
+	 * cross-table analysis that failed used to leave the Report tab looking
+	 * unchanged forever, with nothing saying why (R25) */
+	failures?: {
+		synthesis: JobInfo | null
+		rounds: Record<string, JobInfo>
+	}
 }
 
 /** The newest job behind a recording's state: why it failed, or how long it
@@ -146,6 +153,41 @@ export interface FilesListing {
 		auto_purge: boolean
 	}
 	rounds: Array<{ id: string; position: number; title: string; tables: FileEntry[] }>
+}
+
+/** One phone's own log, as the device report reads it (R17): unix-second
+ * timestamps throughout, exactly as citizens/services/device_report.py emits
+ * them. A phone with no log lines is left out of `DeviceReport.phones`
+ * entirely by the server — never an empty row. */
+export interface DeviceReportPhone {
+	session_id: string
+	table_number: number | null
+	/** recorder slot at the table: 1 = A, 2 = B… */
+	slot: number
+	first_ts: number | null
+	last_ts: number | null
+	family: string
+	user_agent: string
+	standalone: boolean | null
+	wake_lock: Record<string, number>
+	hidden_windows: Array<{ from: number; seconds: number | null; chunks: number }>
+	gaps: Array<{ from: number; seconds: number; seq: number | null }>
+	recordings: Array<{ ts: number; id: string; mime: string }>
+	chunks: number
+	upload_failures: number
+	notable: Array<{ ts: number; event: string; data: Record<string, unknown> }>
+}
+
+/** GET .../device-report: what every table phone's own log says about how it
+ * behaved, for a facilitator trying to make sense of a gap or a silent table
+ * after the fact. `with_gaps` already counts only gaps over 15 s — the
+ * server's own threshold for logging one at all. */
+export interface DeviceReport {
+	sessions: number
+	with_gaps: number
+	families: Record<string, number>
+	text: string
+	phones: DeviceReportPhone[]
 }
 
 /** Everything PUT /assemblies/{id} accepts. Every field is optional; only

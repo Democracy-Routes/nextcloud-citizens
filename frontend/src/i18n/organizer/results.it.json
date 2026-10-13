@@ -110,6 +110,8 @@
 			"refreshed": "La versione pubblicata ora corrisponde al report attuale",
 			"downloadFailed": "Non è stato possibile scaricare il report — controlla il blocco dei pop-up"
 		},
+		"synthesisFailed": "La sintesi tra le sessioni non è riuscita ({reason}). Rilanciala da qui una volta risolta la causa.",
+		"roundAnalysisFailed": "L'analisi della Sessione {position} tra i tavoli non è riuscita ({reason}).",
 		"finalTitle": "Report finale · chiuso il {date}",
 		"quotationsWithheld": "Citazioni non incluse: un partecipante seduto a questo tavolo non ha acconsentito a essere citato.",
 		"finalHint": "{Thing} è chiusa: i tavoli non possono più registrare e questo è il report definitivo. I partecipanti continuano a leggere questa versione anche se riapri — approva altri risultati e premi Aggiorna per inviarli.",

@@ -110,6 +110,8 @@
 			"refreshed": "The published version now matches the current report",
 			"downloadFailed": "The report could not be downloaded — check the pop-up blocker"
 		},
+		"synthesisFailed": "The synthesis across sessions failed ({reason}). Run it again from here once the cause is fixed.",
+		"roundAnalysisFailed": "The analysis of Session {position} across tables failed ({reason}).",
 		"finalTitle": "Final report · closed {date}",
 		"quotationsWithheld": "Quotations withheld: a participant seated at this table did not consent to being quoted.",
 		"finalHint": "{Thing} is closed: tables can no longer record, and this is the definitive report. Participants keep reading this version even if you reopen — approve more findings and press Update to push them.",

@@ -18,7 +18,7 @@ import { downloadBlob, downloadFromApi } from '../download'
 import { SLOW_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import { groupByType, kindNoun, roundHeading, typeLabel } from '../labels'
-import type { AssemblyDetail, ReportData } from '../types'
+import type { AssemblyDetail, JobInfo, ReportData } from '../types'
 import CzFreshness from './ui/CzFreshness.vue'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
@@ -139,12 +139,47 @@ async function refreshFinal(): Promise<void> {
 
 // shared deliberation-report vocabulary + grouped rendering order
 
+/** A synthesis or a session's cross-table analysis that failed used to leave
+ * this tab looking unchanged forever — nothing here ever read the job's own
+ * failure (R25). A separate fetch from the report itself: the progress
+ * endpoint is the one that carries `failures`. */
+const failures = ref<{ synthesis: JobInfo | null; rounds: Record<string, JobInfo> } | null>(null)
+
+/** Always an object, never undefined — so the template's v-for has a single
+ * settled type to iterate rather than `Record<string, JobInfo> | {}`. */
+const roundFailures = computed<Record<string, JobInfo>>(() => failures.value?.rounds ?? {})
+
+/** The classifier's reasons the catalogue already has sentences for (shared
+ * with CzFailureNote) — anything else falls back to the raw code. */
+const REASON_KEYS = [
+	'PROVIDER_AUTH', 'PROVIDER_RATE_LIMIT', 'PROVIDER_TIMEOUT', 'PROVIDER_HTTP',
+	'SCHEMA_INVALID', 'NOT_CONFIGURED', 'NO_TRANSCRIPT', 'AUDIO_MISSING',
+	'RERUN_EMPTY', 'CANCELLED', 'UNKNOWN',
+]
+
+function failureReasonText(reason: string | null | undefined): string {
+	if (!reason) return t('organizer.results.failure.reason.UNKNOWN')
+	return REASON_KEYS.includes(reason) ? t(`organizer.results.failure.reason.${reason}`) : reason
+}
+
+/** The session a failed round-analysis job belongs to, by position — a
+ * round_id means nothing to an organizer. */
+function roundPosition(roundId: string): number | null {
+	return props.assembly.rounds.find((r) => r.id === roundId)?.position ?? null
+}
+
 async function reload(): Promise<void> {
 	try {
 		report.value = await api.assemblyReport(props.assembly.id, includeDrafts.value)
 		error.value = ''
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
+	}
+	try {
+		const progressData = await api.assemblyProgress(props.assembly.id)
+		failures.value = progressData.failures ?? null
+	} catch {
+		// best-effort: a failed fetch here must not blank the report itself
 	}
 }
 
@@ -199,6 +234,20 @@ const hasContent = () =>
 		</div>
 
 		<div v-if="error" class="cz-error">{{ error }}</div>
+
+		<!-- a synthesis or a session's cross-table analysis that failed used to
+		     leave this tab looking unchanged forever, with no way to tell (R25) -->
+		<p v-if="failures?.synthesis" class="cz-error" role="alert" data-test="synthesis-failed">
+			{{ t('organizer.results.report.synthesisFailed', { reason: failureReasonText(failures.synthesis.failure_reason) }) }}
+		</p>
+		<p
+			v-for="(failure, roundId) in roundFailures"
+			:key="roundId"
+			class="cz-error"
+			role="alert"
+			data-test="round-analysis-failed">
+			{{ t('organizer.results.report.roundAnalysisFailed', { position: roundPosition(roundId) ?? '?', reason: failureReasonText(failure.failure_reason) }) }}
+		</p>
 
 		<div v-if="report" class="cz-card cz-nextstep" style="margin-bottom: 16px">
 			<div>

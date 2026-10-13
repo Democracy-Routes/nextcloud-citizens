@@ -300,6 +300,25 @@
 			"scaleAll": "All recorded audio",
 			"message": "{scale} will be permanently deleted and cannot be recovered. Transcripts, findings and the report are kept. Download or export first if you need a copy.",
 			"confirm": "Delete all audio"
+		},
+		"deviceReport": {
+			"title": "Phone report",
+			"load": "Load the report",
+			"loading": "Loading…",
+			"summary": "{phones} phones with a log out of {sessions}; {gaps} with a gap over 15 s",
+			"empty": "No phone has sent a log yet",
+			"showText": "Show as text",
+			"hideText": "Hide the text",
+			"row": "Table {number} · Recorder {letter}",
+			"rowNoTable": "Recorder {letter}",
+			"standalone": "installed as app",
+			"chunks": "{count} chunk saved | {count} chunks saved",
+			"uploadFailures": "{count} upload failure | {count} upload failures",
+			"hiddenWindow": "hidden {seconds} s, {count} chunk captured | hidden {seconds} s, {count} chunks captured",
+			"hiddenWindowOngoing": "still hidden, {count} chunk captured | still hidden, {count} chunks captured",
+			"gap": "gap of {seconds} s before chunk {seq}",
+			"gapNoSeq": "gap of {seconds} s",
+			"notableTitle": "Notable events"
 		}
 	}
 }
