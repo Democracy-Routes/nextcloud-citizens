@@ -32,7 +32,7 @@ from citizens.db.migrate import run_migrations
 from citizens.db.session import configure_database, sqlite_url
 from citizens.jobs.runner import run_forever as jobs_run_forever
 from citizens.logging_setup import get_logger, setup_logging
-from citizens.services import provider_config
+from citizens.services import provider_config, vosk_builtin
 from citizens.services.audit import record_audit_event_standalone
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.storage.paths import db_path, ensure_storage_layout
@@ -139,6 +139,12 @@ async def lifespan(app: FastAPI):
             log.warning("config_snapshot_startup_timeout")
         except Exception:
             log.warning("config_snapshot_startup_failed", exc_info=True)
+    # the built-in Vosk engine, when Settings asks for it (memory only; the
+    # snapshot above already read the setting)
+    try:
+        await asyncio.to_thread(vosk_builtin.reconcile)
+    except Exception:
+        log.warning("vosk_builtin_startup_failed", exc_info=True)
     stop_event = asyncio.Event()
     jobs_task = asyncio.create_task(jobs_run_forever(stop_event))
     LIVE_CAPTIONS.set_loop(asyncio.get_running_loop())
@@ -151,6 +157,7 @@ async def lifespan(app: FastAPI):
     yield
     stop_event.set()
     await LIVE_CAPTIONS.shutdown()
+    vosk_builtin.BUILTIN.stop()
     await jobs_task
     await reaper_task
     log.info("app_stopping")

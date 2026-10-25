@@ -674,11 +674,12 @@ class LiveCaptionManager:
         from citizens.services.provider_config import vosk_model_path
 
         models = config.get("vosk_models") or {}
+        builtin = bool(config.get("vosk_builtin"))
         code = (language or "").strip().lower()
         entry = models.get(code) or models.get(code.split("-")[0]) or {}
         if isinstance(entry, str):  # legacy snapshot shape
-            return vosk_model_path(entry)
-        return vosk_model_path(entry.get("live", ""))
+            return vosk_model_path(entry, builtin=builtin)
+        return vosk_model_path(entry.get("live", ""), builtin=builtin)
 
     def feed(
         self,

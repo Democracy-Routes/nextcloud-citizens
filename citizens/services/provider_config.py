@@ -67,6 +67,8 @@ class ConfigSnapshot:
     # the AI facilitator's instance settings (services/facilitator.py reads
     # them from here once a minute, never from Nextcloud inside a transaction)
     facilitator: dict = field(default_factory=dict)
+    # the built-in Vosk engine should be running (services/vosk_builtin.reconcile)
+    vosk_builtin: bool = False
     refreshed_at: float = 0.0
     # False: the refresh failed and these are defaults (or the previous values)
     ok: bool = False
@@ -93,10 +95,15 @@ def _read_live_stt(store: "ConfigStore") -> dict:
         "api_key": store.get_value(f"{provider}_api_key"),
         "model": get_setting(store, f"{provider}_live_model"),
         # the socket/endpoint each caption engine connects to
-        "endpoint": get_setting(store, LIVE_ENDPOINT_KEYS.get(provider, "")),
+        "endpoint": (
+            vosk_endpoint(store) if provider == "vosk"
+            else get_setting(store, LIVE_ENDPOINT_KEYS.get(provider, ""))
+        ),
         # Vosk only: language -> model path, carried here so the caption
         # path never has to make an OCS call per chunk
         "vosk_models": vosk_language_models(store) if provider == "vosk" else {},
+        # ...and whether those names resolve under the built-in engine's directory
+        "vosk_builtin": vosk_builtin(store) if provider == "vosk" else False,
         # per-provider cap on concurrent LIVE caption sessions (DEFAULTS)
         "concurrency": stt_concurrency_limit(store, provider, "live"),
     }
@@ -215,6 +222,7 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 organization=_read_organization(store),
                 summary=providers_summary(store) if with_summary else previous_summary,
                 facilitator=_read_facilitator(store),
+                vosk_builtin=vosk_builtin(store),
                 refreshed_at=time.monotonic(),
                 ok=True,
                 store_id=id(default_store()),
@@ -235,6 +243,7 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 organization=dict(previous.organization) if previous else {},
                 summary=dict(previous.summary) if previous else {},
                 facilitator=dict(previous.facilitator) if previous else {},
+                vosk_builtin=previous.vosk_builtin if previous else False,
                 refreshed_at=time.monotonic(),
                 ok=False,
                 store_id=previous.store_id if previous else 0,
@@ -328,19 +337,41 @@ def data_handling_summary() -> dict:
 
 # where scripts/vosk-up.sh mounts the model directory inside the server
 VOSK_MODEL_DIR = "/models"
+#: where the built-in engine listens — loopback only, never exposed
+BUILTIN_VOSK_URL = "ws://127.0.0.1:2700"
 
 
-def vosk_model_path(name: str) -> str:
+def vosk_builtin(store: "ConfigStore") -> bool:
+    return get_setting(store, "vosk_mode") == "builtin"
+
+
+def vosk_endpoint(store: "ConfigStore") -> str:
+    """The websocket the Vosk clients connect to: the built-in engine's
+    loopback socket, or the configured server."""
+    return BUILTIN_VOSK_URL if vosk_builtin(store) else get_setting(store, "vosk_url")
+
+
+def builtin_models_dir() -> str:
+    from citizens.config import get_settings
+    from citizens.storage.paths import models_dir
+
+    return str(models_dir(get_settings().app_persistent_storage))
+
+
+def vosk_model_path(name: str, builtin: bool = False) -> str:
     """Model NAME to a path the server can open.
 
     Settings holds a name (`vosk-model-small-it-0.22`) so switching model is
     editing one string. A value that already looks like a path is passed
-    through, for a server whose models are laid out differently.
+    through, for a server whose models are laid out differently. The built-in
+    engine reads the models Settings installed under the persistent volume.
     """
     name = (name or "").strip()
     if not name:
         return ""
-    return name if name.startswith("/") else f"{VOSK_MODEL_DIR}/{name}"
+    if name.startswith("/"):
+        return name
+    return f"{builtin_models_dir()}/{name}" if builtin else f"{VOSK_MODEL_DIR}/{name}"
 
 
 def vosk_language_models(store: "ConfigStore") -> dict[str, dict[str, str]]:
@@ -393,7 +424,7 @@ def vosk_model_for(store: "ConfigStore", language: str, kind: str = "final") -> 
         return ""
     code = (language or "").strip().lower()
     entry = models.get(code) or models.get(code.split("-")[0]) or {}
-    return vosk_model_path(entry.get(kind, ""))
+    return vosk_model_path(entry.get(kind, ""), builtin=vosk_builtin(store))
 
 
 def stt_is_hosted(store: "ConfigStore", provider: str) -> bool:
@@ -521,6 +552,10 @@ DEFAULTS = {
     "whisper_live_model": "",
     # Vosk: fully offline, WebSocket protocol, no key
     "vosk_url": "ws://localhost:2700",
+    # "server": the websocket server at vosk_url; "builtin": the engine runs
+    # inside this container with the models Settings installed
+    # (services/vosk_builtin.py, services/vosk_models.py)
+    "vosk_mode": "server",
     # Vosk needs a separate model per language, but one server can hold several:
     # a JSON map of language code -> model path ON THE SERVER, e.g.
     # {"it": "/models/it", "en": "/models/en"}. A language with no entry uses
@@ -765,6 +800,7 @@ def providers_summary(store: ConfigStore) -> dict:
             "whisper_live_model": get_setting(store, "whisper_live_model"),
             "mistral_live_url": get_setting(store, "mistral_live_url"),
             "vosk_url": get_setting(store, "vosk_url"),
+            "vosk_mode": get_setting(store, "vosk_mode"),
             "vosk_language_models": vosk_language_models(store),
             "vosk_batch_model": get_setting(store, "vosk_batch_model"),
             # per-provider caps on concurrent transcription work, live and
@@ -855,7 +891,7 @@ def test_connection(
 
             from citizens.providers.transcription import vosk as vosk_provider
 
-            url = override_base_url or get_setting(store, "vosk_url")
+            url = override_base_url or vosk_endpoint(store)
             if not url:
                 return {"ok": False, "message": "No Vosk server URL configured"}
             try:

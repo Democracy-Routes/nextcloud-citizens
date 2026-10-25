@@ -26,6 +26,9 @@ dependencies = [
     "websockets>=13,<16",
     "cryptography>=42,<47",
     "fpdf2>=2.7,<3",
+    # built-in Vosk engine (services/vosk_builtin.py); manylinux wheels for
+    # amd64 and arm64, no model shipped — Settings installs them
+    "vosk>=0.3.45,<0.4",
 ]
 
 [project.optional-dependencies]

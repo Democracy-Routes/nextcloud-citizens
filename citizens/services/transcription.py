@@ -38,10 +38,16 @@ def batch_transcription_ready(store: provider_config.ConfigStore) -> bool:
         return False
     provider = provider_config.get_setting(store, "stt_provider")
     if provider in URL_PROVIDERS:
-        return bool(provider_config.get_setting(store, URL_PROVIDERS[provider]))
+        return bool(_provider_url(store, provider))
     if provider in KEYED_PROVIDERS:
         return bool(store.get_value(f"{provider}_api_key"))
     return False
+
+
+def _provider_url(store: provider_config.ConfigStore, provider: str) -> str:
+    if provider == "vosk":
+        return provider_config.vosk_endpoint(store)
+    return provider_config.get_setting(store, URL_PROVIDERS[provider])
 
 
 def live_transcription_ready(store: provider_config.ConfigStore) -> bool:
@@ -51,7 +57,7 @@ def live_transcription_ready(store: provider_config.ConfigStore) -> bool:
         return False
     provider = provider_config.get_setting(store, "stt_provider")
     if provider in URL_PROVIDERS:
-        return bool(provider_config.get_setting(store, URL_PROVIDERS[provider]))
+        return bool(_provider_url(store, provider))
     if provider in KEYED_PROVIDERS:
         return bool(store.get_value(f"{provider}_api_key"))
     return False
@@ -165,7 +171,7 @@ def transcribe_recording(
             base_url=base_url,
         )
     elif provider == "vosk":
-        url = provider_config.get_setting(store, "vosk_url")
+        url = provider_config.vosk_endpoint(store)
         if not url:
             raise TranscriptionError("No Vosk server URL configured", permanent=True)
         # one server can hold a model per language; pick this assembly's

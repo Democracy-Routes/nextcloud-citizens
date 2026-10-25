@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 SUBDIRS = ("recordings", "assembled", "transcripts", "exports", "temp", "logs",
-           "live_captions")
+           "live_captions", "models")
 
 
 def ensure_storage_layout(root: Path) -> None:
@@ -47,6 +47,12 @@ def chunk_path(recording_directory: Path, sequence_number: int) -> Path:
 
 def assembled_dir(root: Path, assembly_id: str) -> Path:
     return root / "assembled" / assembly_id
+
+
+def models_dir(root: Path) -> Path:
+    """Speech models the built-in Vosk engine loads (services/vosk_models.py
+    installs them here, one directory per model name)."""
+    return root / "models"
 
 
 def exports_dir(root: Path, assembly_id: str) -> Path:

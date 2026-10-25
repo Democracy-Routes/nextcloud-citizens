@@ -24,13 +24,20 @@ EVENT_IMAGE="citizens-event:$SHA"
 
 echo "Building $EVENT_IMAGE from $REPO_DIR …"
 docker build -q -t "$EVENT_IMAGE" "$REPO_DIR" >/dev/null
+# Built-in Vosk (Settings → Vosk → built-in engine) loads the speech models
+# inside THIS container: give it room and stop the separate Vosk server,
+# which would otherwise hold its own copy of the same models.
+if [ "${CITIZENS_VOSK_BUILTIN:-0}" = "1" ]; then
+    CITIZENS_MEMORY=${CITIZENS_MEMORY:-3500m}
+    sh "$REPO_DIR/scripts/vosk-down.sh" || true
+fi
 docker volume create "$DATA_VOLUME" >/dev/null
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 docker run -d \
     --name "$CONTAINER" \
     --network "$NETWORK" \
     --restart unless-stopped \
-    --memory 2g --memory-swap 2g \
+    --memory "${CITIZENS_MEMORY:-2g}" --memory-swap "${CITIZENS_MEMORY:-2g}" \
     -v "$DATA_VOLUME":/data \
     -e APP_ID="$APP_ID" \
     -e APP_VERSION="$APP_VERSION" \

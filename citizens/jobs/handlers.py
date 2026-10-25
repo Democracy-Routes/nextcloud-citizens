@@ -494,6 +494,10 @@ def handle_analyze_assembly(session: Session, payload: dict) -> None:
 
 
 HANDLERS = {
+    # the built-in Vosk engine's model installs (services/vosk_models.py)
+    "INSTALL_VOSK_MODEL": lambda session, payload: __import__(
+        "citizens.services.vosk_models", fromlist=["handle_install_vosk_model"]
+    ).handle_install_vosk_model(session, payload),
     "ASSEMBLE_AUDIO": handle_assemble_audio,
     "TRANSCRIBE_FINAL": handle_transcribe_final,
     "TRANSCRIBE_FROM_LIVE": handle_transcribe_from_live,

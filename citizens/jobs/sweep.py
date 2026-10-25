@@ -436,6 +436,12 @@ def sweep_expired_sessions() -> int:
     return removed
 
 
+def _vosk_reconcile() -> bool:
+    from citizens.services import vosk_builtin
+
+    return vosk_builtin.reconcile()
+
+
 def _zero_retention_sweep() -> int:
     from citizens.services import zero_retention
 
@@ -458,6 +464,8 @@ def run_sweeps() -> None:
         # likewise everything the request path wants from Settings: read
         # here, served from memory to every poll and upload
         ("config_snapshot", provider_config.refresh_config_snapshot),
+        # the built-in Vosk engine follows vosk_mode (memory only)
+        ("vosk_builtin", _vosk_reconcile),
         ("server_closes", sweep_server_closes),
         ("stalled_uploads", sweep_stalled_uploads),
         ("superseded_partials", sweep_superseded_partials),

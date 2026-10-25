@@ -106,6 +106,9 @@ def get_providers(store: Store, user: AdminUser):
 
 class ProvidersUpdate(BaseModel):
     stt_provider: Literal["mistral", "deepgram", "whisper", "vosk"] | None = None
+    # "builtin": the engine runs in this container with the models Settings
+    # installed; "server": the websocket server at vosk_url
+    vosk_mode: Literal["builtin", "server"] | None = None
     stt_live_enabled: bool | None = None
     stt_batch_enabled: bool | None = None
     mistral_api_key: str | None = Field(default=None, max_length=500)
@@ -217,7 +220,42 @@ def update_providers(data: ProvidersUpdate, store: Store, user: AdminUser, sessi
     record_audit_event(
         session, "providers_updated", actor=user, data={"fields": changed}
     )
+    if "vosk_mode" in changed:
+        # the engine follows the setting at once, not at the next sweep
+        from citizens.services import vosk_builtin
+
+        vosk_builtin.reconcile()
     return summary
+
+
+@router.get("/vosk/models")
+def vosk_models_overview(user: AdminUser):
+    """Installed and available speech models for the built-in engine, with
+    install progress and the engine's state (services/vosk_models.py)."""
+    from citizens.services import vosk_models
+
+    return vosk_models.overview()
+
+
+@router.post("/vosk/models/{name}/install", status_code=202)
+def vosk_model_install(name: str, user: AdminUser, session: DB):
+    from citizens.services import vosk_models
+
+    return vosk_models.request_install(session, name, actor=user)
+
+
+@router.post("/vosk/models/{name}/cancel")
+def vosk_model_cancel(name: str, user: AdminUser):
+    from citizens.services import vosk_models
+
+    return vosk_models.cancel_install(name)
+
+
+@router.delete("/vosk/models/{name}")
+def vosk_model_remove(name: str, user: AdminUser, session: DB):
+    from citizens.services import vosk_models
+
+    return vosk_models.remove(session, name, actor=user)
 
 
 class TestIn(BaseModel):
