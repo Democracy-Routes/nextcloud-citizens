@@ -123,7 +123,10 @@ def test_response_always_cleans_up(assembly_id, failure):
             raise failure()
 
     async def receive():
-        return {"type": "http.disconnect"}
+        # a client that stays connected: Starlette 1.10 streams the file in a
+        # task group that watches receive() for a disconnect, so answering
+        # one at once cancels the transfer before a single byte is sent
+        await asyncio.Event().wait()
 
     async def run():
         await response({
@@ -131,7 +134,15 @@ def test_response_always_cleans_up(assembly_id, failure):
             "extensions": {"http.response.pathsend": {}},
         }, receive, send)
 
-    if failure:
+    if failure is asyncio.CancelledError:
+        # the client going away: Starlette 1.10 absorbs the cancellation
+        # inside its task group, older versions let it out — either way the
+        # archive must be gone afterwards
+        try:
+            asyncio.run(run())
+        except asyncio.CancelledError:
+            pass
+    elif failure:
         with pytest.raises(failure):
             asyncio.run(run())
     else:
