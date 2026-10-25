@@ -43,7 +43,8 @@ that a human organizer reviews before anything is published.
   on its own schedule, even days apart. *Record now*: one phone, one table,
   no set-up and no planned time — it records until the table is done.
 * **Transcription that fits the room.** Four engines, two of which run entirely
-  on your own hardware. Live captions and the transcription of the finished audio
+  on your own hardware — Vosk can even run built into the app, with its
+  language models installed from Settings. Live captions and the transcription of the finished audio
   are separate switches: run both, or run captions alone and let them be the
   record — which skips a second pass over every recording, at some cost in
   accuracy that the report states plainly.

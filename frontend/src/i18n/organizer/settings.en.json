@@ -78,7 +78,37 @@
 			"label": "Model label (optional)",
 			"labelHint": "Recorded with the transcript for reference, and used as the model only for a language with no row above.",
 			"plainTitle": "Offline, but plainer output.",
-			"plain": "Vosk returns lower-case text without punctuation and does not separate speakers. It is the right choice when nothing may leave the premises; Deepgram or a diarizing Whisper server give a far more readable assembly record."
+			"plain": "Vosk returns lower-case text without punctuation and does not separate speakers. It is the right choice when nothing may leave the premises; Deepgram or a diarizing Whisper server give a far more readable assembly record.",
+			"mode": {
+				"label": "Engine",
+				"builtin": "Built-in engine (models installed below)",
+				"server": "Vosk server at a URL"
+			},
+			"engine": {
+				"running": "Engine running",
+				"stopped": "Engine not running"
+			},
+			"models": {
+				"memory": "{mb} MB free for models in this container",
+				"memoryUnknown": "Free memory unknown",
+				"install": "Install",
+				"remove": "Remove",
+				"cancel": "Cancel",
+				"installed": "installed",
+				"kindSmall": "small",
+				"kindLarge": "large",
+				"kindCustom": "custom",
+				"phase": {
+					"queued": "queued",
+					"downloading": "downloading",
+					"unpacking": "unpacking",
+					"failed": "failed"
+				},
+				"confirmRemove": "Remove {name}?",
+				"sizeHint": "{mb} MB",
+				"inUse": "in use",
+				"notInstalled": "not installed"
+			}
 		},
 		"modes": {
 			"both": "Tables see captions while they talk, and each recording is transcribed again afterwards from the complete audio. The final transcript is the record and the one the analysis reads.",
@@ -140,7 +170,7 @@
 		"address": "Postal address",
 		"contact": "Contact for data requests (email)",
 		"dpo": "Data protection contact (DPO)",
-		"dpoPlaceholder": "Name · dpo@example.org",
+		"dpoPlaceholder": "Name · dpo{'@'}example.org",
 		"hosting": "Hosting provider and country",
 		"hostingPlaceholder": "Hetzner, Germany (EU)",
 		"hostingHint": "Where this server runs — \"Where your data is kept\" in the notice.",

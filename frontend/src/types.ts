@@ -483,6 +483,39 @@ export interface MonitorTable {
 	}>
 }
 
+export type VoskMode = 'builtin' | 'server'
+
+export type VoskModelKind = 'small' | 'large' | 'custom'
+export type VoskInstallPhase = 'queued' | 'downloading' | 'unpacking' | 'done' | 'failed'
+
+export interface VoskInstallProgress {
+	phase: VoskInstallPhase
+	received: number
+	total: number
+	error: string | null
+	started_at: number
+}
+
+export interface VoskModelsResponse {
+	installed: Array<{ name: string; language: string; kind: VoskModelKind; size_bytes: number; usable: boolean }>
+	available: Array<{
+		name: string
+		language: string
+		kind: VoskModelKind
+		size_mb: number
+		progress: VoskInstallProgress | null
+	}>
+	engine: {
+		running: boolean
+		port: number | null
+		loaded: string[]
+		in_use: Record<string, number>
+		last_error: string | null
+		memory_available_bytes: number | null
+	}
+	memory_available_bytes: number | null
+}
+
 export type SttProvider = 'mistral' | 'deepgram' | 'whisper' | 'vosk'
 
 export interface ProvidersSummary {
@@ -514,6 +547,8 @@ export interface ProvidersSummary {
 		whisper_batch_model: string
 		whisper_live_model: string
 		vosk_url: string
+		/** the engine inside this container, or a server at vosk_url */
+		vosk_mode?: VoskMode
 		/** language code -> model NAME for captions and for the final transcript */
 		vosk_language_models: Record<string, { live: string; final: string }>
 		vosk_batch_model: string

@@ -2,6 +2,27 @@
 
 All notable changes to Nextcloud Citizens.
 
+## Unreleased (0.8)
+
+### For the organizer
+
+- Vosk can run built into the app: Settings → Audio → Vosk offers a built-in
+  engine beside a Vosk server at a URL, with a model table per language
+  (small and large), one-click Install with progress and Cancel, and Remove
+  (refused while a live session uses the model). Speech stays on the server.
+
+### Operations
+
+- The built-in engine runs on a loopback socket inside the app container;
+  models live under `models/` in the data volume. A model that would not fit
+  the container's free memory is refused with a clear message; two languages
+  stay loaded and an idle one is unloaded after 30 minutes. Installs are
+  atomic: a crash or cancel leaves nothing half-installed.
+- `CITIZENS_VOSK_BUILTIN=1 scripts/event-up.sh` raises the container to 3500m
+  and stops the separate Vosk container; `CITIZENS_MEMORY` overrides it.
+- New admin routes: `GET /admin/vosk/models`, `POST .../{name}/install`,
+  `POST .../{name}/cancel`, `DELETE .../{name}`.
+
 ## 0.7.0-beta.1 — 2026-10-16
 
 Citizens 0.7 started on the `feature/0.7` branch; `main` immediately before

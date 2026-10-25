@@ -78,7 +78,37 @@
 			"label": "Etichetta del modello (facoltativa)",
 			"labelHint": "Registrata insieme alla trascrizione come riferimento, e usata come modello solo per una lingua senza una riga qui sopra.",
 			"plainTitle": "Offline, ma con un risultato più semplice.",
-			"plain": "Vosk restituisce testo in minuscolo senza punteggiatura e non separa chi parla. È la scelta giusta quando nulla può uscire dalla sede; Deepgram o un server Whisper diarizzante danno un resoconto dell'assemblea molto più leggibile."
+			"plain": "Vosk restituisce testo in minuscolo senza punteggiatura e non separa chi parla. È la scelta giusta quando nulla può uscire dalla sede; Deepgram o un server Whisper diarizzante danno un resoconto dell'assemblea molto più leggibile.",
+			"mode": {
+				"label": "Motore",
+				"builtin": "Motore integrato (modelli installati qui sotto)",
+				"server": "Server Vosk a un indirizzo"
+			},
+			"engine": {
+				"running": "Motore attivo",
+				"stopped": "Motore non attivo"
+			},
+			"models": {
+				"memory": "{mb} MB liberi per i modelli in questo contenitore",
+				"memoryUnknown": "Memoria libera sconosciuta",
+				"install": "Installa",
+				"remove": "Rimuovi",
+				"cancel": "Annulla",
+				"installed": "installato",
+				"kindSmall": "piccolo",
+				"kindLarge": "grande",
+				"kindCustom": "personalizzato",
+				"phase": {
+					"queued": "in coda",
+					"downloading": "download",
+					"unpacking": "estrazione",
+					"failed": "non riuscito"
+				},
+				"confirmRemove": "Rimuovere {name}?",
+				"sizeHint": "{mb} MB",
+				"inUse": "in uso",
+				"notInstalled": "non installato"
+			}
 		},
 		"modes": {
 			"both": "I tavoli vedono i sottotitoli mentre parlano, e ogni registrazione viene trascritta di nuovo in seguito a partire dall'audio completo. La trascrizione finale è il verbale ed è quella letta dall'analisi.",
@@ -140,7 +170,7 @@
 		"address": "Indirizzo postale",
 		"contact": "Contatto per le richieste sui dati (email)",
 		"dpo": "Responsabile della protezione dei dati (DPO)",
-		"dpoPlaceholder": "Nome · dpo@example.org",
+		"dpoPlaceholder": "Nome · dpo{'@'}example.org",
 		"hosting": "Fornitore di hosting e paese",
 		"hostingPlaceholder": "Hetzner, Germania (UE)",
 		"hostingHint": "Dove funziona questo server — «Dove sono conservati i tuoi dati» nell'informativa.",

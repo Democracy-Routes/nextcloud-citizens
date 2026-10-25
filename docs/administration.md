@@ -114,7 +114,7 @@ Open **Citizens → Settings** (visible to Nextcloud administrators only).
 | Deepgram | hosted | yes | native streaming, with speakers |
 | Mistral (Voxtral) | hosted | on final transcripts | Voxtral Realtime, no speakers while live |
 | Whisper (OpenAI-compatible) | hosted **or your own server** | only on diarizing servers | rolling 20-second windows; a line may be revised |
-| Vosk | **your own server**, offline | no | native streaming, no punctuation |
+| Vosk | **your own server, or built into the app**, offline | no | native streaming, no punctuation |
 
 Any endpoint speaking the OpenAI audio API works for Whisper (OpenAI itself,
 Speaches, whisper.cpp, LocalAI, vLLM, WhisperX). Deepgram's caption endpoint is
@@ -179,11 +179,60 @@ source`). When the carrying phone stops — finished, replaced, silent — the
 captions pass to a phone still recording. A plenary room, whose phones all
 used to open their own caption session, now opens one.
 
-### Running Vosk yourself
+### Vosk: two ways to run it
 
-Vosk needs **a separate model per language**, but one server can hold several:
+Vosk needs **a separate model per language**, but one engine can hold several:
 each recording names the model it wants, and the language you set on an assembly
-chooses it.
+chooses it. Settings → Audio → Vosk has an **Engine** choice:
+
+* **Built-in engine** — the engine runs inside the app container, on a loopback
+  socket nobody else can reach, and loads models that you install from Settings
+  into `models/` under the data volume. Nothing to deploy, nothing leaves the
+  server. See *Built-in engine* below.
+* **Vosk server at a URL** — a Vosk server you run elsewhere, or on this host
+  with `scripts/vosk-up.sh`. Unchanged; see *Running a Vosk server yourself*.
+
+### Built-in engine
+
+Choose **Built-in engine** under Settings → Audio → Vosk. The page shows whether
+the engine is running, how much memory is free for models in this container, and
+a table of models per language, each **small** or **large**:
+
+| | Size on disk | Good for |
+|---|---|---|
+| small | about 40–50 MB | fast; fine for live captions and modest rooms |
+| large | about 1.2–1.9 GB | noticeably better transcripts; needs the memory (below) |
+
+Press **Install** next to a model: it downloads from `alphacephei.com` (the only
+thing the engine ever fetches; no audio goes there) with progress, then unpacks.
+The install is atomic — the model is moved into place in one step only when
+complete, so a crash, a restart or **Cancel** leaves nothing half-installed.
+**Remove** deletes a model, and is refused while a live session is using it.
+Then fill the per-language table with the model names, as for a server.
+
+**Memory.** A loaded model takes about 1.3 times its size on disk. The engine
+refuses to load a model that does not fit the container's free memory, and says
+so ("needs about N MB") rather than taking the app down with it. The cap is the
+container's, so size it for the models you chose:
+
+* Scripts install (`scripts/event-up.sh`): `CITIZENS_VOSK_BUILTIN=1` raises the
+  container's memory from 2g to 3500m and stops the separate `citizens-vosk`
+  container. `CITIZENS_MEMORY` overrides the figure, e.g.
+  `CITIZENS_VOSK_BUILTIN=1 CITIZENS_MEMORY=6g scripts/event-up.sh`.
+* AppAPI-managed install: the deploy daemon's memory setting applies; it must
+  allow the models you install, or the engine will refuse the large ones.
+
+Two languages stay loaded at once; a model idle for 30 minutes is unloaded,
+and one in use never is.
+
+**Switching back to a server.** Set the engine to *Vosk server at a URL*. The
+built-in engine stops, and the installed models stay in `models/` so you can
+switch again; remove them from the same table if you want the space back.
+
+### Running a Vosk server yourself
+
+The server option is for a Vosk server on another machine, or on this host
+with `scripts/vosk-up.sh`.
 
 `scripts/vosk-up.sh` starts the server. It downloads nothing: fetch a model when
 you know you need that language, which you can do the day before a session.
@@ -212,7 +261,7 @@ captions while a more accurate one produces the transcript; Vosk's large models
 are 1.2–1.9 GB each, so that only pays off on a machine with the memory for it.
 
 **Models load on first use and are freed when idle** (30 minutes by default,
-`VOSK_MODEL_IDLE_SECONDS`), and only one is held at a time (`VOSK_MODEL_CACHE`).
+`VOSK_MODEL_IDLE_SECONDS`), and two are held at a time (`VOSK_MODEL_CACHE`).
 An assembly uses one language, so an idle server costs a few MB rather than a
 few hundred. A model in use is never unloaded, however long the round runs.
 
@@ -226,6 +275,17 @@ switches models process-wide and reloads from disk on every connection, which
 would let two assemblies in different languages take each other's model, and it
 never releases a model once loaded. The patch makes the choice per-connection,
 caches loads, and frees idle models. A small model is about 230 MB resident.
+
+**Vosk troubleshooting (built-in engine).**
+
+* *"Engine not running"* in Settings: the `vosk` package is missing from the
+  image (the page shows the reason), or port 2700 inside the container is
+  taken. Use an image that includes it, or switch to a Vosk server.
+* *"needs about N MB"* when a recording starts: the model does not fit the
+  container's free memory. Install the small model, raise the memory (above),
+  or remove another loaded language first.
+* A model marked **not usable**: its `am/` or `conf/` directory is missing,
+  usually a hand-copied or partly removed directory. Remove it and install again.
 
 **AI analysis.** Any OpenAI-compatible endpoint works: Mistral, OpenAI, or a
 self-hosted server such as Ollama or vLLM. Set the base URL, model and key.

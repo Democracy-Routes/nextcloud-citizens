@@ -32,7 +32,7 @@ performs no transcription and no analysis.
 * **Speech to text.** Deepgram and Mistral are hosted services: with those, the
   assembled audio of each recording is sent to the provider once. **Whisper**
   works against any OpenAI-compatible endpoint, including one you run yourself,
-  and **Vosk** runs entirely offline — with either, audio never leaves your
+  and **Vosk** runs entirely offline (its built-in engine runs inside the app container, so speech stays on the server) — with either, audio never leaves your
   infrastructure.
 * **Analysis.** Only the *transcript text* is sent, never audio. Any
   OpenAI-compatible endpoint works, so this can also run on your own hardware.

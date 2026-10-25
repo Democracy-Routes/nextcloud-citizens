@@ -13,6 +13,7 @@ import type {
 	InviteGenerated,
 	Participant,
 	ProvidersSummary,
+	VoskModelsResponse,
 	RecordNowOut,
 	SttProvider,
 	ReportData,
@@ -178,6 +179,13 @@ export const api = {
 	getProviders: () => request<ProvidersSummary>('GET', '/api/v1/admin/providers'),
 	updateProviders: (payload: Record<string, unknown>) =>
 		request<ProvidersSummary>('PUT', '/api/v1/admin/providers', payload),
+	voskModels: () => request<VoskModelsResponse>('GET', '/api/v1/admin/vosk/models'),
+	voskModelInstall: (name: string) =>
+		request<{ queued: boolean; name: string }>('POST', `/api/v1/admin/vosk/models/${encodeURIComponent(name)}/install`),
+	voskModelCancel: (name: string) =>
+		request<unknown>('POST', `/api/v1/admin/vosk/models/${encodeURIComponent(name)}/cancel`),
+	voskModelRemove: (name: string) =>
+		request<{ removed: boolean; name: string; freed_bytes: number }>('DELETE', `/api/v1/admin/vosk/models/${encodeURIComponent(name)}`),
 	testProvider: (target: SttProvider | 'analysis' | 'facilitator', apiKey?: string, baseUrl?: string, model?: string) =>
 		request<{ ok: boolean; message: string }>('POST', '/api/v1/admin/providers/test', {
 			target,

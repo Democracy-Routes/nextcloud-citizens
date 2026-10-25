@@ -12,11 +12,11 @@ import {
 	mdiImageOutline,
 	mdiMicrophoneOutline,
 } from '@mdi/js'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../api'
 import { describeError } from '../errors'
-import type { ProvidersSummary, SttProvider } from '../types'
+import type { ProvidersSummary, SttProvider, VoskMode, VoskModelsResponse } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzSkeleton from './ui/CzSkeleton.vue'
 import SvgIcon from './ui/SvgIcon.vue'
@@ -43,6 +43,8 @@ const whisperBaseUrl = ref('')
 const whisperBatchModel = ref('')
 const whisperLiveModel = ref('')
 const voskUrl = ref('')
+// builtin: the engine inside this container; server: an instance at voskUrl
+const voskMode = ref<VoskMode>('builtin')
 const voskBatchModel = ref('')
 // per-provider caps on concurrent transcription work — live caption sessions
 // and final (batch) transcriptions as independent pools, server-wide.
@@ -72,6 +74,142 @@ const ASSEMBLY_LANGUAGES: Array<{ code: string; label: string }> = [
 const voskModels = ref<Record<string, { live: string; final: string }>>(
 	Object.fromEntries(ASSEMBLY_LANGUAGES.map((l) => [l.code, { live: '', final: '' }])),
 )
+
+// --- built-in Vosk engine: the model manager ---------------------------------
+const voskCatalog = ref<VoskModelsResponse | null>(null)
+const voskCatalogError = ref('')
+const pendingRemove = ref('')
+const voskBusy = ref('')
+const VOSK_POLL_MS = 3000
+let voskPoll: ReturnType<typeof setTimeout> | null = null
+
+async function loadVoskModels(): Promise<void> {
+	try {
+		voskCatalog.value = await api.voskModels()
+		voskCatalogError.value = ''
+	} catch (err) {
+		voskCatalogError.value = describeError(err).message
+	}
+}
+
+function installing(progress: { phase: string } | null | undefined): boolean {
+	return !!progress && ['queued', 'downloading', 'unpacking'].includes(progress.phase)
+}
+
+// Poll only while something is in flight: an idle Settings page must not keep
+// asking the server, and a download's bar must not freeze between visits.
+watch(voskCatalog, (catalog) => {
+	if (voskPoll) {
+		clearTimeout(voskPoll)
+		voskPoll = null
+	}
+	if (catalog?.available.some((m) => installing(m.progress))) {
+		voskPoll = setTimeout(() => void loadVoskModels(), VOSK_POLL_MS)
+	}
+})
+onBeforeUnmount(() => {
+	if (voskPoll) clearTimeout(voskPoll)
+})
+onMounted(() => void loadVoskModels())
+
+interface VoskRow {
+	name: string
+	kind: 'small' | 'large' | 'custom'
+	sizeMb: number
+	installed: boolean
+	inUse: boolean
+	progress: { phase: string; received: number; total: number; error: string | null } | null
+}
+
+const voskGroups = computed<Array<{ code: string; label: string; rows: VoskRow[] }>>(() => {
+	const catalog = voskCatalog.value
+	if (!catalog) return []
+	const inUse = catalog.engine?.in_use ?? {}
+	const byLang = new Map<string, Map<string, VoskRow>>()
+	const rowsFor = (code: string) => {
+		if (!byLang.has(code)) byLang.set(code, new Map())
+		return byLang.get(code)!
+	}
+	for (const m of catalog.available) {
+		rowsFor(m.language).set(m.name, {
+			name: m.name,
+			kind: m.kind,
+			sizeMb: m.size_mb,
+			installed: false,
+			inUse: false,
+			progress: m.progress,
+		})
+	}
+	for (const m of catalog.installed) {
+		const rows = rowsFor(m.language)
+		const row = rows.get(m.name)
+		if (row) {
+			row.installed = true
+		} else {
+			rows.set(m.name, {
+				name: m.name,
+				kind: m.kind,
+				sizeMb: Math.max(1, Math.round(m.size_bytes / 1048576)),
+				installed: true,
+				inUse: false,
+				progress: null,
+			})
+		}
+		rows.get(m.name)!.inUse = (inUse[m.name] ?? 0) > 0
+	}
+	const known = ASSEMBLY_LANGUAGES.map((l) => l.code)
+	const others = [...byLang.keys()].filter((c) => !known.includes(c)).sort()
+	return [...known, ...others]
+		.filter((code) => byLang.has(code))
+		.map((code) => ({
+			code,
+			label: ASSEMBLY_LANGUAGES.find((l) => l.code === code)?.label ?? code,
+			rows: [...byLang.get(code)!.values()],
+		}))
+})
+
+function percent(progress: { received: number; total: number }): number {
+	return progress.total > 0 ? Math.min(100, Math.round((progress.received / progress.total) * 100)) : 0
+}
+
+function failureOf(row: VoskRow): string {
+	return row.progress?.phase === 'failed' ? (row.progress.error ?? '') : ''
+}
+
+async function voskAction(name: string, call: () => Promise<unknown>): Promise<void> {
+	voskBusy.value = name
+	try {
+		await call()
+	} catch (err) {
+		voskCatalogError.value = describeError(err).message
+	} finally {
+		voskBusy.value = ''
+	}
+	await loadVoskModels()
+}
+
+const installModel = (name: string) => voskAction(name, () => api.voskModelInstall(name))
+const cancelModel = (name: string) => voskAction(name, () => api.voskModelCancel(name))
+async function removeModel(name: string): Promise<void> {
+	pendingRemove.value = ''
+	await voskAction(name, () => api.voskModelRemove(name))
+}
+
+/** The models a language's picker offers: what is installed and usable, plus
+ * the saved value even when it is gone — hiding it would make the select look
+ * empty and a save silently drop the setting. */
+function voskChoices(code: string, current: string): Array<{ name: string; missing: boolean }> {
+	const names = (voskCatalog.value?.installed ?? [])
+		.filter((m) => m.language === code && m.usable)
+		.map((m) => ({ name: m.name, missing: false }))
+	if (current && !names.some((m) => m.name === current)) names.push({ name: current, missing: true })
+	return names
+}
+
+const memoryMb = computed(() => {
+	const bytes = voskCatalog.value?.memory_available_bytes
+	return bytes == null ? null : Math.floor(bytes / 1048576)
+})
 
 const STT_PROVIDERS: readonly SttProvider[] = ['mistral', 'deepgram', 'whisper', 'vosk']
 
@@ -197,6 +335,7 @@ async function reload(): Promise<void> {
 	whisperBatchModel.value = summary.value.stt.whisper_batch_model
 	whisperLiveModel.value = summary.value.stt.whisper_live_model ?? ''
 	voskUrl.value = summary.value.stt.vosk_url
+	voskMode.value = summary.value.stt.vosk_mode ?? 'server'
 	voskBatchModel.value = summary.value.stt.vosk_batch_model
 	concurrency.value = {
 		deepgram: {
@@ -297,6 +436,7 @@ function currentPayload(): Record<string, unknown> {
 			whisper_batch_model: whisperBatchModel.value.trim(),
 			whisper_live_model: whisperLiveModel.value.trim(),
 			vosk_url: voskUrl.value.trim(),
+			vosk_mode: voskMode.value,
 			vosk_batch_model: voskBatchModel.value.trim(),
 			// clamp locally so a cleared field round-trips as the minimum
 			// rather than a 422 from the server
@@ -653,7 +793,20 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 				</div>
 
 				<div v-else class="cz-fieldgrid">
-					<div class="cz-field" style="grid-column: span 2">
+					<div class="cz-field" style="grid-column: span 2" data-test="vosk-mode">
+						<label>{{ t('organizer.settings.audio.vosk.mode.label') }}</label>
+						<div class="cz-row" style="gap: 18px">
+							<label class="cz-row" style="gap: 6px; font-weight: normal">
+								<input v-model="voskMode" type="radio" name="vosk-mode" value="builtin" />
+								{{ t('organizer.settings.audio.vosk.mode.builtin') }}
+							</label>
+							<label class="cz-row" style="gap: 6px; font-weight: normal">
+								<input v-model="voskMode" type="radio" name="vosk-mode" value="server" />
+								{{ t('organizer.settings.audio.vosk.mode.server') }}
+							</label>
+						</div>
+					</div>
+					<div v-if="voskMode === 'server'" class="cz-field" style="grid-column: span 2">
 						<label>{{ t('organizer.settings.audio.vosk.url') }}</label>
 						<div class="cz-row" style="flex-wrap: nowrap">
 							<input v-model="voskUrl" type="text" style="flex: 1" :placeholder="VOSK_URL_EXAMPLE" />
@@ -666,6 +819,48 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 						<span class="cz-muted" style="font-size: 0.78rem">
 							{{ t('organizer.settings.audio.vosk.urlHint') }}
 						</span>
+					</div>
+					<div v-if="voskMode === 'builtin'" class="cz-field" style="grid-column: span 2" data-test="vosk-models">
+						<p class="cz-muted" style="font-size: 0.78rem; margin: 0 0 6px">
+							{{ memoryMb === null ? t('organizer.settings.audio.vosk.models.memoryUnknown') : t('organizer.settings.audio.vosk.models.memory', { mb: memoryMb }) }}
+							&middot;
+							{{ voskCatalog?.engine?.running ? t('organizer.settings.audio.vosk.engine.running') : t('organizer.settings.audio.vosk.engine.stopped') }}
+							<span v-if="voskCatalog?.engine?.last_error"> &middot; {{ voskCatalog.engine.last_error }}</span>
+						</p>
+						<p v-if="voskCatalogError" class="cz-muted" style="color: var(--cz-danger, #b00020); font-size: 0.78rem">{{ voskCatalogError }}</p>
+						<template v-for="group in voskGroups" :key="group.code">
+							<strong style="font-size: 0.845rem; margin-top: 8px">{{ group.label }}</strong>
+							<div
+								v-for="row in group.rows"
+								:key="row.name"
+								class="cz-row"
+								style="flex-wrap: nowrap; gap: 10px; padding: 3px 0"
+								data-test="model-row">
+								<code style="flex: 1; overflow-wrap: anywhere">{{ row.name }}</code>
+								<span class="cz-pill" style="text-transform: none">{{ t('organizer.settings.audio.vosk.models.kind' + row.kind.charAt(0).toUpperCase() + row.kind.slice(1)) }}</span>
+								<span class="cz-muted" style="font-size: 0.78rem; min-width: 56px">{{ t('organizer.settings.audio.vosk.models.sizeHint', { mb: row.sizeMb }) }}</span>
+								<template v-if="row.installed">
+									<span v-if="row.inUse" class="cz-pill cz-pill--green" style="text-transform: none">{{ t('organizer.settings.audio.vosk.models.inUse') }}</span>
+									<template v-if="pendingRemove === row.name">
+										<span style="font-size: 0.8rem">{{ t('organizer.settings.audio.vosk.models.confirmRemove', { name: row.name }) }}</span>
+										<CzButton small variant="danger" data-test="model-remove-confirm" :disabled="voskBusy === row.name" @click="removeModel(row.name)">{{ t('organizer.settings.audio.vosk.models.remove') }}</CzButton>
+										<CzButton small @click="pendingRemove = ''">{{ t('organizer.settings.audio.vosk.models.cancel') }}</CzButton>
+									</template>
+									<CzButton v-else small data-test="model-remove" :disabled="row.inUse || voskBusy === row.name" @click="pendingRemove = row.name">{{ t('organizer.settings.audio.vosk.models.remove') }}</CzButton>
+								</template>
+								<template v-else-if="installing(row.progress)">
+									<span data-test="model-progress" style="display: flex; align-items: center; gap: 6px; min-width: 190px">
+										<progress :value="percent(row.progress!)" max="100" style="flex: 1"></progress>
+										<span style="font-size: 0.75rem">{{ t('organizer.settings.audio.vosk.models.phase.' + row.progress!.phase) }} {{ percent(row.progress!) }}%</span>
+									</span>
+									<CzButton small data-test="model-cancel" :disabled="voskBusy === row.name" @click="cancelModel(row.name)">{{ t('organizer.settings.audio.vosk.models.cancel') }}</CzButton>
+								</template>
+								<template v-else>
+									<span v-if="failureOf(row)" style="font-size: 0.75rem; color: var(--cz-danger, #b00020)">{{ t('organizer.settings.audio.vosk.models.phase.failed') }}: {{ failureOf(row) }}</span>
+									<CzButton small data-test="model-install" :disabled="voskBusy === row.name" @click="installModel(row.name)">{{ t('organizer.settings.audio.vosk.models.install') }}</CzButton>
+								</template>
+							</div>
+						</template>
 					</div>
 					<div class="cz-field" style="grid-column: span 2">
 						<label>{{ t('organizer.settings.audio.vosk.perLanguage') }}</label>
@@ -688,12 +883,32 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 							class="cz-modelrow"
 							style="grid-template-columns: 78px 1fr 1fr; margin-bottom: 6px">
 							<span style="font-size: 0.845rem; align-self: center">{{ lang.label }}</span>
+							<select
+								v-if="voskMode === 'builtin'"
+								v-model="voskModels[lang.code].live"
+								:aria-label="t('organizer.settings.audio.vosk.liveModelFor', { language: lang.label })">
+								<option value="">{{ t('organizer.settings.audio.vosk.notConfigured') }}</option>
+								<option v-for="m in voskChoices(lang.code, voskModels[lang.code].live)" :key="m.name" :value="m.name">
+									{{ m.name }}{{ m.missing ? ' (' + t('organizer.settings.audio.vosk.models.notInstalled') + ')' : '' }}
+								</option>
+							</select>
 							<input
+								v-else
 								v-model="voskModels[lang.code].live"
 								type="text"
 								:placeholder="t('organizer.settings.audio.vosk.notConfigured')"
 								:aria-label="t('organizer.settings.audio.vosk.liveModelFor', { language: lang.label })" />
+							<select
+								v-if="voskMode === 'builtin'"
+								v-model="voskModels[lang.code].final"
+								:aria-label="t('organizer.settings.audio.vosk.finalModelFor', { language: lang.label })">
+								<option value="">{{ t('organizer.settings.audio.vosk.sameAsLive') }}</option>
+								<option v-for="m in voskChoices(lang.code, voskModels[lang.code].final)" :key="m.name" :value="m.name">
+									{{ m.name }}{{ m.missing ? ' (' + t('organizer.settings.audio.vosk.models.notInstalled') + ')' : '' }}
+								</option>
+							</select>
 							<input
+								v-else
 								v-model="voskModels[lang.code].final"
 								type="text"
 								:placeholder="t('organizer.settings.audio.vosk.sameAsLive')"
