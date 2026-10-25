@@ -145,6 +145,16 @@ class BuiltinVoskServer:
             "memory_available_bytes": memory_available(),
         }
 
+    def default_model_path(self) -> str | None:
+        """The first usable model directory, by name."""
+        try:
+            for child in sorted(Path(self.models_dir).iterdir()):
+                if child.is_dir() and (child / "am").exists() and (child / "conf").exists():
+                    return str(child)
+        except OSError:
+            pass
+        return None
+
     def in_use(self, model_name: str) -> bool:
         return any(Path(p).name == model_name and n for p, n in self._users.items())
 
@@ -236,6 +246,7 @@ class BuiltinVoskServer:
 
     async def _recognize(self, websocket) -> None:
         from vosk import KaldiRecognizer
+        from websockets.exceptions import ConnectionClosed
 
         assert self._loop is not None and self._pool is not None
         rec = None
@@ -277,8 +288,19 @@ class BuiltinVoskServer:
                 if rec is None or model_changed:
                     model_changed = False
                     if conn_model is None:
-                        await websocket.send(json.dumps({"error": "no model named in the config"}))
-                        return
+                        # no model named (the Settings "Test" probe, a client
+                        # before 0.7): the first installed model, as the
+                        # server script falls back to its default directory
+                        default = self.default_model_path()
+                        if default is None:
+                            await websocket.send(json.dumps({"error": "no model installed"}))
+                            return
+                        try:
+                            conn_model = await self._load_model(default)
+                        except (ModelTooLarge, FileNotFoundError) as exc:
+                            await websocket.send(json.dumps({"error": str(exc)}))
+                            return
+                        conn_path = default
                     rec = KaldiRecognizer(conn_model, sample_rate)
                     rec.SetWords(show_words)
                     rec.SetMaxAlternatives(max_alternatives)
@@ -288,6 +310,8 @@ class BuiltinVoskServer:
                 await websocket.send(response)
                 if stop:
                     break
+        except ConnectionClosed:
+            pass  # the client hung up (the Settings probe does, right after its reply)
         finally:
             await self._release_model(conn_path)
 

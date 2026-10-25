@@ -111,9 +111,10 @@ def test_the_loopback_engine_speaks_the_protocol(tmp_path):
         answer = json.loads(ws.recv())
         assert "error" in answer and "no such model" in answer["error"]
     with connect("ws://127.0.0.1:27010") as ws:
-        ws.send(b"\x00" * 6400)  # audio before any model: refused, not crashed
+        ws.send(b"\x00" * 6400)  # audio before any model, none installed: refused, not crashed
         answer = json.loads(ws.recv())
-        assert "error" in answer
+        assert answer["error"] == "no model installed"
+    assert server.default_model_path() is None
     server.stop()
     assert server.status()["running"] is False
 
