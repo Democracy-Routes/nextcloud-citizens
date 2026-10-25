@@ -158,9 +158,12 @@
 			"show": "{count} tavolo procede regolarmente — mostra | {count} tavoli procedono regolarmente — mostra",
 			"hide": "{count} tavolo procede regolarmente — nascondi | {count} tavoli procedono regolarmente — nascondi"
 		},
-		"recorders": {
-			"summary": "{count} registratori · collegati: {labels}",
-			"none": "nessuno"
+		"finishedAt": "terminata alle {time}",
+		"recorderRow": {
+			"connected": "collegato",
+			"lastSeen": "{age}",
+			"live": "sottotitoli",
+			"liveTitle": "I sottotitoli di questo registratore sono quelli che legge la sala"
 		},
 		"coverageTitle": "Audio registrato rispetto al tempo in cui questo registratore è rimasto attivo — rosso sotto il 95 %: quel telefono ha perso parte della discussione",
 		"pills": {

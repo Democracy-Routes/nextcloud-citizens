@@ -18,7 +18,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { describeError } from '../errors'
-import { relativeAge, timestamp } from '../format'
+import { clockTime, relativeAge, timestamp } from '../format'
 import { LIVE_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
 import type { AssemblyDetail, Intervention, MonitorTable, RoundMonitor, SessionMessage, TranscriptData } from '../types'
@@ -497,15 +497,20 @@ function coverageBadges(table: MonitorTable): Array<{ label: string; percent: nu
 		.map((r) => ({ label: r.label, percent: r.recording!.coverage!.percent }))
 }
 
+function allFinished(table: MonitorTable): boolean {
+	const recorders = table.recorders ?? []
+	return recorders.length > 0 && recorders.every((r) => r.finished === true)
+}
+
 /** Nothing the server or this screen would point at. */
 function isQuiet(table: MonitorTable): boolean {
 	if (!table.readiness || table.readiness.status !== 'READY') return false
+	// a table whose recorders have all finished: its last heartbeat is
+	// history, so a flat battery or a silent capture there is not news
+	const heartbeatIsNews = !allFinished(table)
 	return !(
 		coverageBadges(table).some((b) => b.percent < COVERAGE_LOW_PERCENT) ||
-		captureInterrupted(table) ||
-		lowBattery(table) ||
-		lowStorage(table) ||
-		canReplaceDevice(table) ||
+		(heartbeatIsNews && (captureInterrupted(table) || lowBattery(table) || lowStorage(table) || canReplaceDevice(table))) ||
 		canRetryAssembly(table) ||
 		table.superseded_recordings.length > 0
 	)
@@ -593,6 +598,37 @@ function recorderFacts(recorder: RecorderEntry): string {
 	const capture = s.capture_ok === false ? f('captureInterrupted') : s.capture_ok === true ? f('capturing') : '—'
 	const rec = recorder.recording ? recorder.recording.state : f('noRecording')
 	return f('line', { pct, storage, pending, age, screen, visible, capture, rec })
+}
+
+/** The always-visible row of one recorder: what the organizer wants to know
+ * at a glance. A finished recorder shows when it finished and its coverage
+ * only — its heartbeat stopped being news the moment it finished, and "100 s
+ * ago" in red would send somebody to a phone that did nothing wrong. */
+function recorderRow(recorder: RecorderEntry) {
+	const s = recorder.status ?? {}
+	const f = (key: string, named?: Record<string, unknown>) => t(`organizer.live.monitor.facts.${key}`, named ?? {})
+	const finished = recorder.finished === true
+	const age = recorder.seconds_since_contact
+	const pending =
+		typeof s.local_chunks === 'number' && typeof s.acked_chunks === 'number'
+			? Math.max(0, s.local_chunks - s.acked_chunks)
+			: null
+	return {
+		finished,
+		finishedText: t('organizer.live.monitor.finishedAt', { time: clockTime(recorder.finished_at) }),
+		connectedText: recorder.connected
+			? t('organizer.live.monitor.recorderRow.connected')
+			: age === null
+				? f('neverHeard')
+				: t('organizer.live.monitor.recorderRow.lastSeen', { age: relativeAge(age) }),
+		battery: typeof s.battery_level === 'number' ? `${Math.round(s.battery_level * 100)}%` : null,
+		screen: s.screen_awake === true ? f('screenAwake') : s.screen_awake === false ? f('screenMayLock') : s.visible === false ? f('background') : null,
+		pending: pending === null ? null : f('chunksPending', { count: pending }),
+		state: recorder.recording?.state ?? null,
+		coverage: recorder.recording?.coverage ? recorder.recording.coverage.percent : null,
+		live: recorder.recording?.live_source === true,
+		bad: !finished && !recorder.connected,
+	}
 }
 
 type RecorderRecordingInfo = NonNullable<RecorderEntry['recording']>
@@ -1072,17 +1108,36 @@ function pendingChunks(table: MonitorTable): number {
 									</span>
 								</li>
 							</ul>
-							<!-- a table with more than one recorder phone: say so, and
-							     which of them are reachable -->
-							<div
-								v-if="(table.recorders?.length ?? 0) > 1"
-								class="cz-muted"
-								style="font-size: 0.78rem; margin-top: 4px; white-space: nowrap">
-								{{ t('organizer.live.monitor.recorders.summary', {
-									count: table.recorders!.length,
-									labels: table.recorders!.filter((r) => r.connected).map((r) => r.label).join(', ') || t('organizer.live.monitor.recorders.none'),
-								}) }}
-							</div>
+							<!-- every recorder, healthy or not: the table card used to say
+							     nothing until a phone went wrong -->
+							<ul v-if="table.recorders?.length" class="cz-recrows" data-test="recorder-rows">
+								<li
+									v-for="recorder in table.recorders"
+									:key="'row-' + recorder.slot"
+									class="cz-recrow"
+									:class="{ 'cz-recrow--bad': recorderRow(recorder).bad, 'cz-recrow--finished': recorderRow(recorder).finished }"
+									data-test="recorder-row">
+									<span class="cz-tabledot" :class="`cz-tabledot--${table.color_key}`" aria-hidden="true"></span>
+									<strong>{{ recorder.label }}</strong>
+									<template v-if="recorderRow(recorder).finished">
+										<span data-test="recorder-finished">{{ recorderRow(recorder).finishedText }}</span>
+									</template>
+									<template v-else>
+										<span data-test="recorder-connected">{{ recorderRow(recorder).connectedText }}</span>
+										<span v-if="recorderRow(recorder).battery" data-test="recorder-battery">{{ recorderRow(recorder).battery }}</span>
+										<span v-if="recorderRow(recorder).screen">{{ recorderRow(recorder).screen }}</span>
+										<span v-if="recorderRow(recorder).pending">{{ recorderRow(recorder).pending }}</span>
+										<CzStatusPill v-if="recorderRow(recorder).state" :status="recorderRow(recorder).state!" />
+									</template>
+									<CzStatusPill v-if="recorderRow(recorder).finished && recorderRow(recorder).state" :status="recorderRow(recorder).state!" />
+									<span v-if="recorderRow(recorder).coverage !== null" data-test="recorder-coverage">
+										{{ t('organizer.live.files.captured', { percent: recorderRow(recorder).coverage }) }}
+									</span>
+									<span v-if="recorderRow(recorder).live" :title="t('organizer.live.monitor.recorderRow.liveTitle')" data-test="recorder-live">
+										{{ t('organizer.live.monitor.recorderRow.live') }}
+									</span>
+								</li>
+							</ul>
 							<!-- advanced: the heartbeat facts behind the pills, per recorder -->
 							<ul v-if="advanced && table.recorders?.length" class="cz-diag" data-test="diagnostics">
 								<li v-for="recorder in table.recorders" :key="recorder.slot">
@@ -1305,3 +1360,10 @@ function pendingChunks(table: MonitorTable): number {
 		</template>
 	</div>
 </template>
+
+<style scoped>
+.cz-recrows { list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.78rem; }
+.cz-recrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
+.cz-recrow--bad { color: var(--cz-red, #c62828); }
+.cz-recrow--finished { color: var(--cz-muted, inherit); }
+</style>

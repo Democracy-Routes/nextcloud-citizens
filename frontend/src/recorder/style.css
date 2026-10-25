@@ -74,10 +74,9 @@ body {
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
 	scrollbar-width: none;
-	/* the home-indicator inset, for the screens whose buttons live inside the
-	   scroll zone rather than in a pinned .rc-actions bar (consent, recovery,
-	   the join/error screens) */
-	padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+	/* the home-indicator inset belongs to the pinned bar (.rc-actions) alone;
+	   no dead padding is stacked under it */
+	padding-bottom: 8px;
 }
 
 .rc-scroll::-webkit-scrollbar { display: none; }
@@ -92,8 +91,14 @@ body {
 
 .rc-actions {
 	flex-shrink: 0;
-	padding: 8px 0 calc(14px + env(safe-area-inset-bottom, 0px));
+	padding: 6px 0 env(safe-area-inset-bottom, 0px);
+	/* a safety net: a bar with many buttons scrolls inside itself, the page
+	   (and the zone above it) never gives way */
+	max-height: 55%;
+	overflow-y: auto;
+	scrollbar-width: none;
 }
+.rc-actions::-webkit-scrollbar { display: none; }
 
 /* UI chrome shouldn't be selectable like a document; transcripts stay selectable */
 .rc-header, .rc-btn, .rc-status-row__label, .rc-eyebrow, .rc-timer-label, .rc-table-badge {
@@ -173,12 +178,12 @@ body {
 .rc-timer-wrap {
 	display: flex;
 	justify-content: center;
-	margin: 18px 0 14px;
+	margin: clamp(6px, 2vmin, 18px) 0;
 }
 
 .rc-timer-ring {
-	width: 190px;
-	height: 190px;
+	width: clamp(120px, 38vmin, 190px);
+	height: clamp(120px, 38vmin, 190px);
 	border-radius: 50%;
 	display: flex;
 	flex-direction: column;
@@ -199,7 +204,7 @@ body {
 }
 
 .rc-timer {
-	font-size: 46px;
+	font-size: clamp(28px, 9vmin, 46px);
 	font-weight: 800;
 	font-variant-numeric: tabular-nums;
 	line-height: 1;
@@ -320,6 +325,8 @@ body {
 .rc-center { text-align: center; }
 
 .rc-hero { padding-top: 34px; text-align: center; }
+/* the vertically-offset hero of the plain message screens; shrinks with the screen */
+.rc-hero--top { padding-top: min(12vh, 90px); }
 
 .rc-hero__icon {
 	width: 96px;
@@ -471,20 +478,53 @@ body {
 /* ---------- compact heights (landscape phones) ---------- */
 
 @media (max-height: 560px) {
-	.rc-timer-ring { width: 130px; height: 130px; }
-	.rc-timer { font-size: 32px; }
+	.rc-timer-ring { width: clamp(120px, 38vmin, 130px); height: clamp(120px, 38vmin, 130px); }
 	.rc-hero { padding-top: 10px; }
 	/* landscape phones: reclaim the vertical space the chrome eats so the
 	   ring, level meter and buttons still fit the ~120px scroll zone */
 	.rc-screen { padding-top: 8px; }
 	.rc-header { margin-bottom: 8px; min-height: 0; }
 	.rc-qbar { padding: 7px 12px; margin-bottom: 6px; }
-	.rc-timer-wrap { margin: 8px 0 8px; }
 	.rc-hero__icon { width: 64px; height: 64px; }
 	.rc-hero__table { font-size: 38px; }
 	.rc-captions { max-height: 130px; }
 	.rc-card { padding: 12px 14px; }
 	.rc-btn { padding: 11px; font-size: 16px; }
+}
+
+/* ---------- small phones ---------- */
+
+/* narrow: the 18px screen gutter and the card padding give way to 12px, and
+   the hero / badge sizes drop one step */
+@media (max-width: 360px) {
+	.rc-screen { padding-left: 12px; padding-right: 12px; }
+	.rc-card { padding: 12px; margin-bottom: 10px; }
+	.rc-hero__icon { width: 76px; height: 76px; margin-bottom: 12px; }
+	.rc-hero__table { font-size: 42px; }
+	.rc-table-badge--hero { font-size: 32px; }
+	.rc-table-badge { font-size: 14px; padding: 6px 12px; }
+	#recorder-app h1 { font-size: 20px; }
+	.rc-bar { gap: 6px; }
+	.rc-bar__side { min-width: 54px; }
+}
+
+/* short: a 568-640px screen has to hold header, question, ring, level meter,
+   tech bar and the bar at once, so the chrome and the vertical rhythm tighten.
+   The level meter and tech bar are not hidden — they sit before the captions. */
+@media (max-height: 640px) {
+	.rc-screen { padding-top: 8px; }
+	.rc-header { margin-bottom: 8px; min-height: 30px; }
+	.rc-qbar { padding: 7px 12px; margin-bottom: 6px; }
+	.rc-qbar__q { -webkit-line-clamp: 2; line-clamp: 2; }
+	.rc-techbar { min-height: 36px; padding: 4px 8px; margin: 0 0 4px; }
+	.rc-level { margin: 8px 0; height: 14px; }
+	.rc-btn { padding: 12px; margin-top: 8px; }
+	.rc-timer-label { margin-top: 4px; }
+	.rc-alert, .rc-note { padding: 10px 12px; margin: 8px 0; }
+	.rc-captions { max-height: 150px; }
+	.rc-hero { padding-top: 16px; }
+	#recorder-app .rc-lead { margin-top: 4px; font-size: 0.95rem; line-height: 1.4; }
+	#recorder-app .rc-consent__roster-title { margin-top: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -286,6 +286,7 @@ const STATE_CLASS: Record<CheckState, string> = {
 		<div class="rc-header">
 			<TableBadge :number="session.table_number" :color-key="session.table_color" />
 		</div>
+		<div class="rc-scroll">
 		<!-- a hand to raise only where there is an organizer to see it -->
 		<HelpButton v-if="session.assembly.kind !== 'session'" :token="session.session_token" :help="help" />
 		<ParticipantsLine :consent="consent" @open="emit('participants')" />
@@ -295,7 +296,6 @@ const STATE_CLASS: Record<CheckState, string> = {
 			{{ t('recorder.table.addFacilitator') }}
 		</button>
 
-		<div class="rc-scroll">
 		<!-- the table is done: its summaries and the report, nothing about microphones -->
 		<div v-if="allRecorded" class="rc-card">
 			<p class="rc-eyebrow rc-center" style="display: block">{{ t('recorder.armed.allRecordedTitle') }}</p>

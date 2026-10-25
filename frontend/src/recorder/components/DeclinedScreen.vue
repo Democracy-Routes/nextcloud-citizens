@@ -17,8 +17,9 @@ const { t } = useI18n()
 </script>
 
 <template>
+	<div class="rc-fill">
 	<div class="rc-scroll">
-		<div class="rc-hero" style="padding-top: 12vh">
+		<div class="rc-hero rc-hero--top">
 			<h1>{{ t('recorder.declined.title') }}</h1>
 			<p class="rc-muted" style="margin-top: 14px">{{ t('recorder.declined.body') }}</p>
 			<p class="rc-muted" style="margin-top: 14px">{{ t('recorder.declined.noticeHint') }}</p>
@@ -29,5 +30,6 @@ const { t } = useI18n()
 				{{ t('recorder.declined.scanAgain') }}
 			</button>
 		</div>
+	</div>
 	</div>
 </template>

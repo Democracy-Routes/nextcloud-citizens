@@ -440,6 +440,12 @@ export interface MonitorTable {
 		connected: boolean
 		seconds_since_contact: number | null
 		status: DeviceStatus
+		/** the recorder's recording is past RECORDING, or it has none and the
+		 * table has nothing left to record: its last heartbeat is history, not
+		 * news (0.8; absent from an older server) */
+		finished?: boolean
+		/** when that recording ended (ISO) */
+		finished_at?: string | null
 		/** `silent_seconds`: how long since the server last received a chunk
 		 * from a recording still in progress (readiness CAPTURE_SILENT) */
 		recording: {

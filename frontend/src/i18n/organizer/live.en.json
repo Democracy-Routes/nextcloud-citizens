@@ -158,9 +158,12 @@
 			"show": "{count} table running normally — show | {count} tables running normally — show",
 			"hide": "{count} table running normally — hide | {count} tables running normally — hide"
 		},
-		"recorders": {
-			"summary": "{count} recorders · {labels} connected",
-			"none": "none"
+		"finishedAt": "finished {time}",
+		"recorderRow": {
+			"connected": "connected",
+			"lastSeen": "{age}",
+			"live": "captions",
+			"liveTitle": "This recorder's captions are the ones the room reads"
 		},
 		"coverageTitle": "Audio captured against the time this recorder has been recording — red below 95 %: that phone missed part of the discussion",
 		"pills": {
