@@ -8,7 +8,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from nc_py_api import AsyncNextcloudApp
 from nc_py_api.ex_app import AppAPIAuthMiddleware, run_app, set_handlers
 from starlette.staticfiles import StaticFiles
@@ -58,6 +58,40 @@ class _RevalidatedStatic(StaticFiles):
         response = super().file_response(*args, **kwargs)
         response.headers.setdefault("Cache-Control", "no-cache")
         return response
+
+
+BUNDLE_LOADER = """(function () {
+  var me = document.currentScript;
+  var base = me && me.src ? me.src.replace(/\\/js\\/citizens-main\\.js(\\?.*)?$/, "") : "";
+  var v = encodeURIComponent("__APP_VERSION__");
+  var css = document.createElement("link");
+  css.rel = "stylesheet";
+  css.href = base + "/css/citizens-main.bundle.css?v=" + v;
+  document.head.appendChild(css);
+  var js = document.createElement("script");
+  js.src = base + "/js/citizens-main.bundle.js?v=" + v;
+  document.head.appendChild(js);
+})();
+"""
+
+
+def _bundle_loader_router() -> APIRouter:
+    from fastapi.responses import Response
+
+    router = APIRouter()
+    no_cache = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+    @router.get("/js/citizens-main.js")
+    def organizer_loader() -> Response:
+        body = BUNDLE_LOADER.replace("__APP_VERSION__", get_settings().app_version)
+        return Response(body, media_type="application/javascript", headers=no_cache)
+
+    @router.get("/css/citizens-main.css")
+    def organizer_style_stub() -> Response:
+        # the registered stylesheet: the loader injects the real one
+        return Response("/* loaded by js/citizens-main.js */\n", media_type="text/css", headers=no_cache)
+
+    return router
 
 
 async def enabled_handler(enabled: bool, nc: AsyncNextcloudApp) -> str:
@@ -160,6 +194,14 @@ def create_app(with_auth: bool = True) -> FastAPI:
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(files_router, prefix="/api/v1")
     app.include_router(recorder_page_router)
+
+    # The organizer bundle's registered URLs never change (set_script above),
+    # and the AppAPI proxy caches non-JSON responses for an hour: after a
+    # deploy the browser kept the previous build, and Settings opened blank or
+    # old. So the registered paths answer a 300-byte loader that injects the
+    # real bundle with the running version in its query — the same trick the
+    # recorder page plays — and never ask the browser to keep it.
+    app.include_router(_bundle_loader_router())
 
     root = Path(__file__).resolve().parent.parent
     recorder_static = root / "recorder_static"

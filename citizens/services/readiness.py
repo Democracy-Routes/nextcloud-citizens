@@ -104,8 +104,15 @@ def table_readiness(
     help_requested: str | None = None,
     consent_missing: bool = False,
     consent_refused: bool = False,
+    nothing_left: bool = False,
 ) -> TableReadiness:
     """Decide from the monitor's per-recorder entries.
+
+    `nothing_left`: the round is over and no recording of this table is still
+    open — there is nothing this table could be asked to record, so its
+    phones' last heartbeats (minutes old once they closed the page) are not
+    a problem to flag. Until 2026-10-14 a finished table read "cannot
+    record · phone not answering" on the Live tab.
 
     Each entry: {slot, connected, status: <heartbeat payload>, recording:
     {state, live_source} | None} — see services/rounds._table_recorders.
@@ -121,6 +128,8 @@ def table_readiness(
         hand = [Reason(PARTICIPANT_CONSENT_MISSING, BLOCKER), *hand]
     if consent_refused:
         hand = [Reason(PARTICIPANT_REFUSED, BLOCKER), *hand]
+    if nothing_left:
+        return TableReadiness(READY, hand)
     if not recorders:
         return TableReadiness(BLOCKED, [Reason(NO_RECORDER, BLOCKER), *hand])
 

@@ -17,6 +17,7 @@ from citizens.services import help as help_svc
 from citizens.services import job_failures, readiness
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import live_stt_snapshot
+from citizens.services.recording import OPEN_STATES
 from citizens.services.table_recordings import coverage, slot_label
 
 log = get_logger(__name__)
@@ -86,8 +87,15 @@ def _table_recorders(
     for recording in recordings:  # newest first
         slot = slot_of_session.get(recording.recorder_session_id or "", 1)
         recording_by_slot.setdefault(slot, recording)
+    # the round is over: a recorder without a recording has nothing left to do
+    round_over = round_.status not in ("NOT_STARTED", "ACTIVE")
     recorders = []
     for slot, recorder_session in sorted(newest_by_slot.items()):
+        finished = (
+            recording.state not in ("CREATED", "RECORDING")
+            if (recording := recording_by_slot.get(slot)) is not None
+            else round_over
+        )
         age = (
             (now - recorder_session.last_status_at).total_seconds()
             if recorder_session.last_status_at is not None
@@ -101,6 +109,14 @@ def _table_recorders(
                 "connected": age is not None and age < STALE_HEARTBEAT_SECONDS,
                 "seconds_since_contact": int(age) if age is not None else None,
                 "status": json.loads(recorder_session.last_status_json or "{}"),
+                # this recorder is done: its last heartbeat is history, not a
+                # problem (the Live tab shows "finished HH:MM" instead)
+                "finished": finished,
+                "finished_at": (
+                    recording.ended_at.isoformat()
+                    if recording is not None and recording.ended_at is not None
+                    else None
+                ),
                 "recording": None
                 if recording is None
                 else {
@@ -225,6 +241,10 @@ def round_monitor(session: Session, round_: Round) -> dict:
             help_requested=(hands.get(table.number) or {}).get("kind"),
             consent_missing=consent_required and consent["consenting"] == 0,
             consent_refused=consent.get("refusing", 0) > 0,
+            nothing_left=round_.status not in ("NOT_STARTED", "ACTIVE")
+            and not any(
+                r["recording"] and r["recording"]["state"] in OPEN_STATES for r in recorders
+            ),
         )
 
         tables.append(
