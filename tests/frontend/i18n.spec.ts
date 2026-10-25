@@ -10,10 +10,16 @@
  * on a phone during an assembly.
  */
 import { describe, expect, it } from 'vitest'
-import en from '../../frontend/src/i18n/en.json'
-// named `italian`, not `it`: that would shadow vitest's own it()
-import italian from '../../frontend/src/i18n/it.json'
 import { DEFAULT_LOCALE, i18n, resolveLocale, SUPPORTED_LOCALES } from '../../frontend/src/i18n'
+import { installOrganizerCatalogue, organizerCatalogues as catalogues } from '../../frontend/src/i18n/organizer'
+
+installOrganizerCatalogue()
+
+// the merged catalogues: the shared file plus every organizer fragment, so a
+// key added to one area's English and not its Italian fails here too
+const en = catalogues.en
+// named `italian`, not `it`: that would shadow vitest's own it()
+const italian = catalogues.it
 
 function flatten(value: unknown, prefix = ''): string[] {
 	if (typeof value !== 'object' || value === null) return [prefix]
@@ -47,8 +53,11 @@ describe('the catalogues', () => {
 	})
 
 	it('keeps the same interpolation placeholders in both languages', () => {
+		// the SET of names: a language may spell a plural out in three branches
+		// ("{count} tavoli | {count} tavolo | {count} tavoli") where the other
+		// keeps one string — what must agree is which values are interpolated
 		const placeholders = (text: string) =>
-			(text.match(/\{[a-zA-Z0-9_]+\}/g) ?? []).sort().join(',')
+			[...new Set(text.match(/\{[a-zA-Z0-9_]+\}/g) ?? [])].sort().join(',')
 
 		for (const key of flatten(en)) {
 			const read = (catalogue: unknown) =>

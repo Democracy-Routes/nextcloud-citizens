@@ -2,28 +2,119 @@
 
 All notable changes to Nextcloud Citizens.
 
-## Unreleased
+## 0.7.0-beta.1 — 2026-10-16
 
-- **A ten-table rehearsal can be run against an instance we do not
-  administer.** `tests/load/load_i_remote_tables.py` takes the QR links — from
-  a file or straight out of the printed sheet, which puts each address in text
-  under its code — and drives ten virtual phones through the public recorder
-  API alone: ten-second chunks on an absolute schedule, heartbeats, the
-  eight-second status poll, caption polls, the device log, and `--interrupt N`
-  tables that stop mid-round and resume in the same recording as a second
-  segment. It verifies from outside what only a server can confirm: that the
-  `audio_manifest_sha256` it publishes equals the one computed from the bytes
-  we sent, and that an interrupted table's assembled audio is the round minus
-  the gap. Tests F, G and H all need this machine's docker and the ExApp
-  secret; this one needs neither, which is the point — the proxy, the PHP
-  workers and the speech-to-text account that break at ten tables belong to
-  whoever runs the instance. It refuses a build older than 0.6.2, refuses an
-  assembly that does not look like a test, joins sequentially and never
-  retries a 4xx (the public route reports those to Nextcloud's brute-force
-  protection against the caller), and stops the whole run once the server
-  starts failing rather than holding somebody's instance down. Audio comes
-  from our own test recordings, chosen by assembly name and never by duration.
-  Operators' side: `docs/remote-load-test.md`.
+Citizens 0.7 started on the `feature/0.7` branch; `main` immediately before
+this work is tagged `pre-0.7-baseline`, and 0.6.2 stays the published release
+until this one ships. The direction: a Session is the atomic unit and an
+Assembly an optional container around several of them; a Table has one or
+more Recorder phones with one live-caption source; a facilitator can carry a
+phone of their own beside the recorders. The recorder engine, storage,
+ownership, retention and export paths are extended, not rewritten.
+
+### For the organizer
+
+- Home opens on three actions — Record now, Start a Session, Create an
+  Assembly — instead of the first assembly it finds, and a Session can grow
+  into an Assembly later without losing its tables, codes or report.
+- An assembly's tabs are grouped as Plan → Run → Results under a timeline of
+  its sessions, and the organizer UI now speaks Italian as well as English.
+- Rename an assembly or a session from the pencil on its own header; change
+  an assembly's language even after recording has begun — every recording
+  with audio is transcribed again, refused while a session is recording or
+  once zero retention has run.
+- Tables can be added mid-event, coloured for the room, and remixed between
+  sessions (new people, continuity, or a plain shuffle).
+- A phone report on the Files tab — browser, wake lock, chunks captured
+  while hidden, gaps — also as `GET /assemblies/{id}/device-report`, the same
+  analysis the host script used in rehearsals prints.
+- A failed synthesis or cross-table analysis is shown on the Report tab, with
+  its reason, instead of failing silently.
+- Narrative synthesis across sessions, and speaking balance per table and
+  across tables, on the Report and Analysis tabs.
+- A pre-registration link for participants to register ahead of the table,
+  "Already registered? Find your name" at the door, and a consent register
+  (CSV/PDF) of every act ever recorded.
+- Advanced per-recorder diagnostics on the Live tab, a link beside every QR
+  code, a printed A5 event kit per table, and Settings that save only the
+  fields you changed.
+
+### At the table
+
+- A table can run several recorder phones at once; only one feeds the live
+  captions, and the captions pass to another if it stops.
+- The facilitator's own phone follows the table: the question, who has
+  registered, the recorders' health, the organizer's messages, a prompt to
+  send, and a hand to raise — joined by its own QR code, never a recorder.
+- An opt-in AI assistant nudges a table a few times a session at most — time
+  running out, a silence, one voice dominating — routed to the facilitator
+  first; three thumbs-down silence it there for that session.
+- "No audio has reached the server" is its own readiness warning, with a
+  tone the organizer can hear and a coverage percentage per recording.
+- Record now has no planned time: no countdown, no auto-finish. Its done
+  screen offers Record another session, and a phone's own single-use code
+  still works if scanned again by the same phone; once analysed, the AI
+  names the session from what was actually said.
+- A recorder that sends nothing for five minutes is finished by the server
+  with the audio already received; an organizer can also Finish one table's
+  recording from the Live tab. Either way, audio that phone sends afterwards
+  is kept, transcribed, and folded back into the table's analysis.
+- A dying phone's battery prompts for a backup recorder before it dies; a
+  dead phone's table can be handed to any other phone, or taken over
+  automatically.
+- Participants can validate their own table's summary once the report is
+  published, and raise a hand for technical help, the organizer, or a
+  question about the process.
+
+### Privacy and retention
+
+- Individual consent is recorded per person, with a refusal rule: one seated
+  refusal blocks the whole table from recording until they are moved or
+  change their mind.
+- Consent acts are append-only — changed their mind, withdrew, moved to
+  another table — the newest always counts, and nothing already recorded is
+  overwritten.
+- Zero retention: an assembly can be set to keep only its report. Once
+  closed and fully processed, its audio, transcripts and live-caption files
+  are deleted outright and a PDF of the frozen report is kept instead — this
+  cannot be undone, and the assembly can never be reopened afterwards.
+- One consent notice, rendered by the server from Settings and the live
+  configuration, with the organization's own details and the providers
+  actually selected; registration from the table's phone or the participant's
+  own, with a page of their own record.
+- Phone, facilitator and participant sessions that never recorded, and spent
+  single-use codes, are cleaned up a week after they expire.
+
+### Operations
+
+- Migrations `0037` (recording close and late-audio continuation) and `0038`
+  (zero retention); roll back with `alembic downgrade 0036` and the previous
+  image.
+- `scripts/pytest-chunks.sh` runs the whole Python suite across six
+  containers at once, against a snapshot of the tree.
+- A finding cites at most six quotations, and a table transcript longer than
+  roughly 180,000 characters is cut for the analysis prompt, logged when it
+  happens.
+- A ten-table rehearsal can be run against an instance from outside, over
+  the public recorder API alone, without that instance's own Docker access.
+
+### Fixes
+
+- Live captions survive a change of phone — a backup promoted, a takeover —
+  instead of decoding nothing for the rest of the session.
+- The live-caption source follows whichever recorder is actually sending
+  audio, not whichever one is still on screen.
+- A quiet phone no longer costs the caption connection; the recorder tells
+  the organizer how many seconds it missed while hidden, and each recording
+  carries its own coverage percentage.
+- A table added between sessions joins only the sessions still to come; a
+  participant's full name becomes one pseudonym, not one per word; a
+  spontaneous table's "New table" is refused inside an organized assembly,
+  where the organizer's own plan decides the tables.
+- Vocabulary: a Round is a Session (Sessione N) wherever people read it,
+  the software is the "AI assistant" — "facilitator" is only ever the
+  person at the table — quotations are never excerpts, and reseating
+  between sessions is "New seating".
 
 ## 0.6.2 — 2026-09-29
 

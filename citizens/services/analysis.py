@@ -20,10 +20,13 @@ from citizens.db.models import (
     Transcript,
     TranscriptSegment,
 )
+from citizens.db.models.base import utcnow
 from citizens.domain.analysis_schemas import RoundAnalysis, TableAnalysis
 from citizens.logging_setup import get_logger
-from citizens.providers.analysis.openai_compat import AnalysisError, chat_json
+from citizens.providers.analysis.openai_compat import AnalysisError, _chat, chat_json
 from citizens.services import provider_config, pseudonyms
+from citizens.services.audit import record_audit_event
+from citizens.services.table_recordings import recordings_for_table, recordings_overlap
 
 log = get_logger(__name__)
 
@@ -70,6 +73,18 @@ def _timestamp(seconds: float) -> str:
     return f"{int(seconds // 60):02d}:{int(seconds % 60):02d}"
 
 
+def _objective_line(round_: Round | None) -> str:
+    """The session's objective as a prompt line, or nothing when none is stated.
+
+    The question says what the discussion is about; the objective says what it
+    should produce ("three concrete proposals"). Legacy rounds have none, and
+    the prompt must then read exactly as it did before the field existed.
+    """
+    if round_ is None or not round_.objective:
+        return ""
+    return f"Session objective: {round_.objective}\n"
+
+
 def _analysis_config(store: provider_config.ConfigStore) -> tuple[str, str, str]:
     key = store.get_value("analysis_api_key")
     if not key:
@@ -93,6 +108,7 @@ Rules:
 - "type" is one of: proposal, agreement, disagreement, concern, question,
   minority_position, new_idea.
 - "support" (optional) is one of: strong, mixed, weak, unclear.
+- Cite at most 6 evidence_segment_ids per finding: the clearest ones.
 - EVERY finding MUST cite at least one evidence_segment_ids value copied
   EXACTLY from the segment ids in the transcript. Never invent ids.
 - Only report what participants actually said. Do not invent content.
@@ -129,6 +145,80 @@ Rules:
 - Never mention speaker labels such as SPEAKER_03 in titles or summaries;
   write "a participant" or "some participants" instead.
 - Write everything in {language}."""
+
+
+ASSEMBLY_SYSTEM = """You are an analyst supporting an in-person citizens' assembly.
+The assembly ran several sessions in order, each with a question and, often,
+an objective. You describe HOW THE DISCUSSION DEVELOPED across them: what the
+earlier sessions raised, what later sessions did with it, where views
+converged, what stayed unresolved, what came out at the end.
+
+Rules:
+- Respond with ONLY a JSON object: {{"narrative": "...", "stages": [{{"title": ...,
+  "summary": ...}}], "carried_forward": ["...", ...]}}
+- "narrative": a neutral account in 3-6 sentences of the arc from the first
+  session to the last.
+- "stages": one entry per session, in order, with a short title (the
+  session's own title or question) and 2-4 sentences on what that session
+  contributed to the arc. Never invent a session that was not given.
+- "carried_forward": the ideas, proposals or concerns that reappeared in a
+  later session, one short phrase each; empty when nothing did.
+- Never state or imply percentages of participant support; tables are not
+  votes, and recurrence is not agreement.
+- Never mention speaker labels such as SPEAKER_03; write "participants".
+- Write everything in {language}."""
+
+
+def analyze_assembly(
+    session: Session, store: provider_config.ConfigStore, assembly: Assembly
+) -> dict:
+    """How the discussion developed across the assembly's sessions, from the
+    sessions' summaries and approved cross-table findings. Stored on the
+    assembly as JSON and printed in the report after the executive summary.
+    Needs at least two sessions with a summary; returns {} otherwise."""
+    rounds = sorted(assembly.rounds, key=lambda r: r.position)
+    summarised = [r for r in rounds if r.analysis_summary]
+    if len(summarised) < 2:
+        log.info("analysis_assembly_too_few_sessions", assembly_id=assembly.id, sessions=len(summarised))
+        return {}
+    hidden = pseudonyms.name_map(session, assembly)
+    blocks = []
+    for round_ in summarised:
+        findings = list(
+            session.execute(
+                select(Finding).where(
+                    Finding.round_id == round_.id,
+                    Finding.scope == "round",
+                    Finding.status.in_(("APPROVED", "EDITED_AND_APPROVED")),
+                )
+            ).scalars()
+        )
+        lines = [
+            f"- {f.type} · {pseudonyms.redact(f.title, hidden)} (mentioned at "
+            f"{f.mentioned_table_count} tables)"
+            for f in findings[:25]
+        ]
+        blocks.append(
+            f"Session {round_.position}: {round_.title or round_.question}\n"
+            f"Question: {round_.question}\n{_objective_line(round_)}"
+            f"Summary: {pseudonyms.redact(round_.analysis_summary, hidden)[:1500]}\n"
+            + ("Approved cross-table findings:\n" + "\n".join(lines) if lines else "")
+        )
+    user_prompt = f"Assembly: {assembly.name}\n\n" + "\n\n".join(blocks)
+    language = LANGUAGE_NAMES.get(assembly.language, "English")
+    session.commit()
+    base_url, key, model = _analysis_config(store)
+    log.info("analysis_started", assembly_id=assembly.id, scope="assembly", sessions=len(summarised))
+    system_prompt = build_system_prompt(ASSEMBLY_SYSTEM, language, store, assembly.analysis_instructions)
+    from citizens.domain.analysis_schemas import AssemblySynthesis
+
+    result = chat_json(base_url, key, model, system_prompt, user_prompt, AssemblySynthesis)
+    payload = {**result.model_dump(), "model": model, "sessions": len(summarised)}
+    assembly.synthesis_json = json.dumps(payload)
+    assembly.synthesis_at = utcnow()
+    session.commit()
+    log.info("analysis_completed", assembly_id=assembly.id, scope="assembly")
+    return payload
 
 
 def build_system_prompt(
@@ -243,23 +333,23 @@ def table_recordings(session: Session, recording: Recording) -> list[Recording]:
     """Every recording of this table's discussion in this round, oldest first.
 
     Normally one. Two when the phone was replaced mid-round — one group of
-    people having one conversation with a technical interruption in the middle,
-    which is how the analysis and the report should treat it.
+    people having one conversation with a technical interruption in the middle
+    — or when a second recorder was added to the table and both ran side by
+    side. services/table_recordings.py is the home of this; kept here for the
+    callers that already use it.
     """
-    return list(
-        session.execute(
-            select(Recording)
-            .where(
-                Recording.round_id == recording.round_id,
-                Recording.table_id == recording.table_id,
-            )
-            .order_by(Recording.created_at)
-        ).scalars()
-    )
+    return recordings_for_table(session, recording.round_id, recording.table_id)
 
 
-def analyze_table(session: Session, store: provider_config.ConfigStore, recording: Recording) -> int:
+def analyze_table(
+    session: Session, store: provider_config.ConfigStore, recording: Recording,
+    keep_approved: bool = False,
+) -> int:
     """Extract findings for one table's discussion; returns stored finding count.
+
+    keep_approved: this run was not asked for by anybody — audio arrived after
+    a server-side close — so the findings the organizer already approved stay,
+    the model is told about them, and only drafts are replaced.
 
     Analyses the TABLE, not the recording. A table whose phone was replaced has
     two recordings, and analysing each separately would produce two competing
@@ -301,10 +391,17 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     hidden = pseudonyms.name_map(session, assembly) if assembly else {}
 
     lines: list[str] = []
-    if assembly is not None and assembly.recording_mode == "plenary" and len(siblings) > 1:
-        # The whole room on many phones: one discussion, overlapping captures.
-        # Merge and dedupe into a single timeline rather than concatenating the
-        # devices back to back (which would count each statement once per phone).
+    side_by_side = len(siblings) > 1 and (
+        (assembly is not None and assembly.recording_mode == "plenary")
+        or recordings_overlap(siblings)
+    )
+    if side_by_side:
+        # Several phones on one discussion at the same time — the whole room in
+        # plenary, or a table with more than one recorder: overlapping captures
+        # of the same words. Merge and dedupe into a single timeline rather than
+        # concatenating the devices back to back (which would count each
+        # statement once per phone). Recordings that FOLLOW one another (a phone
+        # replaced, "record the rest") are concatenated below instead.
         for block in merge_plenary_segments(siblings, transcripts):
             lines.append(
                 f"[{'|'.join(block['ids'])}] {block['speaker'] or 'SPEAKER'} "
@@ -321,11 +418,20 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
                 f"{pseudonyms.redact(block['text'], hidden)}"
                 for block in coalesce_segments(list(transcript.segments))
             )
+    kept_titles = _approved_titles(session, siblings) if keep_approved else []
+    lines = _cap_transcript_lines(lines, primary.id)
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title if round_ else ''}\n"
+        f"{_objective_line(round_)}"
         f"Table number: {recording.table_number}\n\n"
-        "Transcript segments (format: [segment ids] SPEAKER (start-end): text):\n"
+        + (
+            "Findings already approved for this table, which stay as they are — do not "
+            "repeat them; report only what is NEW in the transcript:\n"
+            + "\n".join(f"- {title}" for title in kept_titles) + "\n\n"
+            if kept_titles else ""
+        )
+        + "Transcript segments (format: [segment ids] SPEAKER (start-end): text):\n"
         + "\n".join(lines)
     )
 
@@ -352,7 +458,7 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
         if not evidence_ids:
             dropped += 1
             continue  # a finding without real evidence is INVALID (brief §38)
-        usable.append((item, evidence_ids))
+        usable.append((item, _first_evidence(evidence_ids, segments)))
 
     if not usable and _table_has_findings(session, siblings):
         # The same transcript gave findings last time and none now. At the
@@ -373,8 +479,12 @@ def analyze_table(session: Session, store: provider_config.ConfigStore, recordin
     # nothing: PermanentJobError does not roll back (see jobs/runner.py). The
     # delete and the inserts below are one transaction, so re-analysis either
     # replaces the findings or leaves them untouched.
-    _delete_table_findings(session, siblings)
+    _delete_table_findings(session, siblings, keep_approved=keep_approved)
     _set_table_summary(siblings, primary, result.summary)
+    if assembly is not None and round_ is not None:
+        _name_record_now_session(
+            session, base_url, key, model, assembly, round_, result.summary, language
+        )
 
     stored = 0
     for item, evidence_ids in usable:
@@ -471,6 +581,7 @@ def analyze_round(session: Session, store: provider_config.ConfigStore, round_: 
     user_prompt = (
         f"Assembly: {assembly.name if assembly else ''}\n"
         f"Round question: {round_.question or round_.title}\n"
+        f"{_objective_line(round_)}"
         f"Tables that produced findings: {total_tables}\n\n"
         "Table findings (format: [finding id] table N · type · title: summary):\n"
         + "\n".join(lines)
@@ -534,15 +645,141 @@ def _table_has_findings(session: Session, siblings: list[Recording]) -> bool:
     ).first() is not None
 
 
-def _delete_table_findings(session: Session, siblings: list[Recording]) -> None:
+APPROVED_STATUSES = ("APPROVED", "EDITED_AND_APPROVED")
+
+#: quotations per finding in the report (R18): the model is asked for this
+#: many (the number is written into TABLE_SYSTEM) and anything beyond it is
+#: cut in transcript order — a theme backed by forty segments printed forty
+#: quotations and read as a transcript dump
+MAX_EVIDENCE_PER_FINDING = 6
+#: what one table's prompt may carry; a three-hour table on a verbose
+#: engine exceeded the provider's context and failed with nothing to show
+MAX_TRANSCRIPT_CHARS = 180_000
+
+
+def _first_evidence(evidence_ids: set[str], segments) -> set[str]:
+    """The first MAX_EVIDENCE_PER_FINDING of the cited segments, in the
+    order they were spoken."""
+    order = {segment.id: index for index, segment in enumerate(segments)}
+    kept = sorted(evidence_ids, key=lambda eid: order.get(eid, 0))[:MAX_EVIDENCE_PER_FINDING]
+    return set(kept)
+
+
+def _cap_transcript_lines(lines: list[str], recording_id: str) -> list[str]:
+    """Keep the prompt under MAX_TRANSCRIPT_CHARS: the beginning of the
+    discussion stays, what follows is cut and the model is told so."""
+    total = 0
+    for index, line in enumerate(lines):
+        total += len(line) + 1
+        if total > MAX_TRANSCRIPT_CHARS:
+            omitted = len(lines) - index
+            log.warning(
+                "analysis_transcript_truncated", recording_id=recording_id,
+                kept_lines=index, omitted_lines=omitted,
+            )
+            return [*lines[:index], f"[transcript truncated here: {omitted} later segments omitted]"]
+    return lines
+
+TITLE_SYSTEM = (
+    "You name a recorded discussion from its summary. Answer with a JSON object "
+    '{{"title": "..."}} whose title has at most eight words in {language}, no final period.'
+)
+
+
+def _title_from_answer(answer: str) -> str:
+    """The title out of what the model said: a JSON object (the analysis
+    provider runs in JSON mode, so that is the usual shape — stored raw it
+    read {"title": ...} in the sidebar on 2026-10-13), or plain text."""
+    import json
+
+    raw = (answer or "").strip()
+    if raw.startswith("{"):
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return ""
+        value = parsed.get("title") if isinstance(parsed, dict) else None
+        raw = value if isinstance(value, str) else ""
+    title = " ".join(raw.strip().strip('"\u201c\u201d\'').rstrip(".").split())
+    if not title or len(title) > 120 or title.startswith("{") or '":' in title:
+        return ""
+    return title
+
+
+def _name_record_now_session(
+    session: Session, base_url: str, key: str, model: str,
+    assembly: Assembly, round_: Round, summary: str, language: str,
+) -> None:
+    """A Record-now session was named after the clock (R16): once its first
+    table is analysed, the model names it after what was said — the sidebar
+    then reads "Parking in the old town" instead of "Recording 2026-10-15
+    09:12 UTC". Only a Session with no question and no title of its own, only
+    once, and never fatal: a title is a courtesy, the analysis is the record."""
+    if assembly.kind != "session" or round_.question or round_.title or not summary.strip():
+        return
+    if not assembly.name.startswith("Recording "):
+        return  # the organizer already renamed it
+    try:
+        answer = _chat(
+            base_url, key, model,
+            [
+                {"role": "system", "content": TITLE_SYSTEM.format(language=language)},
+                {"role": "user", "content": summary.strip()[:2000]},
+            ],
+        )
+    except Exception:
+        log.warning("session_title_failed", assembly_id=assembly.id, exc_info=True)
+        return
+    title = _title_from_answer(answer)
+    if not title:
+        return
+    round_.title = title
+    assembly.name = title
+    session.flush()
+    record_audit_event(
+        session, "session_titled", "assembly", assembly.id,
+        data={"title": title, "round_id": round_.id, "model": model},
+    )
+    log.info("session_titled", assembly_id=assembly.id, title=title)
+
+
+def _delete_table_findings(
+    session: Session, siblings: list[Recording], keep_approved: bool = False
+) -> None:
     """Clear this table's findings across every recording it has.
 
     A replaced phone leaves findings attributed to the earlier recording; a
     re-analysis that only cleared the current one would leave those behind as
-    duplicates nobody could account for.
+    duplicates nobody could account for. With keep_approved (a late-audio
+    re-run nobody asked for) the approved ones stay — the model was told not
+    to repeat them.
     """
     for sibling in siblings:
-        _delete_existing(session, recording_id=sibling.id, scope="table")
+        if not keep_approved:
+            _delete_existing(session, recording_id=sibling.id, scope="table")
+            continue
+        drafts = session.execute(
+            select(Finding).where(
+                Finding.scope == "table",
+                Finding.recording_id == sibling.id,
+                Finding.status.notin_(APPROVED_STATUSES),
+            )
+        ).scalars()
+        for finding in drafts:
+            session.delete(finding)
+    session.flush()
+
+
+def _approved_titles(session: Session, siblings: list[Recording]) -> list[str]:
+    return list(
+        session.execute(
+            select(Finding.title).where(
+                Finding.scope == "table",
+                Finding.recording_id.in_([sibling.id for sibling in siblings]),
+                Finding.status.in_(APPROVED_STATUSES),
+            )
+        ).scalars()
+    )
 
 
 def _set_table_summary(siblings: list[Recording], primary: Recording, summary: str) -> None:

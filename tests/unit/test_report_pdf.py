@@ -119,3 +119,4 @@ def test_qr_sheet_survives_no_invites_and_a_bad_logo(tmp_path):
     card = [SimpleNamespace(table_number=1, url="https://example.test/#/join/x")]
     # a broken logo must cost the logo, never the sheet
     assert render_qr_sheet("Assembly", card, broken, "Org").startswith(b"%PDF")
+

@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiAccountVoice,
 	mdiBroadcast,
 	mdiCheckCircle,
 	mdiCloudUploadOutline,
@@ -12,21 +13,43 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { useI18n } from 'vue-i18n'
-import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { setLocale } from '../../i18n'
+import { clockTime } from '../../format'
+import {
+	type TableConsent,
+	recorderApi,
+	type AiFacilitatorState,
+	type AiLevel,
+	type HelpState,
+	type JoinResult,
+	type RecorderStatus,
+	type RoundInfo,
+} from '../api'
 import { audioExtension, saveLocalAudio, saveNoteKey, type LocalAudio } from '../saveAudio'
 import { captionFooter, updateHistory, type CaptionFooter, type CaptionHistory } from '../captionState'
 import AddDeviceQr from './AddDeviceQr.vue'
+import BatteryHandover from './BatteryHandover.vue'
+import HelpButton from './HelpButton.vue'
+import MessageBanner from './MessageBanner.vue'
+import TableBadge from './TableBadge.vue'
+import TableBar from './TableBar.vue'
+import { batteryPrompt } from '../batteryPrompt'
+import { desktopBrowser } from '../platform'
+import { play, setSoundLevel, soundLevel, type SoundLevel } from '../sounds'
+import { useTableMessages } from '../useTableMessages'
 import { MicrophoneError } from '../errors'
 import { idb } from '../idb'
 import { clientLog, ship } from '../logger'
 import { useWakeLock, wakeLockHeld } from '../useWakeLock'
-import { clearSynchronizedRecordings, RecorderEngine } from '../engine'
+import { clearSynchronizedRecordings, readBatteryLevel, RecorderEngine } from '../engine'
 
 const props = defineProps<{ session: JoinResult; round: RoundInfo }>()
 const emit = defineEmits<{
 	exit: []
 	nextRound: [round: RoundInfo]
 	viewReport: []
+	/** show the code a facilitator's own phone scans to follow this table */
+	facilitator: []
 	/** recording could not be started for THIS round — armed must not
 	 * immediately send the table straight back in, whatever the cause */
 	startFailed: [roundId: string]
@@ -53,6 +76,105 @@ const clearedNote = ref('')
 const orchestrated = props.session.assembly.recording_mode === 'orchestrated'
 const plenary = props.session.assembly.recording_mode === 'plenary'
 const showAddDevice = ref(false)
+
+// The table as a whole — how many recorder phones, whose captions the room
+// reads. From the join snapshot first, refreshed by the status poll.
+const tableInfo = ref(props.session.table ?? null)
+// which recorder carries the captions while this phone is a backup
+const liveSourceLabel = ref<string | null>(null)
+/** this table's consent state from the status poll: a refusal seated here
+ * after recording began is said on screen until it is resolved */
+const consent = ref<TableConsent | null | undefined>(props.session.consent)
+const refusedAtTable = computed(() => !!consent.value && (consent.value.refusing ?? 0) > 0)
+const takingOver = ref(false)
+
+/** This phone's own recording, finished server-side without it tapping
+ * Finish (the silence sweep, or the organizer) — or asked to finish. Kept
+ * across polls so the card stays up until OK is tapped. */
+const serverClosedNotice = ref<NonNullable<RecorderStatus['recording_notice']> | null>(null)
+// tapped away; a NEW closed_at (a later close than the one shown) reopens it
+const serverClosedHidden = ref(false)
+let lastNoticeClosedAt: string | null | undefined
+// finish() is a side effect the server already knows about — called at most
+// once per recording, whichever of the two notices triggers it first
+const finishCalledForRecording = ref<string | null>(null)
+
+// A dying phone asks for a backup while there is still time to add one. The
+// battery is read here as the heartbeat reads it (Chromium only; elsewhere
+// "unknown" and the card never shows); the bar's Add recorder sheet is the
+// handover code, opened one tap closer.
+const batteryLevel = ref<number | undefined>(undefined)
+const handover = computed(() =>
+	plenary ? 'none' : batteryPrompt(batteryLevel.value, tableInfo.value?.recorders),
+)
+const bar = ref<InstanceType<typeof TableBar> | null>(null)
+let batteryTimer = 0
+
+// "5 minutes left" from the organizer, riding the round poll below
+const messages = useTableMessages(props.session.session_token)
+// this table's hand, as the server has it
+const help = ref<HelpState | null | undefined>(undefined)
+
+// Cues the table hears: recording started / stopped / resumed. A spontaneous
+// session defaults to quiet, an assembly to normal; the tech sheet changes it.
+const sounds = ref<SoundLevel>(soundLevel(props.session.assembly.kind === 'session' ? 'quiet' : 'normal'))
+
+/* ---- the AI facilitator at this table: the status poll says the effective
+ * level; the tech sheet's buttons set the table's own level (or follow the
+ * assembly again). Nothing here touches capture. */
+const ai = ref<AiFacilitatorState | null>(null)
+const aiBusy = ref(false)
+async function chooseAi(level: AiLevel | 'default'): Promise<void> {
+	if (aiBusy.value) return
+	aiBusy.value = true
+	try {
+		ai.value = await recorderApi.setFacilitatorLevel(props.session.session_token, level)
+	} catch {
+		/* the next poll says */
+	} finally {
+		aiBusy.value = false
+	}
+}
+function rateMessage(messageId: number, helpful: boolean): void {
+	void recorderApi.messageFeedback(props.session.session_token, messageId, helpful).catch(() => undefined)
+}
+function chooseSounds(level: SoundLevel): void {
+	sounds.value = level
+	setSoundLevel(level)
+	if (level !== 'off') play('message', level)
+}
+// "● Recording started", shown for a couple of seconds with the start cue
+const startedBanner = ref(false)
+let bannerTimer = 0
+function announceStart(): void {
+	play('start', sounds.value)
+	startedBanner.value = true
+	window.clearTimeout(bannerTimer)
+	bannerTimer = window.setTimeout(() => (startedBanner.value = false), 2500)
+}
+// the microphone came back after an interruption: the same rising tone
+watch(
+	() => state.captureInterrupted,
+	(interrupted, before) => {
+		if (before && !interrupted && state.phase === 'recording') play('resume', sounds.value)
+	},
+)
+
+/** This phone takes over its table's live captions. The other recorder keeps
+ * recording; only its caption session ends. */
+async function takeOverCaptions(): Promise<void> {
+	if (!state.recordingId || takingOver.value) return
+	takingOver.value = true
+	try {
+		await recorderApi.promoteLiveSource(props.session.session_token, state.recordingId)
+		captionState.value = 'waiting'
+		captionHistory = { sawLines: false, consecutiveInactive: 0 }
+	} catch {
+		/* the footer keeps saying who has the captions; the next poll tells the truth */
+	} finally {
+		takingOver.value = false
+	}
+}
 
 // How long "Keep talking" holds off the auto-finish before it re-arms. Long
 // enough to finish a thought; bounded, so a table that taps it and walks away
@@ -190,6 +312,9 @@ function watchForNextRound(): void {
 	const poll = async () => {
 		try {
 			const status = await recorderApi.status(props.session.session_token)
+			if (status.table) tableInfo.value = status.table
+			help.value = status.help
+			if (status.assembly?.language) setLocale(status.assembly.language)
 			reportAvailable.value = status.report_available ?? false
 			assemblyClosed.value = status.assembly_closed ?? false
 			currentRoundOpen.value =
@@ -289,6 +414,14 @@ const interruptedSeconds = computed(() =>
 	Math.round(state.interruptions.reduce((sum, gap) => sum + (gap.to - gap.from), 0) / 1000),
 )
 
+/** Audio the phone did not capture while the page was hidden (engine
+ * hiddenGapMs): said in red until somebody at the table has read it, and
+ * said again, with the new total, if it happens again. */
+const hiddenGapSeconds = computed(() => Math.round((state.hiddenGapMs ?? 0) / 1000))
+const hiddenGapSeen = ref(0)
+/** a computer's browser: it may stop capturing when the tab is not in front */
+const desktop = desktopBrowser()
+
 /** The microphone was lost to the screen going off or the OS muting it —
  * not to a phone call — so the wording must not send people after a call
  * that never happened. */
@@ -322,9 +455,12 @@ onMounted(async () => {
 	clockTimer = window.setInterval(() => {
 		now.value = Date.now()
 		// independent tables run on the round's planned time: when it elapses,
-		// finish automatically (with the same cancellable grace countdown)
+		// finish automatically (with the same cancellable grace countdown).
+		// duration_minutes === 0 means no planned time at all: never finish
+		// this one by itself.
 		if (
 			!orchestrated &&
+			props.round.duration_minutes > 0 &&
 			state.phase === 'recording' &&
 			!keepTalking.value &&
 			state.startedAt &&
@@ -334,6 +470,11 @@ onMounted(async () => {
 			beginFinishCountdown()
 		}
 	}, 500)
+	const readBattery = async () => {
+		batteryLevel.value = await readBatteryLevel()
+	}
+	void readBattery()
+	batteryTimer = window.setInterval(() => void readBattery(), 30_000)
 	await beginRecording()
 	const stream = engine.mediaStream
 	if (stream) {
@@ -356,6 +497,11 @@ onMounted(async () => {
 		if (state.phase !== 'recording') return
 		try {
 			const status = await recorderApi.status(props.session.session_token)
+			messages.ingest(status)
+			help.value = status.help
+			if (status.ai_facilitator) ai.value = status.ai_facilitator
+			if (status.consent) consent.value = status.consent
+			applyRecordingNotice(status.recording_notice ?? null)
 			const current = status.rounds.find((r) => r.id === props.round.id)
 			if (current && current.status === 'ENDED') {
 				roundEnded.value = true
@@ -370,6 +516,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
 	window.clearInterval(clockTimer)
+	window.clearInterval(batteryTimer)
 	window.clearInterval(levelTimer)
 	window.clearInterval(roundPollTimer)
 	window.clearInterval(livePollTimer)
@@ -408,6 +555,7 @@ function startLivePoll(): void {
 			}
 			captionHistory = updateHistory(result, captionHistory)
 			captionState.value = captionFooter(result, captionHistory)
+			liveSourceLabel.value = result.live_source_label ?? null
 		} catch {
 			/* captions are best-effort; the footer keeps its last state */
 		}
@@ -420,8 +568,60 @@ async function finishRecording(): Promise<void> {
 	confirmFinish.value = false
 	roundEnded.value = false
 	window.clearTimeout(reprieveTimer)
+	play('stop', sounds.value)
 	await engine.finish()
 }
+
+/** Read the status poll's recording_notice: the server may have finished
+ * this phone's recording without it noticing, or be waiting on it to. The
+ * engine itself is never told anything is different — it keeps capturing
+ * under the same id — so finishing it here, once, is this screen's whole
+ * job; showing the card is the rest. */
+function applyRecordingNotice(notice: RecorderStatus['recording_notice']): void {
+	if (!notice || notice.recording_id !== state.recordingId) {
+		serverClosedNotice.value = null
+		return
+	}
+	// a NEW close reopens a card that was tapped away for an earlier one
+	if (notice.closed_at !== lastNoticeClosedAt) {
+		lastNoticeClosedAt = notice.closed_at
+		serverClosedHidden.value = false
+	}
+	serverClosedNotice.value = notice
+	const alreadyFinished = finishCalledForRecording.value === notice.recording_id
+	if (alreadyFinished || state.phase !== 'recording') return
+	if (notice.closed_by === 'organizer' || (notice.finish_requested && notice.closed_by === null)) {
+		finishCalledForRecording.value = notice.recording_id
+		void finishRecording()
+	}
+}
+
+const showServerClosedCard = computed(
+	() =>
+		!!serverClosedNotice.value &&
+		!serverClosedHidden.value &&
+		(serverClosedNotice.value.closed_by === 'silence' || serverClosedNotice.value.closed_by === 'organizer'),
+)
+
+const serverClosedText = computed(() => {
+	const notice = serverClosedNotice.value
+	if (!notice) return ''
+	if (notice.closed_by === 'organizer') {
+		return t('recorder.recording.closedOrganizer', { time: clockTime(notice.closed_at) })
+	}
+	return notice.closed_at
+		? t('recorder.recording.closedSilence', { time: clockTime(notice.closed_at) })
+		: t('recorder.recording.closedSilenceNoTime')
+})
+
+// closed_by is null here: the organizer asked, but the server has not
+// closed it yet — once it does, the card above takes over
+const showFinishRequestedLine = computed(
+	() =>
+		!!serverClosedNotice.value &&
+		serverClosedNotice.value.closed_by === null &&
+		serverClosedNotice.value.finish_requested,
+)
 
 const startBusy = ref(false)
 const startErrorIsMicrophone = ref(true)
@@ -443,6 +643,7 @@ async function beginRecording(): Promise<void> {
 			props.session.assembly.id,
 			props.session.table_number,
 		)
+		announceStart()
 	} catch (error) {
 		startError.value = error instanceof Error ? error.message : String(error)
 		// A microphone problem is the phone's owner to fix; anything else — the
@@ -483,14 +684,60 @@ async function clearSynced(): Promise<void> {
 	const cleared = await clearSynchronizedRecordings(props.session.assembly.id)
 	clearedNote.value = t('recorder.recording.clearedNote', { count: cleared }, cleared)
 }
+
+const recordAnotherBusy = ref(false)
+const recordAnotherError = ref('')
+
+/** R13 "Record another session": a standalone independent Session only ever
+ * has this one round, so once it is finished the natural next step is a
+ * brand-new Session, not another round of this container. The new link is
+ * followed exactly like any QR code — see RecorderApp's own #/join/<token>
+ * handling — leaving this finished recording (already synced) untouched. */
+async function recordAnother(): Promise<void> {
+	if (recordAnotherBusy.value) return
+	recordAnotherBusy.value = true
+	recordAnotherError.value = ''
+	try {
+		const result = await recorderApi.recordAnother(props.session.session_token, props.round.id)
+		const match = result.recorder_url.match(/#\/join\/(.+)$/)
+		if (match) window.location.hash = `#/join/${match[1]}`
+	} catch (err) {
+		recordAnotherError.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		recordAnotherBusy.value = false
+	}
+}
 </script>
 
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
+			<TableBadge :number="session.table_number" :color-key="tableInfo?.color_key ?? session.table_color" />
 			<span v-if="state.phase === 'recording'" class="rc-live">{{ t('recorder.recording.badge') }}</span>
 		</div>
+		<!-- with the start cue: everyone at the table hears and sees the moment -->
+		<p v-if="startedBanner" class="rc-started" role="status" data-test="started">
+			{{ t('recorder.recording.startedBanner') }}
+		</p>
+		<MessageBanner
+			v-if="messages.current.value"
+			:message="messages.current.value"
+			@dismiss="messages.dismiss"
+			@feedback="rateMessage(messages.current.value.id, $event)" />
+		<HelpButton
+			v-if="!plenary && session.assembly.kind !== 'session'"
+			:token="session.session_token"
+			:help="help" />
+		<!-- more than one phone records this table: say how many, and whose
+		     captions the room is reading -->
+		<p v-if="tableInfo && tableInfo.recorders > 1" class="rc-recorders">
+			{{ t('recorder.table.recorders', { count: tableInfo.recorders }) }} ·
+			{{
+				tableInfo.live_source_label
+					? t('recorder.table.liveSource', { label: tableInfo.live_source_label })
+					: t('recorder.table.noLiveSource')
+			}}
+		</p>
 
 		<div v-if="startError" class="rc-scroll">
 			<div class="rc-alert">
@@ -560,6 +807,40 @@ async function clearSynced(): Promise<void> {
 			<div v-else-if="state.phase === 'recording' && interruptedSeconds > 0" class="rc-note">
 				{{ t('recorder.recording.resumedAfter', { seconds: interruptedSeconds }) }}
 			</div>
+			<!-- the page was hidden and fewer chunks came than the time called
+			     for: that audio is gone. Red, and it stays until read. -->
+			<div v-if="hiddenGapSeconds > hiddenGapSeen" class="rc-alert" role="alert" data-test="hidden-gap">
+				{{ t('recorder.recording.hiddenGap', { seconds: hiddenGapSeconds }) }}
+				<button class="rc-btn rc-subtle" style="margin-top: 8px" data-test="hidden-gap-ok" @click="hiddenGapSeen = hiddenGapSeconds">
+					{{ t('recorder.recording.gapDismiss') }}
+				</button>
+			</div>
+			<!-- someone who refused is at this table: persistent until they are
+			     marked as moved (participants screen) or the table stops -->
+			<div v-if="refusedAtTable" class="rc-alert" role="alert" data-test="refused-alert">
+				{{ t('recorder.recording.refusedAtTable') }}
+			</div>
+			<!-- the server finished this recording without the phone noticing
+			     (the silence sweep, or the organizer from the Live tab): say so,
+			     once, until it is tapped away -->
+			<div v-if="showServerClosedCard" class="rc-alert" role="alert" data-test="server-closed">
+				{{ serverClosedText }}
+				<button
+					class="rc-btn rc-subtle"
+					style="margin-top: 8px"
+					data-test="server-closed-ok"
+					@click="serverClosedHidden = true">
+					{{ t('recorder.recording.closedOk') }}
+				</button>
+			</div>
+			<!-- the organizer asked, the server has not closed it yet: this
+			     screen is in the middle of granting it right now -->
+			<p v-else-if="showFinishRequestedLine" class="rc-note" data-test="finish-requested">
+				{{ t('recorder.recording.finishRequested') }}
+			</p>
+			<p v-if="desktop" class="rc-note" data-test="desktop-hint">
+				{{ t('recorder.recording.desktopHint') }}
+			</p>
 
 			<div class="rc-level"><div class="rc-level-fill" :style="{ width: level + '%' }"></div></div>
 
@@ -583,6 +864,46 @@ async function clearSynced(): Promise<void> {
 			</button>
 
 			<div v-if="techOpen" class="rc-card" style="padding: 8px 18px">
+				<!-- the facilitator's own phone can follow the table from mid-session too -->
+				<div class="rc-status-row">
+					<button type="button" class="rc-facilitator-link" style="margin: 0" data-test="add-facilitator" @click="emit('facilitator')">
+						<SvgIcon :path="mdiAccountVoice" :size="16" />
+						{{ t('recorder.table.addFacilitator') }}
+					</button>
+				</div>
+				<!-- the AI facilitator at this table: the table's own switch -->
+				<div v-if="ai && ai.configured" class="rc-status-row" data-test="ai-row">
+					<span class="rc-status-row__label">{{ t('recorder.recording.aiTitle') }}</span>
+					<span class="rc-sounds" role="group" :aria-label="t('recorder.recording.aiHint')">
+						<button
+							v-for="level in (['off', 'light', 'normal', 'active'] as const)"
+							:key="level"
+							type="button"
+							class="rc-sounds__opt"
+							:class="{ 'rc-sounds__opt--on': ai.level === level }"
+							:disabled="aiBusy"
+							:data-test="`ai-${level}`"
+							@click="chooseAi(level)">
+							{{ t(`recorder.recording.ai${level.charAt(0).toUpperCase() + level.slice(1)}`) }}
+						</button>
+					</span>
+				</div>
+				<!-- the table's cues, a per-phone choice -->
+				<div class="rc-status-row">
+					<span class="rc-status-row__label">{{ t('recorder.recording.sounds') }}</span>
+					<span class="rc-sounds" role="group" :aria-label="t('recorder.recording.soundsHint')">
+						<button
+							v-for="level in (['normal', 'quiet', 'off'] as const)"
+							:key="level"
+							type="button"
+							class="rc-sounds__opt"
+							:class="{ 'rc-sounds__opt--on': sounds === level }"
+							:data-test="`sounds-${level}`"
+							@click="chooseSounds(level)">
+							{{ t(`recorder.recording.sounds${level.charAt(0).toUpperCase() + level.slice(1)}`) }}
+						</button>
+					</span>
+				</div>
 				<div class="rc-status-row">
 					<span class="rc-status-row__label">
 						<SvgIcon :path="mdiDatabaseOutline" :size="19" style="color: var(--rc-muted)" />
@@ -668,7 +989,17 @@ async function clearSynced(): Promise<void> {
 			<template v-if="state.phase === 'recording'">
 				<div v-if="showLive" class="rc-card">
 					<p class="rc-eyebrow">{{ t('recorder.recording.liveTranscript') }}</p>
-					<p v-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 0.875rem; margin: 0">
+					<!-- a backup recorder: another phone at the table carries the
+					     captions; offer to take them over rather than an alarm -->
+					<template v-if="captionBlocks.length === 0 && captionState === 'backup'">
+						<p class="rc-muted" style="font-size: 0.875rem; margin: 0">
+							{{ t('recorder.recording.captionsBackup', { label: liveSourceLabel ?? '' }) }}
+						</p>
+						<button class="rc-btn rc-subtle" :disabled="takingOver" @click="takeOverCaptions">
+							{{ takingOver ? t('recorder.recording.takingOver') : t('recorder.recording.takeOverCaptions') }}
+						</button>
+					</template>
+					<p v-else-if="captionBlocks.length === 0" class="rc-muted" style="font-size: 0.875rem; margin: 0">
 						{{
 							captionState === 'capacity'
 								? t('recorder.recording.captionsCapacity')
@@ -706,7 +1037,20 @@ async function clearSynced(): Promise<void> {
 			</template>
 			</div>
 
-			<div v-if="state.phase === 'recording'" class="rc-actions">
+			<!-- the only recorder at the table, on a phone that is dying -->
+			<BatteryHandover
+				v-if="state.phase === 'recording' && handover !== 'none' && batteryLevel !== undefined"
+				:prompt="handover"
+				:level="batteryLevel"
+				@add-backup="bar?.show('ADD_RECORDER_TO_TABLE')" />
+
+			<!-- New table | Finish | Add recorder — the sides step back while recording -->
+			<TableBar
+				v-if="state.phase === 'recording'"
+				ref="bar"
+				:session="props.session"
+				:round-id="props.round.id"
+				quiet>
 				<button v-if="!confirmFinish" class="rc-btn" @click="confirmFinish = true">
 					{{ t('recorder.recording.finishButton') }}
 				</button>
@@ -717,7 +1061,7 @@ async function clearSynced(): Promise<void> {
 						{{ t('recorder.recording.keepRecording') }}
 					</button>
 				</template>
-			</div>
+			</TableBar>
 		</template>
 
 		<template v-else-if="state.phase === 'syncing'">
@@ -776,6 +1120,9 @@ async function clearSynced(): Promise<void> {
 						{{ t('recorder.recording.resumedAfter', { seconds: interruptedSeconds }) }}
 					</p>
 					<p v-if="clearedNote" class="rc-muted">{{ clearedNote }}</p>
+					<p v-if="recordAnotherError" class="rc-alert" role="alert" data-test="record-another-error">
+						{{ recordAnotherError }}
+					</p>
 
 					<div
 						v-if="currentRoundOpen && orchestrated && !nextRound"
@@ -797,7 +1144,11 @@ async function clearSynced(): Promise<void> {
 					</div>
 					<div v-else-if="nextRound" class="rc-card" style="text-align: left; margin-top: 20px">
 						<p class="rc-eyebrow" style="margin-bottom: 4px">
-							{{ t('recorder.recording.nextRound', { position: nextRound.position, minutes: nextRound.duration_minutes }) }}
+							{{
+								nextRound.duration_minutes > 0
+									? t('recorder.recording.nextRound', { position: nextRound.position, minutes: nextRound.duration_minutes })
+									: t('recorder.recording.noPlannedTime')
+							}}
 						</p>
 						<p class="rc-question" style="margin: 0">
 							{{ nextRound.question || nextRound.title }}
@@ -830,7 +1181,8 @@ async function clearSynced(): Promise<void> {
 				</div>
 			</div>
 
-			<div class="rc-actions">
+			<!-- the done screen keeps the same bar: a table can still grow -->
+			<TableBar :session="props.session" :round-id="props.round.id">
 				<button
 					v-if="nextRound && !orchestrated"
 					class="rc-btn rc-record"
@@ -848,6 +1200,16 @@ async function clearSynced(): Promise<void> {
 				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('viewReport')">
 					{{ t('recorder.armed.viewReport') }}
 				</button>
+				<!-- a standalone Record now session, finished: the next discussion
+				     is a brand-new one, not another round of this container -->
+				<button
+					v-if="session.assembly.kind === 'session' && session.assembly.recording_mode === 'independent'"
+					class="rc-btn rc-record"
+					data-test="record-another"
+					:disabled="recordAnotherBusy"
+					@click="recordAnother">
+					{{ t('recorder.recording.recordAnother') }}
+				</button>
 				<!-- only when the SERVER confirmed it: this deletes the copy that
 				     would otherwise be the last one -->
 				<button
@@ -856,7 +1218,7 @@ async function clearSynced(): Promise<void> {
 					@click="clearSynced">
 					{{ t('recorder.recording.clearAudio') }}
 				</button>
-			</div>
+			</TableBar>
 		</template>
 
 		<template v-else-if="state.phase === 'failed'">

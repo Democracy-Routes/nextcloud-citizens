@@ -3,12 +3,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { mdiQrcode } from '@mdi/js'
+import { mdiAccountVoice, mdiQrcode } from '@mdi/js'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
-import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { setLocale } from '../../i18n'
+import { recorderApi, type HelpState, type JoinResult, type RoundInfo, type TableConsent } from '../api'
 import AddDeviceQr from './AddDeviceQr.vue'
+import HelpButton from './HelpButton.vue'
+import MessageBanner from './MessageBanner.vue'
+import ParticipantsLine from './ParticipantsLine.vue'
+import TableBadge from './TableBadge.vue'
+import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
 import { idb } from '../idb'
+import { useTableMessages } from '../useTableMessages'
 import { useWakeLock, wakeLockHeld } from '../useWakeLock'
 
 /*
@@ -23,7 +30,54 @@ const props = defineProps<{
 	 * or the table is stuck in a five-second failure loop with no way out */
 	blockedRoundId?: string | null
 }>()
-const emit = defineEmits<{ start: [round: RoundInfo]; back: []; report: [] }>()
+const emit = defineEmits<{
+	start: [round: RoundInfo]
+	back: []
+	report: []
+	participants: []
+	/** show the code a facilitator's own phone scans to follow this table */
+	facilitator: []
+}>()
+
+/** A2HS key: whether this device has already been shown the hint (R31).
+ * try/catch throughout — private browsing can throw on every access, and a
+ * hint nobody can dismiss for good is worse than one shown twice. */
+const A2HS_SEEN_KEY = 'citizens-recorder-a2hs-seen'
+
+function isStandalone(): boolean {
+	try {
+		if (window.matchMedia?.('(display-mode: standalone)').matches) return true
+	} catch {
+		/* matchMedia unsupported */
+	}
+	return !!(navigator as Navigator & { standalone?: boolean }).standalone
+}
+
+/** A phone running in the ordinary mobile browser tab — not standalone, and
+ * not a desktop or tablet-as-facilitator session — is the one that benefits
+ * from being added to the home screen: it survives switching apps better. */
+function isPhoneBrowser(): boolean {
+	return /iPhone|iPad|Android/.test(navigator.userAgent)
+}
+
+function a2hsAlreadySeen(): boolean {
+	try {
+		return localStorage.getItem(A2HS_SEEN_KEY) === '1'
+	} catch {
+		return false
+	}
+}
+
+const showA2hsHint = ref(!isStandalone() && isPhoneBrowser() && !a2hsAlreadySeen())
+
+function dismissA2hsHint(): void {
+	showA2hsHint.value = false
+	try {
+		localStorage.setItem(A2HS_SEEN_KEY, '1')
+	} catch {
+		/* private mode: shown again next visit, which is fine */
+	}
+}
 
 const rounds = ref<RoundInfo[]>(props.session.rounds)
 const offline = ref(false)
@@ -54,6 +108,29 @@ let heartbeatTimer = 0
 const nextRound = computed(() => rounds.value.find((r) => !r.recorded_state) ?? null)
 const allRecorded = computed(() => rounds.value.length > 0 && !nextRound.value)
 
+const recordAnotherBusy = ref(false)
+const recordAnotherError = ref('')
+
+/** R13 "Record another session": a standalone independent Session has only
+ * this one round, so once it is recorded the next step is a brand-new
+ * Session, not another round here. Followed exactly like any QR code — see
+ * RecorderApp's own #/join/<token> handling. */
+async function recordAnother(): Promise<void> {
+	const round = rounds.value[0]
+	if (!round || recordAnotherBusy.value) return
+	recordAnotherBusy.value = true
+	recordAnotherError.value = ''
+	try {
+		const result = await recorderApi.recordAnother(props.session.session_token, round.id)
+		const match = result.recorder_url.match(/#\/join\/(.+)$/)
+		if (match) window.location.hash = `#/join/${match[1]}`
+	} catch (err) {
+		recordAnotherError.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		recordAnotherBusy.value = false
+	}
+}
+
 /** Recording states in which the table has declared the round finished. */
 const FINISHED_STATES = [
 	'ASSEMBLING', 'AUDIO_READY', 'TRANSCRIBING', 'TRANSCRIBED', 'TRANSCRIPTION_FAILED',
@@ -78,10 +155,21 @@ const continuableRound = computed(
  * the shape a replaced phone leaves behind until the table is released. */
 const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
 
+// "5 minutes left" from the organizer, riding the same poll
+const messages = useTableMessages(props.session.session_token)
+// this table's hand, as the server has it
+const help = ref<HelpState | null | undefined>(undefined)
+// who registered at this table (the notice screen stays reachable from here)
+const consent = ref<TableConsent | null | undefined>(props.session.consent)
+
 async function poll(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
 		rounds.value = status.rounds
+		messages.ingest(status)
+		help.value = status.help
+		if (status.consent) consent.value = status.consent
+		if (status.assembly?.language) setLocale(status.assembly.language)
 		reportAvailable.value = status.report_available ?? false
 		assemblyClosed.value = status.assembly_closed ?? false
 		offline.value = false
@@ -135,10 +223,43 @@ onBeforeUnmount(() => {
 
 <template>
 	<div class="rc-fill">
+		<MessageBanner
+			v-if="messages.current.value"
+			:message="messages.current.value"
+			@dismiss="messages.dismiss"
+			@feedback="recorderApi.messageFeedback(session.session_token, messages.current.value.id, $event).catch(() => undefined)" />
 		<div class="rc-scroll">
 			<div class="rc-hero" style="padding-top: 16px; padding-bottom: 8px">
 				<p class="rc-eyebrow">{{ session.assembly.name }}</p>
-				<div class="rc-hero__table">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</div>
+				<div class="rc-hero__table">
+					<TableBadge :number="session.table_number" :color-key="session.table_color" hero />
+				</div>
+				<p v-if="session.table && session.table.recorders > 1" class="rc-muted" style="margin: 6px 0 0; font-size: 0.8125rem">
+					{{ t('recorder.table.recorders', { count: session.table.recorders }) }}
+				</p>
+			</div>
+			<div v-if="session.assembly.kind !== 'session'" class="rc-center">
+				<HelpButton :token="session.session_token" :help="help" />
+			</div>
+			<div class="rc-center"><ParticipantsLine :consent="consent" @open="emit('participants')" /></div>
+			<!-- someone seated here refused: the server will not start this table -->
+			<p v-if="consent && (consent.refusing ?? 0) > 0" class="rc-alert" role="alert" data-test="refused-alert">
+				{{ t('recorder.recording.refusedAtTable') }}
+			</p>
+			<div class="rc-center">
+				<button type="button" class="rc-facilitator-link" data-test="add-facilitator" @click="emit('facilitator')">
+					<SvgIcon :path="mdiAccountVoice" :size="16" />
+					{{ t('recorder.table.addFacilitator') }}
+				</button>
+			</div>
+
+			<!-- shown once per device: a phone running in the browser tab rather
+			     than installed survives switching apps worse (R31) -->
+			<div v-if="showA2hsHint" class="rc-note" data-test="a2hs-hint">
+				{{ t('recorder.armed.a2hsHint') }}
+				<button type="button" class="rc-btn rc-subtle" style="margin-top: 8px" @click="dismissA2hsHint">
+					{{ t('recorder.armed.a2hsDismiss') }}
+				</button>
 			</div>
 
 			<!-- the microphone failed for the round that is currently open: say so
@@ -208,6 +329,19 @@ onBeforeUnmount(() => {
 					<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 						{{ t('recorder.armed.viewReport') }}
 					</button>
+					<!-- a standalone Record now session, finished: offer a brand-new
+					     one rather than another round of this container -->
+					<button
+						v-if="session.assembly.kind === 'session' && session.assembly.recording_mode === 'independent'"
+						class="rc-btn rc-record"
+						data-test="record-another"
+						:disabled="recordAnotherBusy"
+						@click="recordAnother">
+						{{ t('recorder.recording.recordAnother') }}
+					</button>
+					<p v-if="recordAnotherError" class="rc-alert" role="alert" data-test="record-another-error">
+						{{ recordAnotherError }}
+					</p>
 				</div>
 			</template>
 
@@ -231,10 +365,12 @@ onBeforeUnmount(() => {
 				<div v-if="nextRound && (nextRound.question || nextRound.title)" class="rc-card">
 					<p class="rc-eyebrow" style="margin-bottom: 4px">
 						{{
-							t('recorder.common.roundAndDuration', {
-								position: nextRound.position,
-								minutes: nextRound.duration_minutes,
-							})
+							nextRound.duration_minutes > 0
+								? t('recorder.common.roundAndDuration', {
+										position: nextRound.position,
+										minutes: nextRound.duration_minutes,
+									})
+								: t('recorder.recording.noPlannedTime')
 						}}
 					</p>
 					<p class="rc-question" style="margin: 0">{{ nextRound.question || nextRound.title }}</p>
@@ -250,8 +386,15 @@ onBeforeUnmount(() => {
 			</template>
 		</div>
 
-		<div class="rc-actions">
-			<button class="rc-btn rc-subtle" @click="emit('back')">{{ t('recorder.armed.backToTest') }}</button>
-		</div>
+		<!-- New table | primary action | Add recorder: the same bar on every screen -->
+		<TableBar :session="session" :round-id="rounds.find((r) => r.status === 'ACTIVE')?.id ?? null">
+			<!-- a finished table has no microphone test to go back to -->
+			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
+				{{ t('recorder.armed.viewReport') }}
+			</button>
+			<button v-else-if="!allRecorded" class="rc-btn rc-subtle" @click="emit('back')">
+				{{ t('recorder.armed.backToTest') }}
+			</button>
+		</TableBar>
 	</div>
 </template>

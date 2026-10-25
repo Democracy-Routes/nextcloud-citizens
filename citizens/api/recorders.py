@@ -11,27 +11,29 @@ from sqlalchemy.orm import Session
 
 from citizens.api.downloads import download_headers
 from citizens.config import get_settings
-from citizens.db.models import RecorderSession, Recording
+from citizens.db.models import RecorderSession, Recording, Table
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.security.identity import CurrentUser
 from citizens.services import invites as invite_svc
-from citizens.services.assemblies import get_owned_assembly
+from citizens.services import live_source
+from citizens.services.assemblies import get_owned_assembly, get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.recording import salvage_total_chunks
 from citizens.services.recording_states import transition
+from citizens.services.table_recordings import recording_slots, recordings_for_table, slot_label
 from citizens.storage.paths import device_log_path
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # Listing invites and rendering the QR sheet are reads; the sheet in particular
 # renders a PDF, which must not hold the writer slot while tables are joining.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 @router.get("/assemblies/{assembly_id}/invites", response_model=list[schemas.InviteOut])
@@ -84,7 +86,31 @@ def release_stalled_recording(session: Session, recording: Recording, error_code
     recording.error_code = error_code
     transition(recording, "UPLOAD_INCOMPLETE")
     session.flush()
+    # a backup recorder still recording takes over the live captions
+    live_source.release(session, recording)
     LIVE_CAPTIONS.finish(recording.id)
+
+
+@router.post("/recordings/{recording_id}/promote-live-source")
+def promote_live_source(recording_id: str, user: CurrentUser, session: DB):
+    """Make this recording the one that feeds its table's live captions.
+
+    For a table with more than one recorder phone: the organizer picks which
+    one the room reads. The previous holder keeps recording; only its caption
+    session ends."""
+    recording = session.get(Recording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    get_owned_assembly(session, recording.assembly_id, user)
+    demoted = live_source.promote(session, recording)
+    record_audit_event(
+        session, "live_source_promoted", "recording", recording.id, actor=user,
+        data={"from_recording_id": demoted.id if demoted is not None else None},
+    )
+    session.flush()
+    if demoted is not None:
+        LIVE_CAPTIONS.finish(demoted.id)
+    return {"recording_id": recording.id, "live_source": True}
 
 
 @router.post("/recordings/{recording_id}/abandon-upload")
@@ -104,6 +130,67 @@ def abandon_upload(recording_id: str, user: CurrentUser, session: DB):
         data={"received_chunks": recording.received_chunks, "total_chunks": recording.total_chunks},
     )
     return {"state": recording.state}
+
+
+@router.get("/assemblies/{assembly_id}/device-report")
+def device_report(
+    assembly_id: str, user: CurrentUser, session: ReadDB,
+    format: Annotated[str, Query(pattern="^(json|text)$")] = "json",
+):
+    """What each phone's own log says about how it behaved (R17): browser,
+    wake lock, chunks captured while hidden, gaps, watchdog events — the
+    host script scripts/device-report.py, as the Files tab reads it."""
+    from fastapi.responses import PlainTextResponse
+
+    from citizens.services import device_report as report_svc
+    from citizens.services.table_recordings import slot_label
+
+    assembly = get_owned_assembly(session, assembly_id, user)
+    rows = session.execute(
+        select(RecorderSession)
+        .where(RecorderSession.assembly_id == assembly.id)
+        .order_by(RecorderSession.created_at.desc())
+    ).scalars()
+    sessions = [
+        {
+            "id": row.id, "table_number": row.table_number, "slot": row.slot,
+            "label": slot_label(row.slot), "assembly": assembly.name,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+    report = report_svc.report_for_sessions(get_settings().app_persistent_storage, sessions)
+    if format == "text":
+        return PlainTextResponse(report["text"] or "no phone has sent a log yet")
+    return report
+
+
+@router.post("/recordings/{recording_id}/finish")
+def finish_recording(recording_id: str, user: CurrentUser, session: DB):
+    """Finish a table's recording from the Live tab.
+
+    Asks the phone first: it finishes on its next poll, so every chunk it
+    holds is uploaded and verified as if somebody had tapped Finish at the
+    table. A phone that does not answer in FINISH_REQUEST_GRACE_SECONDS is
+    finished server-side by the sweep with the audio already received, and
+    whatever it sends later goes into a continuation of the same table.
+    """
+    recording = session.get(Recording, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    get_owned_assembly(session, recording.assembly_id, user)
+    if recording.state != "RECORDING":
+        raise HTTPException(status_code=409, detail=f"Recording is {recording.state}")
+    if recording.finish_requested_at is None:
+        recording.finish_requested_at = utcnow()
+        record_audit_event(
+            session, "recording_finish_requested", "recording", recording.id, actor=user,
+            data={"table_number": recording.table_number},
+        )
+    return {
+        "state": recording.state,
+        "finish_requested_at": recording.finish_requested_at.isoformat(),
+    }
 
 
 @router.post("/recordings/{recording_id}/replace-device")
@@ -244,6 +331,40 @@ def invite_sheet_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
     return Response(pdf, media_type="application/pdf", headers=download_headers(filename))
 
 
+@router.get("/assemblies/{assembly_id}/event-kit.pdf")
+def event_kit_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
+    """The printable event kit: one card per table (number, colour band, QR),
+    the programme of sessions, and the recording notice in the assembly's
+    language. Printed the evening before; see services/event_kit.py."""
+    from fastapi.responses import Response
+
+    from citizens.services.branding import logo_path, organization_name
+    from citizens.services.event_kit import render_event_kit
+    from citizens.services.provider_config import data_handling_summary, organization_data
+
+    assembly = get_owned_assembly(session, assembly_id, user)
+    cards = invite_svc.invite_links(session, assembly)
+    rounds = [
+        {
+            "position": round_.position,
+            "title": round_.title,
+            "question": round_.question,
+            "objective": round_.objective,
+            "duration_minutes": round_.duration_minutes,
+        }
+        for round_ in assembly.rounds
+    ]
+    handling = data_handling_summary()
+    if assembly.audio_retention_days is not None:
+        handling = {**handling, "audio_retention_days": assembly.audio_retention_days}
+    pdf = render_event_kit(
+        assembly.name, assembly.language, cards, rounds, handling, logo_path(), organization_name(),
+        organization=organization_data(), auto_purge=bool(assembly.auto_purge_device_audio),
+    )
+    filename = f"{assembly.name[:40].replace(' ', '-')}-event-kit.pdf"
+    return Response(pdf, media_type="application/pdf", headers=download_headers(filename))
+
+
 @router.post(
     "/assemblies/{assembly_id}/invites/generate",
     response_model=list[schemas.InviteGenerated],
@@ -267,6 +388,33 @@ def revoke_invites(assembly_id: str, user: CurrentUser, session: DB):
     record_audit_event(
         session, "invites_revoked", "assembly", assembly.id, actor=user, data={"count": count}
     )
+
+
+@router.get("/rounds/{round_id}/tables/{table_id}/recordings")
+def table_recordings(round_id: str, table_id: str, user: CurrentUser, session: ReadDB):
+    """Every recording of one table's discussion in one round — however many
+    phones made them — with the recorder slot each came from."""
+    round_ = get_owned_round(session, round_id, user)
+    table = session.get(Table, table_id)
+    if table is None or table.round_id != round_.id:
+        raise HTTPException(status_code=404, detail="Table not found")
+    recordings = recordings_for_table(session, round_.id, table.id)
+    slots = recording_slots(session, recordings)
+    return [
+        {
+            "id": recording.id,
+            "slot": slots.get(recording.id, 1),
+            "slot_label": slot_label(slots.get(recording.id, 1)),
+            "state": recording.state,
+            "error_code": recording.error_code,
+            "started_at": recording.started_at,
+            "ended_at": recording.ended_at,
+            "duration_seconds": recording.duration_seconds,
+            "superseded_at": recording.superseded_at,
+            "received_chunks": recording.received_chunks,
+        }
+        for recording in recordings
+    ]
 
 
 @router.get("/assemblies/{assembly_id}/tables/{table_number}/device-logs")

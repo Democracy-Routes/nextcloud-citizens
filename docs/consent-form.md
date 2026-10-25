@@ -12,6 +12,18 @@ analysis — so nothing in it promises what the app cannot deliver. Fields in
 advice: have counsel read it if the organizer is a public body, and adapt the
 recipients if you use a self-hosted engine (then nothing leaves your server).
 
+**Since 0.7 the phone produces the same record.** The notice on each table's
+phone is rendered by the server from the same facts plus the organization
+data entered in Settings → General (controller, address, contact, data-
+protection contact, hosting, supervisory authority — the bracketed fields
+below), naming the transcription and analysis providers actually selected;
+each person registers against it individually — on the table's phone, or on
+their own through the table's registration code — with the two boxes
+below (this notice is version `2026-10.3`). The record is kept with the
+assembly and exported; see [privacy.md](privacy.md). This paper form remains
+the fallback for people without a phone, for a table whose phone is busy
+recording, and for organizers who want a signature on paper.
+
 **How to use it**
 
 - One form per participant, collected before the first round and kept with
@@ -20,9 +32,14 @@ recipients if you use a self-hosted engine (then nothing leaves your server).
   the "Person 1 / Person 2" labelling, and lets a whole table decline.
 - Fill the retention field with the value actually set on the assembly
   (Settings, or the assembly's own override) — the phone shows the same
-  number.
-- If anyone ticks "I do not consent", seat them at a table that is not
-  recorded, or leave that table's phone on the declined screen.
+  number. If the assembly is set to **zero retention**, use the alternate
+  "How long" sentence given after each language's version below instead —
+  the phone's own notice does the same.
+- If anyone does not tick the first box, seat them at a table that is not
+  recorded, or leave that table's phone on the declined screen. The second
+  box is optional and ticked by default; leaving it unticked (or crossing it
+  out) only withholds quotations from the report — it does not block
+  recording.
 - Announce the recording aloud at the start and post a sign at the door for
   late arrivals; the software cannot know who was in the room.
 - Confirm the "not used for training" sentence against your provider's
@@ -39,6 +56,7 @@ recipients if you use a self-hosted engine (then nothing leaves your server).
 
 **INFORMATION NOTICE AND CONSENT**
 **Citizens' assembly "[assembly name]" — [date], [venue]**
+*(notice version 2026-10.3)*
 
 **Who is responsible for your data.** [Organisation name], [postal address],
 [email]. Data protection contact: [name / email].
@@ -81,6 +99,12 @@ France); [hosting provider]. No transfer outside the EU [confirm].
 summaries and report: kept for [duration / until date] as the record of the
 assembly. Participant list: [duration].
 
+*For an assembly set to zero retention, use this sentence instead:*
+**How long.** The audio recording and the transcript are deleted as soon as
+the assembly is closed and its report is written. Only the report —
+summaries and quotations — is kept as the record of the assembly, together
+with the participant list.
+
 **Your rights.** Access, rectification, erasure, restriction, portability,
 objection, and **withdrawal of consent at any time** (it does not affect
 processing already done). Write to [email]. Because voices are not separated
@@ -89,16 +113,23 @@ recording and transcript on request. You may lodge a complaint with the
 supervisory authority (in Italy: Garante per la protezione dei dati
 personali, www.garanteprivacy.it).
 
-**Consent** — tick each box you agree with:
+**Taking part.** Taking part does not require being recorded: if you do not
+consent, you can sit at a table that is not recorded.
 
-☐ I consent to the audio recording and transcription of the discussion at my
-  table, and to its AI-assisted analysis as described above.
+**Consent** — the first box is required; the second is optional and
+ticked by default:
 
-☐ I consent to short anonymous quotations from my table being included in
-  the assembly's report, which may be published.
+☐ By registering you declare that you have read this notice and you
+  consent to the audio recording of the discussion at your table, to its
+  transcription and AI-assisted analysis.
 
-☐ I do **not** consent. (Tell the organizer: you will be seated at a table
-  that is not recorded, or the phone at your table will not record.)
+☑ I also agree to short anonymous quotations from my table being included
+  in the assembly's report, which may be published. *(ticked by default —
+  cross out if you do not agree)*
+
+If you do not tick the first box: tell the organizer. You will be seated
+at a table that is not recorded, or the phone at your table will not
+record.
 
 Name (print): ________________________________
 
@@ -110,6 +141,7 @@ Signature: ________________________________  Date: ______________
 
 **INFORMATIVA E CONSENSO AL TRATTAMENTO DEI DATI PERSONALI**
 **Assemblea dei cittadini "[nome dell'assemblea]" — [data], [luogo]**
+*(informativa versione 2026-10.3)*
 
 **Chi è responsabile dei tuoi dati.** [Nome dell'organizzazione],
 [indirizzo], [email]. Contatto per la protezione dei dati: [nome / email].
@@ -158,6 +190,13 @@ dell'assemblea. Trascrizione, sintesi e rapporto: conservati per [durata /
 fino al] come documentazione dell'assemblea. Elenco dei partecipanti:
 [durata].
 
+*Per un'assemblea impostata su cancellazione totale, usa questa frase al suo
+posto:*
+**Per quanto tempo.** La registrazione audio e la trascrizione vengono
+cancellate non appena l'assemblea viene chiusa e il rapporto è scritto. Solo
+il rapporto — sintesi e citazioni — è conservato come documentazione
+dell'assemblea, insieme all'elenco dei partecipanti.
+
 **I tuoi diritti.** Accesso, rettifica, cancellazione, limitazione,
 portabilità, opposizione e **revoca del consenso in qualsiasi momento**
 (senza pregiudicare i trattamenti già effettuati). Scrivi a [email]. Poiché
@@ -166,16 +205,23 @@ sessione comporta, su richiesta, l'eliminazione della registrazione e della
 trascrizione del tuo tavolo. Puoi proporre reclamo al Garante per la
 protezione dei dati personali (www.garanteprivacy.it).
 
-**Consenso** — barra le caselle con cui sei d'accordo:
+**Partecipare.** Partecipare non richiede di essere registrati: se non
+acconsenti, puoi sederti a un tavolo che non viene registrato.
 
-☐ Acconsento alla registrazione audio e alla trascrizione della discussione
-  al mio tavolo e alla sua analisi assistita dall'IA come descritto sopra.
+**Consenso** — la prima casella è obbligatoria; la seconda è facoltativa
+ed è già selezionata:
 
-☐ Acconsento all'inserimento di brevi citazioni anonime dal mio tavolo nel
-  rapporto dell'assemblea, che potrà essere pubblicato.
+☐ Registrandoti dichiari di aver letto questa informativa e di
+  acconsentire alla registrazione audio della discussione al tuo tavolo,
+  alla sua trascrizione e all'analisi assistita dall'IA.
 
-☐ **Non** acconsento. (Avvisa l'organizzatore: sarai assegnato a un tavolo
-  non registrato, oppure il telefono al tuo tavolo non registrerà.)
+☑ Acconsento inoltre a che brevi citazioni anonime dal mio tavolo siano
+  incluse nel rapporto dell'assemblea, che potrà essere pubblicato.
+  *(selezionata di default — cancella se non acconsenti)*
+
+Se non selezioni la prima casella: avvisa l'organizzatore. Sarai assegnato
+a un tavolo non registrato, oppure il telefono al tuo tavolo non
+registrerà.
 
 Nome (stampatello): ________________________________
 

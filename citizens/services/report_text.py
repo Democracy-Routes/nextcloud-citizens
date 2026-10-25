@@ -64,6 +64,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "participants": "Participants: {count} (expected {expected})",
         "tables": "Tables: {count}",
         "language": "Language: {code}",
+        "objective": "Objective",
         "participants_expected": "{count} participants (expected {expected})",
         "tables_count": "{count} tables",
         "tables_contributed_to_report": (
@@ -83,11 +84,14 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_note": (
             "AI was used to assist transcription and analysis. "
-            "Findings were reviewed by a human organizer; discussion summaries are "
-            "AI-generated neutral descriptions. "
+            "Discussion summaries are AI-generated neutral descriptions. "
             "“Mentioned at N tables” describes how many discussion tables raised a topic; "
             "it is not a measure of participant support."
         ),
+        # only when at least one finding was approved (report._methodology_note)
+        "methodology_reviewed": "Findings were reviewed by a human organizer.",
+        "transcript_engines": "Speech-to-text: {engines}.",
+        "source_live": "live captions",
         "live_transcript_note": (
             "This assembly's transcripts come from the live captions produced while "
             "the tables were speaking, not from a separate transcription of the "
@@ -101,6 +105,26 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "analysed together as one conversation; a short stretch between them was "
             "not recorded."
         ),
+        "consent_registered_note": (
+            "{registered} participants registered individually at the tables against the "
+            "recording notice; {consenting} consented to being recorded."
+        ),
+        "validation_note": (
+            "{answered} participants said whether their table's summary reflected the "
+            "discussion; {missing} flagged something missing, for the organiser to review."
+        ),
+        "synthesis_heading": "How the discussion developed",
+        "carried_forward": "Carried from one session to the next",
+        "speaking_comparison": "Speaking balance across tables",
+        "speaking_comparison_caveat": (
+            "Each line measures one table on its own; voices are detected, not identified, "
+            "and talk-time is an estimate, not a measure of influence."
+        ),
+        "comparison_col_table": "Table",
+        "comparison_col_voices": "Voices",
+        "comparison_col_largest": "Largest share",
+        "comparison_col_smallest": "Smallest share",
+        "comparison_col_ratio": "Ratio",
         # executive summary (PDF)
         "executive_summary": "Executive summary",
         "executive_summary_note": (
@@ -108,10 +132,14 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "human-reviewed findings follow."
         ),
         # rounds
-        "round": "Round {position}",
-        "round_titled": "Round {position} — {title}",
+        "round": "Session {position}",
+        "round_titled": "Session {position} — {title}",
         "ai_summary": "AI summary",
         "speaking_balance": "Speaking balance",
+        "recorder_changed_caveat": (
+            "The phone recording this table changed during the session; voices cannot "
+            "be matched across the parts, so the balance covers the fullest part only."
+        ),
         "voice": "Voice {label}",
         "others": "Others",
         "voices_caveat": (
@@ -129,6 +157,14 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "mentioned_at_one_table": "Mentioned at {count} table(s)",
         "speaker": "Speaker",
         "evidence_removed": "Evidence removed with the transcript.",
+        "quotations_withheld": (
+            "Quotations from this table are withheld: a participant seated here did not "
+            "consent to being quoted."
+        ),
+        "quotations_withheld_note": (
+            "Verbatim quotations are withheld from tables where a seated participant did not "
+            "consent to being quoted; the findings of those tables stand on the analysis alone."
+        ),
         "type_plural.proposal": "Proposals",
         "type_plural.agreement": "Points of consensus",
         "type_plural.disagreement": "Points of divergence",
@@ -160,6 +196,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "participants": "Partecipanti: {count} (previsti {expected})",
         "tables": "Tavoli: {count}",
         "language": "Lingua: {code}",
+        "objective": "Obiettivo",
         "participants_expected": "{count} partecipanti (previsti {expected})",
         "tables_count": "{count} tavoli",
         "tables_contributed_to_report": (
@@ -180,11 +217,13 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_note": (
             "L'IA è stata utilizzata a supporto della trascrizione e dell'analisi. "
-            "I risultati sono stati revisionati da un organizzatore; le sintesi delle "
-            "discussioni sono descrizioni neutrali generate dall'IA. "
+            "Le sintesi delle discussioni sono descrizioni neutrali generate dall'IA. "
             "«Menzionato in N tavoli» indica in quanti tavoli di discussione è emerso "
             "un tema; non è una misura del sostegno dei partecipanti."
         ),
+        "methodology_reviewed": "I risultati sono stati revisionati da un organizzatore.",
+        "transcript_engines": "Trascrizione automatica: {engines}.",
+        "source_live": "sottotitoli in tempo reale",
         "live_transcript_note": (
             "Le trascrizioni di questa assemblea provengono dai sottotitoli in tempo "
             "reale prodotti mentre i tavoli parlavano, non da una trascrizione separata "
@@ -193,6 +232,28 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "seguire, quindi alcuni passaggi potrebbero mancare o essere meno accurati "
             "dell'audio stesso."
         ),
+        "consent_registered_note": (
+            "{registered} partecipanti si sono registrati individualmente ai tavoli "
+            "rispetto all'informativa sulla registrazione; {consenting} hanno acconsentito "
+            "a essere registrati."
+        ),
+        "validation_note": (
+            "{answered} partecipanti hanno detto se la sintesi del loro tavolo rispecchiava "
+            "la discussione; {missing} hanno segnalato che manca qualcosa, da rivedere da "
+            "parte di chi organizza."
+        ),
+        "synthesis_heading": "Come si è sviluppata la discussione",
+        "carried_forward": "Portato da una sessione alla successiva",
+        "speaking_comparison": "Equilibrio di parola tra i tavoli",
+        "speaking_comparison_caveat": (
+            "Ogni riga misura un tavolo da solo; le voci sono rilevate, non identificate, e "
+            "il tempo di parola è una stima, non una misura di influenza."
+        ),
+        "comparison_col_table": "Tavolo",
+        "comparison_col_voices": "Voci",
+        "comparison_col_largest": "Quota maggiore",
+        "comparison_col_smallest": "Quota minore",
+        "comparison_col_ratio": "Rapporto",
         "device_replaced_note": (
             "Il telefono di almeno un tavolo ha smesso di funzionare durante un turno e "
             "la discussione è proseguita su un altro dispositivo. Entrambe le parti sono "
@@ -204,10 +265,15 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "Panoramica generata dall'IA di ciascun turno in tutti i tavoli; seguono i "
             "dettagli e i risultati revisionati da una persona."
         ),
-        "round": "Turno {position}",
-        "round_titled": "Turno {position} — {title}",
+        "round": "Sessione {position}",
+        "round_titled": "Sessione {position} — {title}",
         "ai_summary": "Sintesi IA",
         "speaking_balance": "Equilibrio degli interventi",
+        "recorder_changed_caveat": (
+            "Il telefono che registrava questo tavolo è cambiato durante la sessione; le "
+            "voci non possono essere abbinate tra le parti, quindi l'equilibrio riguarda "
+            "solo la parte più completa."
+        ),
         "voice": "Voce {label}",
         "others": "Altri",
         "voices_caveat": (
@@ -224,6 +290,14 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "mentioned_at_one_table": "Menzionato in {count} tavolo",
         "speaker": "Partecipante",
         "evidence_removed": "Prove rimosse con la trascrizione.",
+        "quotations_withheld": (
+            "Le citazioni di questo tavolo non sono incluse: un partecipante seduto qui non ha "
+            "acconsentito a essere citato."
+        ),
+        "quotations_withheld_note": (
+            "Le citazioni testuali sono omesse per i tavoli in cui un partecipante seduto non ha "
+            "acconsentito a essere citato; i risultati di quei tavoli si basano sulla sola analisi."
+        ),
         "type_plural.proposal": "Proposte",
         "type_plural.agreement": "Punti di consenso",
         "type_plural.disagreement": "Punti di divergenza",

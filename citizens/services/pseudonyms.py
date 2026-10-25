@@ -45,38 +45,52 @@ def _labels() -> list[str]:
     return [f"[Person {chr(ord('A') + i)}]" for i in range(26)]
 
 
-def name_map(session: Session, assembly: Assembly) -> dict[str, str]:
+def _clean(token: str) -> str:
+    return token.strip().strip(".,;:!?\"'()[]")
+
+
+def labels_for(entries: list[str]) -> dict[str, str]:
     """Every name to hide, mapped to the stand-in used for it.
 
-    One stable label per name for the whole assembly, so the model can still
+    One stable label per PERSON for the whole assembly, so the model can still
     follow who is being referred to across a transcript — replacing every name
     with the same token would destroy exactly the discourse the analysis is
-    trying to read.
+    trying to read. An entry is one person: "Giulia Rossi" is one label, and
+    "Giulia", "Rossi" and "Giulia Rossi" in the text all become it. Before
+    0.7 each part got a label of its own, so one person read as two.
     """
-    names: list[str] = []
-    seen: set[str] = set()
-
-    def add(raw: str) -> None:
-        for part in re.split(r"[,\n;]+", raw or ""):
-            for token in part.split():
-                cleaned = token.strip().strip(".,;:!?\"'()[]")
-                if len(cleaned) >= MIN_NAME_LENGTH and cleaned.lower() not in seen:
-                    seen.add(cleaned.lower())
-                    names.append(cleaned)
-
-    for participant in session.execute(
-        select(Participant).where(Participant.assembly_id == assembly.id)
-    ).scalars():
-        add(participant.name or "")
-    add(assembly.redact_names or "")
-
-    # longest first: "Anna Maria" must be replaced before "Anna" eats half of it
-    names.sort(key=len, reverse=True)
     labels = _labels()
     mapping: dict[str, str] = {}
-    for index, name in enumerate(names):
-        mapping[name] = labels[index] if index < len(labels) else "[Person]"
-    return mapping
+    seen: set[str] = set()
+    people = 0
+    for raw in entries:
+        for entry in re.split(r"[,\n;]+", raw or ""):
+            parts = [_clean(token) for token in entry.split()]
+            parts = [part for part in parts if len(part) >= MIN_NAME_LENGTH]
+            full = " ".join(parts)
+            forms = [full, *parts] if len(parts) > 1 else parts
+            fresh = [form for form in forms if form.lower() not in seen]
+            if not fresh:
+                continue
+            label = labels[people] if people < len(labels) else "[Person]"
+            people += 1
+            for form in fresh:
+                seen.add(form.lower())
+                mapping[form] = label
+    # longest first: "Anna Maria" must be replaced before "Anna" eats half of it
+    return dict(sorted(mapping.items(), key=lambda item: len(item[0]), reverse=True))
+
+
+def name_map(session: Session, assembly: Assembly) -> dict[str, str]:
+    """labels_for over the assembly's participants and its redaction list."""
+    entries = [
+        participant.name or ""
+        for participant in session.execute(
+            select(Participant).where(Participant.assembly_id == assembly.id)
+        ).scalars()
+    ]
+    entries.append(assembly.redact_names or "")
+    return labels_for(entries)
 
 
 def redact(text: str, mapping: dict[str, str]) -> str:

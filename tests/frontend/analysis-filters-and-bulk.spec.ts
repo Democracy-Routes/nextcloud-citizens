@@ -116,7 +116,7 @@ describe('approving every draft', () => {
 	it('offers the action with the count in it', async () => {
 		const wrapper = await mount()
 
-		expect(wrapper.text()).toContain('Approve 2 draft(s)')
+		expect(wrapper.text()).toContain('Approve 2 drafts')
 	})
 
 	it('is not offered when nothing is waiting', async () => {
@@ -125,7 +125,7 @@ describe('approving every draft', () => {
 
 		// the filter dropdown still offers "Approved" as an option — it is the
 		// bulk action that must be absent
-		expect(wrapper.findAll('button').some((b) => b.text().includes('draft(s)'))).toBe(false)
+		expect(wrapper.findAll('button').some((b) => b.text().includes('drafts') && b.text().startsWith('Approve ') && /[0-9]/.test(b.text()))).toBe(false)
 	})
 
 	it('asks first, and says what it will leave alone', async () => {

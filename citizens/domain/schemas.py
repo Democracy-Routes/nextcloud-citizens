@@ -11,13 +11,19 @@ from pydantic import BaseModel, ConfigDict, Field
 class RoundIn(BaseModel):
     title: str = ""
     question: str = ""
-    duration_minutes: int = Field(default=30, ge=1, le=600)
+    # what the discussion should produce, as distinct from what it is about
+    objective: str | None = Field(default=None, max_length=2000)
+    # 0 = no planned time: no countdown, no auto-finish, no time nudge
+    # (Record now sessions start that way)
+    duration_minutes: int = Field(default=30, ge=0, le=600)
 
 
 class RoundUpdate(BaseModel):
     title: str | None = None
     question: str | None = None
-    duration_minutes: int | None = Field(default=None, ge=1, le=600)
+    # sent as "" to clear; left out to keep (see assemblies.update_round)
+    objective: str | None = Field(default=None, max_length=2000)
+    duration_minutes: int | None = Field(default=None, ge=0, le=600)
     position: int | None = Field(default=None, ge=1)
 
 
@@ -28,6 +34,7 @@ class RoundOut(BaseModel):
     position: int
     title: str
     question: str
+    objective: str | None = None
     duration_minutes: int
     status: str
     started_at: datetime | None
@@ -58,7 +65,25 @@ class AssemblyCreate(BaseModel):
     analysis_instructions: str = Field(default="", max_length=4000)
     auto_purge_device_audio: bool = True
     redact_names: str = Field(default="", max_length=2000)
+    # 'required': a table records only once one registered person there has
+    # consented (services/consent.py). The organizer's wizard sends 'required'
+    # for an organized assembly; the API default stays 'optional' so clients
+    # and scripts from before 0.7 keep working unchanged.
+    participant_consent: Literal["required", "optional"] = "optional"
+    # the AI facilitator's level here; None follows the instance default
+    ai_facilitator: Literal["off", "light", "normal", "active"] | None = None
+    # null follows the instance default; 0 keeps audio indefinitely
+    audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    # keep nothing but the report once closed (services/zero_retention.py)
+    zero_retention: bool = False
     rounds: list[RoundIn] = []
+
+
+class LanguageChange(BaseModel):
+    """The organizer changes the language after recording began: every
+    recording with audio is transcribed again (services/assemblies.change_language)."""
+
+    language: Language
 
 
 class AssemblyUpdate(BaseModel):
@@ -74,12 +99,21 @@ class AssemblyUpdate(BaseModel):
     redact_names: str | None = Field(default=None, max_length=2000)
     # null follows the instance default; 0 keeps audio indefinitely
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    participant_consent: Literal["required", "optional"] | None = None
+    # false when the organizer picks the language by hand on a Record-now session
+    language_auto: bool | None = None
+    zero_retention: bool | None = None
+    # the AI facilitator's level for this assembly; "default" follows Settings
+    ai_facilitator: Literal["default", "off", "light", "normal", "active"] | None = None
 
 
 class AssemblyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    # "assembly" for an organized event; "session" for the container behind a
+    # standalone Session, which the UI lists as a Session and never as an assembly
+    kind: str = "assembly"
     name: str
     description: str
     language: str
@@ -94,6 +128,13 @@ class AssemblyOut(BaseModel):
     closed_at: datetime | None
     audio_retention_days: int | None = None
     audio_purged_at: datetime | None = None
+    zero_retention: bool = False
+    zero_retention_done_at: datetime | None = None
+    participant_consent: str = "optional"
+    # the language is being detected from the recording (Record now)
+    language_auto: bool = False
+    # off / light / normal / active, or None: the instance default applies
+    ai_facilitator: str | None = None
     created_by: str
     created_at: datetime
 
@@ -101,6 +142,9 @@ class AssemblyOut(BaseModel):
 class AssemblyDetail(AssemblyOut):
     rounds: list[RoundOut]
     participant_count: int = 0
+    # what "default" means right now (Settings → AI facilitator)
+    ai_facilitator_default: str = "off"
+    ai_facilitator_configured: bool = False
 
 
 class ParticipantIn(BaseModel):
@@ -118,6 +162,22 @@ class CsvImportIn(BaseModel):
     csv: str
 
 
+class ParticipantConsentOut(BaseModel):
+    """A person's newest consent act, as recorded at the table."""
+
+    method: str
+    notice_version: str
+    notice_hash: str
+    notice_language: str
+    notice_read: bool
+    recording: bool
+    transcription: bool
+    analysis: bool
+    publication: bool
+    confirmed_at: datetime
+    withdrawn_at: datetime | None = None
+
+
 class ParticipantOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -126,11 +186,18 @@ class ParticipantOut(BaseModel):
     name: str
     email: str
     notes: str
+    # ORGANIZER, TABLE_DEVICE or SELF_PHONE — where the row came from
+    source: str = "ORGANIZER"
+    registered_table_number: int | None = None
+    consent: ParticipantConsentOut | None = None
 
 
 class TableOut(BaseModel):
     id: str
+    # the identity, unique within the assembly; printed on the QR sheet
     number: int
+    # a visual cue only — blue, green, orange, purple, red, teal, then blue again
+    color_key: str = ""
     label: str
     status: str
     participants: list[ParticipantOut]
@@ -154,7 +221,133 @@ class InviteGenerated(BaseModel):
     qr_svg: str
 
 
+class TableAdded(BaseModel):
+    """A table added to a running assembly or Session: its number and colour
+    (the same in every round), and the QR code that joins a phone to it."""
+
+    number: int
+    color_key: str
+    invite: InviteGenerated
+
+
 class AssemblyCreated(AssemblyDetail):
     # QR invites generated by default at creation; raw links appear ONLY here
     # (hash-only storage — regenerate to obtain new ones later)
     invites: list[InviteGenerated] = []
+
+
+class SessionCreate(BaseModel):
+    """A Session on its own: no assembly to name, configure or understand first.
+
+    Question and objective are the whole brief; the rest are the defaults the
+    assembly wizard also offers. Infrastructure settings are deliberately not
+    here — they belong to the instance, not to a Session.
+    """
+
+    question: str = Field(default="", max_length=2000)
+    objective: str | None = Field(default=None, max_length=2000)
+    duration_minutes: int = Field(default=30, ge=0, le=600)
+    table_count: int = Field(default=1, ge=1, le=200)
+    recording_mode: Literal["orchestrated", "independent", "plenary"] = "orchestrated"
+    language: Language = "en"
+
+
+class SessionCreated(BaseModel):
+    # the Session's own id — the id every /rounds/{id} route accepts today
+    session_id: str
+    # the container behind it; the organizer screens are reached through it
+    # (see services/sessions.py for why it exists at all)
+    container_id: str
+    question: str
+    objective: str | None
+    recording_mode: str
+    table_count: int
+    # raw QR links appear only in this response, as for assemblies
+    invites: list[InviteGenerated]
+
+
+class SessionTableOut(BaseModel):
+    id: str
+    number: int
+    color_key: str
+
+
+class SessionOut(BaseModel):
+    """A Session in product vocabulary — the adapter over a Round.
+
+    `session_id` is the round's id and works on every `/rounds/{id}` route;
+    `container_id` is the assembly behind it, `standalone` whether that
+    container is the synthetic one a standalone Session lives in.
+    """
+
+    session_id: str
+    container_id: str
+    container_name: str
+    standalone: bool
+    position: int
+    title: str
+    question: str
+    objective: str | None
+    duration_minutes: int
+    status: str
+    recording_mode: str
+    language: str
+    started_at: datetime | None
+    ended_at: datetime | None
+    tables: list[SessionTableOut]
+    recording_count: int = 0
+
+
+class MessageIn(BaseModel):
+    """What the organizer says to the tables. Presets (TIME_LEFT with
+    minutes, WRAP_UP) are worded by the server in the assembly's language;
+    PROMPT and CUSTOM carry their own text."""
+
+    kind: Literal["TIME_LEFT", "WRAP_UP", "PROMPT", "CUSTOM"]
+    text: str | None = Field(default=None, max_length=300)
+    minutes: int | None = Field(default=None, ge=1, le=600)
+    target_table_number: int | None = Field(default=None, ge=1)
+    sound: bool = False
+
+
+class MessageOut(BaseModel):
+    id: int
+    kind: str
+    text: str
+    sound: bool
+    created_at: datetime
+    created_by: str | None = None
+    # organizer / facilitator / ai — who the phones say it is from
+    author: str = "organizer"
+    target_table_number: int | None = None
+    seen_by: list[int] = []
+    not_seen_by: list[int] = []
+
+
+class MessageSeenIn(BaseModel):
+    message_id: int = Field(ge=1)
+
+
+class PromoteSessionIn(BaseModel):
+    """A standalone Session becomes an Assembly: the event needs a name."""
+
+    name: str = Field(min_length=1, max_length=200)
+
+
+class PromotedOut(BaseModel):
+    container_id: str
+    kind: str
+    name: str
+
+
+class RecordNowIn(BaseModel):
+    language: Language = "en"
+
+
+class RecordNowOut(BaseModel):
+    session_id: str
+    container_id: str
+    table_number: int
+    # the recorder page with Table 1's join token in the fragment: opening it
+    # on this very device makes it the Session's first recorder
+    recorder_url: str

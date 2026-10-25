@@ -2,39 +2,276 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 /**
- * Shown once per device before anything is recorded (brief §43).
+ * The notice, and the people who registered against it (0.7).
  *
- * People at the table are about to have their voices recorded, so they are
- * told in plain language what happens to that audio: which engine transcribes
- * it, whether that engine belongs to somebody else, and how long the recording
- * is kept. Everything here comes from the server's live configuration, so it
- * cannot drift from what the app actually does.
+ * People at the table are about to have their voices recorded. The server
+ * renders what happens to that audio — who is responsible, which engine
+ * hears it and whether it is somebody else's service, how long the recording
+ * is kept, their rights, the legal basis — in the assembly's language and
+ * hashed exactly as shown. Each person then registers one at a time on this
+ * phone (ConsentForm), or scans the table's registration code and does it on
+ * their own (RegisterPage): both land on the same roster here. A refusal is
+ * recorded too. The record is individual; nothing here is one tick for the
+ * table.
+ *
+ * 'required' assemblies continue only once one person here has consented
+ * (the server enforces the same rule where recording starts); 'optional'
+ * ones continue at once. A server older than 0.7 has no notice endpoint:
+ * the screen then falls back to the table-level text it always showed.
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { DataHandling } from '../api'
+import {
+	recorderApi,
+	type ConsentNotice,
+	type DataHandling,
+	type TableConsent,
+	type UnseatedParticipant,
+} from '../api'
+import CapabilityQr from './CapabilityQr.vue'
+import ConsentForm, { type ConsentFormValue } from './ConsentForm.vue'
+import TableBadge from './TableBadge.vue'
 
-const props = defineProps<{ handling: DataHandling | null; tableNumber: number }>()
-const emit = defineEmits<{ (event: 'accept'): void }>()
+const props = defineProps<{
+	token: string
+	handling: DataHandling | null
+	tableNumber: number
+	colorKey?: string | null
+}>()
+const emit = defineEmits<{ accept: [table: TableConsent | null] }>()
 
 const { t } = useI18n()
 
-/** Somebody at the table objects. Consent that offers only one button is not
- * consent, and a table with no way to say no had to work it out by walking
- * away from the phone. */
+const notice = ref<ConsentNotice | null>(null)
+const legacy = ref(false)
+const loading = ref(true)
+const view = ref<'notice' | 'form' | 'added'>('notice')
+const busy = ref(false)
+const failed = ref('')
+const added = ref<{ name: string; consented: boolean } | null>(null)
+const table = ref<TableConsent | null>(null)
+const ownPhone = ref(false)
+let roster = 0
+
+/* ---- "Already registered? Find your name" ----
+ * People who registered ahead through the assembly's link have no table yet;
+ * the door seats them here by name. Two characters, names only. */
+const finding = ref(false)
+const query = ref('')
+const matches = ref<UnseatedParticipant[]>([])
+const seating = ref('')
+let searchTimer = 0
+
+function search(): void {
+	window.clearTimeout(searchTimer)
+	const q = query.value.trim()
+	if (q.length < 2) {
+		matches.value = []
+		return
+	}
+	searchTimer = window.setTimeout(async () => {
+		try {
+			matches.value = await recorderApi.searchParticipants(props.token, q)
+		} catch {
+			matches.value = []
+		}
+	}, 250)
+}
+
+async function seat(person: UnseatedParticipant): Promise<void> {
+	if (seating.value) return
+	seating.value = person.id
+	try {
+		const result = await recorderApi.seatParticipant(props.token, person.id)
+		table.value = result.table
+		matches.value = matches.value.filter((m) => m.id !== person.id)
+		query.value = ''
+		finding.value = false
+		await load()
+	} catch {
+		/* the next tap will say */
+	} finally {
+		seating.value = ''
+	}
+}
+
+/** Somebody at the table objects (legacy screen only). Consent that offers
+ * only one button is not consent. */
 const declined = ref(false)
 
+async function load(): Promise<void> {
+	try {
+		notice.value = await recorderApi.consentNotice(props.token)
+		legacy.value = false
+	} catch {
+		if (!notice.value) legacy.value = true // a server older than 0.7, or a blink: the old text
+	} finally {
+		loading.value = false
+	}
+}
+onMounted(() => {
+	void load()
+	// people registering on their own phones appear here as they do
+	roster = window.setInterval(() => {
+		if (view.value === 'notice') void load()
+	}, 10_000)
+})
+onBeforeUnmount(() => window.clearInterval(roster))
+
+const consenting = computed(
+	() => notice.value?.participants.filter((p) => p.recording_consent).length ?? 0,
+)
+/** seated people whose newest act refuses or withdraws: one blocks a
+ * required table until marked as moved, or until they change their mind */
+const refusing = computed(() => notice.value?.participants.filter((p) => p.refused).length ?? 0)
+const required = computed(() => notice.value?.mode === 'required')
+const canContinue = computed(
+	() => legacy.value || !required.value || (consenting.value > 0 && refusing.value === 0),
+)
+
+/* ---- the roster's actions: changed their mind, withdraws, moved ---- */
+const changing = ref<{ id: string; name: string } | null>(null)
+const withdrawing = ref<{ id: string; name: string } | null>(null)
+const acting = ref('')
+
+function startForm(): void {
+	failed.value = ''
+	changing.value = null
+	view.value = 'form'
+}
+
+function startChange(person: { id: string; name: string }): void {
+	failed.value = ''
+	changing.value = person
+	view.value = 'form'
+}
+
+/** A refusal reversed on the same phone: a further act, their name fixed. */
+async function confirmChange(value: ConsentFormValue): Promise<void> {
+	if (!notice.value || !changing.value || busy.value) return
+	busy.value = true
+	failed.value = ''
+	try {
+		const result = await recorderApi.changeConsent(props.token, changing.value.id, {
+			notice_hash: notice.value.hash,
+			notice_read: true,
+			recording_consent: value.accepted,
+			transcription_consent: value.accepted,
+			analysis_consent: value.accepted,
+			publication_consent: value.accepted && value.quotations,
+		})
+		table.value = result.table
+		changing.value = null
+		await load()
+		view.value = 'notice'
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		const stale = /NOTICE_CHANGED|notice has changed/i.test(message)
+		failed.value = stale ? t('recorder.consent.form.stale') : t('recorder.consent.form.failed')
+		if (stale) await load()
+	} finally {
+		busy.value = false
+	}
+}
+
+/** Withdraws consent: every flag false; the recording so far is kept. */
+async function withdraw(): Promise<void> {
+	if (!notice.value || !withdrawing.value || acting.value) return
+	acting.value = withdrawing.value.id
+	try {
+		const result = await recorderApi.changeConsent(props.token, withdrawing.value.id, {
+			notice_hash: notice.value.hash,
+			notice_read: true,
+			recording_consent: false,
+			transcription_consent: false,
+			analysis_consent: false,
+			publication_consent: false,
+		})
+		table.value = result.table
+		withdrawing.value = null
+		await load()
+	} catch {
+		failed.value = t('recorder.consent.form.failed')
+	} finally {
+		acting.value = ''
+	}
+}
+
+/** Moved to another table — one that is not recorded. */
+async function moved(person: { id: string }): Promise<void> {
+	if (acting.value) return
+	acting.value = person.id
+	try {
+		const result = await recorderApi.markMoved(props.token, person.id)
+		table.value = result.table
+		await load()
+	} catch {
+		failed.value = t('recorder.consent.form.failed')
+	} finally {
+		acting.value = ''
+	}
+}
+
+async function submit(value: ConsentFormValue, refuse: boolean): Promise<void> {
+	if (!notice.value || busy.value) return
+	busy.value = true
+	failed.value = ''
+	try {
+		// the required box covers recording, transcription and analysis; the
+		// quotations box is its own answer; a refusal clears them all
+		const yes = !refuse && value.accepted
+		const result = await recorderApi.registerParticipant(props.token, {
+			name: value.name,
+			email: value.email,
+			notice_hash: notice.value.hash,
+			notice_read: true,
+			recording_consent: yes,
+			transcription_consent: yes,
+			analysis_consent: yes,
+			publication_consent: yes && value.quotations,
+		})
+		table.value = result.table
+		added.value = { name: result.participant.name, consented: result.can_record }
+		// the roster, without a second round-trip
+		notice.value = {
+			...notice.value,
+			participants: [
+				...notice.value.participants,
+				{
+					id: result.participant.id,
+					label: result.participant.label,
+					name: result.participant.name,
+					recording_consent: result.can_record,
+					publication_consent: yes && value.quotations,
+					refused: !result.can_record,
+				},
+			],
+		}
+		view.value = 'added'
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err)
+		const stale = /NOTICE_CHANGED|notice has changed/i.test(message)
+		failed.value = stale ? t('recorder.consent.form.stale') : t('recorder.consent.form.failed')
+		if (stale) await load()
+	} finally {
+		busy.value = false
+	}
+}
+
+function accept(): void {
+	emit('accept', table.value)
+}
+
+/* ---- the table-level text, for a server without the notice endpoint ---- */
 const ENGINE_NAMES: Record<string, string> = {
 	deepgram: 'Deepgram',
 	mistral: 'Mistral',
 	whisper: 'Whisper',
 	vosk: 'Vosk',
 }
-
 const engine = computed(
 	() => ENGINE_NAMES[props.handling?.stt_provider ?? ''] ?? t('recorder.consent.engineFallback'),
 )
-
 const audioDestination = computed(() => {
 	if (!props.handling) return t('recorder.consent.notConfigured')
 	if (!props.handling.stt_configured) return t('recorder.consent.noEngine')
@@ -42,14 +279,12 @@ const audioDestination = computed(() => {
 		? t('recorder.consent.audioHosted', { engine: engine.value })
 		: t('recorder.consent.audioSelfHosted', { engine: engine.value })
 })
-
 const transcriptDestination = computed(() => {
 	if (!props.handling?.analysis_enabled) return null
 	return props.handling.analysis_hosted
 		? t('recorder.consent.transcriptHosted')
 		: t('recorder.consent.transcriptSelfHosted')
 })
-
 const retention = computed(() => {
 	const days = props.handling?.audio_retention_days ?? 0
 	if (days > 0) return t('recorder.consent.retentionDays', { days }, days)
@@ -59,7 +294,52 @@ const retention = computed(() => {
 
 <template>
 	<div class="rc-scroll">
-		<div v-if="declined" class="rc-pad">
+		<!-- one person registering -->
+		<div v-if="view === 'form' && notice && changing" class="rc-pad">
+			<h1>{{ t('recorder.consent.form.changedMindTitle', { name: changing.name }) }}</h1>
+			<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.changedMindLead') }}</p>
+			<ConsentForm
+				:busy="busy"
+				:failed="failed"
+				:acceptance="notice.acceptance"
+				:acceptance-quotations="notice.acceptance_quotations"
+				:fixed-name="changing.name"
+				@confirm="confirmChange"
+				@cancel="view = 'notice'" />
+		</div>
+		<div v-else-if="view === 'form' && notice" class="rc-pad">
+			<h1>{{ t('recorder.consent.form.title') }}</h1>
+			<p class="rc-muted" style="margin: 6px 0 0">{{ t('recorder.consent.form.lead') }}</p>
+			<ConsentForm
+				:busy="busy"
+				:failed="failed"
+				:acceptance="notice.acceptance"
+				:acceptance-quotations="notice.acceptance_quotations"
+				@confirm="(value) => submit(value, false)"
+				@refuse="(value) => submit(value, true)"
+				@cancel="view = 'notice'" />
+		</div>
+
+		<!-- one person done -->
+		<div v-else-if="view === 'added' && added" class="rc-pad rc-center">
+			<h1 style="margin-top: 10vh">
+				{{ added.consented ? t('recorder.consent.added.title') : t('recorder.consent.added.refused') }}
+			</h1>
+			<p class="rc-lead">{{ added.name }}</p>
+			<p v-if="!added.consented" class="rc-muted">{{ t('recorder.consent.added.refusedBody') }}</p>
+			<button class="rc-btn" style="margin-top: 22px" @click="startForm">
+				{{ t('recorder.consent.added.another') }}
+			</button>
+			<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
+				{{ t('recorder.consent.continue') }}
+			</button>
+			<p v-if="!canContinue" class="rc-muted rc-consent__hint">
+				{{ refusing > 0 ? t('recorder.consent.requiredHintRefused') : t('recorder.consent.requiredHint') }}
+			</p>
+		</div>
+
+		<!-- the legacy table-level screen: somebody objected -->
+		<div v-else-if="legacy && declined" class="rc-pad">
 			<h1>{{ t('recorder.consent.declinedTitle') }}</h1>
 			<p class="rc-lead">{{ t('recorder.consent.declinedBody') }}</p>
 			<button class="rc-btn" @click="declined = false">
@@ -67,35 +347,134 @@ const retention = computed(() => {
 			</button>
 		</div>
 
+		<!-- the notice -->
 		<div v-else class="rc-pad">
+			<div class="rc-consent__head">
+				<TableBadge :number="tableNumber" :color-key="colorKey" />
+			</div>
 			<h1>{{ t('recorder.consent.title', { number: tableNumber }) }}</h1>
 			<p class="rc-lead">{{ t('recorder.consent.lead') }}</p>
 
-			<ul class="rc-consent">
-				<li>{{ t('recorder.consent.records') }}</li>
-				<li>{{ audioDestination }}</li>
-				<li v-if="transcriptDestination">{{ transcriptDestination }}</li>
-				<li>{{ retention }}</li>
-				<li>{{ t('recorder.consent.speakers') }}</li>
-				<li>{{ t('recorder.consent.reviewed') }}</li>
-			</ul>
+			<p v-if="loading" class="rc-muted">…</p>
+			<template v-else-if="notice">
+				<div class="rc-notice" data-test="notice">
+					<p v-for="(paragraph, index) in notice.paragraphs" :key="index">{{ paragraph }}</p>
+				</div>
 
-			<p class="rc-muted rc-consent__ask">{{ t('recorder.consent.ask') }}</p>
+				<h2 class="rc-consent__roster-title">{{ t('recorder.consent.registeredTitle') }}</h2>
+				<ul v-if="notice.participants.length" class="rc-roster" data-test="roster">
+					<li v-for="person in notice.participants" :key="person.label">
+						<span>{{ person.name }}</span>
+						<span :class="person.recording_consent ? 'rc-roster__yes' : 'rc-roster__no'">
+							{{ person.recording_consent ? t('recorder.consent.consented') : t('recorder.consent.refusedNote') }}
+							<template v-if="person.recording_consent && person.publication_consent === false">
+								· {{ t('recorder.consent.quotationsNo') }}
+							</template>
+						</span>
+						<!-- the newest act counts: a refusal can be reversed here, a
+						     refuser marked as moved, a consent withdrawn -->
+						<span v-if="person.id && person.refused" class="rc-roster__actions">
+							<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" data-test="changed-mind" @click="startChange({ id: person.id, name: person.name })">
+								{{ t('recorder.consent.changedMind') }}
+							</button>
+							<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" data-test="moved" @click="moved({ id: person.id })">
+								{{ t('recorder.consent.moved') }}
+							</button>
+						</span>
+						<span v-else-if="person.id && person.recording_consent" class="rc-roster__actions">
+							<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" data-test="withdraw" @click="withdrawing = { id: person.id, name: person.name }">
+								{{ t('recorder.consent.withdraw') }}
+							</button>
+						</span>
+					</li>
+				</ul>
+				<p v-else class="rc-muted" style="margin: 0">{{ t('recorder.consent.none') }}</p>
+				<p v-if="refusing > 0" class="rc-alert" role="alert" data-test="refused-hint">
+					{{ t('recorder.consent.requiredHintRefused') }}
+				</p>
+				<div v-if="withdrawing" class="rc-card" role="dialog" style="text-align: left" data-test="withdraw-confirm">
+					<p>{{ t('recorder.consent.withdrawConfirm', { name: withdrawing.name }) }}</p>
+					<button type="button" class="rc-btn rc-primary" :disabled="!!acting" data-test="withdraw-yes" @click="withdraw">
+						{{ t('recorder.consent.withdrawYes') }}
+					</button>
+					<button type="button" class="rc-btn rc-subtle" :disabled="!!acting" @click="withdrawing = null">
+						{{ t('recorder.consent.form.cancel') }}
+					</button>
+				</div>
+				<p v-if="failed && view === 'notice'" class="rc-alert">{{ failed }}</p>
 
-			<button class="rc-btn rc-primary" @click="emit('accept')">
-				{{ t('recorder.consent.agree') }}
-			</button>
-			<button class="rc-btn rc-subtle" @click="declined = true">
-				{{ t('recorder.consent.decline') }}
-			</button>
+				<button class="rc-btn" style="margin-top: 16px" data-test="add" @click="startForm">
+					{{ t('recorder.consent.add') }}
+				</button>
+				<button class="rc-btn rc-subtle" data-test="own-phone" @click="ownPhone = true">
+					{{ t('recorder.consent.ownPhone') }}
+				</button>
+				<!-- registered ahead through the assembly's link: seated here by name -->
+				<button v-if="!finding" class="rc-btn rc-subtle" data-test="find" @click="finding = true">
+					{{ t('recorder.consent.findName') }}
+				</button>
+				<div v-else class="rc-find" data-test="finder">
+					<input
+						v-model="query"
+						type="search"
+						class="rc-find__input"
+						autocomplete="off"
+						:placeholder="t('recorder.consent.findPlaceholder')"
+						data-test="find-input"
+						@input="search" />
+					<ul v-if="matches.length" class="rc-roster" data-test="matches">
+						<li v-for="person in matches" :key="person.id">
+							<span>{{ person.name }}</span>
+							<button type="button" class="rc-find__seat" :disabled="!!seating" :data-test="`seat-${person.id}`" @click="seat(person)">
+								{{ t('recorder.consent.seatHere') }}
+							</button>
+						</li>
+					</ul>
+					<p v-else-if="query.trim().length >= 2" class="rc-muted" style="font-size: 0.875rem; margin: 6px 0 0">
+						{{ t('recorder.consent.nobodyFound') }}
+					</p>
+				</div>
+				<button class="rc-btn rc-primary" :disabled="!canContinue" data-test="continue" @click="accept">
+					{{ t('recorder.consent.continue') }}
+				</button>
+				<p v-if="!canContinue" class="rc-muted rc-consent__hint">{{ t('recorder.consent.requiredHint') }}</p>
+			</template>
+
+			<!-- a server without the notice endpoint: the table-level text -->
+			<template v-else>
+				<ul class="rc-consent">
+					<li>{{ t('recorder.consent.records') }}</li>
+					<li>{{ audioDestination }}</li>
+					<li v-if="transcriptDestination">{{ transcriptDestination }}</li>
+					<li>{{ retention }}</li>
+					<li>{{ t('recorder.consent.speakers') }}</li>
+					<li>{{ t('recorder.consent.reviewed') }}</li>
+				</ul>
+				<p class="rc-muted rc-consent__ask">{{ t('recorder.consent.ask') }}</p>
+				<button class="rc-btn rc-primary" data-test="continue" @click="accept">
+					{{ t('recorder.consent.agree') }}
+				</button>
+				<button class="rc-btn rc-subtle" @click="declined = true">
+					{{ t('recorder.consent.decline') }}
+				</button>
+			</template>
+		</div>
+
+		<!-- the table's registration code, for people's own phones -->
+		<div v-if="ownPhone" class="rc-sheet-scrim" @click.self="ownPhone = false">
+			<div class="rc-sheet" role="dialog" aria-modal="true">
+				<CapabilityQr
+					:token="token"
+					purpose="REGISTER_PARTICIPANT"
+					:table-number="tableNumber"
+					:color-key="colorKey"
+					@close="ownPhone = false" />
+			</div>
 		</div>
 	</div>
 </template>
 
 <style scoped>
-/* the two class names this screen has always referenced but that never
-   existed anywhere, so the consent copy rendered with no lead emphasis and no
-   breathing room */
 .rc-pad {
 	padding: 6px 2px calc(12px + env(safe-area-inset-bottom, 0px));
 }
@@ -104,15 +483,59 @@ const retention = computed(() => {
 	line-height: 1.5;
 	margin: 8px 0 0;
 }
+.rc-consent__head { margin: 4px 0 10px; }
+.rc-consent__roster-title {
+	font-size: 0.75rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--rc-muted);
+	margin: 18px 0 6px;
+}
+.rc-roster {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.rc-roster li {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--rc-border);
+}
+.rc-roster__yes { color: #1e6b3a; font-weight: 600; }
+.rc-roster__no { color: #8c1d18; font-weight: 600; }
+.rc-roster__actions { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; margin-top: 6px; }
+.rc-roster__actions .rc-btn { margin: 0; padding: 8px 10px; font-size: 0.8125rem; min-height: 36px; }
+.rc-consent__hint { margin: 8px 0 0; font-size: 0.875rem; }
+.rc-find { margin: 6px 0 0; }
+.rc-find__input {
+	width: 100%;
+	box-sizing: border-box;
+	font: inherit;
+	font-size: 1.0625rem;
+	padding: 12px 14px;
+	border: 1px solid var(--rc-border);
+	border-radius: 12px;
+	background: var(--rc-surface);
+	color: inherit;
+}
+.rc-find__seat {
+	background: var(--rc-blue);
+	border: 0;
+	border-radius: 999px;
+	color: #fff;
+	font: inherit;
+	font-size: 0.8125rem;
+	min-height: 36px;
+	padding: 4px 14px;
+	cursor: pointer;
+}
 .rc-consent {
 	margin: 18px 0 0;
 	padding-left: 20px;
 	line-height: 1.55;
 }
-.rc-consent li + li {
-	margin-top: 10px;
-}
-.rc-consent__ask {
-	margin: 20px 0 18px;
-}
+.rc-consent li + li { margin-top: 10px; }
+.rc-consent__ask { margin: 20px 0 18px; }
 </style>

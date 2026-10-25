@@ -10,8 +10,14 @@ from sqlalchemy.orm import Session
 
 from citizens.db.models import RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
+from citizens.domain.tables import color_for
 from citizens.logging_setup import get_logger
-from citizens.services import job_failures
+from citizens.services import consent as consent_svc
+from citizens.services import help as help_svc
+from citizens.services import job_failures, readiness
+from citizens.services.live_captions import LIVE_CAPTIONS
+from citizens.services.provider_config import live_stt_snapshot
+from citizens.services.table_recordings import coverage, slot_label
 
 log = get_logger(__name__)
 
@@ -57,6 +63,86 @@ def end_round(session: Session, round_: Round) -> Round:
     return round_
 
 
+def _table_recorders(
+    session: Session, round_: Round, table, recordings: list[Recording], now
+) -> list[dict]:
+    """One entry per recorder slot at the table: the newest phone in that slot,
+    its liveness, and its newest recording of this round."""
+    sessions = list(
+        session.execute(
+            select(RecorderSession)
+            .where(
+                RecorderSession.assembly_id == round_.assembly_id,
+                RecorderSession.table_number == table.number,
+            )
+            .order_by(RecorderSession.slot, RecorderSession.created_at.desc())
+        ).scalars()
+    )
+    newest_by_slot: dict[int, RecorderSession] = {}
+    for recorder_session in sessions:
+        newest_by_slot.setdefault(recorder_session.slot, recorder_session)
+    slot_of_session = {s.id: s.slot for s in sessions}
+    recording_by_slot: dict[int, Recording] = {}
+    for recording in recordings:  # newest first
+        slot = slot_of_session.get(recording.recorder_session_id or "", 1)
+        recording_by_slot.setdefault(slot, recording)
+    recorders = []
+    for slot, recorder_session in sorted(newest_by_slot.items()):
+        age = (
+            (now - recorder_session.last_status_at).total_seconds()
+            if recorder_session.last_status_at is not None
+            else None
+        )
+        recording = recording_by_slot.get(slot)
+        recorders.append(
+            {
+                "slot": slot,
+                "label": slot_label(slot),
+                "connected": age is not None and age < STALE_HEARTBEAT_SECONDS,
+                "seconds_since_contact": int(age) if age is not None else None,
+                "status": json.loads(recorder_session.last_status_json or "{}"),
+                "recording": None
+                if recording is None
+                else {
+                    "id": recording.id,
+                    "state": recording.state,
+                    # whether this recorder feeds the table's live captions
+                    "live_source": recording.live_source,
+                    # how long since the server last received a chunk from a
+                    # recording still in progress (readiness CAPTURE_SILENT)
+                    "silent_seconds": (
+                        int((now - recording.updated_at).total_seconds())
+                        if recording.state == "RECORDING" and recording.updated_at is not None
+                        else None
+                    ),
+                    # audio captured against the time it has been recording
+                    "coverage": coverage(recording, now),
+                    # "silence" / "organizer" when the server finished it
+                    "closed_by": recording.closed_by,
+                    "finish_requested": recording.finish_requested_at is not None,
+                    # the phone came back after a server-side close: this row
+                    # holds the audio it has sent since
+                    "continued": recording.continued_from_id is not None,
+                },
+            }
+        )
+    return recorders
+
+
+def _ai_levels(session: Session, round_: Round) -> dict[int, str]:
+    """Each table's effective AI-facilitator level, from the snapshot and
+    the tables' own switches (services/facilitator.py)."""
+    from citizens.services import facilitator as ai_svc
+    from citizens.services.provider_config import facilitator_settings_cached
+
+    settings = facilitator_settings_cached()
+    overrides = ai_svc.table_overrides(session, round_.assembly_id)
+    return {
+        table.number: ai_svc.effective_level(round_.assembly, overrides.get(table.number), settings)
+        for table in round_.tables
+    }
+
+
 def round_monitor(session: Session, round_: Round) -> dict:
     """Per-table live health, combining device heartbeats with recording rows.
 
@@ -64,8 +150,21 @@ def round_monitor(session: Session, round_: Round) -> dict:
     heartbeat with storage_ok (brief §25).
     """
     now = utcnow()
+    # from the in-memory snapshot, never an OCS read inside this read session
+    live_stt_enabled = bool(live_stt_snapshot().get("enabled"))
+    # tables that raised their hand (services/help.py), by number
+    hands = help_svc.open_by_table(session, round_.assembly_id)
+    ai_levels = _ai_levels(session, round_)
+    # who registered and consented at each table (services/consent.py); a
+    # table nobody registered at reads as zero under the assembly's rule
+    consents = consent_svc.consent_by_table(session, round_.assembly, round_.id)
+    consent_required = round_.assembly.participant_consent == "required"
     tables = []
     for table in round_.tables:
+        consent = consents.get(table.number) or {
+            "mode": round_.assembly.participant_consent, "registered": 0, "consenting": 0,
+            "refusing": 0, "can_record": not consent_required,
+        }
         recordings = list(
             session.execute(
                 select(Recording)
@@ -104,14 +203,52 @@ def round_monitor(session: Session, round_: Round) -> dict:
             device["connected"] and device["status"].get("storage_ok") is True
         )
         armed = bool(device["connected"] and device["status"].get("armed") is True)
+        recorders = _table_recorders(session, round_, table, recordings, now)
+        live_source_slot = next(
+            (r["slot"] for r in recorders if r["recording"] and r["recording"]["live_source"]), None
+        )
+        live_source_recording = next(
+            (r["recording"]["id"] for r in recorders if r["slot"] == live_source_slot), None
+        )
+        # machine-readable "can this table record": status plus reason codes,
+        # for an exception-first UI and an organizer's autopilot
+        readiness_ = readiness.table_readiness(
+            recorders,
+            live_stt_enabled=live_stt_enabled,
+            live_source_slot=live_source_slot,
+            live_caption_reason=(
+                LIVE_CAPTIONS.status(live_source_recording).get("reason")
+                if live_source_recording
+                else None
+            ),
+            round_active=round_.status == "ACTIVE",
+            help_requested=(hands.get(table.number) or {}).get("kind"),
+            consent_missing=consent_required and consent["consenting"] == 0,
+            consent_refused=consent.get("refusing", 0) > 0,
+        )
 
         tables.append(
             {
                 "table_id": table.id,
                 "number": table.number,
+                "color_key": table.color_key or color_for(table.number),
+                # the table's open request for the organizer, if its hand is up
+                "help_request": hands.get(table.number),
+                # the AI facilitator's effective level at this table (Pause AI)
+                "ai_facilitator": ai_levels.get(table.number, "off"),
+                # registered / consenting people at this table, and whether the
+                # assembly's consent rule lets it record
+                "consent": consent,
                 "device": device,
                 "armed": armed,
                 "local_recording_safe": local_safe,
+                # every recorder of the table, one entry per slot (A, B, …):
+                # `device` and `recording` above keep describing the newest
+                # phone and the newest recording, as they always did
+                "recorders": recorders,
+                # which recorder's captions the room reads (None: no live source)
+                "live_source_slot": live_source_slot,
+                "readiness": readiness_.as_dict(),
                 "recording": None
                 if recording is None
                 else {
@@ -144,6 +281,8 @@ def round_monitor(session: Session, round_: Round) -> dict:
         "tables_ready": sum(1 for t in tables if t["armed"]),
         "tables_total": len(tables),
         "tables": tables,
+        # READY / NEEDS_ATTENTION / BLOCKED counts and the worst of them
+        "readiness": readiness.summarize(tables),
         # Every round's status, not just this one's. The Live tab polls this
         # every few seconds but computed "which round is next" from the
         # assembly it was handed on mount, which nothing refreshed — so it

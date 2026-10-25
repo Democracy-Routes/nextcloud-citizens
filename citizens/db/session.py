@@ -140,6 +140,14 @@ def _begin_immediate(conn) -> None:
     # that cannot write throws away WAL's whole point, and polling endpoints
     # (captions, status, monitor) are most of the traffic at twenty tables.
     if conn.get_execution_options().get("citizens_read_only"):
+        # A plain (deferred) BEGIN: no lock until the first statement, and
+        # then only WAL's shared read mark, which never blocks a writer. It
+        # gives the read session one snapshot, taken at its first statement
+        # and released by the ROLLBACK read_only_scope issues at the end — so
+        # a statement a pooled connection still holds open cannot carry an
+        # old snapshot into the next request (a row committed 100 ms earlier
+        # came back 404 on the dev instance until this).
+        conn.exec_driver_sql("BEGIN")
         return
     conn.exec_driver_sql("BEGIN IMMEDIATE")
 
@@ -166,7 +174,14 @@ def session_scope() -> Iterator[Session]:
 
 
 def get_db() -> Iterator[Session]:
-    """FastAPI dependency."""
+    """FastAPI dependency. Declare it with `Depends(get_db, scope="function")`:
+    since FastAPI 0.118 a yield dependency's exit code runs AFTER the
+    response is sent unless scoped to the function, so the commit below
+    would happen after the client already has its 201 — and a phone or the
+    organizer reading right away saw a row that was not there yet (404s
+    100 ms after a create, a raised hand missing from the next monitor
+    read). tests/unit/test_db_dependency_scope.py keeps every declaration
+    scoped."""
     with session_scope() as session:
         yield session
 

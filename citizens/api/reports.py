@@ -12,7 +12,7 @@ from citizens.api.downloads import download_headers
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
 from citizens.security.identity import CurrentUser
-from citizens.services import lifecycle
+from citizens.services import lifecycle, zero_retention
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
 from citizens.services.branding import logo_path, organization_name
@@ -21,11 +21,11 @@ from citizens.services.report_pdf import render_pdf
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # Rendering a report reads every transcript and finding, and the PDF path also
 # asks Nextcloud for the organization name over OCS. None of that may happen
 # while holding SQLite's single writer slot.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 def _report_filename(name: str, ext: str) -> str:
@@ -78,11 +78,17 @@ def assembly_report_pdf(
 ):
     assembly = get_owned_assembly(session, assembly_id, user)
     _require_closed(assembly)
-    pdf = render_pdf(
-        build_report(session, assembly, include_drafts=include_drafts),
-        logo_path(),
-        organization_name(),
-    )
+    retained = zero_retention.retained_pdf_path(assembly.id)
+    if assembly.zero_retention_done_at is not None and retained.is_file():
+        # the transcripts are gone: the PDF written before they went is the
+        # report, quotations included
+        pdf = retained.read_bytes()
+    else:
+        pdf = render_pdf(
+            build_report(session, assembly, include_drafts=include_drafts),
+            logo_path(),
+            organization_name(),
+        )
     return Response(
         pdf,
         media_type="application/pdf",
@@ -123,10 +129,51 @@ def refresh_final_report(assembly_id: str, user: CurrentUser, session: DB):
     return {"final_report_at": assembly.final_report_at.isoformat()}
 
 
+@router.post("/assemblies/{assembly_id}/synthesis", status_code=202)
+def generate_synthesis(assembly_id: str, user: CurrentUser, session: DB):
+    """How the discussion developed across sessions: queue the synthesis
+    (at least two sessions with a summary). Happens by itself at closing;
+    this is for an organizer who wants it earlier or again."""
+    from citizens.jobs.handlers import maybe_enqueue_synthesis
+    from citizens.services.jobs import enqueue_job, has_live_job
+
+    assembly = get_owned_assembly(session, assembly_id, user)
+    summarised = [r for r in assembly.rounds if r.analysis_summary]
+    if len(summarised) < 2:
+        raise HTTPException(
+            status_code=409, detail="The synthesis needs at least two sessions with a summary"
+        )
+    queued = maybe_enqueue_synthesis(session, assembly)
+    if not queued and not has_live_job(session, "ANALYZE_ASSEMBLY", "assembly_id", assembly.id):
+        # a round analysis is running: queue anyway, the runner orders them
+        enqueue_job(session, "ANALYZE_ASSEMBLY", {"assembly_id": assembly.id})
+        queued = True
+    record_audit_event(session, "synthesis_requested", "assembly", assembly.id, actor=user)
+    return {"queued": queued, "sessions": len(summarised)}
+
+
 @router.get("/assemblies/{assembly_id}/progress")
 def assembly_progress(assembly_id: str, user: CurrentUser, session: ReadDB):
+    from citizens.services import job_failures
+
     assembly = get_owned_assembly(session, assembly_id, user)
-    return lifecycle.assembly_progress(session, assembly)
+    # a synthesis or a session's cross-table analysis that failed used to
+    # fail silently: the Report tab just never changed (R25)
+    synthesis = job_failures.latest_job_failure(
+        session, "ANALYZE_ASSEMBLY", "assembly_id", assembly.id
+    )
+    rounds = {}
+    for round_ in assembly.rounds:
+        failure = job_failures.latest_job_failure(session, "ANALYZE_ROUND", "round_id", round_.id)
+        if failure and failure["state"] == "FAILED":
+            rounds[round_.id] = failure
+    return {
+        **lifecycle.assembly_progress(session, assembly),
+        "failures": {
+            "synthesis": synthesis if synthesis and synthesis["state"] == "FAILED" else None,
+            "rounds": rounds,
+        },
+    }
 
 
 @router.post("/assemblies/{assembly_id}/report/publish")

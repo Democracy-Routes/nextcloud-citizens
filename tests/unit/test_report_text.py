@@ -58,32 +58,40 @@ def _report(participants: int = 48, title: str = "Design", language: str = "en")
 
 
 class TestRoundHeading:
-    """Both round-creation paths pre-fill the title with "Round N", so an
-    organizer who edits it to "Round 1 - design" used to get
-    "Round 1 — Round 1 - design" on every screen and in every export."""
+    """Both creation paths pre-fill the title with "Session N" (before 0.7:
+    "Round N"), so an organizer who edits it to "Session 1 - design" would
+    get "Session 1 — Session 1 - design" on every screen and in every export."""
 
-    def test_a_title_repeating_the_round_number_is_used_alone(self):
+    def test_a_title_repeating_the_session_number_is_used_alone(self):
+        assert round_heading(1, "Session 1 - design") == "Session 1 - design"
         assert round_heading(1, "Round 1 - design") == "Round 1 - design"
 
-    def test_the_untouched_default_is_not_doubled_either(self):
-        assert round_heading(2, "Round 2") == "Round 2"
+    def test_the_untouched_default_is_the_plain_heading_in_every_spelling(self):
+        assert round_heading(2, "Session 2") == "Session 2"
+        assert round_heading(2, "Round 2") == "Session 2"  # pre-0.7 pre-fill
+        assert round_heading(2, "round 2") == "Session 2"
+        assert round_heading(2, "Round 2", "it") == "Sessione 2"
+        assert round_heading(2, "Turno 2", "it") == "Sessione 2"
+        assert round_heading(2, "Sessione 2", "it") == "Sessione 2"
 
     def test_a_real_title_still_gets_its_number(self):
-        assert round_heading(3, "Mobility") == "Round 3 — Mobility"
+        assert round_heading(3, "Mobility") == "Session 3 — Mobility"
+        assert round_heading(3, "Mobilità", "it") == "Sessione 3 — Mobilità"
 
     def test_an_empty_title_falls_back_to_the_number(self):
-        assert round_heading(4, "") == "Round 4"
-        assert round_heading(4, "   ") == "Round 4"
+        assert round_heading(4, "") == "Session 4"
+        assert round_heading(4, "   ") == "Session 4"
 
-    def test_a_bare_number_prefix_counts_as_the_round_number(self):
+    def test_a_bare_number_prefix_counts_as_the_session_number(self):
         assert round_heading(5, "5. Housing") == "5. Housing"
 
-    def test_a_different_number_is_not_mistaken_for_this_round(self):
-        # "Round 2" as the title of round 1 is a mistake, but not ours to hide
-        assert round_heading(1, "Round 2 - design") == "Round 1 — Round 2 - design"
+    def test_a_different_number_is_not_mistaken_for_this_session(self):
+        # "Round 2" as the title of session 1 is a mistake, but not ours to hide
+        assert round_heading(1, "Round 2 - design") == "Session 1 — Round 2 - design"
 
-    def test_a_title_merely_starting_with_the_word_round(self):
-        assert round_heading(1, "Rounding up the evidence") == "Round 1 — Rounding up the evidence"
+    def test_a_title_merely_starting_with_the_word(self):
+        assert round_heading(1, "Rounding up the evidence") == "Session 1 — Rounding up the evidence"
+        assert round_heading(1, "Sessions of the past") == "Session 1 — Sessions of the past"
 
 
 class TestCoverParticipants:
@@ -146,15 +154,21 @@ class TestPlenaryReportHasNoDuplication:
 
 def _balanced_report() -> dict:
     r = _report()
-    r["rounds"][0]["speaking_balance"] = {
-        "voices": [
-            {"label": "A", "seconds": 750, "percent": 60},
-            {"label": "B", "seconds": 375, "percent": 30},
-            {"label": "Others", "seconds": 125, "percent": 10},
-        ],
-        "total_seconds": 1250,
-        "from_recording_id": "rec-1",
-    }
+    # per table, never per round: diarization labels do not cross tables
+    r["rounds"][0]["tables"] = [{
+        "table_number": 1, "summary": "", "findings": [],
+        "speaking_balance": {
+            "voices": [
+                {"label": "A", "seconds": 750, "percent": 60},
+                {"label": "B", "seconds": 375, "percent": 30},
+                {"label": "Others", "seconds": 125, "percent": 10},
+            ],
+            "total_seconds": 1250,
+            "from_recording_id": "rec-1",
+            "parts": 1,
+            "recorder_changed": False,
+        },
+    }]
     return r
 
 
@@ -163,16 +177,23 @@ class TestSpeakingBalanceInReport:
     diarization actually produced distinct voices. One voice means the whole
     recording was a single label (no diarization) and says nothing."""
 
-    def test_voices_and_caption_render(self):
+    def test_voices_and_caption_render_under_the_table(self):
         md = render_markdown(_balanced_report())
         assert "Speaking balance" in md
+        assert md.index("### Table 1") < md.index("**Speaking balance**")
         assert "- Voice A — 60% (12:30)" in md
         assert "- Others — 10%" in md
         assert "not identified by name" in md
+        assert "fullest part" not in md
+
+    def test_a_changed_phone_is_said_plainly(self):
+        r = _balanced_report()
+        r["rounds"][0]["tables"][0]["speaking_balance"]["recorder_changed"] = True
+        assert "covers the fullest part only" in render_markdown(r)
 
     def test_a_single_voice_is_not_printed(self):
         r = _balanced_report()
-        r["rounds"][0]["speaking_balance"]["voices"] = [
+        r["rounds"][0]["tables"][0]["speaking_balance"]["voices"] = [
             {"label": "A", "seconds": 100, "percent": 100},
         ]
         assert "Speaking balance" not in render_markdown(r)
@@ -270,7 +291,7 @@ How people move.
 
 In-person citizens' assembly.
 
-## Round 1 — Design
+## Session 1 — Design
 
 > What can improve?
 
@@ -310,7 +331,7 @@ A shared fleet.
 
 > [11:02] SPEAKER_02: “Why not cargo bikes?”
 
-## Round 2
+## Session 2
 
 _No findings for this round yet._
 
@@ -434,14 +455,15 @@ class TestDates:
 
 class TestRoundHeadingInItalian:
     def test_an_empty_title_is_the_localized_default(self):
-        assert round_heading(3, "", "it") == "Turno 3"
+        assert round_heading(3, "", "it") == "Sessione 3"
 
     def test_the_untouched_english_prefill_is_translated(self):
-        # both round-creation paths pre-fill "Round N" whatever the language
-        assert round_heading(2, "Round 2", "it") == "Turno 2"
+        # both creation paths pre-fill "Session N" (before 0.7 "Round N") whatever the language
+        assert round_heading(2, "Round 2", "it") == "Sessione 2"
+        assert round_heading(2, "Session 2", "it") == "Sessione 2"
 
     def test_a_real_title_gets_the_localized_number(self):
-        assert round_heading(1, "Mobilità", "it") == "Turno 1 — Mobilità"
+        assert round_heading(1, "Mobilità", "it") == "Sessione 1 — Mobilità"
 
     def test_a_title_already_naming_the_turno_is_used_alone(self):
         assert round_heading(1, "Turno 1 - mobilità", "it") == "Turno 1 - mobilità"
@@ -454,8 +476,8 @@ class TestRoundHeadingInItalian:
         assert round_heading(5, "5. Casa", "it") == "5. Casa"
 
     def test_english_is_untouched_by_the_language_argument(self):
-        assert round_heading(2, "Round 2", "en") == "Round 2"
-        assert round_heading(3, "Mobility", "en") == "Round 3 — Mobility"
+        assert round_heading(2, "Round 2", "en") == "Session 2"
+        assert round_heading(3, "Mobility", "en") == "Session 3 — Mobility"
 
 
 class TestItalianMarkdown:
@@ -480,8 +502,8 @@ class TestItalianMarkdown:
 
     def test_rounds_and_tables(self):
         md = render_markdown(_rich_report("it"))
-        assert "## Turno 1 — Design" in md
-        assert "## Turno 2\n" in md  # the untouched "Round 2" pre-fill
+        assert "## Sessione 1 — Design" in md
+        assert "## Sessione 2\n" in md  # the untouched "Round 2" pre-fill
         assert "*Sintesi IA:* Tables focused on buses." in md
         assert "### In tutti i tavoli" in md
         assert "### Tavolo 1" in md
@@ -531,7 +553,7 @@ class TestItalianMarkdown:
         md = render_markdown(_rich_report("it"))
         for english in (
             "Assembly Report", "INTERIM REPORT", "Tables contributing", "Participants:",
-            "Language:", "## Method", "Round 1", "AI summary", "Across all tables",
+            "Language:", "## Method", "Round 1", "Session 1", "AI summary", "Across all tables",
             "### Table", "table(s)", "DRAFT", "Speaker:", "Evidence removed",
             "No findings", "Other findings", "Proposals",
         ):
@@ -580,7 +602,7 @@ class TestBuildReportInItalian:
         finding = report["rounds"][0]["tables"][0]["findings"][0]
         assert finding["type"] == "proposal"
         assert finding["type_label"] == "Proposta"
-        assert report["rounds"][0]["heading"].startswith("Turno 1"), report["rounds"][0]
+        assert report["rounds"][0]["heading"].startswith("Sessione 1"), report["rounds"][0]
 
     def test_both_renderers_take_the_payload(self, database):
         with session_scope() as session:
@@ -589,7 +611,7 @@ class TestBuildReportInItalian:
 
         md = render_markdown(report)
         assert "# Assemblea di Bologna — Rapporto dell'assemblea" in md
-        assert "## Turno 1\n" in md
+        assert "## Sessione 1\n" in md
         assert "**Proposta: Autobus serali**" in md
         assert re.search(r"^_L'IA è stata utilizzata.*_$", md, re.MULTILINE)
         assert render_pdf(report).startswith(b"%PDF")
@@ -604,5 +626,106 @@ class TestBuildReportInItalian:
 
         finding = report["rounds"][0]["tables"][0]["findings"][0]
         assert finding["type_label"] == "Proposal"
-        assert report["methodology_note"] == METHODOLOGY_NOTE
+        # the seeded finding is approved, so the note says a human reviewed it
+        assert report["methodology_note"] == f"{METHODOLOGY_NOTE} {text('en', 'methodology_reviewed')}"
         assert report["method"].startswith("In-person citizens' assembly")
+
+
+def _seed_quoted_assembly(session, *, decline_at_table: int | None) -> str:
+    """Two tables with one quoted finding each and a cross-table finding
+    built from both; optionally a participant seated at a table who did not
+    consent to being quoted."""
+    from citizens.db.models import FindingEvidence, Participant, Transcript, TranscriptSegment
+    from citizens.db.models.consent import ConsentNotice, ParticipantConsent
+
+    assembly = Assembly(name="Quoted", created_by="tester", language="en", default_table_count=2,
+                        participant_consent="required")
+    session.add(assembly)
+    session.flush()
+    round_ = Round(assembly_id=assembly.id, position=1, title="Session 1", question="Q")
+    session.add(round_)
+    session.flush()
+    sources = []
+    for number in (1, 2):
+        table = Table(round_id=round_.id, number=number)
+        session.add(table)
+        session.flush()
+        recording = Recording(assembly_id=assembly.id, round_id=round_.id, table_id=table.id,
+                              table_number=number, state="READY_FOR_REVIEW")
+        session.add(recording)
+        session.flush()
+        transcript = Transcript(recording_id=recording.id, provider="test")
+        session.add(transcript)
+        session.flush()
+        segment = TranscriptSegment(
+            transcript_id=transcript.id, sequence=1, speaker_label="SPEAKER_00",
+            start_seconds=10.0, end_seconds=14.0,
+            text=f"A long enough quotation from table {number} to count as evidence.",
+        )
+        session.add(segment)
+        session.flush()
+        finding = Finding(
+            assembly_id=assembly.id, round_id=round_.id, table_id=table.id, scope="table",
+            type="proposal", title=f"Proposal {number}", summary="Summary.", status="APPROVED",
+        )
+        session.add(finding)
+        session.flush()
+        session.add(FindingEvidence(finding_id=finding.id, transcript_segment_id=segment.id))
+        sources.append(finding.id)
+    import json as _json
+
+    session.add(Finding(
+        assembly_id=assembly.id, round_id=round_.id, table_id=None, scope="round",
+        type="proposal", title="Across", summary="Both tables.", status="APPROVED",
+        source_finding_ids=_json.dumps(sources), mentioned_table_count=2,
+    ))
+    if decline_at_table is not None:
+        person = Participant(assembly_id=assembly.id, label="P001", name="Anna",
+                             source="TABLE_DEVICE", registered_table_number=decline_at_table)
+        session.add(person)
+        session.add(ConsentNotice(hash="0" * 64, version="t", language="en", text="t"))
+        session.flush()
+        session.add(ParticipantConsent(
+            assembly_id=assembly.id, participant_id=person.id, table_number=decline_at_table,
+            method="TABLE_DEVICE", notice_hash="0" * 64, notice_version="t", notice_language="en",
+            notice_read=True, recording_consent=True, transcription_consent=True,
+            analysis_consent=True, publication_consent=False,
+        ))
+    session.flush()
+    return assembly.id
+
+
+class TestQuotationsWithheld:
+    """Someone seated at a table declined to be quoted: the table's findings
+    stand, their verbatim quotations do not reach the report — nor does a
+    cross-table finding borrow one from that table."""
+
+    def test_the_tables_quotations_are_withheld_and_the_report_says_so(self, database):
+        with session_scope() as session:
+            assembly_id = _seed_quoted_assembly(session, decline_at_table=1)
+            report = build_report(session, session.get(Assembly, assembly_id))
+        [round_] = report["rounds"]
+        tables = {t["table_number"]: t for t in round_["tables"]}
+        assert tables[1]["quotations_withheld"] is True and tables[2]["quotations_withheld"] is False
+        assert tables[1]["findings"][0]["evidence"] == []
+        assert tables[1]["findings"][0]["quotations_withheld"] is True
+        assert tables[1]["findings"][0]["evidence_removed"] is False
+        assert len(tables[2]["findings"][0]["evidence"]) == 1
+        [cross] = round_["cross_table"]
+        assert [e["table_number"] for e in cross["evidence"]] == [2]
+        assert "did not consent to being quoted" in report["methodology_note"]
+
+        md = render_markdown(report)
+        assert "_Quotations from this table are withheld" in md
+        assert "quotation from table 1" not in md and "quotation from table 2" in md
+        assert render_pdf(report).startswith(b"%PDF")
+
+    def test_nothing_is_withheld_when_everyone_agreed_to_be_quoted(self, database):
+        with session_scope() as session:
+            assembly_id = _seed_quoted_assembly(session, decline_at_table=None)
+            report = build_report(session, session.get(Assembly, assembly_id))
+        [round_] = report["rounds"]
+        assert all(t["quotations_withheld"] is False for t in round_["tables"])
+        assert sorted(e["table_number"] for e in round_["cross_table"][0]["evidence"]) == [1, 2]
+        assert "did not consent to being quoted" not in report["methodology_note"]
+        assert "withheld" not in render_markdown(report)

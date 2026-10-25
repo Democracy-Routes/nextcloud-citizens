@@ -4,14 +4,27 @@
 import { mdiAlertCircleOutline, mdiCheckCircle, mdiQrcodeScan, mdiWifiOff } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SvgIcon from '../components/ui/SvgIcon.vue'
-import { recorderApi, RecorderApiError, type JoinResult, type RoundInfo } from './api'
+import {
+	recorderApi,
+	RecorderApiError,
+	type Joined,
+	type JoinResult,
+	type RoundInfo,
+	type TableConsent,
+} from './api'
 import { useI18n } from 'vue-i18n'
 import { setLocale } from '../i18n'
 import { decideOnStatusFailure } from './errors'
 import { hasUnfinishedAudio, purgeLocalAudio, type PurgeOutcome } from './purge'
 import ArmedScreen from './components/ArmedScreen.vue'
+import CapabilityQr from './components/CapabilityQr.vue'
 import ConsentScreen from './components/ConsentScreen.vue'
+import ConfirmJoinScreen from './components/ConfirmJoinScreen.vue'
+import FacilitatorPage from './components/FacilitatorPage.vue'
+import JoinedScreen from './components/JoinedScreen.vue'
+import ParticipantPage from './components/ParticipantPage.vue'
 import Preflight from './components/Preflight.vue'
+import RegisterPage from './components/RegisterPage.vue'
 import RecordingScreen from './components/RecordingScreen.vue'
 import RecoverySync from './components/RecoverySync.vue'
 import ReportScreen from './components/ReportScreen.vue'
@@ -19,6 +32,29 @@ import { idb, type StoredRecording } from './idb'
 import { initLogger } from './logger'
 
 const SESSION_KEY = 'citizens-recorder-session'
+const DEVICE_KEY = 'citizens-recorder-device'
+
+/** This phone's own random id (R14), made once and kept in localStorage.
+ *
+ * Sent on every join so a single-use code already spent — scanned again
+ * after a reload, or by "Record another session" — returns the same
+ * session instead of a 410. Wrapped in try/catch: private mode or blocked
+ * storage must still let the phone join, just without this. */
+function deviceId(): string | undefined {
+	try {
+		const stored = window.localStorage.getItem(DEVICE_KEY)
+		if (stored) return stored
+		const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'
+		const bytes = new Uint8Array(24)
+		crypto.getRandomValues(bytes)
+		// 64 letters in the alphabet divide 256 evenly, so byte % 64 is unbiased
+		const id = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('')
+		window.localStorage.setItem(DEVICE_KEY, id)
+		return id
+	} catch {
+		return undefined
+	}
+}
 
 type Screen =
 	| 'joining'
@@ -26,11 +62,16 @@ type Screen =
 	| 'offline'
 	| 'purged'
 	| 'recovery'
+	| 'confirm-join'
+	| 'joined'
 	| 'consent'
 	| 'preflight'
 	| 'armed'
 	| 'recording'
 	| 'report'
+	| 'register'
+	| 'participant'
+	| 'facilitate'
 	| 'error'
 
 const { t } = useI18n()
@@ -39,6 +80,9 @@ const screen = ref<Screen>('joining')
 const error = ref('')
 const session = ref<JoinResult | null>(null)
 const selectedRound = ref<RoundInfo | null>(null)
+// What a code other than the printed table code made this phone — shown once,
+// right after the scan, before consent; a resumed session never sees it again.
+const pendingJoined = ref<Joined | null>(null)
 const recoveryRecording = ref<StoredRecording | null>(null)
 const skippedRecovery = new Set<string>()
 
@@ -54,7 +98,7 @@ const orchestrated = computed(() => session.value?.assembly.recording_mode !== '
 async function joinWithRetry(token: string): Promise<JoinResult> {
 	for (let attempt = 0; ; attempt++) {
 		try {
-			return await recorderApi.join(token)
+			return await recorderApi.join(token, deviceId())
 		} catch (err) {
 			const status = err instanceof RecorderApiError ? err.status : 0
 			if ((status !== 429 && status < 500) || attempt >= 5) throw err
@@ -161,6 +205,18 @@ async function enterWithSession(joined: JoinResult): Promise<void> {
 	// audio from a previous event, and that must not stand between them and
 	// recording this one.
 	if (await scanForRecovery(joined.assembly.id)) return
+	// the code this phone just scanned made it a recorder of a table it did not
+	// pick (another recorder, or a brand-new table): say so, once, first
+	if (pendingJoined.value) {
+		screen.value = 'joined'
+		return
+	}
+	afterJoined()
+}
+
+/** Past the joined screen (or straight here for a printed table code). */
+function afterJoined(): void {
+	pendingJoined.value = null
 	// people are about to be recorded: tell them what happens to the audio
 	// before it starts. Once per device — an interrupted round must not make
 	// the table read it again mid-assembly.
@@ -191,12 +247,16 @@ function consentGiven(): boolean {
 	}
 }
 
-function acceptConsent(): void {
+function acceptConsent(table: TableConsent | null = null): void {
 	try {
 		if (session.value) window.localStorage.setItem(CONSENT_KEY, session.value.assembly.id)
 	} catch {
 		/* not being able to remember is fine; showing it twice is not a failure */
 	}
+	// the roster as the screen left it, so the next screen's "Participants: 3"
+	// is right without another round-trip (registration is per person, and
+	// the screen stays reachable from there for a late arrival)
+	if (session.value && table) session.value = { ...session.value, consent: table }
 	screen.value = 'preflight'
 }
 
@@ -246,30 +306,248 @@ function joinHashChanged(): void {
 	void joinFromHash()
 }
 
+/** A guard against an accident, asked BEFORE the code is spent: a third
+ * recorder at a table that already has two, or a phone that was recording one
+ * table scanning a code for another. Cancel never consumes the code. */
+const pendingGuard = ref<{
+	kind: 'third-recorder' | 'switch-table'
+	token: string
+	tableNumber: number
+	colorKey: string | null
+	recorders: number
+	previousTable: number
+} | null>(null)
+
+async function guardBeforeJoin(token: string): Promise<boolean> {
+	try {
+		const peek = await recorderApi.peekCapability(token)
+		if (!peek.valid || peek.table_number === null) return false
+		const stored = sessionLoad()
+		const previousTable = stored && stored.assembly.id === peek.assembly_id ? stored.table_number : null
+		const kind =
+			previousTable !== null && previousTable !== peek.table_number
+				? 'switch-table'
+				: peek.purpose === 'ADD_RECORDER_TO_TABLE' && peek.recorders >= 2
+					? 'third-recorder'
+					: null
+		if (!kind) return false
+		pendingGuard.value = {
+			kind, token, tableNumber: peek.table_number, colorKey: peek.color_key,
+			recorders: peek.recorders, previousTable: previousTable ?? 0,
+		}
+		return true
+	} catch {
+		return false // the join itself will say what is wrong
+	}
+}
+
+async function confirmGuardedJoin(): Promise<void> {
+	const guard = pendingGuard.value
+	pendingGuard.value = null
+	if (guard) await joinToken(guard.token)
+}
+
+async function cancelGuardedJoin(): Promise<void> {
+	pendingGuard.value = null
+	history.replaceState(null, '', window.location.pathname + window.location.search)
+	const stored = sessionLoad()
+	if (stored && (await resumeStoredSession(stored))) return
+	screen.value = 'no-invite'
+}
+
+/* ---- a person's own phone (0.7 consent) ----
+ * recorder.html#/register/<token> is the table's registration code scanned by
+ * a participant; registering hands this browser a bearer for the person's
+ * page, kept under its own key so a table phone and a person's phone never
+ * confuse each other's sessions. */
+const PARTICIPANT_KEY = 'citizens-participant-session'
+const registerToken = ref<string | null>(null)
+const participantToken = ref<string | null>(null)
+
+function participantLoad(): string | null {
+	try {
+		return localStorage.getItem(PARTICIPANT_KEY)
+	} catch {
+		return null
+	}
+}
+
+function participantRegistered(token: string): void {
+	participantToken.value = token
+	try {
+		localStorage.setItem(PARTICIPANT_KEY, token)
+	} catch {
+		/* private mode: the page lasts until reload */
+	}
+	// a facilitator who registered for consent from their own page goes back
+	// to it; the registration stays on this phone like anyone else's
+	if (facilitatorToken.value) {
+		history.replaceState(null, '', window.location.pathname + window.location.search + '#/facilitator')
+		screen.value = 'facilitate'
+		return
+	}
+	// the code's token leaves the visible URL; a reload lands on the page
+	history.replaceState(null, '', window.location.pathname + window.location.search + '#/participant')
+	screen.value = 'participant'
+}
+
+/* ---- the facilitator's own phone (0.7 facilitator) ----
+ * recorder.html#/facilitate/<token> is the table phone's "Add facilitator"
+ * code. Redeeming it hands this browser a bearer for one table's view, kept
+ * under its own key: a facilitator's phone is neither a table phone nor a
+ * participant's, and may later become a recorder through the join route. */
+const FACILITATOR_KEY = 'citizens-facilitator-session'
+const facilitatorToken = ref<string | null>(null)
+const facilitatorBusy = ref(false)
+
+function facilitatorLoad(): string | null {
+	try {
+		return localStorage.getItem(FACILITATOR_KEY)
+	} catch {
+		return null
+	}
+}
+
+function facilitatorStore(token: string | null): void {
+	try {
+		if (token) localStorage.setItem(FACILITATOR_KEY, token)
+		else localStorage.removeItem(FACILITATOR_KEY)
+	} catch {
+		/* private mode: the page lasts until reload */
+	}
+}
+
+async function facilitateWithToken(code: string): Promise<void> {
+	facilitatorBusy.value = true
+	screen.value = 'joining'
+	try {
+		const joined = await recorderApi.facilitate(code)
+		facilitatorToken.value = joined.facilitator_token
+		facilitatorStore(joined.facilitator_token)
+		setLocale(joined.assembly.language)
+		history.replaceState(null, '', window.location.pathname + window.location.search + '#/facilitator')
+		screen.value = 'facilitate'
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+		screen.value = 'error'
+	} finally {
+		facilitatorBusy.value = false
+	}
+}
+
+function forgetFacilitator(): void {
+	facilitatorToken.value = null
+	facilitatorStore(null)
+	history.replaceState(null, '', window.location.pathname + window.location.search)
+	screen.value = 'no-invite'
+}
+
+/** The facilitator registers for consent: the table's registration code
+ * opens here, on the same phone, and the page comes back afterwards. */
+function facilitatorRegisters(code: string): void {
+	registerToken.value = code
+	screen.value = 'register'
+}
+
+/** This phone becomes a recorder of the table: the join route takes over,
+ * the facilitator view is left (its bearer is dropped — one role per phone). */
+function facilitatorBecomesRecorder(url: string): void {
+	const match = url.match(/#\/join\/(.+)$/)
+	if (!match) return
+	facilitatorToken.value = null
+	facilitatorStore(null)
+	window.location.hash = `#/join/${match[1]}`
+}
+
+/** The facilitator routes, before any join is attempted. */
+function facilitatorFromHash(): boolean {
+	const facilitate = window.location.hash.match(/#\/facilitate\/(.+)$/)
+	if (facilitate && !capturing.value && !facilitatorBusy.value) {
+		void facilitateWithToken(decodeURIComponent(facilitate[1]))
+		return true
+	}
+	if (/#\/facilitator$/.test(window.location.hash) || (!window.location.hash && !sessionLoad())) {
+		const stored = facilitatorLoad()
+		if (stored) {
+			facilitatorToken.value = stored
+			screen.value = 'facilitate'
+			return true
+		}
+	}
+	return false
+}
+
+/* ---- "Add facilitator" from a table screen: the code as a sheet ---- */
+const facilitatorSheet = ref(false)
+
+function forgetParticipant(): void {
+	participantToken.value = null
+	try {
+		localStorage.removeItem(PARTICIPANT_KEY)
+	} catch {
+		/* ignore */
+	}
+	history.replaceState(null, '', window.location.pathname + window.location.search)
+	screen.value = 'no-invite'
+}
+
+/** The registration and participant routes, before any join is attempted. */
+function participantFromHash(): boolean {
+	const register = window.location.hash.match(/#\/register\/(.+)$/)
+	if (register && !capturing.value) {
+		registerToken.value = decodeURIComponent(register[1])
+		screen.value = 'register'
+		return true
+	}
+	if (/#\/participant$/.test(window.location.hash) || (!window.location.hash && !sessionLoad())) {
+		const stored = participantLoad()
+		if (stored) {
+			participantToken.value = stored
+			screen.value = 'participant'
+			return true
+		}
+	}
+	return false
+}
+
 async function joinFromHash(): Promise<boolean> {
+	if (participantFromHash()) return true
+	if (facilitatorFromHash()) return true
 	// A QR opened in this same tab can be a fragment-only navigation: Vue
 	// remains mounted. Do not tear down a live microphone to switch sessions.
 	const match = window.location.hash.match(/#\/join\/(.+)$/)
 	if (match && !capturing.value && !joinInProgress) {
-		joinInProgress = true
+		const token = decodeURIComponent(match[1])
 		screen.value = 'joining'
-		try {
-			const joined = await joinWithRetry(decodeURIComponent(match[1]))
-			sessionStore(joined)
-			skippedRecovery.clear()
-			// remove the invite secret from the visible URL (brief §14)
-			history.replaceState(null, '', window.location.pathname + window.location.search)
-			await enterWithSession(joined)
+		if (await guardBeforeJoin(token)) {
+			screen.value = 'confirm-join'
 			return true
-		} catch (err) {
-			error.value = err instanceof Error ? err.message : String(err)
-			screen.value = 'error'
-			return true
-		} finally {
-			joinInProgress = false
 		}
+		await joinToken(token)
+		return true
 	}
 	return false
+}
+
+async function joinToken(token: string): Promise<void> {
+	if (joinInProgress) return
+	joinInProgress = true
+	screen.value = 'joining'
+	try {
+		const joined = await joinWithRetry(token)
+		sessionStore(joined)
+		skippedRecovery.clear()
+		pendingJoined.value =
+			joined.joined && joined.joined.purpose !== 'JOIN_TABLE' ? joined.joined : null
+		// remove the invite secret from the visible URL (brief §14)
+		history.replaceState(null, '', window.location.pathname + window.location.search)
+		await enterWithSession(joined)
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+		screen.value = 'error'
+	} finally {
+		joinInProgress = false
+	}
 }
 
 onMounted(async () => {
@@ -424,10 +702,27 @@ function sessionStorageClear(): void {
 			:recording="recoveryRecording"
 			@done="finishRecovery" />
 
+		<ConfirmJoinScreen
+			v-else-if="screen === 'confirm-join' && pendingGuard"
+			:kind="pendingGuard.kind"
+			:table-number="pendingGuard.tableNumber"
+			:color-key="pendingGuard.colorKey"
+			:recorders="pendingGuard.recorders"
+			:previous-table="pendingGuard.previousTable"
+			@join="confirmGuardedJoin"
+			@cancel="cancelGuardedJoin" />
+
+		<JoinedScreen
+			v-else-if="screen === 'joined' && pendingJoined"
+			:joined="pendingJoined"
+			@continue="afterJoined" />
+
 		<ConsentScreen
 			v-else-if="screen === 'consent' && session"
+			:token="session.session_token"
 			:handling="session.data_handling ?? null"
 			:table-number="session.table_number"
+			:color-key="session.table_color"
 			@accept="acceptConsent" />
 
 		<Preflight
@@ -435,6 +730,8 @@ function sessionStorageClear(): void {
 			:session="session"
 			@ready="screen = 'armed'"
 			@start="startRound"
+			@participants="screen = 'consent'"
+			@facilitator="facilitatorSheet = true"
 			@report="screen = 'report'" />
 
 		<ArmedScreen
@@ -443,12 +740,37 @@ function sessionStorageClear(): void {
 			:blocked-round-id="startFailedRoundId"
 			@start="startRound"
 			@back="screen = 'preflight'"
+			@participants="screen = 'consent'"
+			@facilitator="facilitatorSheet = true"
 			@report="screen = 'report'" />
 
 		<ReportScreen
 			v-else-if="screen === 'report' && session"
-			:session="session"
+			:token="session.session_token"
+			:assembly-name="session.assembly.name"
+			:table-number="session.table_number"
 			@back="screen = orchestrated ? 'armed' : 'preflight'" />
+
+		<!-- a person's own phone: registering through the table's code, then
+		     their page (where they are, their consent, the report when out) -->
+		<RegisterPage
+			v-else-if="screen === 'register' && registerToken"
+			:token="registerToken"
+			@registered="participantRegistered" />
+
+		<ParticipantPage
+			v-else-if="screen === 'participant' && participantToken"
+			:token="participantToken"
+			@forget="forgetParticipant" />
+
+		<!-- the facilitator's own phone: one table's view, never a recorder -->
+		<FacilitatorPage
+			v-else-if="screen === 'facilitate' && facilitatorToken"
+			:token="facilitatorToken"
+			:registered="participantToken !== null || participantLoad() !== null"
+			@forget="forgetFacilitator"
+			@register="facilitatorRegisters"
+			@become-recorder="facilitatorBecomesRecorder" />
 
 		<RecordingScreen
 			v-else-if="screen === 'recording' && session && selectedRound"
@@ -459,6 +781,21 @@ function sessionStorageClear(): void {
 			@next-round="startRound"
 			@start-failed="startFailedRoundId = $event; capturing = false"
 			@settled="capturing = false"
+			@facilitator="facilitatorSheet = true"
 			@view-report="screen = 'report'" />
+
+		<!-- "Add facilitator": the code a facilitator's own phone scans, over
+		     whichever table screen asked for it -->
+		<div v-if="facilitatorSheet && session" class="rc-sheet-scrim" @click.self="facilitatorSheet = false">
+			<div class="rc-sheet" role="dialog" aria-modal="true">
+				<CapabilityQr
+					:token="session.session_token"
+					purpose="FACILITATE_TABLE"
+					:table-number="session.table_number"
+					:color-key="session.table_color"
+					:round-id="selectedRound?.id ?? null"
+					@close="facilitatorSheet = false" />
+			</div>
+		</div>
 	</div>
 </template>

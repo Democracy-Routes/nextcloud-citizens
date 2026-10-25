@@ -1,0 +1,22 @@
+{
+	"spaces": {
+		"plan": "Plan",
+		"run": "Run",
+		"results": "Results"
+	},
+	"timeline": {
+		"participants": "{count} of {expected} participants",
+		"participantsNoTarget": "{count} participants",
+		"tables": "{count} tables | {count} table | {count} tables",
+		"wholeRoom": "Whole room",
+		"sessions": "{count} sessions | {count} session | {count} sessions",
+		"untitled": "Session {position}",
+		"liveNow": "Live now",
+		"notStarted": "Not started",
+		"ended": "Ended",
+		"processing": "Processing",
+		"review": "In review",
+		"closed": "Closed",
+		"openLive": "Open the Live tab for session {position}"
+	}
+}

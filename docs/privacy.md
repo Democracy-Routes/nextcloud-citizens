@@ -54,6 +54,26 @@ starts** — see "Consent" below.
   Individual assemblies can override the instance default.
 * Deletion runs from a periodic sweep, is audit-logged (assembly, policy,
   number of recordings, bytes freed), and never logs content.
+* **Zero retention (0.7): keep only the report.** A third choice, per
+  assembly, beside the instance default and a day count. Once the assembly is
+  **closed** and every transcription and analysis has actually finished, the
+  audio, every transcript and the live-caption files are deleted outright,
+  and a PDF of the frozen report is kept in their place — from then on the
+  report-PDF download serves that file rather than rendering a new one.
+  Nothing but the participant list and that PDF survives. **This cannot be
+  undone**: the assembly can never be reopened afterwards, because there is
+  no audio left to build anything from again. If the assembly was still being
+  transcribed or analysed at closing time, zero retention runs as soon as
+  that finishes, not necessarily the instant you close it.
+* **Audio that arrives after a recording has been closed is not lost
+  (0.7).** A recording the server finished on a phone's behalf — because the
+  phone sent nothing for five minutes, or because an organizer pressed
+  *Finish recording* on the Live tab and the phone never answered — still
+  accepts whatever that phone sends afterwards: it opens a new recording of
+  the same table and the same recorder, continuing the account, which is
+  transcribed and folded back into the table's analysis (keeping any findings
+  already approved). It is ordinary audio from there on, subject to
+  retention — including zero retention — like any other recording.
 * **Audio only.** Transcripts, findings and reports are the record of the
   assembly and are not touched by retention. Delete them explicitly from the
   Files tab of the assembly if you need to.
@@ -108,6 +128,20 @@ starts** — see "Consent" below.
     organizer.
 
   Each phone also offers the same thing to its own user at the end of a round.
+* **The device log is diagnostics, not a second recording.** Each phone ships
+  an event log of its own session (`logs/devices/`, in the table above); the
+  organizer's own report of it — `GET /api/v1/assemblies/{id}/device-report`,
+  the same thing `scripts/device-report.py` prints from the host — contains
+  event names and timestamps only: which browser, whether it held the
+  screen's wake lock, how many audio chunks it captured while the page was
+  hidden, where capture gapped. No audio and nothing spoken is in it, beyond
+  the browser's own user agent string.
+* **Sessions that never recorded, and spent single-use QR codes, are removed
+  a week after they expired (0.7).** A phone, facilitator or participant
+  session that expired without making a recording, and a single-use code
+  already spent, are deleted seven days after they expired — including that
+  phone's device log. A session that did make a recording is kept, because it
+  is that recording's record of which phone made it.
 * **Not implemented:** there is no automatic deletion of transcripts or
   findings, and no data-subject-request tooling. Both are manual today.
 
@@ -124,9 +158,103 @@ The screen offers a decline as well as a confirmation. A screen with only one
 button is not a consent step, and a table with no way to say no previously had
 to work that out by walking away from the phone.
 
-This is an *information and confirmation* step at the table. It is **not** a
-per-individual consent record: Citizens does not store who agreed. If your
-lawful basis requires individual consent records, collect them separately.
+Since 0.7 the screen is also where **individual consent is recorded**. The
+notice is versioned — `2026-10.3` today — and rendered by the server from
+the Settings (data controller and contact) and the live data-handling
+facts, in the assembly's language, and hashed exactly as shown; the text
+behind every hash is kept (`consent_notices`). It opens with a paragraph
+making clear that recording is not a condition of taking part: a person who
+does not consent can sit at a table that is not recorded. Each person
+registers one at a time — on the table's phone, or on their own phone
+through a registration code the table shows — giving a name (required), an
+email (optional), and **two boxes**: a required one covering the audio
+recording of the discussion at the table, its transcription and
+AI-assisted analysis, and an optional one, ticked by default, covering
+short anonymous quotations from the table in the assembly's report.
+Leaving the required box unticked records a refusal; the optional box can
+be unticked on its own without affecting the rest. The record
+(`participant_consents`: who, where, method, notice version and hash, the
+four flags the two boxes cover, the server's timestamp) is stored as given.
+Registration is audited without name or email. The notice names the
+transcription and analysis providers selected in Settings and prints the
+organization data entered there (controller, address, contact,
+data-protection contact, hosting, supervisory authority) — blank fields are
+left out, never shown as placeholders.
+
+Consent acts are append-only: nothing already recorded is overwritten, and
+the newest act for a person is the one that counts everywhere it is
+checked. From the table phone's own participants screen, or the
+organizer's Participants tab, three actions each add a new act: **Changed
+their mind** (offered only after a refusal) records a new act with both
+boxes ticked again and the name unchanged; **Withdraws consent** records a
+new act with every flag false — what was already recorded is kept and
+keeps being processed, but the table cannot record this person again until
+they are moved or change their mind; **Moved to another table** takes the
+person off this table's roster for the sessions still to come, and leaves
+their consent record untouched. The consent register (CSV or PDF, from the
+Participants tab) lists every act ever recorded, one row per act, all under
+the same participant's label.
+
+If anyone seated at a table declined the quotations box, the report prints
+no verbatim quotation from that table: the table's findings stand on the
+analysis alone, the report states under that table that quotations from it
+are withheld because a participant seated there did not consent to being
+quoted, and cross-table findings borrow no quotation from that table
+either. The methodology note explains why. This withholds by table, not by
+the one person, because voices are not separated in the recording.
+
+A **facilitator's own phone** (0.7) follows one table through a code the
+table's phone shows. The server keeps only a hashed bearer with the table
+number and timestamps (`facilitator_sessions`) — no name, no audio, no
+captions: the facilitator's page reads the same roster (names only) and
+messages the table's phones read, and what it writes (a prompt, a hand
+raised) is audited under the session id. Registering for consent from that
+phone goes through the ordinary registration code and record.
+
+The **AI facilitator** (0.7, off unless an administrator or organizer turns
+it on) sends a language model, once a minute at most, the last ~40 live
+caption lines of a table with every known participant name replaced by a
+pseudonym (the same `redact_names` list the analysis uses), the session's
+question and time, and — only when the engine labels speakers — anonymous
+speaking-time shares. It receives one sentence back, which is stored with
+the table number, the model name and who it was delivered to
+(`facilitator_interventions`), and shown on the facilitator's phone or the
+table's phones. Thumbs up or down are stored as counts per intervention
+(`facilitator_feedback`), never as who tapped. The model and endpoint are
+the ones configured in Settings → AI facilitator, falling back to the
+analysis model; the consent notice's analysis provider therefore covers it
+when the two are the same service, and an administrator who points the
+facilitator at a different provider should name it in the organization
+data.
+
+An assembly set to *Consent at the table: required* (the default for an
+organized assembly) records a table only once at least one person seated
+there has consented, **and only for as long as nobody seated there has
+refused or withdrawn** — one refusal blocks the whole table; it is not
+outvoted by the rest. The seat that counts is the seat of the current
+session's seating plan — written by registration and by New seating —
+falling back to the table the person registered at. The room procedure for
+a blocked table is to mark the refusing person **Moved to another table**
+(a table that is not recorded), on the table's phone or from the
+organizer's Participants tab; the table can then record. The rule is
+enforced where recording starts, not only on the phone. *Optional* (the
+default for a spontaneous Session) shows the notice and offers registration
+without blocking anything.
+
+Every consent act is audited — `consent_changed` and `participant_moved`,
+alongside the existing `participant_registered`. A table's own phone can
+act only on people seated at its own table; the organizer can act on
+anyone in the assembly. A closed assembly accepts no further consent acts.
+
+The lawful basis documented in [consent-form.md](consent-form.md) is explicit
+consent (GDPR Art. 6(1)(a) and Art. 9(2)(a)). Rights: erasing a participant
+from the Participants tab erases their consent record (cascade); the export
+carries every record and every notice text, so a subject-access request can
+be answered from the archive; withdrawal is handled through the contact on
+the notice — there is no self-service withdrawal yet, and a withdrawal does
+not undo processing already done. A person who registered on their own phone
+keeps a page showing their registration, their consent and, once published,
+the report.
 
 ## Identifiability
 

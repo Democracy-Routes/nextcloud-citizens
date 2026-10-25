@@ -9,9 +9,12 @@ those recordings into transcripts, per-table summaries and cross-table findings
 that a human organizer reviews before anything is published.
 
 > **Beta.** The pipeline is tested end to end. Audio retention is configurable,
-> and the recorder tells each table what happens to the recording before it
-> starts. That screen is not a per-individual consent record, so bring your own
-> privacy notice, and rehearse before a high-stakes assembly.
+> down to **zero retention** (keep only the report, nothing recorded behind
+> it). The recorder tells each table what happens to the recording before it
+> starts, and records each person's individual consent against that notice
+> (on the table's phone or their own). Set the data controller and contact in
+> Settings, have counsel read the notice if you are a public body, and
+> rehearse before a high-stakes assembly.
 
 ```text
 50 citizens → 10 tables → 1 phone per table
@@ -34,9 +37,11 @@ that a human organizer reviews before anything is published.
 * **Offline-first recording.** Audio is written to the phone's storage before
   anything is uploaded, with checksums and idempotent retries, so a bad network
   can never lose a discussion.
-* **Two ways to run an assembly.** *Live*: you start and end each round and every
-  armed table records simultaneously. *Independent*: each table works through the
-  same questions on its own schedule, even days apart.
+* **Two ways to run an assembly, and a third for one table right now.**
+  *Live*: you start and end each round and every armed table records
+  simultaneously. *Independent*: each table works through the same questions
+  on its own schedule, even days apart. *Record now*: one phone, one table,
+  no set-up and no planned time — it records until the table is done.
 * **Transcription that fits the room.** Four engines, two of which run entirely
   on your own hardware. Live captions and the transcription of the finished audio
   are separate switches: run both, or run captions alone and let them be the
@@ -47,7 +52,19 @@ that a human organizer reviews before anything is published.
   replacement is let in automatically after two minutes of silence — and the
   half already recorded is transcribed and analysed with the rest, so the round
   reads as one discussion. Phones report their battery level while recording,
-  so a table can be swapped before it goes dark rather than after.
+  so a table can be swapped before it goes dark rather than after. A table can
+  also run two or more recorder phones at once, side by side. Since 0.7, a
+  recorder that has gone quiet for five minutes is finished by the server
+  with the audio already received, from the Live tab's own *Finish recording*
+  or by itself — and if that phone wakes up and keeps recording, what it sends
+  next is kept too, in a second recording of the same table that is
+  transcribed and folded back into the analysis.
+* **A facilitator phone, with an AI assistant beside it.** The person running
+  a table can carry their own phone — the question, who has registered and
+  consented, the recorder phones' health, an organizer's messages, a hand to
+  raise — separate from whichever phone is actually recording. An optional AI
+  assistant reads the table's live captions and, only when something is worth
+  saying, offers the facilitator one sentence to send on or dismiss.
 * **Evidence-linked analysis.** Every finding cites the transcript passages that
   support it — speaker, timestamp, exact words. A finding with no evidence is
   discarded automatically.
@@ -63,7 +80,10 @@ that a human organizer reviews before anything is published.
   appearing on somebody's phone.
 * **Data you control.** Per-assembly Files tab to download, export or delete
   audio and transcripts at any time — and with a self-hosted Whisper server or
-  Vosk, recordings never leave your infrastructure at all.
+  Vosk, recordings never leave your infrastructure at all. **Zero retention**
+  goes further: choose it and, once the assembly is closed and its report
+  written, the audio, the transcripts and the live captions are deleted
+  outright, keeping only the report.
 * **Audio can be cleared off the phones.** Recording offline-first means every
   phone keeps a copy of its table's audio, which matters when participants used
   their own devices. Once the assembly is closed, one button asks every phone
@@ -99,8 +119,10 @@ Full note: [docs/privacy.md](docs/privacy.md).
 
 ## Documentation
 
-* [Administration guide](docs/administration.md) — install, keys, data, troubleshooting
+* [Administration guide](docs/administration.md) — install, keys, data, upgrading, troubleshooting
 * [Privacy & data handling](docs/privacy.md)
+* [Facilitator guide](docs/facilitator-guide.md) — for the person running a table
+* [Participant information notice and consent form](docs/consent-form.md)
 * [Running one assembly, rehearsed](docs/event-checklist.md) — the day-of runbook
 * [Architecture](docs/architecture.md) — how the pipeline works
 * [A ten-table rehearsal on your Nextcloud](docs/remote-load-test.md) — for the

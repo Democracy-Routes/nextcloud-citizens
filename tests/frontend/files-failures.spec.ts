@@ -121,7 +121,7 @@ describe('failure explanations', () => {
 		})
 
 		expect(full.text()).toContain('still here')
-		expect(gone.text()).toContain('record the round again')
+		expect(gone.text()).toContain('record the session again')
 	})
 
 	it('falls back to the state when there is no specific code', () => {
@@ -174,10 +174,10 @@ describe('the device-audio purge line', () => {
 		await flushPromises()
 
 		expect(wrapper.text()).toContain('6 of 8')
-		expect(wrapper.text()).toContain('recorder sessions last reported no local recordings')
+		expect(wrapper.text()).toContain('the phones last reported no local recordings')
 		expect(wrapper.text()).toContain('2 still hold audio')
 		expect(wrapper.text()).toContain('same phone more than once')
-		expect(wrapper.text()).toContain('expired or revoked sessions may need manual cleanup')
+		expect(wrapper.text()).toContain('expired or revoked phone links may need manual cleanup')
 	})
 })
 
@@ -240,5 +240,25 @@ describe("the job's own reason on the Files tab", () => {
 		})
 		expect(wrapper.text()).toContain('Parts of the upload are missing')
 		expect(wrapper.text()).not.toContain('did not recognise')
+	})
+
+	it('shows how much of the clock the audio covers, red when a phone slept', async () => {
+		listFiles.mockResolvedValue(listing({
+			state: 'READY_FOR_REVIEW', duration_seconds: 1614,
+			coverage: { audio_seconds: 1614, wall_seconds: 1821, percent: 89 },
+		}))
+		const wrapper = mountWithI18n(FilesTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const badge = wrapper.find('[data-test="coverage"]')
+		expect(badge.text()).toBe('89 %')
+		expect(badge.classes()).toContain('cz-coverage--low')
+
+		listFiles.mockResolvedValue(listing({
+			state: 'READY_FOR_REVIEW', duration_seconds: 1815,
+			coverage: { audio_seconds: 1815, wall_seconds: 1816, percent: 100 },
+		}))
+		const fine = mountWithI18n(FilesTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(fine.find('[data-test="coverage"]').classes()).not.toContain('cz-coverage--low')
 	})
 })

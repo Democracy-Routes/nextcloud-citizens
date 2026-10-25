@@ -1,8 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiContentCopy, mdiPrinter, mdiQrcode, mdiRefresh, mdiCancel } from '@mdi/js'
+import { mdiContentCopy, mdiPlus, mdiPrinter, mdiQrcode, mdiRefresh, mdiCancel } from '@mdi/js'
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../api'
 import { downloadFromApi } from '../download'
 import { describeError, type UiError } from '../errors'
@@ -17,9 +18,11 @@ import { toast } from './ui/toast'
 
 const props = defineProps<{ assembly: AssemblyDetail; initialGenerated?: InviteGenerated[] }>()
 
+const { t } = useI18n()
+
 // plenary is one shared code the whole room scans, not one code per table
 const plenary = computed(() => props.assembly.recording_mode === 'plenary')
-const emit = defineEmits<{ consumed: [] }>()
+const emit = defineEmits<{ consumed: []; changed: [] }>()
 
 const invites = ref<Invite[]>([])
 // QR codes auto-generated at assembly creation arrive via initialGenerated
@@ -70,7 +73,26 @@ async function generate(): Promise<void> {
 	try {
 		generated.value = await api.generateInvites(props.assembly.id)
 		await reload()
-		toast(`${generated.value.length} QR codes generated`)
+		toast(t('organizer.shell.qr.generated', { count: generated.value.length }))
+	} catch (err) {
+		error.value = err instanceof Error ? err.message : String(err)
+	} finally {
+		busy.value = false
+	}
+}
+
+/** One more table, numbered next, in every round. The codes already on the
+ * wall stay valid; only the new table has a code to print. */
+async function addTable(): Promise<void> {
+	busy.value = true
+	error.value = ''
+	try {
+		const added = await api.addTable(props.assembly.id)
+		generated.value = [...generated.value.filter((g) => g.table_number !== added.number), added.invite]
+			.sort((a, b) => a.table_number - b.table_number)
+		await reload()
+		emit('changed')
+		toast(t('organizer.shell.qr.tableAdded', { number: added.number }))
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	} finally {
@@ -85,7 +107,7 @@ async function revoke(): Promise<void> {
 		await api.revokeInvites(props.assembly.id)
 		generated.value = []
 		await reload()
-		toast('All table codes revoked')
+		toast(t('organizer.shell.qr.revoked'))
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	} finally {
@@ -93,35 +115,40 @@ async function revoke(): Promise<void> {
 	}
 }
 
-const printing = ref(false)
+const printing = ref<'' | 'sheet' | 'kit'>('')
 
-async function printSheet(): Promise<void> {
+/** The QR sheet (four codes per page, cut at the door) or the event kit (a
+ * card per table with its colour, the programme, the recording notice —
+ * printed the evening before). */
+async function printSheet(kind: 'sheet' | 'kit' = 'sheet'): Promise<void> {
 	// A real PDF, not window.print(): the browser print dropped every page
 	// after the first, and the layout had to survive Nextcloud's global CSS.
 	//
 	// Fetched rather than window.open'd, because a popup blocker swallows the
 	// new tab silently — and this is the single most time-critical action of
 	// the event, taken at the door with people waiting.
-	const url = `${BASE}/api/v1/assemblies/${props.assembly.id}/invites/sheet.pdf`
-	printing.value = true
+	const path = kind === 'kit' ? 'event-kit.pdf' : 'invites/sheet.pdf'
+	const url = `${BASE}/api/v1/assemblies/${props.assembly.id}/${path}`
+	const name = `${props.assembly.name.slice(0, 40).replace(/ /g, '-')}-${kind === 'kit' ? 'event-kit' : 'qr-sheet'}.pdf`
+	printing.value = kind
 	try {
-		await downloadFromApi(url, `${props.assembly.name.slice(0, 40).replace(/ /g, '-')}-qr-sheet.pdf`)
+		await downloadFromApi(url, name)
 	} catch {
 		// last resort: let the browser try, and say so if that is blocked too
 		if (!window.open(url, '_blank')) {
-			toast('The sheet could not be downloaded — check the pop-up blocker', 'error')
+			toast(t('organizer.shell.qr.downloadFailed'), 'error')
 		}
 	} finally {
-		printing.value = false
+		printing.value = ''
 	}
 }
 
 async function copyUrl(url: string): Promise<void> {
 	try {
 		await navigator.clipboard.writeText(url)
-		toast('Link copied')
+		toast(t('organizer.shell.qr.copied'))
 	} catch {
-		toast('Could not copy — select the link text instead', 'error')
+		toast(t('organizer.shell.qr.copyFailed'), 'error')
 	}
 }
 
@@ -136,17 +163,15 @@ const hasActive = () => invites.value.some((i) => i.active)
 		<div class="cz-card">
 			<div class="cz-row cz-row--spread">
 				<div style="flex: 1; min-width: 240px">
-					<h3>{{ plenary ? 'Room recording code' : 'Table recorder QR codes' }}</h3>
+					<h3>{{ plenary ? t('organizer.shell.qr.sharedCodeTitle') : t('organizer.shell.qr.tableCodesTitle') }}</h3>
 					<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">
 						<template v-if="plenary">
-							One shared code for the whole room. Any number of phones scan it to
-							record together. Re-viewable and re-printable here anytime.
+							{{ t('organizer.shell.qr.sharedCodeHint') }}
 						</template>
 						<template v-else>
-							One code per physical table. Codes can be re-viewed and re-printed here
-							anytime.
+							{{ t('organizer.shell.qr.tableCodesHint') }}
 						</template>
-						<strong>Regenerating revokes all previous codes.</strong>
+						<strong>{{ t('organizer.shell.qr.regenerateWarning') }}</strong>
 					</p>
 				</div>
 				<div class="cz-row" style="flex-wrap: nowrap">
@@ -155,28 +180,35 @@ const hasActive = () => invites.value.some((i) => i.active)
 						:icon="mdiRefresh"
 						:disabled="busy"
 						@click="hasActive() ? (confirmRegenerate = true) : generate()">
-						{{ hasActive() ? 'Regenerate all' : 'Generate codes' }}
+						{{ hasActive() ? t('organizer.shell.qr.regenerateAll') : t('organizer.shell.qr.generate') }}
 					</CzButton>
-					<CzButton v-if="generated.length" :icon="mdiPrinter" :disabled="printing" @click="printSheet">
-						{{ printing ? 'Preparing…' : 'Print' }}
+					<CzButton v-if="generated.length" :icon="mdiPrinter" :disabled="!!printing" @click="printSheet('sheet')">
+						{{ printing === 'sheet' ? t('organizer.shell.qr.preparing') : t('organizer.shell.qr.print') }}
+					</CzButton>
+					<CzButton
+						v-if="generated.length"
+						:icon="mdiPrinter"
+						:disabled="!!printing"
+						:title="t('organizer.shell.qr.printKitTitle')"
+						@click="printSheet('kit')">
+						{{ printing === 'kit' ? t('organizer.shell.qr.preparing') : t('organizer.shell.qr.printKit') }}
+					</CzButton>
+					<CzButton v-if="!plenary" :icon="mdiPlus" :disabled="busy" :title="t('organizer.shell.qr.addTableTitle')" @click="addTable">
+						{{ t('organizer.shell.qr.addTable') }}
 					</CzButton>
 					<CzButton v-if="hasActive()" variant="tertiary" :icon="mdiCancel" :disabled="busy" @click="confirmRevoke = true">
-						Revoke all
+						{{ t('organizer.shell.qr.revokeAll') }}
 					</CzButton>
 				</div>
 			</div>
 			<p
-				v-if="generated.length && generated.length < invites.filter((i) => i.active).length"
+				v-if="generated.length && generated.length < activeCount()"
 				class="cz-muted"
 				style="margin: 12px 0 0; font-size: 0.8125rem">
-				Showing {{ generated.length }} of
-				{{ invites.filter((i) => i.active).length }} table codes — the rest were issued
-				under a different app secret and cannot be re-displayed. Regenerate to get a
-				complete sheet, which revokes the current codes.
+				{{ t('organizer.shell.qr.partialSheet', { shown: generated.length, active: activeCount() }) }}
 			</p>
 			<p v-if="invites.length && !generated.length" class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
-				{{ invites.filter((i) => i.active).length }} of {{ invites.length }} table codes active,
-				but they were issued before re-viewing existed — regenerate to obtain new QR codes.
+				{{ t('organizer.shell.qr.staleCodes', { active: activeCount(), total: invites.length }) }}
 			</p>
 		</div>
 
@@ -187,38 +219,38 @@ const hasActive = () => invites.value.some((i) => i.active)
 		<CzEmptyState
 			v-else-if="!generated.length && !invites.length"
 			:icon="mdiQrcode"
-			title="No QR codes yet"
-			hint="Generate one recording code per table, print the sheet, and place one code on each physical table.">
-			<CzButton variant="primary" :icon="mdiRefresh" :disabled="busy" @click="generate">Generate codes</CzButton>
+			:title="t('organizer.shell.qr.emptyTitle')"
+			:hint="t('organizer.shell.qr.emptyHint')">
+			<CzButton variant="primary" :icon="mdiRefresh" :disabled="busy" @click="generate">{{ t('organizer.shell.qr.generate') }}</CzButton>
 		</CzEmptyState>
 
 		<div v-if="generated.length" class="cz-qr-grid">
 			<div v-for="invite in generated" :key="invite.table_number" class="cz-qr-item">
 				<div class="cz-qr-item__assembly">{{ assembly.name }}</div>
-				<h3>TABLE {{ invite.table_number }}</h3>
-				<CzQrImage :svg="invite.qr_svg" :label="`QR code for table ${invite.table_number}`" />
-				<p style="font-size: 0.8125rem; margin: 0; color: #333">Scan with the table recording phone</p>
+				<h3>{{ t('organizer.shell.qr.tableBadge', { number: invite.table_number }) }}</h3>
+				<CzQrImage :svg="invite.qr_svg" :label="t('organizer.shell.qr.qrAlt', { number: invite.table_number })" />
+				<p style="font-size: 0.8125rem; margin: 0; color: #333">{{ t('organizer.shell.qr.scanHint') }}</p>
 				<div class="cz-qr-url" :title="invite.url">{{ invite.url }}</div>
 				<CzButton small :icon="mdiContentCopy" @click="copyUrl(invite.url)">
-					Copy link
+					{{ t('organizer.shell.qr.copyLink') }}
 				</CzButton>
 			</div>
 		</div>
 
 		<CzConfirm
 			v-if="confirmRegenerate"
-			title="Replace every table code?"
-			:message="`All ${activeCount()} codes already printed and placed on the tables stop working immediately, and a new sheet has to be printed and distributed. Tables already recording keep their session.`"
-			confirm-label="Regenerate all codes"
+			:title="t('organizer.shell.qr.regenerateTitle')"
+			:message="t('organizer.shell.qr.regenerateMessage', { count: activeCount() })"
+			:confirm-label="t('organizer.shell.qr.regenerateConfirm')"
 			tone="danger"
 			@confirm="confirmRegenerate = false; generate()"
 			@cancel="confirmRegenerate = false" />
 
 		<CzConfirm
 			v-if="confirmRevoke"
-			title="Revoke all table codes?"
-			message="Every printed or shared QR code stops working immediately. Phones already recording keep their session."
-			confirm-label="Revoke all"
+			:title="t('organizer.shell.qr.revokeTitle')"
+			:message="t('organizer.shell.qr.revokeMessage')"
+			:confirm-label="t('organizer.shell.qr.revokeConfirm')"
 			tone="danger"
 			@confirm="revoke"
 			@cancel="confirmRevoke = false" />

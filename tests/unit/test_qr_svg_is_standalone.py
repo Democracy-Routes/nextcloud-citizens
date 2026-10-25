@@ -18,26 +18,26 @@ element in no namespace.
 
 from xml.etree import ElementTree
 
-from citizens.services.invites import _qr_svg
+from citizens.services.invites import qr_svg
 
 SVG_NS = "http://www.w3.org/2000/svg"
 URL = "https://cloud.example.com/index.php/apps/app_api/proxy/citizens/recorder.html#/join/tok"
 
 
 def test_the_root_element_is_in_the_svg_namespace():
-    root = ElementTree.fromstring(_qr_svg(URL))
+    root = ElementTree.fromstring(qr_svg(URL))
 
     assert root.tag == f"{{{SVG_NS}}}svg"
 
 
 def test_it_parses_as_a_standalone_xml_document():
     """An <img> gets no help from an HTML parser."""
-    ElementTree.fromstring(_qr_svg(URL))
+    ElementTree.fromstring(qr_svg(URL))
 
 
 def test_it_carries_a_viewbox_and_no_fixed_size():
     """The card scales the code with CSS; a fixed px size clips it."""
-    root = ElementTree.fromstring(_qr_svg(URL))
+    root = ElementTree.fromstring(qr_svg(URL))
 
     assert root.get("viewBox")
     assert root.get("width") is None

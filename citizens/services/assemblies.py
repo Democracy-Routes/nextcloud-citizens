@@ -10,8 +10,10 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from citizens.db.models import Assembly, Participant, Round, Table, TableAssignment
+from citizens.db.models import Assembly, Participant, Recording, Round, Table, TableAssignment
 from citizens.domain import schemas
+from citizens.domain.tables import color_for
+from citizens.services.audit import record_audit_event
 
 
 def get_owned_assembly(session: Session, assembly_id: str, user_id: str) -> Assembly:
@@ -44,6 +46,10 @@ def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate
         analysis_instructions=data.analysis_instructions,
         auto_purge_device_audio=data.auto_purge_device_audio,
         redact_names=data.redact_names,
+        participant_consent=data.participant_consent,
+        ai_facilitator=data.ai_facilitator,
+        audio_retention_days=data.audio_retention_days,
+        zero_retention=data.zero_retention,
         created_by=user_id,
     )
     for position, round_in in enumerate(data.rounds, start=1):
@@ -53,15 +59,88 @@ def create_assembly(session: Session, user_id: str, data: schemas.AssemblyCreate
     return assembly
 
 
+#: a recording in one of these is still on its way to a transcript in the
+#: current language; the language cannot change under it
+BUSY_RECORDING_STATES = (
+    "RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS", "ASSEMBLING", "TRANSCRIBING",
+)
+
+
+def change_language(session: Session, assembly: Assembly, language: str) -> dict:
+    """Set the assembly's language after recording began and transcribe every
+    recording that still has audio again in it (S8).
+
+    Refused while a session is being recorded (its transcript would land in
+    the old language) and once zero retention has run (no audio to transcribe
+    from). A language chosen here is chosen by hand: detection stops. Findings
+    and the report follow the new transcripts through the normal chain; a
+    closed assembly's frozen report is refreshed when analysis completes.
+    """
+    from citizens.services.retranscription import RETRANSCRIBABLE, queue_final_transcription
+
+    # the round's status is not enough: in an independent Session a phone
+    # records without anybody starting the round (seen on the dev instance,
+    # 2026-10-13), and a recording still being transcribed would keep the old
+    # language — its live job is never re-queued
+    busy = session.execute(
+        select(Recording.id).where(
+            Recording.assembly_id == assembly.id,
+            Recording.state.in_(BUSY_RECORDING_STATES),
+        ).limit(1)
+    ).first()
+    if any(round_.status == "ACTIVE" for round_ in assembly.rounds) or busy is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="SESSION_ACTIVE: finish the session being recorded (and let its "
+                   "transcription end) first",
+        )
+    if assembly.zero_retention_done_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="ZERO_RETENTION_APPLIED: the audio is gone, nothing can be transcribed again",
+        )
+    previous = assembly.language
+    assembly.language_auto = False
+    queued = skipped_no_audio = 0
+    if language != previous:
+        assembly.language = language
+        session.flush()
+        for recording in session.execute(
+            select(Recording).where(
+                Recording.assembly_id == assembly.id,
+                Recording.state.in_(RETRANSCRIBABLE),
+            )
+        ).scalars():
+            try:
+                if queue_final_transcription(session, recording):
+                    queued += 1
+            except HTTPException:
+                skipped_no_audio += 1
+    record_audit_event(
+        session, "language_changed", "assembly", assembly.id,
+        data={
+            "from": previous, "to": language, "queued": queued,
+            "skipped_no_audio": skipped_no_audio,
+        },
+    )
+    return {
+        "language": assembly.language,
+        "queued": queued,
+        "skipped_no_audio": skipped_no_audio,
+        "closed": assembly.closed_at is not None,
+    }
+
+
 def _build_round(round_in: schemas.RoundIn, position: int, table_count: int) -> Round:
     round_ = Round(
         position=position,
         title=round_in.title,
         question=round_in.question,
+        objective=round_in.objective or None,
         duration_minutes=round_in.duration_minutes,
     )
     for number in range(1, table_count + 1):
-        round_.tables.append(Table(number=number))
+        round_.tables.append(Table(number=number, color_key=color_for(number)))
     return round_
 
 
@@ -78,6 +157,10 @@ def update_round(session: Session, round_: Round, data: schemas.RoundUpdate) -> 
         round_.title = data.title
     if data.question is not None:
         round_.question = data.question
+    # None is the field's default, so "sent as null" and "not sent" look alike;
+    # the fields-set tells them apart, and an empty string clears it
+    if "objective" in data.model_fields_set:
+        round_.objective = data.objective or None
     if data.duration_minutes is not None:
         round_.duration_minutes = data.duration_minutes
     if data.position is not None and data.position != round_.position:
@@ -143,11 +226,27 @@ def parse_participants_csv(csv_text: str) -> list[schemas.ParticipantIn]:
     return participants
 
 
+
+def seatable_participants(session: Session, assembly: Assembly) -> list[Participant]:
+    """Who New seating may place at a recorded table: everyone on the list
+    EXCEPT a person whose newest consent act refuses or withdraws recording —
+    the room's procedure puts them at a table that is not recorded, and a
+    seating plan that dealt them to a recorded table would block it
+    (PARTICIPANT_REFUSED) the moment the session was set up."""
+    from citizens.services import consent as consent_svc
+
+    latest = consent_svc.latest_consents(session, assembly.id)
+    return [
+        p for p in assembly.participants
+        if not consent_svc.refuses_recording(latest.get(p.id))
+    ]
+
+
 def randomize_assignments(session: Session, round_: Round) -> None:
     """Shuffle all assembly participants and deal them round-robin to tables."""
     if not round_.tables:
         raise HTTPException(status_code=422, detail="Round has no tables")
-    participants = list(round_.assembly.participants)
+    participants = seatable_participants(session, round_.assembly)
     random.shuffle(participants)
     _replace_assignments(
         session,
@@ -157,6 +256,116 @@ def randomize_assignments(session: Session, round_: Round) -> None:
             for index, participant in enumerate(participants)
         },
     )
+
+
+REMIX_GOALS = ("new_people", "random", "continuity")
+
+
+def remix_assignments(session: Session, round_: Round, goal: str = "new_people") -> dict:
+    """Seat everyone for this session with a goal (0.7):
+
+    - new_people: as few repeated table-mates as possible — each person goes
+      to the table, among the emptiest, where they have sat with the fewest
+      of its members in earlier sessions;
+    - random: today's shuffle;
+    - continuity: the previous session's seating, newcomers dealt to the
+      smallest tables.
+
+    Everyone on the assembly's list is seated, those who registered at the
+    tables included — except people whose newest consent act refuses or
+    withdraws recording (seatable_participants): they sit at a table that is
+    not recorded. Returns how many repeated pairs the seating has, so the
+    organizer sees what the goal achieved."""
+    if goal not in REMIX_GOALS:
+        raise HTTPException(status_code=422, detail="Unknown remix goal")
+    if not round_.tables:
+        raise HTTPException(status_code=422, detail="Round has no tables")
+    tables = sorted(round_.tables, key=lambda t: t.number)
+    participants = seatable_participants(session, round_.assembly)
+    met = _co_seatings(session, round_)
+
+    if goal == "random":
+        randomize_assignments(session, round_)
+    elif goal == "continuity":
+        mapping = _previous_mapping(session, round_)
+        seated = {t.id: [pid for pid, tid in mapping.items() if tid == t.id] for t in tables}
+        rng = random.Random(round_.id)
+        newcomers = [p for p in participants if p.id not in mapping]
+        rng.shuffle(newcomers)
+        for person in newcomers:
+            target = min(tables, key=lambda t: (len(seated[t.id]), t.number))
+            seated[target.id].append(person.id)
+            mapping[person.id] = target.id
+        _replace_assignments(session, round_, mapping)
+    else:
+        rng = random.Random(round_.id)
+        order = list(participants)
+        rng.shuffle(order)
+        # the most "connected" people first: they are the hardest to place
+        def connections(p: Participant) -> int:
+            return sum(met.get(frozenset((p.id, q.id)), 0) for q in participants if q is not p)
+
+        order.sort(key=lambda p: -connections(p))
+        seated: dict[str, list[str]] = {t.id: [] for t in tables}
+        mapping = {}
+        for person in order:
+            smallest = min(len(members) for members in seated.values())
+            candidates = [t for t in tables if len(seated[t.id]) <= smallest]
+            target = min(
+                candidates,
+                key=lambda t: (
+                    sum(met.get(frozenset((person.id, other)), 0) for other in seated[t.id]),
+                    rng.random(),
+                ),
+            )
+            seated[target.id].append(person.id)
+            mapping[person.id] = target.id
+        _replace_assignments(session, round_, mapping)
+
+    repeated = 0
+    for assignment_group in _group_by_table(session, round_).values():
+        for i, a in enumerate(assignment_group):
+            for b in assignment_group[i + 1:]:
+                repeated += 1 if met.get(frozenset((a, b)), 0) else 0
+    return {"goal": goal, "seated": len(participants), "repeated_pairs": repeated}
+
+
+def _previous_mapping(session: Session, round_: Round) -> dict[str, str]:
+    previous = next(
+        (r for r in sorted(round_.assembly.rounds, key=lambda r: r.position, reverse=True)
+         if r.position < round_.position),
+        None,
+    )
+    if previous is None:
+        return {}
+    tables_by_number = {t.number: t for t in round_.tables}
+    mapping: dict[str, str] = {}
+    for assignment in _round_assignments(session, previous.id):
+        target = tables_by_number.get(assignment.table.number)
+        if target is not None:
+            mapping[assignment.participant_id] = target.id
+    return mapping
+
+
+def _co_seatings(session: Session, round_: Round) -> dict[frozenset, int]:
+    """How often each pair of people sat together in the sessions before this one."""
+    met: dict[frozenset, int] = {}
+    for earlier in round_.assembly.rounds:
+        if earlier.position >= round_.position:
+            continue
+        for members in _group_by_table(session, earlier).values():
+            for i, a in enumerate(members):
+                for b in members[i + 1:]:
+                    key = frozenset((a, b))
+                    met[key] = met.get(key, 0) + 1
+    return met
+
+
+def _group_by_table(session: Session, round_: Round) -> dict[str, list[str]]:
+    groups: dict[str, list[str]] = {}
+    for assignment in _round_assignments(session, round_.id):
+        groups.setdefault(assignment.table_id, []).append(assignment.participant_id)
+    return groups
 
 
 def copy_previous_assignments(session: Session, round_: Round) -> None:
@@ -223,6 +432,7 @@ def tables_with_participants(session: Session, round_: Round) -> list[schemas.Ta
         schemas.TableOut(
             id=table.id,
             number=table.number,
+            color_key=table.color_key or color_for(table.number),
             label=table.label,
             status=table.status,
             participants=[

@@ -20,7 +20,7 @@ import CzToasts from '../../frontend/src/components/ui/CzToasts.vue'
 import { toast, toasts } from '../../frontend/src/components/ui/toast'
 import { mountWithI18n } from './support/mount'
 
-const CONFIRM = { title: 'Delete round?', message: 'It goes away.', confirmLabel: 'Delete' }
+const CONFIRM = { title: 'Delete session?', message: 'It goes away.', confirmLabel: 'Delete' }
 
 describe('the confirm dialog', () => {
 	it('names itself through the roles it declares', () => {
@@ -30,7 +30,7 @@ describe('the confirm dialog', () => {
 		const labelledBy = dialog.attributes('aria-labelledby')
 		const describedBy = dialog.attributes('aria-describedby')
 
-		expect(document.getElementById(labelledBy!)?.textContent).toContain('Delete round?')
+		expect(document.getElementById(labelledBy!)?.textContent).toContain('Delete session?')
 		expect(document.getElementById(describedBy!)?.textContent).toContain('It goes away.')
 		wrapper.unmount()
 	})
@@ -110,15 +110,15 @@ describe('toasts', () => {
 
 describe('icon-only buttons', () => {
 	it('take their accessible name from the title already given', () => {
-		const wrapper = mountWithI18n(CzButton, { props: { icon: 'M0 0', title: 'Delete round' } })
+		const wrapper = mountWithI18n(CzButton, { props: { icon: 'M0 0', title: 'Delete session' } })
 
-		expect(wrapper.attributes('aria-label')).toBe('Delete round')
+		expect(wrapper.attributes('aria-label')).toBe('Delete session')
 	})
 
 	it('do not repeat a name a visible label already gives', () => {
 		const wrapper = mountWithI18n(CzButton, {
 			props: { icon: 'M0 0', label: 'Delete' },
-			slots: { default: 'Delete round' },
+			slots: { default: 'Delete session' },
 		})
 
 		expect(wrapper.attributes('aria-label')).toBeUndefined()

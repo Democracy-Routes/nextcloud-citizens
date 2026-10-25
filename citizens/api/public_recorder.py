@@ -7,38 +7,49 @@ recordings for its own table, upload chunks, and complete recordings.
 """
 
 import json
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from citizens.api.downloads import download_headers
 from citizens.config import get_settings
-from citizens.db.models import Assembly, RecorderSession, Recording
+from citizens.db.models import Assembly, ParticipantSession, RecorderSession, Recording, Round
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db, get_read_db
+from citizens.domain.tables import color_for
 from citizens.security.rate_limit import (
+    CAPABILITY_LIMITER,
+    HELP_LIMITER,
     JOIN_IP_LIMITER,
     JOIN_TOKEN_LIMITER,
+    PARTICIPANT_LIMITER,
     client_ip,
     token_key,
 )
+from citizens.services import capabilities as capabilities_svc
+from citizens.services import consent as consent_svc
+from citizens.services import help as help_svc
 from citizens.services import invites as invites_svc
-from citizens.services import provider_config
+from citizens.services import live_source, provider_config
+from citizens.services import messages as messages_svc
 from citizens.services import recording as rec_svc
+from citizens.services import validation as validation_svc
 from citizens.services.live_captions import LIVE_CAPTIONS
 from citizens.services.provider_config import data_handling_summary, live_stt_snapshot
 from citizens.services.recording import MAX_CHUNK_BYTES, RERECORDABLE_STATES
+from citizens.services.table_recordings import recording_slots, slot_label
 from citizens.storage.paths import device_log_path
 
 router = APIRouter(prefix="/public")
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # for pure polls: no BEGIN IMMEDIATE, so readers never queue behind writers
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 def _session_from_authorization(
@@ -74,6 +85,11 @@ ReadingSess = Annotated[RecorderSession, Depends(get_reading_session)]
 
 class JoinIn(BaseModel):
     token: str = Field(min_length=16, max_length=128)
+    # the phone's own random id (kept in its browser): a single-use code
+    # scanned again by the SAME phone returns its session instead of 410
+    device_id: str | None = Field(
+        default=None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
 
 
 @router.post("/join")
@@ -81,19 +97,71 @@ def join(data: JoinIn, request: Request, session: DB):
     JOIN_TOKEN_LIMITER.check(token_key(data.token))
     JOIN_IP_LIMITER.check(client_ip(request))
     # Both of these can refresh a 30-second cache by calling Nextcloud over
-    # OCS. Read them BEFORE the first statement: create_session_from_invite
+    # OCS. Read them BEFORE the first statement: join_with_token
     # opens the write transaction, and SQLite's single writer slot must not be
     # held across an HTTPS round-trip while the room is scanning QR codes.
     handling = data_handling_summary()
     analysis_enabled = provider_config.analysis_enabled_cached()
-    recorder_session, bearer = rec_svc.create_session_from_invite(session, data.token)
+    # a printed table code, or an action code another phone made: the token
+    # decides, never the scanner (services/capabilities.py)
+    joined = capabilities_svc.join_with_token(session, data.token, device_id=data.device_id)
+    recorder_session = joined.recorder_session
     return {
-        "session_token": bearer,
+        "session_token": joined.bearer,
         "expires_at": recorder_session.expires_at,
+        "joined": joined.as_dict(),
         **_assembly_state(
             session, recorder_session, handling=handling, analysis_enabled=analysis_enabled
         ),
     }
+
+
+@router.post("/capabilities/peek")
+def peek_capability(data: JoinIn, request: Request, session: ReadDB):
+    """What a code would do if scanned, without scanning it: the phone warns
+    about an accident (a third recorder, a phone switching tables) and lets
+    the person cancel before a single-use code is spent. Same rate limits as
+    /join; the token travels in the body, never in the path."""
+    JOIN_TOKEN_LIMITER.check(token_key(data.token))
+    JOIN_IP_LIMITER.check(client_ip(request))
+    return capabilities_svc.peek(session, data.token)
+
+
+class CapabilityIn(BaseModel):
+    purpose: Literal["ADD_RECORDER_TO_TABLE", "ADD_TABLE", "REGISTER_PARTICIPANT", "FACILITATE_TABLE"]
+    # the Session this is being done in, when the phone knows it
+    round_id: str | None = None
+
+
+@router.post("/recorder/capabilities", status_code=201)
+def create_capability(data: CapabilityIn, recorder_session: RecorderSess, session: DB):
+    """A joined phone makes a QR code for the next phone — add a recorder to
+    this table, or add a new table. The code means exactly that; the phone
+    that scans it does not choose."""
+    CAPABILITY_LIMITER.check(recorder_session.id)
+    card = capabilities_svc.create_capability(
+        session, recorder_session, data.purpose, round_id=data.round_id
+    )
+    return card.as_dict()
+
+
+class RecordAnotherIn(BaseModel):
+    round_id: str
+
+
+@router.post("/recorder/sessions", status_code=201)
+def record_another_session(data: RecordAnotherIn, recorder_session: RecorderSess, session: DB):
+    """Record another session from the phone's done screen (R13): a new
+    one-table Session like this one, and the link that joins its table."""
+    from citizens.services import sessions as sessions_svc
+
+    CAPABILITY_LIMITER.check(recorder_session.id)
+    round_ = session.get(Round, data.round_id)
+    if round_ is None or round_.assembly_id != recorder_session.assembly_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    container = session.get(Assembly, recorder_session.assembly_id)
+    made = sessions_svc.record_another(session, container, round_)
+    return made.model_dump()
 
 
 @router.get("/recorder/status")
@@ -152,6 +220,27 @@ async def _read_capped_body(request: Request, limit: int = MAX_CHUNK_BYTES) -> b
     return bytes(buffer)
 
 
+def _live_feed_plan(
+    session: Session, recording: Recording, duplicate: bool, sequence_number: int, segment: int
+) -> tuple[bool, Path | None, str | None]:
+    """What the caption engine should do with the chunk just stored, decided
+    inside the upload's write transaction: whether it feeds the captions,
+    the segment's opening chunk to seed a decoder built mid-stream, and the
+    recording whose caption session must end because this one just took the
+    source over from a phone that fell silent (services/live_source.py)."""
+    if duplicate:
+        return False, None, None
+    demoted_id = None
+    if not recording.live_source:
+        demoted = live_source.take_over_if_stalled(session, recording)
+        if demoted is not None:
+            demoted_id = demoted.id
+    if not recording.live_source:
+        return False, None, None
+    header_path = rec_svc.segment_header_path(session, recording, sequence_number, segment)
+    return True, header_path, demoted_id
+
+
 @router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}")
 async def upload_chunk(
     recording_id: str,
@@ -192,26 +281,44 @@ async def upload_chunk(
     # uploading at once made a plain redirect take 27 seconds, the organizer UI
     # stop responding, and commits (which the loop must schedule) stall until
     # waiting writers gave up with "database is locked".
-    def _persist() -> tuple[dict, str, str, dict, str]:
+    def _persist() -> tuple[dict, str, str, dict, str, bool, Path | None, str | None]:
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+        # a recording the server has finished: the phone's later chunks go
+        # into its continuation, under the continuation's sequence numbers
+        recording, sequence = rec_svc.late_audio_target(
+            session, recording, sequence_number, x_chunk_segment
+        )
         outcome = rec_svc.receive_chunk(
-            session, recording, sequence_number, x_chunk_sha256, body, x_chunk_segment
+            session, recording, sequence, x_chunk_sha256, body, x_chunk_segment
         )
         language = ""
         if not outcome.get("duplicate"):
             assembly = session.get(Assembly, recording.assembly_id)
             language = assembly.language if assembly else ""
+        feed_live, header_path, demoted_id = _live_feed_plan(
+            session, recording, bool(outcome.get("duplicate")), sequence, x_chunk_segment
+        )
         session.commit()  # durable receipt before an acknowledgement can leave the server
-        return outcome, recording.id, language, stt, recording.assembly_id
+        return (outcome, recording.id, language, stt, recording.assembly_id, feed_live,
+                header_path, demoted_id)
 
-    result, recording_id_out, language, stt, assembly_id = await run_in_threadpool(_persist)
-    if not result.get("duplicate"):
+    (result, recording_id_out, language, stt, assembly_id, feed_live,
+     header_path, demoted_id) = await run_in_threadpool(_persist)
+    if demoted_id:
+        # the phone that fell silent: its caption session ends, this one's
+        # chunk below opens the replacement (seeded with its own header)
+        LIVE_CAPTIONS.finish(demoted_id)
+    # Only the table's live source feeds the caption engine: a backup recorder's
+    # audio is kept and transcribed afterwards, but it must not open a second
+    # streaming session for the same discussion (services/live_source.py).
+    if not result.get("duplicate") and feed_live:
         # provisional live captions ride on the safety upload — failures here
         # never affect the recording (brief §51)
         LIVE_CAPTIONS.feed(
-            recording_id_out, body, stt, language, assembly_id, segment=x_chunk_segment
+            recording_id_out, body, stt, language, assembly_id, segment=x_chunk_segment,
+            header_path=header_path,
         )
     return result
 
@@ -221,7 +328,8 @@ def uploaded_parts(recording_id: str, sequence_number: int, recorder_session: Re
     from citizens.services.multipart_audio import part_status
 
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-    return part_status(session, recording, sequence_number)
+    recording, sequence = rec_svc.late_audio_target(session, recording, sequence_number)
+    return part_status(session, recording, sequence)
 
 
 @router.post("/recorder/recordings/{recording_id}/chunks/{sequence_number}/parts/{part_number}")
@@ -246,17 +354,27 @@ async def upload_part(
         raise HTTPException(422, "Invalid checksum")
     body = await _read_capped_body(request, multipart_audio.PART_BYTES)
 
-    def persist() -> tuple[dict, str, str]:
+    def persist() -> tuple[dict, str, str, dict, bool, Path | None, str | None, str]:
         stt = live_stt_snapshot()
         recorder_session = _session_from_authorization(session, authorization)
         recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-        result = multipart_audio.receive_part(session, recording, sequence_number, part_number,
+        recording, sequence = rec_svc.late_audio_target(
+            session, recording, sequence_number, x_chunk_segment
+        )
+        result = multipart_audio.receive_part(session, recording, sequence, part_number,
                                               x_total_bytes, x_chunk_sha256, x_part_sha256, body)
         assembly = session.get(Assembly, recording.assembly_id)
         language = assembly.language if assembly else ""
-        return result, recording.assembly_id, language, stt
+        feed_live, header_path, demoted_id = _live_feed_plan(
+            session, recording, bool(result.get("duplicate")), sequence, x_chunk_segment
+        )
+        return (result, recording.assembly_id, language, stt, feed_live, header_path, demoted_id,
+                recording.id)
 
-    result, assembly_id, language, stt = await run_in_threadpool(persist)
+    (result, assembly_id, language, stt, feed_live, header_path,
+     demoted_id, recording_id) = await run_in_threadpool(persist)
+    if demoted_id:
+        LIVE_CAPTIONS.finish(demoted_id)
     # Live captions feed on chunk order. The plain route feeds upload_chunk as
     # the chunk arrives; a chunk big enough to go through parts never reached
     # the caption session until finalize — so a phone whose chunks all exceed
@@ -267,9 +385,11 @@ async def upload_part(
     # real-time. Only a part not seen before: a retry (a lost ack, or the
     # client's force-resend after a finalize conflict) stores idempotently on
     # disk but would push the same audio into the caption stream a second
-    # time — mid-stream, which the decoder cannot tell from new speech.
-    if not result.get("duplicate"):
-        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id, segment=x_chunk_segment)
+    # time — mid-stream, which the decoder cannot tell from new speech. And only
+    # from the table's live source (see upload_chunk).
+    if not result.get("duplicate") and feed_live:
+        LIVE_CAPTIONS.feed(recording_id, body, stt, language, assembly_id,
+                           segment=x_chunk_segment, header_path=header_path)
     return result
 
 
@@ -286,9 +406,12 @@ def finalize_uploaded_chunk(
     if not 0 <= x_chunk_segment <= rec_svc.MAX_SEGMENT_NUMBER:
         raise HTTPException(status_code=422, detail="Invalid segment number")
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    recording, sequence = rec_svc.late_audio_target(
+        session, recording, sequence_number, x_chunk_segment
+    )
     # Live captions were fed as each part landed (upload_part) — reading the
     # assembled chunk back here would feed every byte a second time.
-    return finalize_chunk(session, recording, sequence_number, x_chunk_segment)
+    return finalize_chunk(session, recording, sequence, x_chunk_segment)
 
 
 class CompleteIn(BaseModel):
@@ -300,7 +423,13 @@ def complete(
     recording_id: str, data: CompleteIn, recorder_session: RecorderSess, session: DB
 ):
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
-    result = rec_svc.complete_recording(session, recording, data.total_chunks)
+    if recording.continued_by_id:
+        # the server finished this one; the phone's total counts the stream
+        # it kept sending, which lives in the continuation
+        recording, total = rec_svc.late_audio_target(session, recording, data.total_chunks)
+    else:
+        total = data.total_chunks
+    result = rec_svc.complete_recording(session, recording, total)
     if not result["missing_sequences"]:
         LIVE_CAPTIONS.finish(recording.id)
     return result
@@ -311,7 +440,36 @@ def live_transcript(recording_id: str, recorder_session: ReadingSess, session: R
     """Provisional live captions for this table's recording (may be empty or
     unavailable — that is never an error)."""
     recording = rec_svc.get_session_recording(session, recorder_session, recording_id)
+    if recording.state == "RECORDING" and not recording.live_source:
+        # a backup recorder: its audio is kept, but another phone at the table
+        # carries the captions — say which, rather than "unavailable"
+        holder = live_source.current(session, recording.round_id, recording.table_id)
+        holder_slot = recording_slots(session, [holder]).get(holder.id, 1) if holder else None
+        return {
+            "active": False, "lines": [], "reason": "backup",
+            "live_source_slot": holder_slot,
+            "live_source_label": slot_label(holder_slot) if holder_slot else None,
+        }
     return LIVE_CAPTIONS.status(recording.id)
+
+
+class LiveSourceIn(BaseModel):
+    recording_id: str
+
+
+@router.post("/recorder/live-source")
+def promote_live_source(data: LiveSourceIn, recorder_session: RecorderSess, session: DB):
+    """This phone takes over its table's live captions. Its recording must be
+    in progress; the previous holder keeps recording and only its caption
+    session ends."""
+    recording = rec_svc.get_session_recording(session, recorder_session, data.recording_id)
+    if recording.recorder_session_id != recorder_session.id:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    demoted = live_source.promote(session, recording)
+    session.flush()
+    if demoted is not None:
+        LIVE_CAPTIONS.finish(demoted.id)
+    return {"recording_id": recording.id, "live_source": True, "slot": recorder_session.slot}
 
 
 @router.get("/recorder/recordings/{recording_id}")
@@ -321,10 +479,13 @@ def recording_status(recording_id: str, recorder_session: RecorderSess, session:
 
 
 def _published_report(session: Session, recorder_session: RecorderSession) -> tuple:
+    return _published_report_of(session, session.get(Assembly, recorder_session.assembly_id))
+
+
+def _published_report_of(session: Session, assembly: Assembly | None) -> tuple:
     from citizens.services.lifecycle import frozen_report
     from citizens.services.report import build_report
 
-    assembly = session.get(Assembly, recorder_session.assembly_id)
     if assembly is None or not _report_available(session, assembly):
         raise HTTPException(status_code=404, detail="No published report for this assembly")
     # once the session was closed, participants read the frozen version — a
@@ -396,6 +557,351 @@ def heartbeat(data: HeartbeatIn, recorder_session: RecorderSess, session: DB):
     return {"ok": True}
 
 
+class MessageSeenIn(BaseModel):
+    message_id: int = Field(ge=1)
+
+
+@router.post("/recorder/messages/seen")
+def message_seen(data: MessageSeenIn, recorder_session: RecorderSess, session: DB):
+    """The phone has shown the organizer's message: its receipt, read by the
+    Live tab as "delivered 9/10". Separate from the heartbeat so the recorder
+    engine, which owns the heartbeat, stays untouched."""
+    messages_svc.mark_seen(session, recorder_session, data.message_id)
+    return {"ok": True}
+
+
+class FacilitatorLevelIn(BaseModel):
+    level: Literal["default", "off", "light", "normal", "active"]
+
+
+@router.post("/recorder/facilitator")
+def set_facilitator_level(data: FacilitatorLevelIn, recorder_session: RecorderSess, session: DB):
+    """The table's own AI-facilitator switch (tech sheet): a level of its
+    own, or "default" to follow the assembly again."""
+    from citizens.services import facilitator as ai_svc
+
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    return ai_svc.set_table_level(
+        session, assembly, recorder_session.table_number,
+        None if data.level == "default" else data.level,
+        actor=f"recorder-session:{recorder_session.id}",
+    )
+
+
+class MessageFeedbackIn(BaseModel):
+    helpful: bool
+
+
+@router.post("/recorder/messages/{message_id}/feedback")
+def message_feedback(
+    message_id: int, data: MessageFeedbackIn, recorder_session: RecorderSess, session: DB
+):
+    """👍 / 👎 under an AI facilitator banner on the table's phone. Only AI
+    messages take feedback; anything else is 404."""
+    from citizens.services import facilitator as ai_svc
+
+    intervention = ai_svc.intervention_for_message(session, recorder_session.assembly_id, message_id)
+    if intervention is None or intervention.table_number != recorder_session.table_number:
+        raise HTTPException(status_code=404, detail="No AI message to rate")
+    return ai_svc.give_feedback(
+        session, intervention, recorder_session.table_number, "table_phone", data.helpful
+    )
+
+
+@router.get("/recorder/consent-notice")
+def consent_notice(recorder_session: ReadingSess, session: ReadDB):
+    """The notice people read before registering, rendered by the server and
+    hashed as shown, with this table's roster (names, never email) and the
+    assembly's rule (required / optional)."""
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    notice = consent_svc.notice_for(assembly)
+    return {
+        **notice.as_dict(),
+        "mode": assembly.participant_consent,
+        "participants": consent_svc.table_roster(session, assembly.id, recorder_session.table_number),
+    }
+
+
+class ParticipantRegisterIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(default="", max_length=200)
+    notice_hash: str = Field(min_length=64, max_length=64)
+    notice_read: bool = False
+    recording_consent: bool = False
+    transcription_consent: bool = False
+    analysis_consent: bool = False
+    publication_consent: bool = False
+
+
+@router.post("/recorder/participants", status_code=201)
+def register_participant(data: ParticipantRegisterIn, recorder_session: RecorderSess, session: DB):
+    """One person registers at this table on the shared phone: name, the
+    notice they read (by hash), what they consent to. Stored as given — a
+    refusal is a record too — and the answer says whether the table may
+    record now under the assembly's rule."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    if assembly.closed_at is not None:
+        raise HTTPException(status_code=409, detail="This assembly has been closed by the organizer")
+    participant, consent = consent_svc.register(
+        session,
+        assembly,
+        consent_svc.ConsentAct(
+            name=data.name,
+            email=data.email,
+            notice_hash=data.notice_hash,
+            notice_read=data.notice_read,
+            recording_consent=data.recording_consent,
+            transcription_consent=data.transcription_consent,
+            analysis_consent=data.analysis_consent,
+            publication_consent=data.publication_consent,
+        ),
+        method="TABLE_DEVICE",
+        table_number=recorder_session.table_number,
+        recorder_session=recorder_session,
+    )
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "consent": consent_svc.consent_dict(consent),
+        "can_record": consent.recording_consent,
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
+
+
+class ConsentChangeIn(BaseModel):
+    """A further act by someone already on this table's roster: the notice
+    they read now (by hash), and what they consent to. Every flag false is a
+    withdrawal."""
+    notice_hash: str = Field(min_length=64, max_length=64)
+    notice_read: bool = False
+    recording_consent: bool = False
+    transcription_consent: bool = False
+    analysis_consent: bool = False
+    publication_consent: bool = False
+
+
+@router.post("/recorder/participants/{participant_id}/consent", status_code=201)
+def change_consent(
+    participant_id: str, data: ConsentChangeIn, recorder_session: RecorderSess, session: DB
+):
+    """Changed their mind (after a refusal) or withdraws consent, on the
+    table's phone — only for a person seated at THIS table. Append-only: the
+    register keeps every act and the newest counts."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    participant = consent_svc.participant_at_table(
+        session, assembly, participant_id, recorder_session.table_number
+    )
+    consent = consent_svc.act(
+        session, assembly, participant,
+        notice_hash=data.notice_hash, notice_read=data.notice_read,
+        recording=data.recording_consent, transcription=data.transcription_consent,
+        analysis=data.analysis_consent, publication=data.publication_consent,
+        method="TABLE_DEVICE", recorder_session=recorder_session,
+    )
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "consent": consent_svc.consent_dict(consent),
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
+
+
+@router.post("/recorder/participants/{participant_id}/moved")
+def participant_moved(participant_id: str, recorder_session: RecorderSess, session: DB):
+    """Marked as moved to another table — the room's procedure for a refusal
+    (a table that is not recorded). Leaves this table's roster; consent acts
+    stay as they are."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    participant = consent_svc.participant_at_table(
+        session, assembly, participant_id, recorder_session.table_number
+    )
+    consent_svc.unseat(session, assembly, participant, actor=f"recorder-session:{recorder_session.id}")
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
+
+
+# ---- registration on the participant's own phone (0.7 consent) ----
+#
+# The table's notice screen shows a REGISTER_PARTICIPANT code; a person scans
+# it and registers here, on their own phone, with the table known from the
+# code. The token travels in the body like /join's, under /join's limits; the
+# result is a bearer for the person's own page (status, the published report).
+
+
+class RegisterNoticeIn(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/register/notice")
+def register_notice(data: RegisterNoticeIn, request: Request, session: ReadDB):
+    """What a registration code is for — the event, the table, the notice —
+    before anyone types a name. Consumes nothing."""
+    JOIN_TOKEN_LIMITER.check(token_key(data.token))
+    JOIN_IP_LIMITER.check(client_ip(request))
+    invite, assembly = consent_svc.registration_code(session, data.token)
+    return {
+        **consent_svc.notice_for(assembly).as_dict(),
+        "mode": assembly.participant_consent,
+        "assembly": {"id": assembly.id, "name": assembly.name, "language": assembly.language,
+                     "kind": assembly.kind},
+        # None for the assembly's pre-registration link: seated at the door
+        "table_number": invite.table_number,
+        "color_key": color_for(invite.table_number) if invite.table_number is not None else None,
+    }
+
+
+class RegisterIn(ParticipantRegisterIn):
+    token: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/register", status_code=201)
+def register_self(data: RegisterIn, request: Request, session: DB):
+    """One person registers at the code's table from their own phone: the
+    same record as on the shared phone (method SELF_PHONE), plus a bearer for
+    their page. The notice is read outside the transaction's hot path (an
+    in-memory snapshot) and must match what they read."""
+    JOIN_TOKEN_LIMITER.check(token_key(data.token))
+    JOIN_IP_LIMITER.check(client_ip(request))
+    participant, consent, _, bearer, invite = consent_svc.register_by_code(
+        session,
+        data.token,
+        consent_svc.ConsentAct(
+            name=data.name,
+            email=data.email,
+            notice_hash=data.notice_hash,
+            notice_read=data.notice_read,
+            recording_consent=data.recording_consent,
+            transcription_consent=data.transcription_consent,
+            analysis_consent=data.analysis_consent,
+            publication_consent=data.publication_consent,
+        ),
+    )
+    return {
+        "participant_token": bearer,
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "consent": consent_svc.consent_dict(consent),
+        "table_number": invite.table_number,
+        "color_key": color_for(invite.table_number) if invite.table_number is not None else None,
+    }
+
+
+def get_participant_session(session: ReadDB, authorization: Annotated[str, Header()] = ""):
+    scheme, _, bearer = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not bearer:
+        raise HTTPException(status_code=401, detail="Missing participant token")
+    return consent_svc.participant_by_bearer(session, bearer.strip())
+
+
+ParticipantSess = Annotated[ParticipantSession, Depends(get_participant_session)]
+
+
+@router.get("/participant/status")
+def participant_status(participant_session: ParticipantSess, session: ReadDB):
+    """The person's own page: where they registered, their consent, whether
+    the report is out, whom to contact to withdraw."""
+    assembly = session.get(Assembly, participant_session.assembly_id)
+    available = assembly is not None and _report_available(session, assembly)
+    return consent_svc.participant_status(session, participant_session, available)
+
+
+class ValidateIn(BaseModel):
+    round_id: str
+    verdict: Literal["LOOKS_RIGHT", "MISSING"]
+    note: str = Field(default="", max_length=1000)
+
+
+@router.post("/participant/validate")
+def participant_validate(data: ValidateIn, participant_session: ParticipantSess, session: DB):
+    """"Does this reflect your table?" — once the report is out. One answer per
+    person and session; a second tap replaces the first."""
+    assembly = session.get(Assembly, participant_session.assembly_id)
+    if assembly is None or not _report_available(session, assembly):
+        raise HTTPException(status_code=409, detail="The report has not been published yet")
+    validation = validation_svc.record(
+        session, participant_session, data.round_id, data.verdict, data.note
+    )
+    return {"round_id": validation.round_id, "verdict": validation.verdict, "note": validation.note}
+
+
+@router.get("/participant/report")
+def participant_report(participant_session: ParticipantSess, session: ReadDB):
+    """The published report, the same payload the table phones read."""
+    _, report = _published_report_of(session, session.get(Assembly, participant_session.assembly_id))
+    return report
+
+
+@router.get("/participant/report.pdf")
+def participant_report_pdf(participant_session: ParticipantSess, session: ReadDB):
+    from fastapi.responses import Response
+
+    from citizens.services.branding import logo_path, organization_name
+    from citizens.services.report_pdf import render_pdf
+
+    assembly, report = _published_report_of(
+        session, session.get(Assembly, participant_session.assembly_id)
+    )
+    filename = f"{assembly.name[:40].replace(' ', '-')}-report.pdf"
+    return Response(
+        render_pdf(report, logo_path(), organization_name()),
+        media_type="application/pdf",
+        headers=download_headers(filename),
+    )
+
+
+@router.get("/recorder/participants/search")
+def search_participants(q: str, recorder_session: ReadingSess, session: ReadDB):
+    """The door's "find your name": people who registered ahead and have no
+    table yet. Two characters at least; names only."""
+    if len(q.strip()) < 2:
+        return []
+    return consent_svc.search_unseated(session, recorder_session.assembly_id, q)
+
+
+@router.post("/recorder/participants/{participant_id}/seat")
+def seat_participant(participant_id: str, recorder_session: RecorderSess, session: DB):
+    """A pre-registered person sits down at this table."""
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None:
+        raise HTTPException(status_code=404, detail="Assembly not found")
+    participant = consent_svc.seat(session, assembly, participant_id, recorder_session)
+    return {
+        "participant": {"id": participant.id, "label": participant.label, "name": participant.name},
+        "table": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+    }
+
+
+class HelpIn(BaseModel):
+    kind: Literal["TECHNICAL", "ORGANIZER", "PROCESS"]
+
+
+@router.post("/recorder/help", status_code=201)
+def need_help(data: HelpIn, recorder_session: RecorderSess, session: DB):
+    """The table raises its hand. One open request per table — tapping again
+    changes what it asks for. The Live tab shows it beside the table's
+    number; the phone learns of the acknowledgement on its status poll."""
+    HELP_LIMITER.check(recorder_session.id)
+    # a spontaneous Session has no organizer walking the room: the phone
+    # hides the button, and the server keeps the rule
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is not None and assembly.kind == "session":
+        raise HTTPException(status_code=409, detail="A Session has no organizer to call")
+    return help_svc.as_dict(help_svc.raise_hand(session, recorder_session, data.kind))
+
+
 class LogEntry(BaseModel):
     ts: float
     level: str = Field(max_length=10)
@@ -455,13 +961,24 @@ def _assembly_state(
     # In plenary the whole room is recorded by many phones at once, so a round
     # is "recorded" only from THIS phone's point of view — another device
     # recording the same round must not lock it out. Every other mode scopes to
-    # the table (one phone per table), where any device's recording means done.
+    # the table AND this phone's recorder slot: the table's own phone and a
+    # replacement that rescanned its code share slot 1, so either's recording
+    # means "done" for the other, while a second recorder added by QR records
+    # beside them and must not be told its table is taken. Recordings whose
+    # session is gone count as slot 1, which is what they were before slots.
     plenary = assembly.recording_mode == "plenary"
-    recorded_scope = (
-        Recording.recorder_session_id == recorder_session.id
-        if plenary
-        else Recording.table_number == recorder_session.table_number
-    )
+    if plenary:
+        recorded_scope = Recording.recorder_session_id == recorder_session.id
+    else:
+        same_slot = select(RecorderSession.id).where(
+            RecorderSession.assembly_id == assembly.id,
+            RecorderSession.table_number == recorder_session.table_number,
+            RecorderSession.slot == recorder_session.slot,
+        )
+        slot_scope = Recording.recorder_session_id.in_(same_slot)
+        if recorder_session.slot == 1:
+            slot_scope = or_(slot_scope, Recording.recorder_session_id.is_(None))
+        recorded_scope = and_(Recording.table_number == recorder_session.table_number, slot_scope)
     for recording in session.execute(
         select(Recording).where(
             Recording.assembly_id == assembly.id,
@@ -480,6 +997,10 @@ def _assembly_state(
         # was reachable by the API and unreachable by an actual phone.
         if rec_svc.device_has_gone_silent(recording):
             continue
+        if recording.continued_by_id:
+            # the server finished it and the phone kept going: its
+            # continuation is the row that says where this round stands
+            continue
         recorded_rounds[recording.round_id] = recording.state
         if recording.recorder_session_id == recorder_session.id:
             own_rounds.add(recording.round_id)
@@ -488,6 +1009,9 @@ def _assembly_state(
     return {
         "assembly": {
             "id": assembly.id,
+            # "session" when this is the container behind a standalone Session:
+            # the phone then has no event name worth a hero line
+            "kind": assembly.kind,
             "name": assembly.name,
             "language": assembly.language,
             "recording_mode": assembly.recording_mode,
@@ -510,16 +1034,40 @@ def _assembly_state(
             ),
         },
         "table_number": recorder_session.table_number,
+        # the colour beside the number, the same in every round — a cue for
+        # people looking for "the blue table", never something to depend on
+        "table_color": color_for(recorder_session.table_number),
+        # which of the table's recorders this phone is (1 = the table's own code)
+        "slot": recorder_session.slot,
+        # the table as a whole: how many recorder phones it has right now and
+        # which of them carries the live captions, for the status line
+        "table": _table_summary(session, assembly.id, recorder_session),
         # The organizer has asked the phones to delete their local copies. The
         # server cannot push, so it rides on this poll — which every recorder
         # already makes every few seconds.
         "purge_local_audio": assembly.device_audio_purge_requested_at is not None,
+        # what the organizer has said to this table and the phone has not
+        # shown yet ("5 minutes left"); the phone posts a receipt once shown
+        "messages": messages_svc.unseen_for(session, recorder_session),
+        # this table's hand, if up — or just acknowledged, so the phone can
+        # say the organizer has seen it
+        "help": help_svc.latest_for_phone(session, recorder_session),
+        # the assembly's consent rule and where this table stands under it,
+        # so the phone can gate without a second call
+        "consent": consent_svc.table_consent_state(session, assembly, recorder_session.table_number),
+        # the AI facilitator at this table: effective level and the table's own
+        # override, for the tech sheet's switch
+        "ai_facilitator": _ai_level(session, assembly, recorder_session.table_number),
+        # the server finished (or wants finished) this phone's recording: the
+        # phone shows it and, for a Finish request, finishes
+        "recording_notice": _recording_notice(session, recorder_session),
         "rounds": [
             {
                 "id": round_.id,
                 "position": round_.position,
                 "title": round_.title,
                 "question": round_.question,
+                "objective": round_.objective,
                 "duration_minutes": round_.duration_minutes,
                 "status": round_.status,
                 "recorded_state": recorded_rounds.get(round_.id),
@@ -530,6 +1078,66 @@ def _assembly_state(
             }
             for round_ in assembly.rounds
         ],
+    }
+
+
+def _recording_notice(session: Session, recorder_session: RecorderSession) -> dict | None:
+    recording = session.execute(
+        select(Recording)
+        .where(
+            Recording.recorder_session_id == recorder_session.id,
+            Recording.continued_from_id.is_(None),
+        )
+        .order_by(Recording.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if recording is None or (recording.closed_by is None and recording.finish_requested_at is None):
+        return None
+    return {
+        "recording_id": recording.id,
+        "round_id": recording.round_id,
+        "closed_by": recording.closed_by,
+        "closed_at": recording.ended_at.isoformat() if recording.ended_at else None,
+        "finish_requested": recording.finish_requested_at is not None,
+        "audio_added": recording.continued_by_id is not None,
+    }
+
+
+def _ai_level(session: Session, assembly: Assembly, table_number: int) -> dict:
+    from citizens.services import facilitator as ai_svc
+
+    return ai_svc.table_level_state(session, assembly, table_number)
+
+
+def _table_summary(session: Session, assembly_id: str, recorder_session: RecorderSession) -> dict:
+    """Recorders: 2 · Live captions: Recorder A — what the phone shows about
+    its table. Recorders are counted by slot among sessions not revoked; the
+    live source is whichever recorder's recording in progress carries it."""
+    recorders = session.execute(
+        select(func.count(func.distinct(RecorderSession.slot))).where(
+            RecorderSession.assembly_id == assembly_id,
+            RecorderSession.table_number == recorder_session.table_number,
+            RecorderSession.revoked_at.is_(None),
+        )
+    ).scalar_one()
+    live_slot = session.execute(
+        select(RecorderSession.slot)
+        .join(Recording, Recording.recorder_session_id == RecorderSession.id)
+        .where(
+            Recording.assembly_id == assembly_id,
+            Recording.table_number == recorder_session.table_number,
+            Recording.state == "RECORDING",
+            Recording.live_source.is_(True),
+        )
+    ).scalars().first()
+    return {
+        "number": recorder_session.table_number,
+        "color_key": color_for(recorder_session.table_number),
+        "slot": recorder_session.slot,
+        "slot_label": slot_label(recorder_session.slot),
+        "recorders": int(recorders or 0),
+        "live_source_slot": live_slot,
+        "live_source_label": slot_label(live_slot) if live_slot else None,
     }
 
 

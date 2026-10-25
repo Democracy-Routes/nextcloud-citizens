@@ -34,7 +34,7 @@ test('the organizer hands a dead table to another phone', async ({ browser }) =>
 	await phoneB.page.goto(
 		`/recorder.html?chunkms=${CHUNK_MS}#/join/${encodeURIComponent(fixture.token)}`,
 	)
-	const agree = phoneB.page.getByRole('button', { name: /Everyone at this table agrees/ })
+	const agree = phoneB.page.getByRole('button', { name: /continue/ })
 	await agree.waitFor({ state: 'visible', timeout: 20_000 })
 	await agree.click()
 	await expect(phoneB.page.getByRole('button', { name: 'READY' })).toBeEnabled({ timeout: 20_000 })
@@ -43,10 +43,10 @@ test('the organizer hands a dead table to another phone', async ({ browser }) =>
 	// Told the truth about why it cannot start: the round is being recorded on
 	// another phone. NOT "this table has completed every round", which is what
 	// it used to say at the exact moment a table's device had just died.
-	await expect(phoneB.page.getByText(/already recording on another phone/)).toBeVisible({
+	await expect(phoneB.page.getByText(/Another phone is recording this table/)).toBeVisible({
 		timeout: 25_000,
 	})
-	await expect(phoneB.page.getByText('completed every round')).toHaveCount(0)
+	await expect(phoneB.page.getByText('completed every session')).toHaveCount(0)
 
     // --- the facilitator releases the table ---
 	const released = organizerApi<{ assembling: boolean }>(

@@ -1,23 +1,32 @@
 // SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type {
+	Intervention,
 	Assembly,
 	AssemblyCreated,
 	AssemblyDetail,
 	AssemblyProgress,
 	AssemblyUpdate,
+	DeviceReport,
 	FilesListing,
 	Invite,
 	InviteGenerated,
 	Participant,
 	ProvidersSummary,
+	RecordNowOut,
 	SttProvider,
 	ReportData,
 	Round,
 	RoundFindings,
 	RoundIn,
+	HelpRequest,
+	RegistrationLink,
 	RoundMonitor,
+	SessionCreate,
+	SessionCreated,
+	SessionMessage,
 	Table,
+	TableAdded,
 	TranscriptData,
 } from './types'
 
@@ -81,11 +90,38 @@ export const api = {
 		default_table_count: number
 		analysis_instructions: string
 		rounds: RoundIn[]
+		/** the organizer's wizard sends 'required'; the server defaults to 'optional' */
+		participant_consent?: 'required' | 'optional'
+		/** null: the instance default; 0: keep indefinitely */
+		audio_retention_days?: number | null
+		zero_retention?: boolean
 	}) => request<AssemblyCreated>('POST', '/api/v1/assemblies', data),
 	getAssembly: (id: string) => request<AssemblyDetail>('GET', `/api/v1/assemblies/${id}`),
+
+	// A Session on its own: no assembly to name or configure first. The rows
+	// behind it are reached through container_id on the assembly routes.
+	createSession: (data: SessionCreate) => request<SessionCreated>('POST', '/api/v1/sessions', data),
+	recordNow: (data: { language: string }) =>
+		request<RecordNowOut>('POST', '/api/v1/sessions/record-now', data),
+	// a standalone Session becomes an Assembly (an event of several sessions),
+	// keeping everything it already has
+	promoteSession: (sessionId: string, name: string) =>
+		request<{ container_id: string; kind: string; name: string }>(
+			'POST', `/api/v1/sessions/${sessionId}/promote`, { name },
+		),
 	updateAssembly: (id: string, data: AssemblyUpdate) =>
 		request<AssemblyDetail>('PUT', `/api/v1/assemblies/${id}`, data),
 	deleteAssembly: (id: string) => request<void>('DELETE', `/api/v1/assemblies/${id}`),
+	/** Change the language after recording has begun (S8): the old PUT keeps
+	 * refusing it once audio exists. Every recording with audio is queued to
+	 * be transcribed again. 409 with detail SESSION_ACTIVE while a session is
+	 * being recorded, or ZERO_RETENTION_APPLIED. */
+	changeLanguage: (id: string, language: string) =>
+		request<{ language: string; queued: number; skipped_no_audio: number; closed: boolean }>(
+			'POST',
+			`/api/v1/assemblies/${id}/language`,
+			{ language },
+		),
 
 	addRound: (assemblyId: string, data: RoundIn) =>
 		request<Round>('POST', `/api/v1/assemblies/${assemblyId}/rounds`, data),
@@ -100,12 +136,38 @@ export const api = {
 	importCsv: (assemblyId: string, csv: string) =>
 		request<Participant[]>('POST', `/api/v1/assemblies/${assemblyId}/participants/import-csv`, { csv }),
 	deleteParticipant: (id: string) => request<void>('DELETE', `/api/v1/participants/${id}`),
+	/** Changed their mind / withdraws consent, recorded on the person's word (a further act). */
+	participantConsent: (
+		assemblyId: string,
+		participantId: string,
+		flags: { recording_consent: boolean; transcription_consent: boolean; analysis_consent: boolean; publication_consent: boolean },
+	) =>
+		request<{ participant: { id: string; label: string }; consent: unknown }>(
+			'POST',
+			`/api/v1/assemblies/${assemblyId}/participants/${participantId}/consent`,
+			flags,
+		),
+	/** Moved to another table: leaves the current table's roster for the sessions still to come. */
+	participantMoved: (assemblyId: string, participantId: string) =>
+		request<{ participant: { id: string; label: string } }>(
+			'POST',
+			`/api/v1/assemblies/${assemblyId}/participants/${participantId}/moved`,
+		),
 
 	roundTables: (roundId: string) => request<Table[]>('GET', `/api/v1/rounds/${roundId}/tables`),
+	// the next table, in every round at once, with its QR code (in this response only)
+	addTable: (assemblyId: string) => request<TableAdded>('POST', `/api/v1/assemblies/${assemblyId}/tables`),
 	randomize: (roundId: string) =>
 		request<Table[]>('POST', `/api/v1/rounds/${roundId}/assignments/randomize`),
 	copyPrevious: (roundId: string) =>
 		request<Table[]>('POST', `/api/v1/rounds/${roundId}/assignments/copy-previous`),
+	/** Seat everyone with a goal: meet new people, random, or continuity. */
+	remix: (roundId: string, goal: 'new_people' | 'random' | 'continuity') =>
+		request<{ goal: string; seated: number; repeated_pairs: number; tables: Table[] }>(
+			'POST',
+			`/api/v1/rounds/${roundId}/assignments/remix`,
+			{ goal },
+		),
 	moveParticipant: (roundId: string, participantId: string, toTableId: string) =>
 		request<Table[]>('POST', `/api/v1/rounds/${roundId}/assignments/move`, {
 			participant_id: participantId,
@@ -116,7 +178,7 @@ export const api = {
 	getProviders: () => request<ProvidersSummary>('GET', '/api/v1/admin/providers'),
 	updateProviders: (payload: Record<string, unknown>) =>
 		request<ProvidersSummary>('PUT', '/api/v1/admin/providers', payload),
-	testProvider: (target: SttProvider | 'analysis', apiKey?: string, baseUrl?: string, model?: string) =>
+	testProvider: (target: SttProvider | 'analysis' | 'facilitator', apiKey?: string, baseUrl?: string, model?: string) =>
 		request<{ ok: boolean; message: string }>('POST', '/api/v1/admin/providers/test', {
 			target,
 			api_key: apiKey,
@@ -129,6 +191,34 @@ export const api = {
 	startRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/start`),
 	endRound: (roundId: string) => request<Round>('POST', `/api/v1/rounds/${roundId}/end`),
 	roundMonitor: (roundId: string) => request<RoundMonitor>('GET', `/api/v1/rounds/${roundId}/monitor`),
+	/** The assembly's pre-registration link (made on first ask). */
+	registrationLink: (assemblyId: string, create = true) =>
+		request<RegistrationLink>(
+			create ? 'POST' : 'GET',
+			`/api/v1/assemblies/${assemblyId}/registration-link`,
+		),
+	/** The Live tab's "Pause AI" for one table ('default' follows the assembly). */
+	setTableFacilitation: (assemblyId: string, tableNumber: number, level: 'default' | 'off' | 'light' | 'normal' | 'active') =>
+		request<{ level: string; override: string | null }>(
+			'POST', `/api/v1/assemblies/${assemblyId}/tables/${tableNumber}/facilitation`, { level },
+		),
+	/** What the AI facilitator said at each table of a session. */
+	roundInterventions: (roundId: string) =>
+		request<Intervention[]>('GET', `/api/v1/rounds/${roundId}/interventions`),
+	acknowledgeHelp: (requestId: string) =>
+		request<HelpRequest>('POST', `/api/v1/help-requests/${requestId}/acknowledge`),
+	roundMessages: (roundId: string) =>
+		request<SessionMessage[]>('GET', `/api/v1/rounds/${roundId}/messages`),
+	sendMessage: (
+		roundId: string,
+		data: {
+			kind: SessionMessage['kind']
+			text?: string
+			minutes?: number
+			target_table_number?: number | null
+			sound?: boolean
+		},
+	) => request<SessionMessage>('POST', `/api/v1/rounds/${roundId}/messages`, data),
 	roundFindings: (roundId: string) =>
 		request<RoundFindings>('GET', `/api/v1/rounds/${roundId}/findings`),
 	updateFinding: (findingId: string, payload: { status?: string; title?: string; summary?: string }) =>
@@ -151,6 +241,12 @@ export const api = {
 			'GET',
 			`/api/v1/assemblies/${assemblyId}/report?include_drafts=${includeDrafts}`,
 		),
+	/** Progress plus the newest FAILED synthesis/cross-table job, if any (R25).
+	 * A separate endpoint from the report itself: lifecycle.assembly_progress()
+	 * never carried failures, so the Report tab just looked unchanged forever
+	 * when one of those jobs gave up. */
+	assemblyProgress: (assemblyId: string) =>
+		request<AssemblyProgress>('GET', `/api/v1/assemblies/${assemblyId}/progress`),
 	publishReport: (assemblyId: string) =>
 		request<{ published_at: string }>('POST', `/api/v1/assemblies/${assemblyId}/report/publish`),
 	unpublishReport: (assemblyId: string) =>
@@ -164,9 +260,18 @@ export const api = {
 		request<void>('DELETE', `/api/v1/assemblies/${assemblyId}/close`),
 	refreshFinalReport: (assemblyId: string) =>
 		request<{ final_report_at: string }>('POST', `/api/v1/assemblies/${assemblyId}/report/refresh`),
+	/** Queue "How the discussion developed" across sessions (at least two with a summary). */
+	generateSynthesis: (assemblyId: string) =>
+		request<{ queued: boolean; sessions: number }>('POST', `/api/v1/assemblies/${assemblyId}/synthesis`),
 
 	listFiles: (assemblyId: string) =>
 		request<FilesListing>('GET', `/api/v1/assemblies/${assemblyId}/files`),
+	/** Each table phone's own log, read back after the fact (R17) — loaded on
+	 * demand from the Files tab, never on its regular poll: it re-reads every
+	 * phone's log file on the server and is only useful when something
+	 * already looks wrong. */
+	deviceReport: (assemblyId: string) =>
+		request<DeviceReport>('GET', `/api/v1/assemblies/${assemblyId}/device-report`),
 	deleteRecordingAudio: (recordingId: string) =>
 		request<{ freed_bytes: number }>('DELETE', `/api/v1/recordings/${recordingId}/audio`),
 	deleteAssemblyAudio: (assemblyId: string) =>
@@ -205,6 +310,14 @@ export const api = {
 		request<{ state: string; assembling: boolean }>(
 			'POST',
 			`/api/v1/recordings/${recordingId}/replace-device`,
+		),
+	/** Finish this recording now, with whatever audio has already arrived, and
+	 * ask the phone to stop — the organizer's own version of the 5-minute
+	 * silence sweep. 409 if the recording is not RECORDING any more. */
+	finishRecording: (recordingId: string) =>
+		request<{ state: string; finish_requested_at: string | null }>(
+			'POST',
+			`/api/v1/recordings/${recordingId}/finish`,
 		),
 	/** Try assembling a recording's audio again — the way out of a failure
 	 * that left it stuck, once the disk has room. */

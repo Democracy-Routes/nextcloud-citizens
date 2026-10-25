@@ -8,7 +8,7 @@ you spoke too much, you should let other people…" — a named criticism of a
 participant, printed and sent to an outside service.
 """
 
-from citizens.services.pseudonyms import redact
+from citizens.services.pseudonyms import labels_for, redact
 
 
 def _map(*names: str) -> dict[str, str]:
@@ -58,3 +58,21 @@ def test_punctuation_around_a_name_survives():
 
 def test_an_empty_map_changes_nothing():
     assert redact("Simone said so", {}) == "Simone said so"
+
+
+def test_a_full_name_is_one_person_and_each_part_points_at_the_same_label():
+    """"Giulia Rossi" registered at a table is one person: the model must see
+    one stand-in whether the transcript says her first name, her surname or
+    both — before 0.7 each part got its own label and one person read as two."""
+    mapping = labels_for(["Giulia Rossi", "Marco", "Anna Maria Bianchi, Luca Verdi"])
+
+    assert mapping["Giulia Rossi"] == mapping["Giulia"] == mapping["Rossi"] == "[Person A]"
+    assert mapping["Marco"] == "[Person B]"
+    assert mapping["Anna Maria Bianchi"] == mapping["Anna"] == mapping["Maria"] == "[Person C]"
+    assert mapping["Luca Verdi"] == mapping["Luca"] == "[Person D]"
+    # the full name is replaced as one token, never as two labels
+    assert redact("Giulia Rossi agreed with Rossi", mapping) == "[Person A] agreed with [Person A]"
+    # longest first in the map, so "Anna Maria Bianchi" never becomes half a label
+    assert list(mapping)[0] == "Anna Maria Bianchi"
+    # a name seen twice (two participants with the same first name) is one label
+    assert labels_for(["Marco Neri", "Marco"])["Marco"] == "[Person A]"

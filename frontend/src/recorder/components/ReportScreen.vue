@@ -6,16 +6,22 @@ import { mdiDownloadOutline, mdiFileDocumentOutline } from '@mdi/js'
 import { onMounted, ref } from 'vue'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
 import { TYPE_LABELS, groupByType, roundHeading } from '../../labels'
-import { recorderApi, type JoinResult, type PublishedReport } from '../api'
+import { recorderApi, type PublishedReport } from '../api'
 import { downloadBlob } from '../../download'
 
 /*
  * The assembly report as published by the organizer (approved findings and
  * AI summaries only). Participants can read it at the table and download the
- * PDF to keep.
+ * PDF to keep — and, since 0.7, on their own phone after registering there
+ * (`participant`: the bearer is a participant's, the routes its own).
  */
 
-const props = defineProps<{ session: JoinResult }>()
+const props = defineProps<{
+	token: string
+	assemblyName: string
+	tableNumber: number
+	participant?: boolean
+}>()
 const emit = defineEmits<{ back: [] }>()
 
 const { t } = useI18n()
@@ -27,7 +33,9 @@ const downloadNote = ref('')
 
 onMounted(async () => {
 	try {
-		report.value = await recorderApi.report(props.session.session_token)
+		report.value = props.participant
+			? await recorderApi.participantReport(props.token)
+			: await recorderApi.report(props.token)
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
 	}
@@ -36,11 +44,10 @@ onMounted(async () => {
 async function downloadPdf(): Promise<void> {
 	downloading.value = true
 	try {
-		const blob = await recorderApi.reportPdf(props.session.session_token)
-		downloadBlob(
-			blob,
-			`${props.session.assembly.name.slice(0, 40).replace(/ /g, '-')}-report.pdf`,
-		)
+		const blob = props.participant
+			? await recorderApi.participantReportPdf(props.token)
+			: await recorderApi.reportPdf(props.token)
+		downloadBlob(blob, `${props.assemblyName.slice(0, 40).replace(/ /g, '-')}-report.pdf`)
 		downloadNote.value = t('recorder.report.pdfSaved')
 	} catch (err) {
 		error.value = err instanceof Error ? err.message : String(err)
@@ -53,7 +60,8 @@ async function downloadPdf(): Promise<void> {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
+			<!-- one table: "TABLE 1" says nothing a reader needs -->
+			<span v-if="(report?.assembly.tables ?? 2) > 1" class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: tableNumber }) }}</span>
 		</div>
 
 		<div class="rc-scroll">
@@ -65,14 +73,20 @@ async function downloadPdf(): Promise<void> {
 						<SvgIcon :path="mdiFileDocumentOutline" :size="13" /> {{ t('recorder.report.title') }}
 					</p>
 					<h1 style="font-size: 1.25rem">{{ report.assembly.name }}</h1>
-					<p class="rc-muted" style="margin: 6px 0 0; font-size: 0.8125rem">
-						{{ t('recorder.report.participants', { count: report.assembly.participants }, report.assembly.participants) }} ·
-						{{ t('recorder.report.tables', { count: report.assembly.tables }, report.assembly.tables) }}
+					<!-- "0 participants · 1 table" under a Record-now session is noise:
+					     the count only when somebody registered, the tables only when
+					     there are several -->
+					<p v-if="report.assembly.participants > 0 || report.assembly.tables > 1" class="rc-muted" style="margin: 6px 0 0; font-size: 0.8125rem">
+						<template v-if="report.assembly.participants > 0">{{ t('recorder.report.participants', { count: report.assembly.participants }, report.assembly.participants) }}</template>
+						<template v-if="report.assembly.participants > 0 && report.assembly.tables > 1"> · </template>
+						<template v-if="report.assembly.tables > 1">{{ t('recorder.report.tables', { count: report.assembly.tables }, report.assembly.tables) }}</template>
 					</p>
 				</div>
 
 				<div v-for="round in report.rounds" :key="round.position" class="rc-card">
-					<p class="rc-eyebrow" style="margin-bottom: 4px">
+					<!-- an empty heading is deliberate: a Session on its own carries its
+					     name as the page title already -->
+					<p v-if="round.heading !== ''" class="rc-eyebrow" style="margin-bottom: 4px">
 						{{ round.heading ?? roundHeading(round.position, round.title) }}
 					</p>
 					<p v-if="round.question" class="rc-question" style="margin: 0 0 10px">

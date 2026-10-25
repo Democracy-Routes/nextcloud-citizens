@@ -2,6 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import {
+	mdiAccountVoice,
 	mdiAlert,
 	mdiCheckCircle,
 	mdiCloseCircle,
@@ -16,7 +17,12 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '../../components/ui/SvgIcon.vue'
-import { recorderApi, type JoinResult, type RoundInfo } from '../api'
+import { setLocale } from '../../i18n'
+import { recorderApi, type HelpState, type JoinResult, type RoundInfo, type TableConsent } from '../api'
+import HelpButton from './HelpButton.vue'
+import ParticipantsLine from './ParticipantsLine.vue'
+import TableBadge from './TableBadge.vue'
+import TableBar from './TableBar.vue'
 import { heldByAnotherDevice } from '../holding'
 import { clientLog, ship } from '../logger'
 import { useWakeLock } from '../useWakeLock'
@@ -24,7 +30,14 @@ import { pickMimeType } from '../engine'
 import { idb } from '../idb'
 
 const props = defineProps<{ session: JoinResult }>()
-const emit = defineEmits<{ ready: []; start: [round: RoundInfo]; report: [] }>()
+const emit = defineEmits<{
+	ready: []
+	start: [round: RoundInfo]
+	report: []
+	participants: []
+	/** show the code a facilitator's own phone scans to follow this table */
+	facilitator: []
+}>()
 
 const { t } = useI18n()
 
@@ -39,6 +52,13 @@ const orchestrated = props.session.assembly.recording_mode !== 'independent'
 const rounds = ref<RoundInfo[]>([...props.session.rounds])
 const openRounds = computed(() => rounds.value.filter((r) => !r.recorded_state))
 const recordingElsewhere = computed(() => heldByAnotherDevice(rounds.value))
+// Every session recorded: the table is done. The microphone checklist, the
+// level meter and the test are for a table about to record, and showing them
+// here read as "there is more to do". The status poll keeps `rounds` fresh,
+// so a session added later brings the checklist back by itself.
+const allRecorded = computed(
+	() => rounds.value.length > 0 && openRounds.value.length === 0 && !recordingElsewhere.value,
+)
 
 function pickRound(): RoundInfo | null {
 	const open = rounds.value.filter((r) => !r.recorded_state)
@@ -58,12 +78,22 @@ const tableSummaries = ref<Array<{ position: number; summary: string }>>([])
 
 let reportTimer = 0
 
+// this table's hand, as the server has it (HelpButton)
+const help = ref<HelpState | null | undefined>(undefined)
+// who registered at this table, as the join (or the notice screen) left it;
+// refreshed by the status poll once the table is finished
+const consent = ref<TableConsent | null | undefined>(props.session.consent)
+
 // once this table is finished, watch for the report becoming available and
 // for this table's own AI summaries landing
 async function pollReport(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
 		reportAvailable.value = status.report_available ?? false
+		help.value = status.help
+		if (status.consent) consent.value = status.consent
+		// Record now learns the room's language from its first transcript
+		if (status.assembly?.language) setLocale(status.assembly.language)
 		// keep the round list current — the whole point: a round recorded on
 		// another device (or by a sync that just failed) drops out of openRounds
 		if (status.rounds?.length) rounds.value = status.rounds
@@ -178,8 +208,9 @@ async function runChecks(): Promise<void> {
 
 	// Independent tables poll throughout, not only once every round is done:
 	// the list must stay fresh while rounds are still open, so a round recorded
-	// elsewhere or a just-failed sync is reflected rather than re-offered.
-	if (!orchestrated && rounds.value.length > 0) {
+	// elsewhere or a just-failed sync is reflected rather than re-offered. A
+	// finished table polls in every mode, so a session added later shows up.
+	if ((!orchestrated || allRecorded.value) && rounds.value.length > 0) {
 		void pollReport()
 		reportTimer = window.setInterval(() => void pollReport(), 20_000)
 	}
@@ -253,11 +284,35 @@ const STATE_CLASS: Record<CheckState, string> = {
 <template>
 	<div class="rc-fill">
 		<div class="rc-header">
-			<span class="rc-table-badge">{{ t('recorder.common.tableBadge', { number: session.table_number }) }}</span>
+			<TableBadge :number="session.table_number" :color-key="session.table_color" />
 		</div>
+		<!-- a hand to raise only where there is an organizer to see it -->
+		<HelpButton v-if="session.assembly.kind !== 'session'" :token="session.session_token" :help="help" />
+		<ParticipantsLine :consent="consent" @open="emit('participants')" />
+		<!-- the facilitator's own phone follows this table from here -->
+		<button type="button" class="rc-facilitator-link" data-test="add-facilitator" @click="emit('facilitator')">
+			<SvgIcon :path="mdiAccountVoice" :size="16" />
+			{{ t('recorder.table.addFacilitator') }}
+		</button>
 
 		<div class="rc-scroll">
-		<div class="rc-card">
+		<!-- the table is done: its summaries and the report, nothing about microphones -->
+		<div v-if="allRecorded" class="rc-card">
+			<p class="rc-eyebrow rc-center" style="display: block">{{ t('recorder.armed.allRecordedTitle') }}</p>
+			<p class="rc-muted rc-center" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
+			<template v-for="entry in tableSummaries" :key="entry.position">
+				<p class="rc-eyebrow" style="margin: 10px 0 2px; color: var(--rc-blue)">
+					{{ t('recorder.preflight.roundSummary', { position: entry.position }) }}
+				</p>
+				<p v-if="entry.summary" style="font-size: 0.875rem; margin: 0">{{ entry.summary }}</p>
+				<p v-else class="rc-muted" style="font-size: 0.845rem; margin: 0">{{ t('recorder.preflight.analyzing') }}</p>
+			</template>
+			<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
+				{{ t('recorder.armed.viewReport') }}
+			</button>
+		</div>
+
+		<div v-if="!allRecorded" class="rc-card">
 			<h2>{{ t('recorder.preflight.title') }}</h2>
 			<div v-for="row in ROWS" :key="row.key" class="rc-status-row">
 				<span class="rc-status-row__label">
@@ -299,22 +354,26 @@ const STATE_CLASS: Record<CheckState, string> = {
 			</button>
 		</div>
 
-		<div v-if="checks.microphone.state === 'fail'" class="rc-alert">
+		<div v-if="!allRecorded && checks.microphone.state === 'fail'" class="rc-alert">
 			<strong>{{ t('recorder.preflight.micRequired') }}</strong>
 			<p style="margin: 8px 0 0">{{ t('recorder.preflight.micGuidance') }}</p>
 			<button class="rc-btn rc-primary" style="margin-top: 12px" @click="runChecks">
 				{{ t('recorder.preflight.micRetry') }}
 			</button>
 		</div>
-		<div v-else-if="checks.storage.state === 'fail'" class="rc-alert">
+		<div v-else-if="!allRecorded && checks.storage.state === 'fail'" class="rc-alert">
 			{{ t('recorder.preflight.noStorage') }}
 		</div>
 
-		<template v-if="!orchestrated">
+		<template v-if="!orchestrated && !allRecorded">
 			<div v-if="selectedRound" class="rc-card">
 				<p class="rc-eyebrow" style="margin-bottom: 4px">
 					{{ t('recorder.common.roundOf', { position: selectedRound.position, total: session.rounds.length }) }} ·
-					{{ t('recorder.common.minutes', { minutes: selectedRound.duration_minutes }, selectedRound.duration_minutes) }}
+					{{
+						selectedRound.duration_minutes > 0
+							? t('recorder.common.minutes', { minutes: selectedRound.duration_minutes }, selectedRound.duration_minutes)
+							: t('recorder.recording.noPlannedTime')
+					}}
 				</p>
 				<p class="rc-question" style="margin: 0">{{ selectedRound.question || selectedRound.title }}</p>
 				<div v-if="openRounds.length > 1" style="margin-top: 14px">
@@ -347,36 +406,25 @@ const STATE_CLASS: Record<CheckState, string> = {
 					{{ t('recorder.preflight.recordingElsewhere') }}
 				</p>
 			</div>
-
-			<div v-else class="rc-card">
-				<p class="rc-eyebrow rc-center" style="display: block">{{ t('recorder.armed.allRecordedTitle') }}</p>
-				<p class="rc-muted rc-center" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
-				<template v-for="entry in tableSummaries" :key="entry.position">
-					<p class="rc-eyebrow" style="margin: 10px 0 2px; color: var(--rc-blue)">
-						{{ t('recorder.preflight.roundSummary', { position: entry.position }) }}
-					</p>
-					<p v-if="entry.summary" style="font-size: 0.875rem; margin: 0">{{ entry.summary }}</p>
-					<p v-else class="rc-muted" style="font-size: 0.845rem; margin: 0">{{ t('recorder.preflight.analyzing') }}</p>
-				</template>
-				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
-					{{ t('recorder.armed.viewReport') }}
-				</button>
-			</div>
 		</template>
 		</div>
 
-		<div class="rc-actions">
-			<button v-if="orchestrated" class="rc-btn rc-primary" :disabled="!canProceed()" @click="emit('ready')">
+		<!-- New table | primary action | Add recorder: the same bar on every screen -->
+		<TableBar :session="session" :round-id="selectedRound?.id ?? null">
+			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
+				{{ t('recorder.armed.viewReport') }}
+			</button>
+			<button v-else-if="orchestrated && !allRecorded" class="rc-btn rc-primary" :disabled="!canProceed()" @click="emit('ready')">
 				{{ t('recorder.preflight.ready') }}
 			</button>
 			<button
-				v-else-if="selectedRound"
+				v-else-if="!allRecorded && selectedRound"
 				class="rc-btn rc-record"
 				:disabled="!canProceed()"
 				@click="emit('start', selectedRound)">
 				<SvgIcon :path="mdiRecordCircleOutline" :size="22" />
 				{{ t('recorder.preflight.startRecording') }}
 			</button>
-		</div>
+		</TableBar>
 	</div>
 </template>

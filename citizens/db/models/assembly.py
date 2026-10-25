@@ -11,15 +11,28 @@ from citizens.db.models.base import Base, TZDateTime, new_uuid, utcnow
 
 ASSEMBLY_STATUSES = ("DRAFT", "READY", "ACTIVE", "PROCESSING", "REVIEW", "COMPLETE")
 ROUND_STATUSES = ("NOT_STARTED", "ACTIVE", "ENDED", "PROCESSING", "READY_FOR_REVIEW")
+# "assembly": an organized event the user created as such, holding rounds.
+# "session": the container behind a standalone Session (services/sessions.py)
+# — persisted this way because every storage path, ownership check and sweep
+# is keyed by assembly_id, but never shown to the user as an assembly.
+ASSEMBLY_KINDS = ("assembly", "session")
 
 
 class Assembly(Base):
     __tablename__ = "assemblies"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    kind: Mapped[str] = mapped_column(String(16), default="assembly", server_default="assembly")
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text, default="")
     language: Mapped[str] = mapped_column(String(10), default="en")
+    # Record now: nobody chose the language, so the first final transcript's
+    # detected language becomes it (services/transcription.py); a wizard's
+    # explicit choice, or a manual change, leaves this off
+    language_auto: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # the AI facilitator's level here (off/light/normal/active); None follows
+    # the instance default in Settings (services/facilitator.py)
+    ai_facilitator: Mapped[str | None] = mapped_column(String(12))
     scheduled_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     status: Mapped[str] = mapped_column(String(20), default="DRAFT")
     # "orchestrated": facilitator starts/ends rounds for all tables at once;
@@ -39,10 +52,19 @@ class Assembly(Base):
     closed_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     final_report_json: Mapped[str | None] = mapped_column(Text)
     final_report_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # how the discussion developed across sessions (services/analysis.py
+    # analyze_assembly): narrative, stages, what was carried forward
+    synthesis_json: Mapped[str | None] = mapped_column(Text)
+    synthesis_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     # days of audio retention after closing, overriding the instance default;
     # NULL = follow the default, 0 = keep indefinitely
     audio_retention_days: Mapped[int | None] = mapped_column(Integer())
     audio_purged_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # keep nothing but the report once closed and processed
+    # (services/zero_retention.py); done_at says it ran, and from then on
+    # reopening and changing the language are refused
+    zero_retention: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    zero_retention_done_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     # The organizer asked the table phones to delete their local copies. The
     # server cannot push to a phone, so this travels on the status poll each
     # recorder already makes every few seconds. Set once and left set: a phone
@@ -66,6 +88,13 @@ class Assembly(Base):
     # analysis model. Free text, one per line or comma-separated: the organizer
     # knows who is in the room, and a guess would mangle ordinary words.
     redact_names: Mapped[str] = mapped_column(Text, default="")
+    # 'required': a table records only once one registered person there has
+    # consented (services/consent.py); 'optional': the notice is shown and
+    # registration offered, nothing is blocked. Organized assemblies start
+    # 'required', spontaneous Sessions 'optional'.
+    participant_consent: Mapped[str] = mapped_column(
+        String(16), default="optional", server_default="optional"
+    )
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 
@@ -90,6 +119,10 @@ class Round(Base):
     position: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(200), default="")
     question: Mapped[str] = mapped_column(Text, default="")
+    # What the discussion should produce ("three concrete proposals"), as
+    # distinct from what it is about (the question). Optional; NULL on every
+    # round made before 0.7 and on any session that does not state one.
+    objective: Mapped[str | None] = mapped_column(Text)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
     status: Mapped[str] = mapped_column(String(20), default="NOT_STARTED")
     analysis_summary: Mapped[str] = mapped_column(Text, default="")
@@ -122,6 +155,9 @@ class Table(Base):
     round_id: Mapped[str] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"), index=True)
     number: Mapped[int] = mapped_column(Integer)
     label: Mapped[str] = mapped_column(String(100), default="")
+    # a visual cue beside the number (domain/tables.py); assigned from the
+    # number, repeats after six, and nothing depends on it for correctness
+    color_key: Mapped[str] = mapped_column(String(16), default="", server_default="")
     status: Mapped[str] = mapped_column(String(20), default="IDLE")
 
     round: Mapped[Round] = relationship(back_populates="tables")
@@ -142,6 +178,16 @@ class Participant(Base):
     name: Mapped[str] = mapped_column(String(200), default="")
     email: Mapped[str] = mapped_column(String(200), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
+    # ORGANIZER (the list, the CSV) or registered at a table phone: TABLE_DEVICE
+    # on the shared phone, SELF_PHONE through the table's registration code
+    source: Mapped[str] = mapped_column(String(16), default="ORGANIZER", server_default="ORGANIZER")
+    # where a table-phone registration happened — the table is then known
+    # without anyone typing it; the round is the one being set up at the time
+    registered_table_number: Mapped[int | None] = mapped_column(Integer)
+    registered_round_id: Mapped[str | None] = mapped_column(
+        ForeignKey("rounds.id", ondelete="SET NULL")
+    )
+    registered_session_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
 
     assembly: Mapped[Assembly] = relationship(back_populates="participants")
@@ -163,14 +209,42 @@ class TableAssignment(Base):
     participant: Mapped[Participant] = relationship()
 
 
+#: What scanning the code does. JOIN_TABLE is the printed table code, reusable
+#: for thirty days so a replacement phone can rescan the poster. The other two
+#: are made by a phone that already joined, shown as a QR for the next phone,
+#: short-lived and single-use — and the scanner never chooses between them.
+INVITE_PURPOSES = ("JOIN_TABLE", "ADD_RECORDER_TO_TABLE", "ADD_TABLE")
+
+
 class RecorderInvite(Base):
+    """A capability a phone redeems by scanning: a table code or an action code.
+
+    One row, one token mechanism (hash, vault, rate limit, brute-force
+    protection, the #/join route) for every purpose; `purpose` says which.
+    """
+
     __tablename__ = "recorder_invites"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     assembly_id: Mapped[str] = mapped_column(
         ForeignKey("assemblies.id", ondelete="CASCADE"), index=True
     )
-    table_number: Mapped[int] = mapped_column(Integer)
+    purpose: Mapped[str] = mapped_column(
+        String(32), default="JOIN_TABLE", server_default="JOIN_TABLE"
+    )
+    # the table this code concerns; NULL for ADD_TABLE, whose number is
+    # allocated when the code is consumed
+    table_number: Mapped[int | None] = mapped_column(Integer)
+    # the Session (round) an action code was made in — scope and audit, not a
+    # restriction on where the table lives: tables span every round
+    round_id: Mapped[str | None] = mapped_column(ForeignKey("rounds.id", ondelete="SET NULL"))
+    # action codes are redeemed once: consumed_at is claimed atomically by the
+    # first scan (services/capabilities.py) and a second scan is refused
+    single_use: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    consumed_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # the recorder session that made an action code. A plain id, not a foreign
+    # key: recorder_sessions already references this table
+    created_by_session_id: Mapped[str | None] = mapped_column(String(36))
     # the SHA-256 hex digest is what join verification uses; the token itself
     # is additionally kept encrypted (app-secret Fernet) so the organizer can
     # re-view and re-print QR sheets at any time

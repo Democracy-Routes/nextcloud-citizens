@@ -2,30 +2,36 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Organizer API: assemblies, rounds, participants, table assignments."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import Assembly, Participant, RecorderSession, Recording
+from citizens.db.models import Assembly, HelpRequest, Participant, RecorderSession, Recording
 from citizens.db.session import get_db, get_read_db
 from citizens.domain import schemas
 from citizens.security.identity import CurrentUser
 from citizens.services import assemblies as svc
+from citizens.services import consent as consent_svc
+from citizens.services import help as help_svc
 from citizens.services import invites as invite_svc
+from citizens.services import messages as messages_svc
+from citizens.services import provider_config
 from citizens.services import rounds as rounds_svc
+from citizens.services import tables as tables_svc
 from citizens.services.audit import record_audit_event
 from citizens.storage.paths import purge_assembly_storage
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # round_monitor is polled every few seconds by every open organizer tab for the
 # whole length of an event. Taking SQLite's writer slot for it competes with
 # the phones' chunk uploads for no reason: it only reads.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 @router.get("/assemblies", response_model=list[schemas.AssemblyOut])
@@ -77,10 +83,28 @@ def update_assembly(assembly_id: str, data: schemas.AssemblyUpdate, user: Curren
             status_code=409,
             detail=f"Cannot change {', '.join(sorted(changed))} once recording has begun.",
         )
+    if fields.get("ai_facilitator") == "default":
+        fields["ai_facilitator"] = None  # follow Settings
     for field, value in fields.items():
         setattr(assembly, field, value)
     session.flush()
     return _detail(session, assembly)
+
+
+@router.post("/assemblies/{assembly_id}/language")
+def change_language(
+    assembly_id: str, data: schemas.LanguageChange, user: CurrentUser, session: DB
+):
+    """Change the language once recording has begun: transcripts are made
+    again in it (PUT refuses the field then, deliberately — this is the
+    explicit path, with its cost stated)."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    result = svc.change_language(session, assembly, data.language)
+    record_audit_event(
+        session, "language_change_requested", "assembly", assembly.id, actor=user,
+        data={"language": data.language},
+    )
+    return result
 
 
 def _assembly_has_recordings(session: Session, assembly_id: str) -> bool:
@@ -154,10 +178,119 @@ def round_monitor(round_id: str, user: CurrentUser, session: ReadDB):
     return rounds_svc.round_monitor(session, round_)
 
 
+@router.post("/rounds/{round_id}/messages", response_model=schemas.MessageOut, status_code=201)
+def send_message(round_id: str, data: schemas.MessageIn, user: CurrentUser, session: DB):
+    """Say something to every table of this session, or to one: "5 minutes
+    left", "wrap up", a prompt. Rides the phones' status poll; the phones
+    report receipt, which GET below shows as delivered / not yet."""
+    round_ = svc.get_owned_round(session, round_id, user)
+    message = messages_svc.post_message(
+        session, round_, actor=user, kind=data.kind, text=data.text, minutes=data.minutes,
+        target_table_number=data.target_table_number, sound=data.sound,
+    )
+    return messages_svc.list_with_delivery(session, round_, limit=1)[0] | {"id": message.id}
+
+
+@router.get("/rounds/{round_id}/messages", response_model=list[schemas.MessageOut])
+def list_messages(round_id: str, user: CurrentUser, session: ReadDB):
+    round_ = svc.get_owned_round(session, round_id, user)
+    return messages_svc.list_with_delivery(session, round_)
+
+
+@router.post("/help-requests/{request_id}/acknowledge")
+def acknowledge_help(request_id: str, user: CurrentUser, session: DB):
+    """The organizer has seen a table's hand. The table's phone reads this
+    on its next status poll; the row leaves the Live tab's attention list."""
+    request = session.get(HelpRequest, request_id)
+    if request is None or request.assembly.created_by != user:
+        raise HTTPException(status_code=404, detail="Help request not found")
+    return help_svc.as_dict(help_svc.acknowledge(session, request, user))
+
+
+@router.get("/rounds/{round_id}/readiness")
+def round_readiness(round_id: str, user: CurrentUser, session: ReadDB):
+    """Can each table record? READY / NEEDS_ATTENTION / BLOCKED with reason
+    codes — the monitor's judgement without its detail, for an exception-first
+    view or an organizer's autopilot."""
+    round_ = svc.get_owned_round(session, round_id, user)
+    monitor = rounds_svc.round_monitor(session, round_)
+    return {
+        "round_id": round_.id,
+        "status": round_.status,
+        **monitor["readiness"],
+        "tables": [
+            {
+                "table_id": table["table_id"],
+                "number": table["number"],
+                "color_key": table["color_key"],
+                "recorders": len(table["recorders"]),
+                "live_source_slot": table["live_source_slot"],
+                **table["readiness"],
+            }
+            for table in monitor["tables"]
+        ],
+    }
+
+
 @router.get("/assemblies/{assembly_id}/participants", response_model=list[schemas.ParticipantOut])
 def list_participants(assembly_id: str, user: CurrentUser, session: ReadDB):
     assembly = svc.get_owned_assembly(session, assembly_id, user)
-    return assembly.participants
+    return consent_svc.participants_with_consent(session, assembly)
+
+
+@router.post("/assemblies/{assembly_id}/registration-link")
+def registration_link(assembly_id: str, user: CurrentUser, session: DB):
+    """The assembly's pre-registration link (made on first ask, then the same
+    one): people register and consent at home, and are seated at the door
+    by name on the table's phone."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    card = invite_svc.registration_link(session, assembly)
+    record_audit_event(session, "registration_link_issued", "assembly", assembly.id, actor=user)
+    return {**card, "registered": _pre_registered(session, assembly)}
+
+
+@router.get("/assemblies/{assembly_id}/registration-link")
+def get_registration_link(assembly_id: str, user: CurrentUser, session: ReadDB):
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    card = invite_svc.registration_link(session, assembly, create=False)
+    return {**(card or {"url": None, "qr_svg": None, "expires_at": None}),
+            "registered": _pre_registered(session, assembly)}
+
+
+def _pre_registered(session: Session, assembly: Assembly) -> dict:
+    """How many registered ahead, and how many of them have been seated."""
+    people = [p for p in assembly.participants if p.source == "PRE_REGISTRATION"]
+    return {
+        "total": len(people),
+        "seated": sum(1 for p in people if p.registered_table_number is not None),
+    }
+
+
+@router.get("/assemblies/{assembly_id}/consent-register.csv")
+def consent_register_csv(assembly_id: str, user: CurrentUser, session: ReadDB):
+    """The consent register as an auditor asks for it: one row per person
+    with what they accepted, against which notice, when, by which method."""
+    from fastapi.responses import Response
+
+    from citizens.api.downloads import download_headers
+
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    body = consent_svc.consent_register_csv(session, assembly)
+    filename = f"{assembly.name[:40].replace(' ', '-')}-consent-register.csv"
+    return Response(body, media_type="text/csv; charset=utf-8", headers=download_headers(filename))
+
+
+@router.get("/assemblies/{assembly_id}/consent-register.pdf")
+def consent_register_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
+    from fastapi.responses import Response
+
+    from citizens.api.downloads import download_headers
+    from citizens.services.branding import organization_name
+
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    body = consent_svc.consent_register_pdf(session, assembly, organization_name())
+    filename = f"{assembly.name[:40].replace(' ', '-')}-consent-register.pdf"
+    return Response(body, media_type="application/pdf", headers=download_headers(filename))
 
 
 @router.post(
@@ -180,6 +313,51 @@ def import_participants_csv(assembly_id: str, data: schemas.CsvImportIn, user: C
     return svc.add_participants(session, assembly, svc.parse_participants_csv(data.csv))
 
 
+class ConsentChangeByOrganizerIn(BaseModel):
+    recording_consent: bool = False
+    transcription_consent: bool = False
+    analysis_consent: bool = False
+    publication_consent: bool = False
+
+
+def _owned_participant(session: Session, assembly: Assembly, participant_id: str) -> Participant:
+    participant = session.get(Participant, participant_id)
+    if participant is None or participant.assembly_id != assembly.id:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return participant
+
+
+@router.post("/assemblies/{assembly_id}/participants/{participant_id}/consent", status_code=201)
+def organizer_records_consent_change(
+    assembly_id: str, participant_id: str, data: ConsentChangeByOrganizerIn,
+    user: CurrentUser, session: DB,
+):
+    """Changed their mind / Withdraws consent, recorded by the organizer on
+    the person's word (no notice hash: the organizer vouches for it)."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    participant = _owned_participant(session, assembly, participant_id)
+    consent = consent_svc.act(
+        session, assembly, participant,
+        notice_hash=None, notice_read=True,
+        recording=data.recording_consent, transcription=data.transcription_consent,
+        analysis=data.analysis_consent, publication=data.publication_consent,
+        method="ORGANIZER", actor=user,
+    )
+    return {"participant": {"id": participant.id, "label": participant.label},
+            "consent": consent_svc.consent_dict(consent)}
+
+
+@router.post("/assemblies/{assembly_id}/participants/{participant_id}/moved")
+def organizer_marks_moved(assembly_id: str, participant_id: str, user: CurrentUser, session: DB):
+    """Moved to another table: leaves the current table's roster for the
+    sessions still to come; seated again by name where they sit now."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    participant = _owned_participant(session, assembly, participant_id)
+    consent_svc.unseat(session, assembly, participant, actor=user)
+    return {"participant": {"id": participant.id, "label": participant.label},
+            "registered_table_number": None}
+
+
 @router.delete("/participants/{participant_id}", status_code=204)
 def delete_participant(participant_id: str, user: CurrentUser, session: DB):
     participant = session.get(Participant, participant_id)
@@ -193,11 +371,64 @@ def round_tables(round_id: str, user: CurrentUser, session: ReadDB):
     return svc.tables_with_participants(session, round_)
 
 
+@router.post("/assemblies/{assembly_id}/tables", response_model=schemas.TableAdded, status_code=201)
+def add_table(assembly_id: str, user: CurrentUser, session: DB):
+    """Add the next table — to every round at once — while the event runs.
+
+    The QR code for the new table is in this response only; the codes already
+    on the wall stay valid."""
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    return tables_svc.add_table(session, assembly, actor=user)
+
+
 @router.post("/rounds/{round_id}/assignments/randomize", response_model=list[schemas.TableOut])
 def randomize(round_id: str, user: CurrentUser, session: DB):
     round_ = svc.get_owned_round(session, round_id, user)
     svc.randomize_assignments(session, round_)
     return svc.tables_with_participants(session, round_)
+
+
+class FacilitationIn(BaseModel):
+    level: Literal["default", "off", "light", "normal", "active"]
+
+
+@router.post("/assemblies/{assembly_id}/tables/{table_number}/facilitation")
+def set_table_facilitation(
+    assembly_id: str, table_number: int, data: FacilitationIn, user: CurrentUser, session: DB
+):
+    """The Live tab's "Pause AI" for one table — or a level of its own;
+    "default" follows the assembly again."""
+    from citizens.services import facilitator as ai_svc
+
+    assembly = svc.get_owned_assembly(session, assembly_id, user)
+    return ai_svc.set_table_level(
+        session, assembly, table_number, None if data.level == "default" else data.level,
+        actor=user,
+    )
+
+
+@router.get("/rounds/{round_id}/interventions")
+def round_interventions(round_id: str, user: CurrentUser, session: ReadDB):
+    """What the AI facilitator said at each table of this session, to whom,
+    and what people thought of it."""
+    from citizens.services import facilitator as ai_svc
+
+    round_ = svc.get_owned_round(session, round_id, user)
+    return ai_svc.interventions_for_round(session, round_)
+
+
+class RemixIn(BaseModel):
+    goal: Literal["new_people", "random", "continuity"] = "new_people"
+
+
+@router.post("/rounds/{round_id}/assignments/remix")
+def remix(round_id: str, data: RemixIn, user: CurrentUser, session: DB):
+    """Seat everyone for this session with a goal — meet new people, random,
+    or continuity — including the people who registered at the tables."""
+    round_ = svc.get_owned_round(session, round_id, user)
+    outcome = svc.remix_assignments(session, round_, data.goal)
+    record_audit_event(session, "assignments_remixed", "round", round_.id, actor=user, data=outcome)
+    return {**outcome, "tables": svc.tables_with_participants(session, round_)}
 
 
 @router.post("/rounds/{round_id}/assignments/copy-previous", response_model=list[schemas.TableOut])
@@ -220,6 +451,9 @@ def _detail(session: Session, assembly: Assembly) -> schemas.AssemblyDetail:
     ).scalar_one()
     detail = schemas.AssemblyDetail.model_validate(assembly, from_attributes=True)
     detail.participant_count = count
+    facilitator_settings = provider_config.facilitator_settings_cached()
+    detail.ai_facilitator_default = facilitator_settings.get("level", "off")
+    detail.ai_facilitator_configured = bool(facilitator_settings.get("configured"))
     recordings = dict(
         session.execute(
             select(Recording.round_id, func.count())

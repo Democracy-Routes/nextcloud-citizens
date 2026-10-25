@@ -6,6 +6,7 @@ API keys are stored with the `sensitive` flag (encrypted by Nextcloud, brief
 §28) and are never returned by any API — only `configured` + a short hint.
 """
 
+import copy
 import json
 import threading
 import time
@@ -52,6 +53,20 @@ class ConfigSnapshot:
     analysis_ready: bool = False
     live_stt: dict = field(default_factory=lambda: dict(EMPTY_LIVE_STT))
     organization_name: str = ""
+    # who is the data controller on the consent notice, and how to reach them
+    # (services/consent_notice.py); the controller falls back to the
+    # organization name when empty
+    consent_controller: str = ""
+    consent_contact: str = ""
+    # the rest of the organization data the notice prints (see DEFAULTS)
+    organization: dict = field(default_factory=dict)
+    # the Settings page's view (providers_summary), kept here so opening
+    # Settings costs no OCS round-trip; empty until the first request for it
+    # or the first save — the minute sweep does not rebuild it
+    summary: dict = field(default_factory=dict)
+    # the AI facilitator's instance settings (services/facilitator.py reads
+    # them from here once a minute, never from Nextcloud inside a transaction)
+    facilitator: dict = field(default_factory=dict)
     refreshed_at: float = 0.0
     # False: the refresh failed and these are defaults (or the previous values)
     ok: bool = False
@@ -96,19 +111,85 @@ def _read_data_handling(store: "ConfigStore") -> dict:
     base_url = get_setting(store, "analysis_base_url")
     return {
         "stt_provider": provider,
+        # the names the consent notice prints — the selected engine and the
+        # analysis service behind the configured endpoint, so the admin panel
+        # and what participants read agree by construction
+        "stt_provider_label": STT_PROVIDER_LABELS.get(provider, provider or ""),
         "stt_configured": bool(store.get_value(f"{provider}_api_key"))
         or provider in ("vosk", "whisper"),
         "stt_hosted": stt_is_hosted(store, provider),
         "analysis_enabled": analysis_on,
         # a self-hosted analysis endpoint keeps transcripts on-premises
         "analysis_hosted": analysis_on and not _is_local_endpoint(base_url),
+        "analysis_provider_label": analysis_provider_label(base_url),
         "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
     }
 
 
-def refresh_config_snapshot() -> ConfigSnapshot:
+STT_PROVIDER_LABELS = {
+    "vosk": "Vosk",
+    "whisper": "Whisper",
+    "mistral": "Mistral AI",
+    "deepgram": "Deepgram",
+}
+
+_ANALYSIS_HOSTS = {
+    "api.mistral.ai": "Mistral AI",
+    "api.openai.com": "OpenAI",
+    "api.anthropic.com": "Anthropic",
+    "generativelanguage.googleapis.com": "Google",
+    "api.groq.com": "Groq",
+    "openrouter.ai": "OpenRouter",
+}
+
+
+def analysis_provider_label(base_url: str | None) -> str:
+    """Who runs the analysis model, from the configured endpoint: a known
+    hosted service by name, a local endpoint as the organisation's own
+    server, anything else by its hostname."""
+    from urllib.parse import urlparse
+
+    host = (urlparse(base_url or "").hostname or "").lower()
+    if not host:
+        return ""
+    if _is_local_endpoint(base_url or ""):
+        return "local"
+    return _ANALYSIS_HOSTS.get(host, host)
+
+
+ORGANIZATION_KEYS = (
+    "organization_name",
+    "consent_controller",
+    "consent_contact",
+    "org_address",
+    "org_dpo",
+    "org_hosting",
+    "org_authority",
+)
+
+
+def _read_organization(store: "ConfigStore") -> dict:
+    """The organization data the consent notice and the event kit print."""
+    return {key: get_setting(store, key) for key in ORGANIZATION_KEYS}
+
+
+def organization_data() -> dict:
+    """From memory, like every other snapshot read."""
+    snapshot = config_snapshot()
+    data = dict(snapshot.organization)
+    data.setdefault("organization_name", snapshot.organization_name)
+    data.setdefault("consent_controller", snapshot.consent_controller)
+    data.setdefault("consent_contact", snapshot.consent_contact)
+    return data
+
+
+def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
     """Read Nextcloud's config once, for everybody. The ONLY OCS reader the
     request path can ever reach, and it is never called from a request.
+
+    `with_summary` also rebuilds the Settings page's summary (another ~40
+    reads) — the save path and a Settings open with no summary yet ask for
+    it; the minute sweep keeps the previous one.
 
     Single-flight: concurrent callers queue on the lock and all see the one
     fresh result. A failure keeps the previous snapshot (or the defaults when
@@ -119,17 +200,24 @@ def refresh_config_snapshot() -> ConfigSnapshot:
     global _snapshot, _refresh_failed
     with _refresh_lock:
         try:
-            store = default_store()
+            # one round trip for every key, not one per key (bulk_view)
+            store = bulk_view(default_store())
             analysis_enabled = get_setting(store, "analysis_enabled") == "1"
+            previous_summary = dict(_snapshot.summary) if _snapshot else {}
             fresh = ConfigSnapshot(
                 data_handling=_read_data_handling(store),
                 analysis_enabled=analysis_enabled,
                 analysis_ready=analysis_enabled and bool(store.get_value("analysis_api_key")),
                 live_stt=_read_live_stt(store),
                 organization_name=get_setting(store, "organization_name"),
+                consent_controller=get_setting(store, "consent_controller"),
+                consent_contact=get_setting(store, "consent_contact"),
+                organization=_read_organization(store),
+                summary=providers_summary(store) if with_summary else previous_summary,
+                facilitator=_read_facilitator(store),
                 refreshed_at=time.monotonic(),
                 ok=True,
-                store_id=id(store),
+                store_id=id(default_store()),
             )
         except Exception:
             if not _refresh_failed:
@@ -142,6 +230,11 @@ def refresh_config_snapshot() -> ConfigSnapshot:
                 analysis_ready=previous.analysis_ready if previous else False,
                 live_stt=previous.live_stt if previous else dict(EMPTY_LIVE_STT),
                 organization_name=previous.organization_name if previous else "",
+                consent_controller=previous.consent_controller if previous else "",
+                consent_contact=previous.consent_contact if previous else "",
+                organization=dict(previous.organization) if previous else {},
+                summary=dict(previous.summary) if previous else {},
+                facilitator=dict(previous.facilitator) if previous else {},
                 refreshed_at=time.monotonic(),
                 ok=False,
                 store_id=previous.store_id if previous else 0,
@@ -186,6 +279,30 @@ def invalidate_snapshot() -> None:
     """Settings changed: read them again now, before the caller answers, so
     the next request already sees them. Called outside any transaction."""
     refresh_config_snapshot()
+
+
+def settings_summary(store: "ConfigStore") -> dict:
+    """The Settings page, from memory.
+
+    Opening Settings used to read every field through Nextcloud one call at
+    a time, and saving re-read them twice. The summary now lives on the
+    snapshot: built once after a save (where the write pass already pays for
+    a refresh) or on the first open with none cached, served from memory
+    after that. A store swapped in by a test is read afresh, like the rest of
+    the snapshot."""
+    snapshot = config_snapshot()
+    # Any AppConfigStore reads the same Nextcloud, so the cached summary
+    # speaks for all of them. Until 2026-10-13 this compared object identity,
+    # and the admin routes build a fresh store per request — so the check
+    # never matched and every open of Settings made ~40 OCS calls (13 s).
+    if snapshot.summary and (
+        isinstance(store, AppConfigStore) or not snapshot.store_id or snapshot.store_id == id(store)
+    ):
+        return copy.deepcopy(snapshot.summary)
+    if not isinstance(store, AppConfigStore) and id(store) != id(default_store()):
+        # a store swapped in by a test: no cache can speak for it
+        return providers_summary(store)
+    return copy.deepcopy(refresh_config_snapshot(with_summary=True).summary)
 
 
 def organization_name_cached() -> str:
@@ -318,17 +435,60 @@ def _is_local_endpoint(url: str) -> bool:
     return address.is_private or address.is_loopback or address.is_link_local
 
 
+def _read_facilitator(store: "ConfigStore") -> dict:
+    """The AI facilitator's instance settings. `configured` means a model can
+    be called: its own key, or the analysis key when it has none of its own."""
+    level = get_setting(store, "facilitator_level") or "off"
+    if level not in ("off", "light", "normal", "active"):
+        level = "off"
+
+    def number(key: str, fallback: int) -> int:
+        try:
+            return int(get_setting(store, key) or fallback)
+        except ValueError:
+            return fallback
+
+    own_key = bool(store.get_value("facilitator_api_key"))
+    return {
+        "level": level,
+        "configured": own_key or bool(store.get_value("analysis_api_key")),
+        "own_key": own_key,
+        "interval_minutes": max(1, number("facilitator_interval_minutes", 4)),
+        "dominance_percent": min(95, max(40, number("facilitator_dominance_percent", 60))),
+        "silence_seconds": max(20, number("facilitator_silence_seconds", 90)),
+    }
+
+
+def facilitator_settings_cached() -> dict:
+    """The AI facilitator's instance settings from the snapshot (level,
+    thresholds); empty before the first refresh, which reads as Off."""
+    return dict(config_snapshot().facilitator)
+
+
+def facilitator_model_config(store: "ConfigStore") -> tuple[str, str, str]:
+    """(base_url, key, model) for the AI facilitator: its own, falling back
+    field by field to the analysis model's. Reads Nextcloud — call it outside
+    any database transaction."""
+    key = store.get_value("facilitator_api_key") or store.get_value("analysis_api_key") or ""
+    base_url = get_setting(store, "facilitator_base_url") or get_setting(store, "analysis_base_url")
+    model = get_setting(store, "facilitator_model") or get_setting(store, "analysis_model")
+    return base_url, key, model
+
+
 def analysis_enabled_cached() -> bool:
     """The analysis-enabled flag for hot public endpoints (status polls hit
     this) — from the snapshot, never an OCS read."""
     return config_snapshot().analysis_enabled
 
-KEY_FIELDS = ("mistral_api_key", "deepgram_api_key", "whisper_api_key", "analysis_api_key")
+KEY_FIELDS = (
+    "mistral_api_key", "deepgram_api_key", "whisper_api_key", "analysis_api_key",
+    "facilitator_api_key",
+)
 
 # targets whose connection test sends a stored API key, so an admin-supplied
 # endpoint override must be accompanied by an admin-supplied key (see
 # test_connection). Vosk is absent because it authenticates with no key.
-KEYED_TEST_TARGETS = ("whisper", "analysis", "mistral", "deepgram")
+KEYED_TEST_TARGETS = ("whisper", "analysis", "facilitator", "mistral", "deepgram")
 
 # where each engine's live captions connect; Deepgram's is configurable so
 # servers speaking the same protocol (WhisperLiveKit) can be used instead
@@ -390,8 +550,27 @@ DEFAULTS = {
     # appended to the built-in analysis prompts (tone, focus areas, glossary);
     # the JSON output contract and evidence rules stay protected
     "analysis_extra_instructions": "",
+    # the AI facilitator (services/facilitator.py): the instance default level
+    # an assembly inherits, its own model (blank = the analysis model), and
+    # the thresholds behind its nudges
+    "facilitator_level": "off",
+    "facilitator_base_url": "",
+    "facilitator_model": "",
+    "facilitator_interval_minutes": "4",
+    "facilitator_dominance_percent": "60",
+    "facilitator_silence_seconds": "90",
     # shown with the logo on PDF report headers/footers
     "organization_name": "",
+    # Organization data for the consent notice: who is responsible for the
+    # data (empty: the organization name), how to reach them, postal address,
+    # data-protection contact, where the server is hosted, which supervisory
+    # authority a complaint goes to (empty: a default by language)
+    "consent_controller": "",
+    "consent_contact": "",
+    "org_address": "",
+    "org_dpo": "",
+    "org_hosting": "",
+    "org_authority": "",
     # days to keep raw audio after an assembly is CLOSED; 0 keeps it
     # indefinitely. Transcripts, findings and reports are never affected — only
     # the recordings. Individual assemblies can override this.
@@ -441,11 +620,65 @@ class AppConfigStore:
     def get_value(self, key: str) -> str | None:
         return self._nc.appconfig_ex.get_value(key)
 
+    def get_values(self, keys: list[str]) -> dict[str, str]:
+        """Every stored key among `keys`, in one OCS call."""
+        return {
+            record.key: record.value for record in self._nc.appconfig_ex.get_values(list(keys))
+        }
+
     def set_value(self, key: str, value: str, sensitive: bool = False) -> None:
         self._nc.appconfig_ex.set_value(key, value, sensitive=sensitive)
 
     def delete_value(self, key: str) -> None:
         self._nc.appconfig_ex.delete(key)
+
+
+#: every key a snapshot or a Settings summary reads
+def _all_known_keys() -> list[str]:
+    keys = set(DEFAULTS) | set(LEGACY_KEYS.values())
+    keys |= {
+        f"{name}_api_key"
+        for name in ("mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator")
+    }
+    return sorted(keys)
+
+
+class _BulkStore:
+    """A read-only ConfigStore over values fetched in one call. A key the
+    bulk read did not cover is asked of the real store, so a reader of a key
+    nobody listed still works — one call slower, never wrong."""
+
+    def __init__(self, values: dict[str, str], covered: set[str], fallback: ConfigStore):
+        self._values = values
+        # a key that was asked for and came back absent IS answered: None.
+        # Only a key nobody listed goes to the real store.
+        self._covered = covered
+        self._fallback = fallback
+
+    def get_value(self, key: str) -> str | None:
+        if key in self._covered:
+            return self._values.get(key)
+        return self._fallback.get_value(key)
+
+    def set_value(self, key: str, value: str, sensitive: bool = False) -> None:
+        self._fallback.set_value(key, value, sensitive=sensitive)
+
+    def delete_value(self, key: str) -> None:
+        self._fallback.delete_value(key)
+
+
+def bulk_view(store: ConfigStore) -> ConfigStore:
+    """The store, with every known key read up front in ONE request where
+    the store can (AppConfigStore); any other store is returned as it is."""
+    getter = getattr(store, "get_values", None)
+    if getter is None:
+        return store
+    keys = _all_known_keys()
+    try:
+        return _BulkStore(getter(keys), set(keys), store)
+    except Exception:
+        log.warning("config_bulk_read_failed", exc_info=True)
+        return store
 
 
 def get_setting(store: ConfigStore, key: str) -> str:
@@ -480,9 +713,16 @@ def set_settings(store: ConfigStore, values: dict[str, str]) -> list[str]:
     changed = []
     for key, value in values.items():
         sensitive = key in KEY_FIELDS
+        current = store.get_value(key)
         if sensitive and value == "":
+            if current is None:
+                continue  # nothing to clear
             store.delete_value(key)
         else:
+            # a field sent unchanged costs nothing: the Settings form used to
+            # post every field on every save, each one an OCS write
+            if (current if current is not None else DEFAULTS.get(key, "")) == value:
+                continue
             store.set_value(key, value, sensitive=sensitive)
         changed.append(key)
     return changed
@@ -499,6 +739,12 @@ def providers_summary(store: ConfigStore) -> dict:
     return {
         "organization_name": get_setting(store, "organization_name"),
         "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
+        "consent_controller": get_setting(store, "consent_controller"),
+        "consent_contact": get_setting(store, "consent_contact"),
+        "org_address": get_setting(store, "org_address"),
+        "org_dpo": get_setting(store, "org_dpo"),
+        "org_hosting": get_setting(store, "org_hosting"),
+        "org_authority": get_setting(store, "org_authority"),
         "stt": {
             "provider": get_setting(store, "stt_provider"),
             "live_enabled": get_setting(store, "stt_live_enabled") == "1",
@@ -539,6 +785,12 @@ def providers_summary(store: ConfigStore) -> dict:
             "key_hint": key_hint(store, "analysis_api_key"),
             "enabled": get_setting(store, "analysis_enabled") == "1",
             "extra_instructions": get_setting(store, "analysis_extra_instructions"),
+        },
+        "facilitator": {
+            **_read_facilitator(store),
+            "base_url": get_setting(store, "facilitator_base_url"),
+            "model": get_setting(store, "facilitator_model"),
+            "key_hint": key_hint(store, "facilitator_api_key"),
         },
     }
 
@@ -612,12 +864,18 @@ def test_connection(
                 log.warning("provider_test_failed", target=target, error=type(exc).__name__)
                 return {"ok": False, "message": f"Could not reach {url}: {type(exc).__name__}"}
             return {"ok": True, "message": "Connected"}
-        elif target == "analysis":
-            key = override_key or store.get_value("analysis_api_key")
+        elif target in ("analysis", "facilitator"):
+            if target == "facilitator":
+                fac_base, fac_key, fac_model = facilitator_model_config(store)
+                key = override_key or fac_key
+                base = (override_base_url or fac_base).rstrip("/")
+                model = override_model or fac_model
+            else:
+                key = override_key or store.get_value("analysis_api_key")
+                base = (override_base_url or get_setting(store, "analysis_base_url")).rstrip("/")
+                model = override_model or get_setting(store, "analysis_model")
             if not key:
                 return {"ok": False, "message": "No analysis API key — paste one or save it first"}
-            base = (override_base_url or get_setting(store, "analysis_base_url")).rstrip("/")
-            model = override_model or get_setting(store, "analysis_model")
             # One real, tiny completion. Listing /models only proves the key
             # exists: it said "Connected" for a workspace whose every chat call
             # was refused with 403 at the 2026-09-18 rehearsal.

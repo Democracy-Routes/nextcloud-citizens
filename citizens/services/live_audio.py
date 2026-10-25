@@ -8,6 +8,15 @@ Deepgram accepts the container stream directly; Vosk, Mistral Voxtral Realtime
 and Whisper endpoints all want raw PCM. One long-lived ffmpeg per recording
 turns the former into the latter.
 
+A decoder that starts in the MIDDLE of a recording — a backup phone promoted
+to live source, the source passing to a sibling, a reconnect after the idle
+reaper closed the previous decoder — is therefore seeded with the container
+header first (`container_header`). Measured on real phone chunks: Chrome's
+MediaRecorder cuts every chunk at a WebM Cluster boundary, so the 260 bytes
+before the first Cluster of the segment's first chunk, followed by any later
+chunk, decode cleanly; the later chunk alone is "Invalid data found when
+processing input" — the exact failure the 2026-10-11 field test logged.
+
 Everything here is best-effort by design (brief §51): if ffmpeg dies or the
 audio is undecodable, captions stop and the recording is untouched.
 """
@@ -22,11 +31,30 @@ log = get_logger(__name__)
 SAMPLE_RATE = 16000
 BYTES_PER_SECOND = SAMPLE_RATE * 2  # s16le mono
 READ_SIZE = 8192
+EBML_MAGIC = b"\x1a\x45\xdf\xa3"
+WEBM_CLUSTER_ID = b"\x1f\x43\xb6\x75"
 # a caption engine that stops draining must not grow memory without bound
 MAX_QUEUED_PCM_BYTES = BYTES_PER_SECOND * 120
 # dropping is the right safety valve, but it silently loses words from the
 # captions, so say so — rate-limited, since it drops per 8 KB read
 DROP_WARNING_SECONDS = 5.0
+
+
+def container_header(first_chunk: bytes) -> bytes:
+    """What a decoder must see before a chunk from mid-stream.
+
+    For WebM that is everything before the first Cluster: EBML header, Segment,
+    Info and Tracks (the Opus codec setup). Feeding only that, and not the
+    first chunk's ten seconds of audio, means a promoted phone's captions start
+    on live speech instead of a stale sentence from the beginning of the round.
+    Any other container (an iPhone's fragmented mp4, whose init segment IS the
+    first chunk) gets the whole first chunk — at most ten seconds of old audio.
+    """
+    if first_chunk.startswith(EBML_MAGIC):
+        cluster = first_chunk.find(WEBM_CLUSTER_ID)
+        if cluster > 0:
+            return first_chunk[:cluster]
+    return first_chunk
 
 
 class PcmStream:

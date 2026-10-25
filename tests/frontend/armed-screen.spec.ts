@@ -103,7 +103,7 @@ describe('ArmedScreen when this table finished a round the facilitator still has
 		await flushPromises()
 
 		expect(wrapper.emitted('start')).toBeFalsy()
-		expect(wrapper.text()).toContain('Round 1 is still open')
+		expect(wrapper.text()).toContain('Session 1 is still open')
 	})
 
 	it('records the rest only when the table taps the button', async () => {
@@ -127,7 +127,7 @@ describe('ArmedScreen when this table finished a round the facilitator still has
 		await flushPromises()
 
 		expect(wrapper.text()).not.toContain('still open')
-		expect(wrapper.text()).toContain('All rounds recorded')
+		expect(wrapper.text()).toContain('All sessions recorded')
 	})
 
 	it('does not confuse a round still being uploaded with a finished one', async () => {

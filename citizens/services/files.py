@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from citizens.config import get_settings
 from citizens.db.models import (
     Assembly,
+    ConsentNotice,
     Participant,
     RecorderSession,
     Recording,
@@ -27,11 +28,13 @@ from citizens.db.models.base import utcnow
 from citizens.db.models.findings import Finding, FindingEvidence
 from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
+from citizens.services import consent as consent_svc
 from citizens.services import job_failures
 from citizens.services.jobs import has_live_job
 from citizens.services.recording_states import InvalidTransition, transition
 from citizens.services.report import build_report, render_markdown
-from citizens.services.transcription import transcript_payload
+from citizens.services.table_recordings import coverage, recording_slots, slot_label
+from citizens.services.transcription import transcript_payload, transcript_provenance
 from citizens.storage.exports import build_target
 from citizens.storage.paths import (
     live_caption_path,
@@ -41,7 +44,20 @@ from citizens.storage.paths import (
 
 log = get_logger(__name__)
 
-EXPORT_FORMAT_VERSION = 1
+# 2 (0.7): participants carry email, source, registered_table_number and
+# their consent act; consent-notices/<hash>.txt holds the texts people read
+EXPORT_FORMAT_VERSION = 2
+
+
+def _consent_json(consent) -> dict | None:
+    """A consent act for the manifest, datetimes as ISO strings."""
+    data = consent_svc.consent_dict(consent)
+    if data is None:
+        return None
+    for key in ("confirmed_at", "withdrawn_at"):
+        if data[key] is not None:
+            data[key] = data[key].isoformat()
+    return data
 
 
 def _storage_root() -> Path:
@@ -55,12 +71,17 @@ def canonical_path(recording: Recording) -> Path | None:
     return path if path.is_file() else None
 
 
-def audio_filename(assembly: Assembly, recording: Recording, position: int) -> str:
-    """Keep plenary devices and repeated replacements distinct within an export."""
+def audio_filename(assembly: Assembly, recording: Recording, position: int, slot: int = 1) -> str:
+    """Keep plenary devices, repeated replacements and side-by-side recorders
+    distinct within an export: table 7's second recorder is `-recorderB`."""
     stem = "".join(c if c.isalnum() or c in "-_" else "-" for c in assembly.name)[:40].strip("-")
     suffix = Path(recording.canonical_audio_path or "audio.webm").suffix or ".webm"
+    recorder = f"-recorder{slot_label(slot)}" if slot > 1 else ""
     part = "-part1" if recording.superseded_at is not None else ""
-    return f"{stem or 'assembly'}-round{position}-table{recording.table_number}{part}-{recording.id}{suffix}"
+    return (
+        f"{stem or 'assembly'}-round{position}-table{recording.table_number}"
+        f"{recorder}{part}-{recording.id}{suffix}"
+    )
 
 
 def list_files(session: Session, assembly: Assembly) -> dict:
@@ -75,12 +96,12 @@ def list_files(session: Session, assembly: Assembly) -> dict:
     # source too, so the tab can mark a captions-derived transcript and offer
     # to replace it with a real one
     transcribed = {
-        recording_id: source
-        for recording_id, source in session.execute(
-            select(Transcript.recording_id, Transcript.source).where(
+        transcript.recording_id: transcript
+        for transcript in session.execute(
+            select(Transcript).where(
                 Transcript.recording_id.in_([r.id for r in recordings] or [""])
             )
-        )
+        ).scalars()
     }
     by_round: dict[str, list[dict]] = {}
     total_bytes = 0
@@ -118,6 +139,8 @@ def list_files(session: Session, assembly: Assembly) -> dict:
                 "state": recording.state,
                 "mime_type": recording.mime_type,
                 "duration_seconds": recording.duration_seconds,
+                # audio against the wall clock it ran for (table_recordings.coverage)
+                "coverage": coverage(recording),
                 "size_bytes": size,
                 "sha256": recording.sha256,
                 "created_at": recording.created_at.isoformat() if recording.created_at else None,
@@ -125,8 +148,23 @@ def list_files(session: Session, assembly: Assembly) -> dict:
                 "audio_deleted_at": (
                     recording.audio_deleted_at.isoformat() if recording.audio_deleted_at else None
                 ),
+                # "silence" / "organizer" when the server finished it; a
+                # continuation holds what its phone sent after that close
+                "closed_by": recording.closed_by,
+                "continued_from_id": recording.continued_from_id,
+                "audio_added_at": (
+                    recording.audio_added_at.isoformat() if recording.audio_added_at else None
+                ),
                 "has_transcript": recording.id in transcribed,
-                "transcript_source": transcribed.get(recording.id, ""),
+                "transcript_source": (
+                    transcribed[recording.id].source if recording.id in transcribed else ""
+                ),
+                # where the transcript came from, stated rather than inferred
+                "transcript_provenance": (
+                    transcript_provenance(transcribed[recording.id])
+                    if recording.id in transcribed
+                    else None
+                ),
                 "can_retranscribe": path is not None,
                 # WHY a table failed, not just that it did. A bare orange pill
                 # told the organizer nothing they could act on — and the states
@@ -425,12 +463,19 @@ def plan_audio_zip(session: Session, assembly: Assembly) -> list[tuple[Path, str
     the whole of what it needs the database for, so a caller can let go of
     its connection before the minutes of disk work that follow."""
     positions = {round_.id: round_.position for round_ in assembly.rounds}
+    recordings = _recordings(session, assembly)
+    slots = recording_slots(session, recordings)
     plan = []
-    for recording in _recordings(session, assembly):
+    for recording in recordings:
         path = canonical_path(recording)
         if path is None:
             continue
-        plan.append((path, audio_filename(assembly, recording, positions.get(recording.round_id, 0))))
+        plan.append((
+            path,
+            audio_filename(
+                assembly, recording, positions.get(recording.round_id, 0), slots.get(recording.id, 1)
+            ),
+        ))
     return plan
 
 
@@ -461,7 +506,10 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
 
     positions = {round_.id: round_.position for round_ in assembly.rounds}
     recordings = _recordings(session, assembly)
+    slots = recording_slots(session, recordings)
     report = build_report(session, assembly, include_drafts=True)
+    latest_consents = consent_svc.latest_consents(session, assembly.id)
+    notice_hashes = {c.notice_hash for c in latest_consents.values()}
 
     manifest = {
         "format_version": EXPORT_FORMAT_VERSION,
@@ -495,8 +543,20 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
             }
             for round_ in assembly.rounds
         ],
+        # format 2: email, where a person registered, and their consent act
+        # (method, notice version + hash, the ticks, when) — the notice texts
+        # themselves are in consent-notices/<hash>.txt
         "participants": [
-            {"id": p.id, "label": p.label, "name": p.name, "notes": p.notes}
+            {
+                "id": p.id,
+                "label": p.label,
+                "name": p.name,
+                "email": p.email,
+                "notes": p.notes,
+                "source": p.source,
+                "registered_table_number": p.registered_table_number,
+                "consent": _consent_json(latest_consents.get(p.id)),
+            }
             for p in session.execute(
                 select(Participant).where(Participant.assembly_id == assembly.id)
             ).scalars()
@@ -512,7 +572,7 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
                 "sha256": r.sha256,
                 "analysis_summary": r.analysis_summary,
                 "audio_file": (
-                    f"audio/{audio_filename(assembly, r, positions.get(r.round_id, 0))}"
+                    f"audio/{audio_filename(assembly, r, positions.get(r.round_id, 0), slots.get(r.id, 1))}"
                     if canonical_path(r)
                     else None
                 ),
@@ -527,6 +587,10 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("manifest.json", json.dumps(manifest, indent=1))
         archive.writestr("README.txt", _README)
+        for notice in session.execute(
+            select(ConsentNotice).where(ConsentNotice.hash.in_(notice_hashes))
+        ).scalars():
+            archive.writestr(f"consent-notices/{notice.hash}.txt", notice.text)
         archive.writestr("report.json", json.dumps(report, indent=1))
         archive.writestr("report.md", render_markdown(report))
         try:
@@ -538,7 +602,10 @@ def _build_session_export(session: Session, assembly: Assembly, target: Path) ->
             if path is not None:
                 archive.write(
                     path,
-                    f"audio/{audio_filename(assembly, recording, positions.get(recording.round_id, 0))}",
+                    "audio/" + audio_filename(
+                        assembly, recording, positions.get(recording.round_id, 0),
+                        slots.get(recording.id, 1),
+                    ),
                 )
             transcript = session.execute(
                 select(Transcript).where(Transcript.recording_id == recording.id)
@@ -569,7 +636,10 @@ _README = """Nextcloud Citizens — session export
 ===================================
 
 manifest.json   assembly, rounds, tables, participants and recording metadata
-                (format_version tells an importer how to read this archive)
+                (format_version tells an importer how to read this archive;
+                from 2, each participant carries the consent act recorded at
+                the table: method, notice version and hash, the ticks, when)
+consent-notices/<hash>.txt  the exact notice text people read, one per hash
 audio/          one canonical audio file per table and round, named
                 <assembly>-round<N>-table<M>.<ext>; missing when the audio was
                 deleted (see audio_deleted_at in the manifest)

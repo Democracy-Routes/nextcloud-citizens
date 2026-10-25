@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { createApp } from 'vue'
 import { i18n, setLocale } from './i18n'
+import { installOrganizerCatalogue } from './i18n/organizer'
 import App from './App.vue'
 import './style.css'
 
@@ -13,6 +14,7 @@ function mount(): void {
 	content.appendChild(root)
 	// Nextcloud sets the document language from the user's own preference
 	setLocale(document.documentElement.lang)
+	installOrganizerCatalogue()
 	createApp(App).use(i18n).mount(root)
 }
 

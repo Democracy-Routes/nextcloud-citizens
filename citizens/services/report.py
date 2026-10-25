@@ -15,6 +15,7 @@ from citizens.db.models import (
     Transcript,
     TranscriptSegment,
 )
+from citizens.services import tables as tables_svc
 from citizens.services.recording import assembly_progress as progress
 from citizens.services.report_text import (
     TYPE_ORDER,
@@ -23,7 +24,7 @@ from citizens.services.report_text import (
     type_labels,
     type_labels_singular,
 )
-from citizens.services.speaking import round_speaking_balance
+from citizens.services.speaking import round_speaking_comparison, table_speaking_balance
 
 # The wording lives in report_text.py, per language. These module names are
 # the English values, kept for callers that want a language-neutral constant
@@ -80,27 +81,33 @@ LIVE_TRANSCRIPT_NOTE = " " + text("en", "live_transcript_note")
 DEVICE_REPLACED_NOTE = " " + text("en", "device_replaced_note")
 
 
-def round_heading(position: int, title: str, language: str | None = "en") -> str:
-    """How a round is named wherever it is shown.
+#: The titles the app itself pre-fills, in every spelling it has used: an
+#: untouched one is the default heading, not "Session 2 — Round 2".
+DEFAULT_TITLE_WORDS = ("session", "round", "sessione", "turno")
 
-    The app manufactures its own redundancy here: both round-creation paths
-    pre-fill the title with "Round N", so an organizer who edits it to
-    "Round 1 - design" gets "Round 1 — Round 1 - design" on every screen and in
-    every export. When the title already opens with this round's number, it is
-    the whole heading.
+
+def round_heading(position: int, title: str, language: str | None = "en") -> str:
+    """How a session is named wherever it is shown.
+
+    The app manufactures its own redundancy here: both creation paths pre-fill
+    the title with "Session N" (before 0.7: "Round N"), so an organizer who
+    edits it to "Session 1 - design" would get "Session 1 — Session 1 - design"
+    on every screen and in every export. When the title already opens with
+    this session's number, it is the whole heading.
 
     The pre-filled default is English whatever the assembly's language, so an
-    untouched "Round 2" in an Italian assembly is rendered as "Turno 2"; a
-    title the organizer wrote is theirs and is printed as written.
+    untouched "Session 2" (or a pre-0.7 "Round 2") in an Italian assembly is
+    rendered as "Sessione 2"; a title the organizer wrote is theirs and is
+    printed as written.
     """
     name = (title or "").strip()
     default = text(language, "round", position=position)
-    if not name or name == f"Round {position}":
+    lowered = name.lower()
+    if not name or lowered in {f"{word} {position}" for word in DEFAULT_TITLE_WORDS}:
         return default
     first = name.split()[0].rstrip(".:-–—") if name.split() else ""
-    lowered = name.lower()
     if (
-        lowered.startswith(f"round {position}")
+        any(lowered.startswith(f"{word} {position}") for word in DEFAULT_TITLE_WORDS)
         or lowered.startswith(default.lower())
         or first == str(position)
     ):
@@ -120,7 +127,8 @@ MIN_QUOTE_CHARS = 25
 
 
 def _cross_table_evidence(
-    session: Session, finding: Finding, table_numbers: dict[str, int]
+    session: Session, finding: Finding, table_numbers: dict[str, int],
+    withheld: set[int] = frozenset(),
 ) -> list[dict]:
     """Quotes for a cross-table finding, borrowed from the table findings it
     clustered and labelled with the table each came from.
@@ -157,7 +165,9 @@ def _cross_table_evidence(
     per_table: dict[int, list[TranscriptSegment]] = {}
     for source in sources:
         number = table_numbers.get(source.table_id or "")
-        if number is None:
+        if number is None or number in withheld:
+            # a table where someone declined to be quoted lends no quotation
+            # to a cross-table finding either
             continue
         cited = [segments[e.transcript_segment_id] for e in source.evidence
                  if e.transcript_segment_id in segments]
@@ -227,15 +237,106 @@ def _quotes(cited: list[TranscriptSegment]) -> list[dict]:
     ]
 
 
-def _methodology_note(session: Session, assembly: Assembly) -> str:
-    """The standing note, plus whatever was unusual about THIS assembly."""
+def _methodology_note(
+    session: Session, assembly: Assembly, quotations_withheld: bool = False,
+    reviewed: bool = False,
+) -> str:
+    """The standing note, plus whatever was unusual about THIS assembly.
+    "Findings were reviewed by a human organizer" only when one was."""
     language = assembly.language
     parts = [text(language, "methodology_note")]
+    if reviewed:
+        parts.insert(1, text(language, "methodology_reviewed"))
+    if quotations_withheld:
+        parts.append(text(language, "quotations_withheld_note"))
+    engines = _transcript_engines(session, assembly)
+    if engines:
+        parts.append(text(language, "transcript_engines", engines=engines))
     if _has_live_transcript(session, assembly):
         parts.append(text(language, "live_transcript_note"))
     if _has_replaced_device(session, assembly):
         parts.append(text(language, "device_replaced_note"))
+    # individual consent recorded at the tables (0.7): say how many, so the
+    # report itself documents the basis it rests on
+    from citizens.services import consent as consent_svc
+
+    counts = consent_svc.consent_counts(session, assembly.id)
+    if counts["registered_at_table"]:
+        parts.append(
+            text(
+                language, "consent_registered_note",
+                registered=counts["registered_at_table"], consenting=counts["consenting"],
+            )
+        )
+    # participants' word on the published summaries (0.7)
+    from citizens.services import validation as validation_svc
+
+    validated = validation_svc.counts(session, assembly.id)
+    if validated["answered"]:
+        parts.append(
+            text(
+                language, "validation_note",
+                answered=validated["answered"], missing=validated["missing"],
+            )
+        )
     return " ".join(parts)
+
+
+def _transcript_engines(session: Session, assembly: Assembly) -> str:
+    """The providers and models that produced this assembly's transcripts —
+    "deepgram nova-3, vosk vosk-model-small-it-0.22" — so the report states its
+    provenance rather than leaving a reader to guess."""
+    rows = session.execute(
+        select(Transcript.provider, Transcript.model, Transcript.source)
+        .join(Recording, Recording.id == Transcript.recording_id)
+        .where(Recording.assembly_id == assembly.id)
+        .distinct()
+    ).all()
+    names = sorted(
+        {
+            " ".join(part for part in (provider, model) if part)
+            + (f" ({text(assembly.language, 'source_live')})" if source == "live" else "")
+            for provider, model, source in rows
+            if provider or model
+        }
+    )
+    return ", ".join(names)
+
+
+def _synthesis_payload(assembly: Assembly) -> dict | None:
+    if not assembly.synthesis_json:
+        return None
+    try:
+        payload = json.loads(assembly.synthesis_json)
+    except ValueError:
+        return None
+    payload["generated_at"] = assembly.synthesis_at.isoformat() if assembly.synthesis_at else None
+    return payload
+
+
+def _markdown_synthesis(synthesis: dict | None, language: str | None) -> list[str]:
+    if not synthesis or not synthesis.get("narrative"):
+        return []
+    lines = [f"## {text(language, 'synthesis_heading')}", "", synthesis["narrative"], ""]
+    for stage in synthesis.get("stages") or []:
+        lines += [f"### {stage['title']}", "", stage["summary"], ""]
+    carried = synthesis.get("carried_forward") or []
+    if carried:
+        lines += [f"**{text(language, 'carried_forward')}**", ""]
+        lines += [f"- {item}" for item in carried]
+        lines.append("")
+    return lines
+
+
+def _validation_payload(entry: dict | None, include_notes: bool) -> dict | None:
+    """Participants' word on a table's summary: counts for everyone, the
+    notes only where the organizer reads them (drafts included = organizer)."""
+    if not entry:
+        return None
+    payload = {"looks_right": entry["looks_right"], "missing": entry["missing"]}
+    if include_notes:
+        payload["notes"] = list(entry["notes"])
+    return payload
 
 
 def _has_replaced_device(session: Session, assembly: Assembly) -> bool:
@@ -310,7 +411,13 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
 
     language = assembly.language
 
-    def finding_payload(finding: Finding, table_numbers: dict[str, int]) -> dict:
+    from citizens.services import consent as consent_svc
+
+    def finding_payload(
+        finding: Finding, table_numbers: dict[str, int], withheld: set[int] = frozenset()
+    ) -> dict:
+        own_table = table_numbers.get(finding.table_id or "")
+        quotations_withheld = finding.scope != "round" and own_table in withheld
         return {
             "id": finding.id,
             "type": finding.type,
@@ -327,11 +434,15 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             # the quotes went away with a deleted/replaced transcript — say so
             # rather than rendering a finding that looks unsupported
             "evidence_removed": finding.evidence_removed_at is not None,
+            # someone seated at this table declined to be quoted: the finding
+            # stands, its verbatim quotations do not reach the report
+            "quotations_withheld": quotations_withheld,
             "evidence": (
                 # a cross-table finding has no evidence of its own; borrow it
                 # from the table findings it clustered, labelled per table
-                _cross_table_evidence(session, finding, table_numbers)
+                _cross_table_evidence(session, finding, table_numbers, withheld)
                 if finding.scope == "round"
+                else [] if quotations_withheld
                 else _quotes(
                     [
                         segments[e.transcript_segment_id]
@@ -342,22 +453,42 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             ),
         }
 
+    from citizens.services import validation as validation_svc
+
+    validations = validation_svc.by_table(session, assembly.id)
     rounds_payload = []
+    any_withheld = False
     for round_ in assembly.rounds:
         table_numbers = {table.id: table.number for table in round_.tables}
+        # tables where a seated participant did not consent to being quoted
+        withheld = consent_svc.quotations_withheld_tables(session, assembly, round_.id)
+        any_withheld = any_withheld or bool(withheld)
+        # talk-time per detected voice, PER TABLE (services/speaking.py): the
+        # renderers show it only when diarization produced >= 2 voices
+        balances = {
+            table.number: table_speaking_balance(session, round_, table) for table in round_.tables
+        }
         round_findings = [f for f in findings if f.round_id == round_.id]
-        cross = [finding_payload(f, table_numbers) for f in round_findings if f.scope == "round"]
+        cross = [
+            finding_payload(f, table_numbers, withheld) for f in round_findings if f.scope == "round"
+        ]
         per_table: dict[int, list[dict]] = {}
         for finding in round_findings:
             if finding.scope != "table":
                 continue
             number = table_numbers.get(finding.table_id or "")
             if number is not None:
-                per_table.setdefault(number, []).append(finding_payload(finding, table_numbers))
-        # tables with an AI summary appear even without findings
+                per_table.setdefault(number, []).append(
+                    finding_payload(finding, table_numbers, withheld)
+                )
+        # tables with an AI summary or a measured balance appear even without findings
         round_table_numbers = sorted(
             set(per_table)
             | {num for (rid, num) in table_summaries if rid == round_.id}
+            | {num for num, balance in balances.items() if balance}
+            # a table whose participants answered is listed even without a
+            # summary, so the organizer sees what they said
+            | {num for (rid, num) in validations if rid == round_.id and num is not None}
         )
         rounds_payload.append(
             {
@@ -365,20 +496,35 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
                 "title": round_.title,
                 # the phone's report screen shows this as-is, so it follows the
                 # assembly's language without a dictionary of its own
-                "heading": round_heading(round_.position, round_.title, assembly.language),
+                "heading": (
+                    # a Session on its own has one discussion: its name is the
+                    # page's title, so a "Session 1 — …" line under it repeats it
+                    "" if assembly.kind == "session" and len(assembly.rounds) == 1
+                    else round_heading(round_.position, round_.title, assembly.language)
+                ),
                 "question": round_.question,
+                # NULL on every round made before 0.7: the renderers print
+                # nothing for an empty objective
+                "objective": round_.objective or "",
                 "status": round_.status,
                 "summary": round_.analysis_summary,
                 "recordings": recordings_by_round.get(round_.id, 0),
-                # talk-time per detected voice (services/speaking.py); the
-                # renderers show it only when diarization produced >= 2 voices
-                "speaking_balance": round_speaking_balance(session, round_),
                 "cross_table": cross,
+                # the tables side by side: voices, largest/smallest share and
+                # their ratio — never summed across tables
+                "speaking_comparison": round_speaking_comparison(session, round_),
                 "tables": [
                     {
                         "table_number": number,
                         "summary": table_summaries.get((round_.id, number), ""),
+                        "speaking_balance": balances.get(number),
                         "findings": per_table.get(number, []),
+                        "quotations_withheld": number in withheld,
+                        # participants' word on the summary: counts for
+                        # everyone, the notes only for the organizer's view
+                        "validations": _validation_payload(
+                            validations.get((round_.id, number)), include_drafts
+                        ),
                     }
                     for number in round_table_numbers
                 ],
@@ -388,13 +534,17 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
     return {
         "assembly": {
             "name": assembly.name,
+            # "session" for a Session on its own: the readers drop the table
+            # badge and the participant line that mean nothing for one table
+            "kind": assembly.kind,
             "description": assembly.description,
             "language": assembly.language,
             "status": assembly.status,
             "recording_mode": assembly.recording_mode,
             "participants": participant_count,
             "expected_participants": assembly.expected_participants,
-            "tables": assembly.default_table_count,
+            # the rows, not default_table_count: tables can be added mid-event
+            "tables": len(tables_svc.table_numbers(assembly)),
         },
         # only claim diarization when the transcripts actually carry speakers:
         # Whisper and Vosk return text without speaker separation
@@ -402,9 +552,14 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             language,
             "method_diarized" if _has_speaker_labels(session, assembly) else "method",
         ),
+        # how the discussion developed across sessions (0.7), when produced
+        "synthesis": _synthesis_payload(assembly),
         # built by accumulation rather than a ternary: there are three notes
         # now, and "(A + B) if cond else A" does not extend to a third
-        "methodology_note": _methodology_note(session, assembly),
+        "methodology_note": _methodology_note(
+            session, assembly, quotations_withheld=any_withheld,
+            reviewed=any(f.status in APPROVED for f in findings),
+        ),
         "include_drafts": include_drafts,
         # when set, table phones can view/download this report
         "published_at": (
@@ -485,27 +640,22 @@ def render_markdown(report: dict) -> str:
     ]
     ai_summary = text(language, "ai_summary")
     no_findings = f"_{text(language, 'no_findings_yet')}_"
+    lines += _markdown_synthesis(report.get("synthesis"), language)
     plenary = assembly.get("recording_mode") == "plenary"
     for round_ in report["rounds"]:
         lines += [f"## {round_heading(round_['position'], round_['title'], language)}", ""]
         if round_["question"]:
             lines += [f"> {round_['question']}", ""]
+        if round_.get("objective"):
+            lines += [f"*{text(language, 'objective')}:* {round_['objective']}", ""]
         if round_["summary"]:
             lines += [f"*{ai_summary}:* {round_['summary']}", ""]
-        balance = round_.get("speaking_balance")
-        if balance and len(balance["voices"]) >= 2:
-            lines += [f"**{text(language, 'speaking_balance')}**", ""]
-            lines += [
-                f"- {voice_name(language, v['label'])} — {v['percent']}% "
-                f"({_timestamp(v['seconds'])})"
-                for v in balance["voices"]
-            ]
-            lines += ["", f"*{text(language, 'voices_caveat')}*", ""]
         if plenary:
             # One group = one table: render its findings once, grouped by type,
             # with no "Across all tables" section and no "Table N" heading.
             table = round_["tables"][0] if round_["tables"] else None
             findings = table["findings"] if table else []
+            lines += _markdown_balance(table.get("speaking_balance") if table else None, language)
             for _type, label, group in group_findings_by_type(findings, language):
                 lines += [f"### {label}", ""]
                 for finding in group:
@@ -519,22 +669,71 @@ def render_markdown(report: dict) -> str:
                 lines += [f"#### {label}", ""]
                 for finding in group:
                     lines += _markdown_finding(finding, cross=True, language=language)
+        lines += _markdown_comparison(round_.get("speaking_comparison") or [], language)
         for table in round_["tables"]:
-            if not table["findings"] and not table["summary"]:
+            balance_lines = _markdown_balance(table.get("speaking_balance"), language)
+            if not table["findings"] and not table["summary"] and not balance_lines:
                 continue
+            # per table: summary → speaking balance → findings
             lines += [f"### {text(language, 'table', number=table['table_number'])}", ""]
+            if table.get("quotations_withheld"):
+                lines += [f"_{text(language, 'quotations_withheld')}_", ""]
             if table["summary"]:
                 lines += [f"*{ai_summary}:* {table['summary']}", ""]
+            lines += balance_lines
             for finding in table["findings"]:
                 lines += _markdown_finding(finding, cross=False, language=language)
         if (
             not round_["summary"]
             and not round_["cross_table"]
-            and not any(t["findings"] or t["summary"] for t in round_["tables"])
+            and not any(
+                t["findings"] or t["summary"] or _markdown_balance(t.get("speaking_balance"), language)
+                for t in round_["tables"]
+            )
         ):
             lines += [no_findings, ""]
     lines += ["---", "", f"_{report['methodology_note']}_", ""]
     return "\n".join(lines)
+
+
+def _markdown_comparison(rows: list[dict], language: str | None) -> list[str]:
+    """The tables side by side, when at least two have a measured balance."""
+    if len(rows) < 2:
+        return []
+    lines = [
+        f"### {text(language, 'speaking_comparison')}",
+        "",
+        f"_{text(language, 'speaking_comparison_caveat')}_",
+        "",
+        "| " + " | ".join(text(language, f"comparison_col_{col}")
+                          for col in ("table", "voices", "largest", "smallest", "ratio")) + " |",
+        "|---|---|---|---|---|",
+    ]
+    for row in rows:
+        ratio = f"{row['ratio']}×" if row.get("ratio") else "—"
+        lines.append(
+            f"| {row['table_number']} | {row['voices']} | {row['largest_percent']}% | "
+            f"{row['smallest_percent']}% | {ratio} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _markdown_balance(balance: dict | None, language: str | None) -> list[str]:
+    """The table's talk-time per detected voice — only when diarization gave
+    at least two voices; one voice means the whole recording was one label."""
+    if not balance or len(balance.get("voices") or []) < 2:
+        return []
+    lines = [f"**{text(language, 'speaking_balance')}**", ""]
+    lines += [
+        f"- {voice_name(language, v['label'])} — {v['percent']}% ({_timestamp(v['seconds'])})"
+        for v in balance["voices"]
+    ]
+    lines += ["", f"*{text(language, 'voices_caveat')}*"]
+    if balance.get("recorder_changed"):
+        lines += [f"*{text(language, 'recorder_changed_caveat')}*"]
+    lines += [""]
+    return lines
 
 
 def voice_name(language: str | None, label: str) -> str:

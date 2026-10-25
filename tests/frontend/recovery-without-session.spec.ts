@@ -63,13 +63,16 @@ it('a QR fragment opened in the same recovery tab joins again without a reload',
 	vi.spyOn(idb, 'unfinishedRecordings').mockResolvedValue([recording])
 	vi.spyOn(idb, 'chunksFor').mockResolvedValue([{ seq: 0, blob: new Blob(['audio']) }] as never)
 	vi.spyOn(recorderApi, 'join').mockResolvedValue({ ...session, session_token: 'fresh' } as never)
+	// the pre-join look at the code (0.7 guards) finds nothing to ask about
+	vi.spyOn(recorderApi, 'peekCapability').mockResolvedValue({ valid: false, reason: 'invalid' })
 	const wrapper = mountWithI18n(RecorderApp)
 	await flushPromises()
 	expect(wrapper.text()).toContain('Scan a current QR code')
 	history.replaceState(null, '', '/#/join/new-qr')
 	window.dispatchEvent(new HashChangeEvent('hashchange'))
 	await flushPromises()
-	expect(recorderApi.join).toHaveBeenCalledWith('new-qr')
+	// R14: every join now also carries this phone's own random device id
+	expect(recorderApi.join).toHaveBeenCalledWith('new-qr', expect.stringMatching(/^[A-Za-z0-9_-]{8,64}$/))
 	expect(resume).toHaveBeenCalledWith('fresh', expect.objectContaining({ recordingId: 'rec' }))
 	expect(window.location.hash).toBe('')
 	wrapper.unmount()

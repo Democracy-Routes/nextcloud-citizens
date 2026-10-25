@@ -63,7 +63,9 @@ test('Test C: browser reload mid-recording; chunks recovered and synchronized', 
 		timeout: 90_000,
 	})
 	await page.getByRole('button', { name: 'Continue' }).click()
-	await expect(page.getByText('Microphone test')).toBeVisible()
+	// the recovered recording was this table's only session, so the phone
+	// lands on the done state (0.7), not on another microphone test
+	await expect(page.getByText(/All sessions recorded|Microphone test/)).toBeVisible({ timeout: 20_000 })
 
 	const recording = await latestRecordingState(page)
 	expect(recording.state).toBe('AUDIO_READY')

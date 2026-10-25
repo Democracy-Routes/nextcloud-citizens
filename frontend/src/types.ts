@@ -3,6 +3,9 @@
 export interface RoundIn {
 	title: string
 	question: string
+	/** What the discussion should produce, as distinct from what it is about.
+	 * Optional; null on every round made before 0.7. */
+	objective?: string | null
 	duration_minutes: number
 }
 
@@ -16,8 +19,28 @@ export interface Round extends RoundIn {
 	ended_at: string | null
 }
 
+export type RecordingMode = 'orchestrated' | 'independent' | 'plenary'
+
 export interface Assembly {
 	id: string
+	/** "assembly" for an organized event; "session" for the container behind a
+	 * standalone Session, which the UI lists as a Session and never as an
+	 * assembly. Absent only from a server older than 0.7. */
+	kind?: 'assembly' | 'session'
+	/** the consent rule at the tables (0.7); absent from an older server */
+	participant_consent?: ConsentMode
+	/** Record now: the language follows the first transcript until chosen by hand */
+	language_auto?: boolean
+	/** the AI facilitator's level; 'default' (or null) follows Settings */
+	ai_facilitator?: 'default' | 'off' | 'light' | 'normal' | 'active' | null
+	/** null: the instance default; 0: keep indefinitely (0.7) */
+	audio_retention_days?: number | null
+	/** once closed and processed, audio and transcripts are deleted and only
+	 * the report PDF is kept — irreversible, and the assembly cannot reopen
+	 * (0.7); absent from a server older than 0.7 */
+	zero_retention?: boolean
+	/** when the zero-retention sweep ran, if it has; null before (0.7) */
+	zero_retention_done_at?: string | null
 	name: string
 	description: string
 	language: string
@@ -42,6 +65,13 @@ export interface AssemblyProgress {
 	rounds_total: number
 	rounds_analyzed: number
 	complete: boolean
+	/** only present from GET .../progress: a synthesis or a session's
+	 * cross-table analysis that failed used to leave the Report tab looking
+	 * unchanged forever, with nothing saying why (R25) */
+	failures?: {
+		synthesis: JobInfo | null
+		rounds: Record<string, JobInfo>
+	}
 }
 
 /** The newest job behind a recording's state: why it failed, or how long it
@@ -55,6 +85,16 @@ export interface JobInfo {
 	failure_detail: string | null
 }
 
+/** Audio against wall clock: the number that says a phone slept through a
+ * discussion. Red territory, by convention everywhere, is below 95 %. */
+export interface Coverage {
+	audio_seconds: number
+	wall_seconds: number
+	percent: number
+}
+
+export const COVERAGE_LOW_PERCENT = 95
+
 export interface FileEntry {
 	recording_id: string
 	table_number: number
@@ -66,6 +106,9 @@ export interface FileEntry {
 	can_retry_assembly?: boolean
 	mime_type: string
 	duration_seconds: number | null
+	/** audio captured against the wall clock the recording ran for; null
+	 * until there is half a minute to measure (0.7) */
+	coverage?: Coverage | null
 	size_bytes: number
 	sha256: string
 	created_at: string | null
@@ -74,6 +117,14 @@ export interface FileEntry {
 	has_transcript: boolean
 	transcript_source: string
 	can_retranscribe: boolean
+	/** finished server-side without anyone tapping Finish: the silence sweep,
+	 * or the organizer from the Live tab (0.7) */
+	closed_by?: 'silence' | 'organizer' | null
+	/** the id of the recording this one continues — audio that arrived after
+	 * that recording was closed server-side; null for an ordinary recording */
+	continued_from_id?: string | null
+	/** when this continuation's audio first arrived (0.7); null otherwise */
+	audio_added_at?: string | null
 }
 
 /** How far a request to clear the phones actually reached.
@@ -104,6 +155,41 @@ export interface FilesListing {
 	rounds: Array<{ id: string; position: number; title: string; tables: FileEntry[] }>
 }
 
+/** One phone's own log, as the device report reads it (R17): unix-second
+ * timestamps throughout, exactly as citizens/services/device_report.py emits
+ * them. A phone with no log lines is left out of `DeviceReport.phones`
+ * entirely by the server — never an empty row. */
+export interface DeviceReportPhone {
+	session_id: string
+	table_number: number | null
+	/** recorder slot at the table: 1 = A, 2 = B… */
+	slot: number
+	first_ts: number | null
+	last_ts: number | null
+	family: string
+	user_agent: string
+	standalone: boolean | null
+	wake_lock: Record<string, number>
+	hidden_windows: Array<{ from: number; seconds: number | null; chunks: number }>
+	gaps: Array<{ from: number; seconds: number; seq: number | null }>
+	recordings: Array<{ ts: number; id: string; mime: string }>
+	chunks: number
+	upload_failures: number
+	notable: Array<{ ts: number; event: string; data: Record<string, unknown> }>
+}
+
+/** GET .../device-report: what every table phone's own log says about how it
+ * behaved, for a facilitator trying to make sense of a gap or a silent table
+ * after the fact. `with_gaps` already counts only gaps over 15 s — the
+ * server's own threshold for logging one at all. */
+export interface DeviceReport {
+	sessions: number
+	with_gaps: number
+	families: Record<string, number>
+	text: string
+	phones: DeviceReportPhone[]
+}
+
 /** Everything PUT /assemblies/{id} accepts. Every field is optional; only
  * what is sent is written. Was Record<string, unknown>, which typed nothing. */
 export interface AssemblyUpdate {
@@ -118,11 +204,39 @@ export interface AssemblyUpdate {
 	auto_purge_device_audio?: boolean
 	redact_names?: string
 	audio_retention_days?: number | null
+	zero_retention?: boolean
+	participant_consent?: ConsentMode
+	language_auto?: boolean
+	/** the AI facilitator's level; 'default' (or null) follows Settings */
+	ai_facilitator?: 'default' | 'off' | 'light' | 'normal' | 'active' | null
 }
 
+/** 'required': a table records only once one registered person there has
+ * consented; 'optional': the notice is shown and registration offered,
+ * nothing is blocked. */
+export type ConsentMode = 'required' | 'optional'
+
 export interface AssemblyDetail extends Assembly {
+	/** what "default" means for the AI facilitator right now, and whether it can run */
+	ai_facilitator_default?: 'off' | 'light' | 'normal' | 'active'
+	ai_facilitator_configured?: boolean
 	rounds: Round[]
 	participant_count: number
+}
+
+/** A person's newest consent act, as recorded at the table (0.7). */
+export interface ParticipantConsent {
+	method: 'TABLE_DEVICE' | 'SELF_PHONE' | 'PAPER' | string
+	notice_version: string
+	notice_hash: string
+	notice_language: string
+	notice_read: boolean
+	recording: boolean
+	transcription: boolean
+	analysis: boolean
+	publication: boolean
+	confirmed_at: string
+	withdrawn_at: string | null
 }
 
 export interface Participant {
@@ -131,14 +245,30 @@ export interface Participant {
 	name: string
 	email: string
 	notes: string
+	/** ORGANIZER (the list, the CSV), TABLE_DEVICE or SELF_PHONE; absent on older servers */
+	source?: 'ORGANIZER' | 'TABLE_DEVICE' | 'SELF_PHONE' | string
+	registered_table_number?: number | null
+	consent?: ParticipantConsent | null
 }
+
+export type TableColor = 'blue' | 'green' | 'orange' | 'purple' | 'red' | 'teal'
 
 export interface Table {
 	id: string
 	number: number
+	/** a visual cue beside the number; derived from it, repeats after six */
+	color_key?: TableColor | string
 	label: string
 	status: string
 	participants: Participant[]
+}
+
+/** A table added while the event runs: the same number and colour in every
+ * round, and the QR code that joins a phone to it (in this response only). */
+export interface TableAdded {
+	number: number
+	color_key: TableColor | string
+	invite: InviteGenerated
 }
 
 export interface Invite {
@@ -156,6 +286,37 @@ export interface InviteGenerated {
 
 export interface AssemblyCreated extends AssemblyDetail {
 	invites: InviteGenerated[]
+}
+
+/** Start a Session: no assembly to describe first. */
+export interface SessionCreate {
+	question: string
+	objective?: string | null
+	duration_minutes: number
+	table_count: number
+	recording_mode: RecordingMode
+	language: string
+}
+
+export interface SessionCreated {
+	/** the Session's own id — what every /rounds/{id} route accepts */
+	session_id: string
+	/** the container the organizer screens are reached through */
+	container_id: string
+	question: string
+	objective: string | null
+	recording_mode: RecordingMode
+	table_count: number
+	invites: InviteGenerated[]
+}
+
+export interface RecordNowOut {
+	session_id: string
+	container_id: string
+	table_number: number
+	/** the recorder page with Table 1's join token: opening it on this device
+	 * makes it the Session's recorder */
+	recorder_url: string
 }
 
 export interface DeviceStatus {
@@ -180,9 +341,83 @@ export interface DeviceStatus {
 	screen_awake?: boolean
 }
 
+export type ReadinessStatus = 'READY' | 'NEEDS_ATTENTION' | 'BLOCKED'
+
+export type ReadinessCode =
+	| 'NO_RECORDER'
+	| 'RECORDER_OFFLINE'
+	| 'MIC_UNAVAILABLE'
+	| 'LOW_STORAGE'
+	| 'LOW_BATTERY'
+	| 'UPLOAD_STALLED'
+	| 'LIVE_STT_UNAVAILABLE'
+
+export interface TableReadiness {
+	status: ReadinessStatus
+	reasons: Array<{
+		code: ReadinessCode | string
+		severity: 'blocker' | 'warning'
+		/** the recorder concerned, or null for the table as a whole */
+		slot: number | null
+		data: Record<string, unknown>
+	}>
+}
+
+/** What the organizer said to the tables of a session, and who has shown it. */
+export interface SessionMessage {
+	id: number
+	kind: 'TIME_LEFT' | 'WRAP_UP' | 'PROMPT' | 'CUSTOM'
+	text: string
+	sound: boolean
+	created_at: string
+	created_by: string | null
+	/** who the phones say it is from */
+	author?: 'organizer' | 'facilitator' | 'ai'
+	/** null: every table */
+	target_table_number: number | null
+	seen_by: number[]
+	not_seen_by: number[]
+}
+
+/** What the AI facilitator said at a table, and what people thought of it. */
+export interface Intervention {
+	id: string
+	kind: string
+	text: string
+	table_number: number
+	delivered_to: 'facilitator' | 'table'
+	created_at: string
+	sent_to_table_at: string | null
+	dismissed_at: string | null
+	feedback: { helpful: number; not_helpful: number }
+}
+
+/** The assembly's pre-registration link, and how many used it (0.7). */
+export interface RegistrationLink {
+	url: string | null
+	qr_svg: string | null
+	expires_at: string | null
+	registered: { total: number; seated: number }
+}
+
+/** A table's hand, up until the organizer acknowledges it. */
+export interface HelpRequest {
+	id: string
+	kind: 'TECHNICAL' | 'ORGANIZER' | 'PROCESS'
+	table_number: number
+	slot: number
+	created_at: string
+	acknowledged_at: string | null
+}
+
 export interface MonitorTable {
 	table_id: string
 	number: number
+	/** the table's open request for the organizer; absent on older servers */
+	help_request?: HelpRequest | null
+	/** the AI facilitator's effective level at this table (0.7) */
+	ai_facilitator?: 'off' | 'light' | 'normal' | 'active'
+	color_key?: TableColor | string
 	device: { connected: boolean; seconds_since_contact: number | null; status: DeviceStatus }
 	armed: boolean
 	local_recording_safe: boolean
@@ -195,6 +430,40 @@ export interface MonitorTable {
 		error_code: string
 		job?: JobInfo | null
 	} | null
+	/** Every recorder of the table, one per slot (A, B, …): the newest phone in
+	 * that slot and its newest recording of this round. `device` and
+	 * `recording` above keep describing the newest phone and recording overall;
+	 * absent from a server older than 0.7. */
+	recorders?: Array<{
+		slot: number
+		label: string
+		connected: boolean
+		seconds_since_contact: number | null
+		status: DeviceStatus
+		/** `silent_seconds`: how long since the server last received a chunk
+		 * from a recording still in progress (readiness CAPTURE_SILENT) */
+		recording: {
+			id: string
+			state: string
+			live_source?: boolean
+			silent_seconds?: number | null
+			coverage?: Coverage | null
+			/** finished server-side without this phone tapping Finish: the
+			 * silence sweep, or the organizer from the Live tab (0.7) */
+			closed_by?: 'silence' | 'organizer' | null
+			/** the organizer asked this phone to finish; true until closed_by is set */
+			finish_requested?: boolean
+			/** this row holds audio that arrived after an earlier recording of
+			 * the same phone was closed server-side — the continuation, not the
+			 * original (0.7) */
+			continued?: boolean
+		} | null
+	}>
+	/** which recorder's captions the room reads; null when none */
+	live_source_slot?: number | null
+	/** Can this table record? Status plus reason codes, never prose — the
+	 * client words them. Absent from a server older than 0.7. */
+	readiness?: TableReadiness
 	/** Recordings from a phone this table has since replaced. The server ships
 	 * these so the salvaged half of a round stays visible while it finishes
 	 * transcribing — otherwise it vanished from the Live tab the moment the
@@ -213,6 +482,13 @@ export type SttProvider = 'mistral' | 'deepgram' | 'whisper' | 'vosk'
 export interface ProvidersSummary {
 	organization_name: string
 	audio_retention_days: number
+	/** the organization data the consent notice prints (0.7) */
+	consent_controller?: string
+	consent_contact?: string
+	org_address?: string
+	org_dpo?: string
+	org_hosting?: string
+	org_authority?: string
 	stt: {
 		provider: SttProvider
 		live_enabled: boolean
@@ -254,6 +530,18 @@ export interface ProvidersSummary {
 		enabled: boolean
 		extra_instructions: string
 		default_prompts?: { table: string; round: string }
+	}
+	/** the AI facilitator's instance settings (absent from a server before 0.7) */
+	facilitator?: {
+		level: 'off' | 'light' | 'normal' | 'active'
+		configured: boolean
+		own_key: boolean
+		interval_minutes: number
+		dominance_percent: number
+		silence_seconds: number
+		base_url: string
+		model: string
+		key_hint: string
 	}
 	logo_set: boolean
 }
@@ -308,6 +596,22 @@ export interface SpeakingBalance {
 	voices: SpeakingVoice[]
 	total_seconds: number
 	from_recording_id: string
+	/** how many of the table's recordings held speech */
+	parts?: number
+	/** the balance covers only the fullest of several parts: voices cannot be
+	 * matched across a replaced phone's recordings */
+	recorder_changed?: boolean
+}
+
+/** One table of a session beside the others: voices, largest/smallest share, ratio. */
+export interface SpeakingComparisonRow {
+	table_number: number
+	voices: number
+	total_seconds: number
+	largest_percent: number
+	smallest_percent: number
+	ratio: number | null
+	recorder_changed: boolean
 }
 
 export interface RoundFindings {
@@ -316,20 +620,34 @@ export interface RoundFindings {
 	round_summary: string
 	analysis_configured: boolean
 	tables_with_findings: number
+	speaking_comparison?: SpeakingComparisonRow[]
 	cross_table: FindingData[]
-	speaking_balance: SpeakingBalance | null
 	tables: Array<{
 		table_number: number
 		recording: { id: string; state: string; error_code?: string; job?: JobInfo | null } | null
 		summary: string
 		analyzed: boolean
+		/** talk-time per detected voice at THIS table (never across tables) */
+		speaking_balance?: SpeakingBalance | null
 		findings: FindingData[]
 	}>
 	/** The newest cross-table clustering job, whatever its state. */
 	round_job?: JobInfo | null
 }
 
+/** How the discussion developed across sessions (0.7). */
+export interface ReportSynthesis {
+	narrative: string
+	stages: Array<{ title: string; summary: string }>
+	carried_forward: string[]
+	model?: string
+	sessions?: number
+	generated_at?: string | null
+}
+
 export interface ReportData {
+	/** present once the analysis model has written it; null before */
+	synthesis?: ReportSynthesis | null
 	assembly: {
 		name: string
 		description: string
@@ -356,7 +674,16 @@ export interface ReportData {
 		summary: string
 		recordings: number
 		cross_table: ReportFinding[]
-		tables: Array<{ table_number: number; summary: string; findings: ReportFinding[] }>
+		tables: Array<{
+			table_number: number
+			summary: string
+			speaking_balance?: SpeakingBalance | null
+			findings: ReportFinding[]
+			/** someone seated here declined to be quoted: no verbatim quotation from this table */
+			quotations_withheld?: boolean
+			/** participants' word on the summary (0.7): counts, notes for the organizer */
+			validations?: { looks_right: number; missing: number; notes?: string[] } | null
+		}>
 	}>
 }
 
@@ -373,6 +700,8 @@ export interface ReportFinding {
 	table_number: number | null
 	mentioned_table_count: number
 	evidence_removed?: boolean
+	/** the table's quotations are withheld (see the table's flag) */
+	quotations_withheld?: boolean
 	evidence: Array<{ speaker: string; start: number; timestamp: string; text: string }>
 }
 
@@ -385,6 +714,8 @@ export interface RoundMonitor {
 	tables_ready: number
 	tables_total: number
 	tables: MonitorTable[]
+	/** READY / NEEDS_ATTENTION / BLOCKED counts and the worst of them */
+	readiness?: { status: ReadinessStatus; ready: number; needs_attention: number; blocked: number }
 	/** Every round of the assembly, as the server has them right now. The Live
 	 * tab used to read these from the assembly prop, which nothing refreshed. */
 	rounds: { id: string; position: number; title: string; status: string }[]

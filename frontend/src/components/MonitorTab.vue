@@ -6,6 +6,7 @@ import {
 	mdiCellphoneRemove,
 	mdiClipboardTextOutline,
 	mdiConsoleLine,
+	mdiHandBackLeft,
 	mdiMonitorEye,
 	mdiPlay,
 	mdiRefresh,
@@ -14,12 +15,14 @@ import {
 	mdiTextBoxPlusOutline,
 } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { describeError } from '../errors'
 import { relativeAge, timestamp } from '../format'
 import { LIVE_MS } from '../composables/intervals'
 import { usePolling } from '../composables/usePolling'
-import type { AssemblyDetail, MonitorTable, RoundMonitor, TranscriptData } from '../types'
+import type { AssemblyDetail, Intervention, MonitorTable, RoundMonitor, SessionMessage, TranscriptData } from '../types'
+import { COVERAGE_LOW_PERCENT } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzConfirm from './ui/CzConfirm.vue'
 import CzEmptyState from './ui/CzEmptyState.vue'
@@ -29,9 +32,14 @@ import CzSkeleton from './ui/CzSkeleton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
 import SvgIcon from './ui/SvgIcon.vue'
 import { toast } from './ui/toast'
+import { play } from '../recorder/sounds'
 
 const props = defineProps<{ assembly: AssemblyDetail }>()
 const emit = defineEmits<{ changed: [] }>()
+const { t } = useI18n()
+
+/** "Table 3", wherever a table is named in a sentence. */
+const tableName = (number: number) => t('organizer.live.monitor.tableN', { number })
 
 const roundId = ref(
 	props.assembly.rounds.find((r) => r.status === 'ACTIVE')?.id ?? props.assembly.rounds[0]?.id ?? '',
@@ -52,12 +60,110 @@ let clockTimer = 0
 async function poll(): Promise<void> {
 	if (!roundId.value) return
 	const previous = monitor.value?.status
+	const before = alarmKeys(monitor.value)
 	monitor.value = await api.roundMonitor(roundId.value)
 	error.value = ''
+	ringForNewAlarms(before, alarmKeys(monitor.value))
 	// the poll is the only thing watching the round change state, so it has to
 	// be what tells the rest of the app — otherwise the header pill, the
 	// sidebar and the Rounds tab stay on whatever they last heard
 	if (previous && previous !== monitor.value.status) emit('changed')
+	void loadMessages()
+	void loadInterventions()
+}
+
+/* ---- the facilitator's voice: "5 minutes left" to every table, or one ----
+ * A message rides the phones' status poll; each phone reports when it has
+ * shown it, which is the "delivered 9/10" here. Nothing stops a recording. */
+const messages = ref<SessionMessage[]>([])
+const messagesOpen = ref(false)
+const messageText = ref('')
+const messageTarget = ref<number | null>(null)
+const messageBusy = ref(false)
+
+async function loadMessages(): Promise<void> {
+	if (!roundId.value) return
+	try {
+		messages.value = await api.roundMessages(roundId.value)
+	} catch {
+		/* an older server, or a blink: the row simply shows what it last had */
+	}
+}
+
+async function sendMessage(data: Parameters<typeof api.sendMessage>[1]): Promise<void> {
+	if (!roundId.value || messageBusy.value) return
+	messageBusy.value = true
+	try {
+		await api.sendMessage(roundId.value, { ...data, target_table_number: messageTarget.value })
+		messageText.value = ''
+		await loadMessages()
+	} catch (err) {
+		error.value = describeError(err).message
+	} finally {
+		messageBusy.value = false
+	}
+}
+
+/** The organizer has seen a table's hand: the row goes calm on the next poll,
+ * the phone reads it on its own poll and says so. */
+function acknowledgeHelp(table: MonitorTable): void {
+	const request = table.help_request
+	if (!request) return
+	void run(() => api.acknowledgeHelp(request.id), t('organizer.live.monitor.toast.acknowledged', { number: table.number }))
+}
+
+function clockOf(iso: string): string {
+	return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function sendCustom(): void {
+	const text = messageText.value.trim()
+	if (text) void sendMessage({ kind: 'CUSTOM', text })
+}
+
+function deliveryText(message: SessionMessage): string {
+	const total = message.seen_by.length + message.not_seen_by.length
+	if (!total) return t('organizer.live.monitor.delivery.none')
+	const missing = message.not_seen_by.length
+	if (!missing) return t('organizer.live.monitor.delivery.all', { total })
+	const names = message.not_seen_by.map(tableName).join(', ')
+	return t('organizer.live.monitor.delivery.partial', { seen: message.seen_by.length, total, names })
+}
+
+const recentMessages = computed(() => messages.value.slice(0, 3))
+
+/* ---- the AI facilitator's log and the per-table pause ---- */
+const interventions = ref<Intervention[]>([])
+const aiLogOpen = ref(false)
+
+async function loadInterventions(): Promise<void> {
+	if (!roundId.value) return
+	try {
+		interventions.value = await api.roundInterventions(roundId.value)
+	} catch {
+		/* an older server: no log */
+	}
+}
+
+const anyAi = computed(
+	() => interventions.value.length > 0 || (monitor.value?.tables ?? []).some((t) => (t.ai_facilitator ?? 'off') !== 'off'),
+)
+
+function authorLabel(message: SessionMessage): string {
+	return message.author === 'ai'
+		? t('organizer.live.monitor.author.ai')
+		: message.author === 'facilitator'
+			? t('organizer.live.monitor.author.facilitator')
+			: ''
+}
+
+function pauseAi(table: MonitorTable, level: 'off' | 'default'): void {
+	void run(
+		() => api.setTableFacilitation(props.assembly.id, table.number, level),
+		t(level === 'off' ? 'organizer.live.monitor.toast.aiPaused' : 'organizer.live.monitor.toast.aiResumed', {
+			number: table.number,
+		}),
+	)
 }
 
 // keeps polling while hidden: this is the live view, and a facilitator
@@ -124,6 +230,8 @@ const autoEndCancelled = ref(false)
 /** Seconds until the round's planned end. Negative once it has overrun. */
 const secondsLeft = computed(() => {
 	if (!monitor.value || monitor.value.status !== 'ACTIVE' || !monitor.value.started_at) return null
+	// no planned time: there is no end to count down to, and never an overrun
+	if (monitor.value.duration_minutes === 0) return null
 	const endAt =
 		new Date(monitor.value.started_at).getTime() +
 		(monitor.value.duration_minutes + extraMinutes.value) * 60_000
@@ -201,7 +309,7 @@ function extendRound(): void {
 	extraMinutes.value += EXTEND_MINUTES
 	// extending moves the planned end forward, so `overrunning` drops and the
 	// grace state resets itself on the next tick
-	toast(`Round extended by ${EXTEND_MINUTES} minutes`)
+	toast(t('organizer.live.monitor.toast.extended', { minutes: EXTEND_MINUTES }))
 }
 
 // a new round starts its own clock
@@ -214,6 +322,7 @@ watch(roundId, () => {
 
 const progress = computed(() => {
 	if (!monitor.value || monitor.value.status !== 'ACTIVE' || !monitor.value.started_at) return 0
+	if (monitor.value.duration_minutes === 0) return 0
 	const total = (monitor.value.duration_minutes + extraMinutes.value) * 60_000
 	const elapsed = now.value - new Date(monitor.value.started_at).getTime()
 	return Math.min(100, Math.max(0, (elapsed / total) * 100))
@@ -285,10 +394,10 @@ function startRound(): void {
 		return
 	}
 	confirmStartUnready.value = false
-	void run(() => api.startRound(roundId.value), 'Round started — armed tables are now recording')
+	void run(() => api.startRound(roundId.value), t('organizer.live.monitor.toast.started'))
 }
 
-const endRound = () => run(() => api.endRound(roundId.value), 'Round ended')
+const endRound = () => run(() => api.endRound(roundId.value), t('organizer.live.monitor.toast.ended'))
 
 async function showTranscript(recordingId: string): Promise<void> {
 	if (transcriptFor.value === recordingId) {
@@ -307,7 +416,7 @@ async function showTranscript(recordingId: string): Promise<void> {
 }
 
 const transcribe = (recordingId: string) =>
-	run(() => api.requestTranscription(recordingId), 'Transcription queued')
+	run(() => api.requestTranscription(recordingId), t('organizer.live.monitor.toast.transcriptionQueued'))
 
 async function showDevice(tableNumber: number): Promise<void> {
 	openTable.value = openTable.value === tableNumber ? null : tableNumber
@@ -328,16 +437,217 @@ function speakerClass(speaker: string): string {
 	return `cz-convo__seg--s${((parseInt(match[1], 10) - 1) % 5) + 1}`
 }
 
+/* ---- exception-first: healthy tables collapse, problems stay in view ----
+ *
+ * Fifty green rows tell a facilitator nothing; the two that need a hand are
+ * what the screen is for. The server's readiness judgement (0.7) decides: a
+ * READY table with nothing the client itself flags is "quiet" and folds into
+ * one row, anything else stays expanded with its reasons worded here and the
+ * fix beside it. A server without readiness (older) collapses nothing. */
+
+/** The server's readiness codes this screen has words for; an unknown code is
+ * shown lower-cased rather than hidden. Looked up through t() on every call so
+ * the wording follows the locale. */
+const REASON_CODES = [
+	'NO_RECORDER',
+	'RECORDER_OFFLINE',
+	'MIC_UNAVAILABLE',
+	'LOW_STORAGE',
+	'LOW_BATTERY',
+	'UPLOAD_STALLED',
+	'CAPTURE_SILENT',
+	'LIVE_STT_UNAVAILABLE',
+	'HELP_REQUESTED',
+	'PARTICIPANT_CONSENT_MISSING',
+	'PARTICIPANT_REFUSED',
+]
+
+function reasonWording(code: string): string {
+	return REASON_CODES.includes(code)
+		? t(`organizer.live.monitor.reasons.${code}`)
+		: code.toLowerCase().replaceAll('_', ' ')
+}
+
+/** What a table's raised hand is about, in the organizer's words. */
+const HELP_KINDS = ['TECHNICAL', 'ORGANIZER', 'PROCESS']
+
+function helpKindText(kind: unknown): string {
+	const code = String(kind ?? '')
+	return HELP_KINDS.includes(code) ? t(`organizer.live.monitor.helpKinds.${code}`) : code.toLowerCase()
+}
+
+function reasonText(reason: { code: string; slot: number | null; data: Record<string, unknown> }): string {
+	if (reason.code === 'HELP_REQUESTED') {
+		const kind = helpKindText(reason.data.kind)
+		return `${reasonWording('HELP_REQUESTED')}${kind ? ` — ${kind}` : ''}`
+	}
+	const base = reason.code === 'CAPTURE_SILENT'
+		? t('organizer.live.monitor.reasons.CAPTURE_SILENT', { seconds: Number(reason.data.silent_seconds ?? 0) })
+		: reasonWording(reason.code)
+	const who = reason.slot !== null && reason.slot !== undefined && (reason.slot > 1 || reason.code !== 'NO_RECORDER')
+		? ` ${t('organizer.live.monitor.reasons.recorderSuffix', { letter: String.fromCharCode(64 + reason.slot) })}`
+		: ''
+	return base + who
+}
+
+/** One badge per recorder with a measurable coverage (table_recordings.coverage). */
+function coverageBadges(table: MonitorTable): Array<{ label: string; percent: number }> {
+	return (table.recorders ?? [])
+		.filter((r) => r.recording?.coverage)
+		.map((r) => ({ label: r.label, percent: r.recording!.coverage!.percent }))
+}
+
+/** Nothing the server or this screen would point at. */
+function isQuiet(table: MonitorTable): boolean {
+	if (!table.readiness || table.readiness.status !== 'READY') return false
+	return !(
+		coverageBadges(table).some((b) => b.percent < COVERAGE_LOW_PERCENT) ||
+		captureInterrupted(table) ||
+		lowBattery(table) ||
+		lowStorage(table) ||
+		canReplaceDevice(table) ||
+		canRetryAssembly(table) ||
+		table.superseded_recordings.length > 0
+	)
+}
+
+const showQuiet = ref(false)
+
+/* ---- the alarm: a short tone on the organizer's laptop when a table turns
+ * red or a recorder's audio stops reaching the server. The table phone itself
+ * stays silent (decided 2026-10-13): the room must not hear its own alarm,
+ * the organizer and the facilitator's phone must. Off with one click. */
+const SOUND_KEY = 'citizens-live-sound'
+const soundOn = ref(true)
+
+function toggleSound(): void {
+	soundOn.value = !soundOn.value
+	try {
+		localStorage.setItem(SOUND_KEY, soundOn.value ? '1' : '0')
+	} catch {
+		/* private mode */
+	}
+}
+
+/** What would ring if it were new: blocked tables, and silent recorders. */
+function alarmKeys(m: RoundMonitor | null): Set<string> {
+	const keys = new Set<string>()
+	for (const table of m?.tables ?? []) {
+		if (table.readiness?.status === 'BLOCKED') keys.add(`blocked:${table.number}`)
+		for (const reason of table.readiness?.reasons ?? []) {
+			if (reason.code === 'CAPTURE_SILENT') keys.add(`silent:${table.number}:${reason.slot ?? ''}`)
+		}
+	}
+	return keys
+}
+
+function ringForNewAlarms(before: Set<string>, after: Set<string>): void {
+	if (!soundOn.value) return
+	for (const key of after) {
+		if (!before.has(key)) {
+			play('alert', 'normal')
+			return
+		}
+	}
+}
+
+/* ---- advanced diagnostics: the numbers behind a pill, on demand ----
+ * Battery, storage, upload backlog, heartbeat age, wake lock, capture — every
+ * recorder's heartbeat already arrives in the monitor payload; the normal view
+ * words it, this shows it. A per-browser toggle, off by default. */
+const ADVANCED_KEY = 'citizens-live-advanced'
+const advanced = ref(false)
+try {
+	advanced.value = localStorage.getItem(ADVANCED_KEY) === '1'
+	soundOn.value = localStorage.getItem(SOUND_KEY) !== '0'
+} catch {
+	/* private mode */
+}
+function toggleAdvanced(): void {
+	advanced.value = !advanced.value
+	try {
+		localStorage.setItem(ADVANCED_KEY, advanced.value ? '1' : '0')
+	} catch {
+		/* ignore */
+	}
+}
+
+type RecorderEntry = NonNullable<MonitorTable['recorders']>[number]
+
+/** One line of facts per recorder, dashes where the phone said nothing. */
+function recorderFacts(recorder: RecorderEntry): string {
+	const s = recorder.status ?? {}
+	const f = (key: string, named?: Record<string, unknown>) => t(`organizer.live.monitor.facts.${key}`, named ?? {})
+	const pct = typeof s.battery_level === 'number' ? `${Math.round(s.battery_level * 100)}%` : '—'
+	const storage = typeof s.storage_free_mb === 'number' ? f('mbFree', { mb: Math.round(s.storage_free_mb) }) : '—'
+	const pending =
+		typeof s.local_chunks === 'number' && typeof s.acked_chunks === 'number'
+			? f('chunksPending', { count: Math.max(0, s.local_chunks - s.acked_chunks) })
+			: '—'
+	const age =
+		recorder.seconds_since_contact === null
+			? f('neverHeard')
+			: f('heartbeat', { seconds: recorder.seconds_since_contact })
+	const screen = s.screen_awake === true ? f('screenAwake') : s.screen_awake === false ? f('screenMayLock') : '—'
+	const visible = s.visible === false ? f('background') : s.visible === true ? f('foreground') : '—'
+	const capture = s.capture_ok === false ? f('captureInterrupted') : s.capture_ok === true ? f('capturing') : '—'
+	const rec = recorder.recording ? recorder.recording.state : f('noRecording')
+	return f('line', { pct, storage, pending, age, screen, visible, capture, rec })
+}
+
+type RecorderRecordingInfo = NonNullable<RecorderEntry['recording']>
+
+/** The recorders of a table that have a recording of their own to report
+ * on — the per-recorder Finish control sits beside each one's coverage
+ * badge, since a table with more than one phone can have one finish while
+ * another keeps recording. */
+function recordingRecorders(table: MonitorTable): Array<{ slot: number; recording: RecorderRecordingInfo }> {
+	return (table.recorders ?? [])
+		.filter((r) => !!r.recording)
+		.map((r) => ({ slot: r.slot, recording: r.recording as RecorderRecordingInfo }))
+}
+
+const confirmFinishRecording = ref<{ number: number; recording: RecorderRecordingInfo } | null>(null)
+
+/** Finish one recorder's recording from here, the way the 5-minute silence
+ * sweep would — asked for explicitly rather than waited out. */
+async function finishRecordingNow(): Promise<void> {
+	const target = confirmFinishRecording.value
+	confirmFinishRecording.value = null
+	if (!target) return
+	await run(() => api.finishRecording(target.recording.id))
+}
+
+const quietTables = computed(() => (monitor.value?.tables ?? []).filter(isQuiet))
+const attentionTables = computed(() => (monitor.value?.tables ?? []).filter((t) => !isQuiet(t)))
+const visibleTables = computed(() =>
+	showQuiet.value ? (monitor.value?.tables ?? []) : attentionTables.value,
+)
+
+/** The one line at the top: all fine, or how many need a hand. */
+const health = computed(() => {
+	const m = monitor.value
+	if (!m?.readiness || !m.tables.length) return null
+	const attention = attentionTables.value.length
+	const blocked = m.tables.filter((t) => t.readiness?.status === 'BLOCKED').length
+	if (attention === 0) return { tone: 'ok', text: t('organizer.live.monitor.health.ok') }
+	const blockedNote = blocked ? ` ${t('organizer.live.monitor.health.cannotRecord', { count: blocked })}` : ''
+	return {
+		tone: blocked ? 'bad' : 'warn',
+		text: t('organizer.live.monitor.health.attention', { count: attention, blocked: blockedNote }, attention),
+	}
+})
+
 function deviceState(table: MonitorTable): { status: string; label: string } {
-	if (table.armed) return { status: 'CONNECTED', label: 'armed' }
+	if (table.armed) return { status: 'CONNECTED', label: t('organizer.live.monitor.device.armed') }
 	// the page is alive but not on screen: iOS can stop the microphone in
 	// that state with no error the page can catch, so it is not "connected"
 	if (table.device.connected && table.device.status.visible === false)
-		return { status: 'STALE', label: 'in background' }
-	if (table.device.connected) return { status: 'CONNECTED', label: 'connected' }
+		return { status: 'STALE', label: t('organizer.live.monitor.device.background') }
+	if (table.device.connected) return { status: 'CONNECTED', label: t('organizer.live.monitor.device.connected') }
 	if (table.device.seconds_since_contact !== null)
 		return { status: 'STALE', label: relativeAge(table.device.seconds_since_contact) }
-	return { status: 'IDLE', label: 'no device' }
+	return { status: 'IDLE', label: t('organizer.live.monitor.device.none') }
 }
 
 /** Roughly twenty minutes of audio left, at the recorder's bitrate. Enough
@@ -397,21 +707,23 @@ async function retryAssembly(table: MonitorTable): Promise<void> {
 	if (!recording) return
 	await run(
 		() => api.retryAssembly(recording.id),
-		`Table ${table.number}: assembling the audio that reached the server`,
+		t('organizer.live.monitor.toast.assembling', { number: table.number }),
 	)
 }
 
-/** What the earlier recording of a table is, in a word. */
+/** What the earlier recording of a table is, in the room's words — never the
+ * engine's ("superseded", "replacement"). It is an earlier part of the same
+ * discussion; the suffix says why the phone changed. */
 function priorLabel(prior: { error_code: string }): string {
 	switch (prior.error_code) {
 		case 'ROUND_CONTINUED':
-			return 'first part'
+			return t('organizer.live.monitor.prior.continued')
 		case 'DEVICE_REJOINED':
-			return 'before the phone reconnected'
+			return t('organizer.live.monitor.prior.rejoined')
 		case 'DEVICE_SILENT':
-			return 'phone went silent'
+			return t('organizer.live.monitor.prior.silent')
 		default:
-			return 'replaced device'
+			return t('organizer.live.monitor.prior.handedOver')
 	}
 }
 
@@ -423,9 +735,12 @@ async function replaceDevice(): Promise<void> {
 	try {
 		const result = await api.replaceDevice(table.recording.id)
 		toast(
-			result.assembling
-				? `Table ${table.number} released — its recording so far is being transcribed`
-				: `Table ${table.number} released — it had not uploaded any audio yet`,
+			t(
+				result.assembling
+					? 'organizer.live.monitor.toast.releasedAssembling'
+					: 'organizer.live.monitor.toast.releasedEmpty',
+				{ number: table.number },
+			),
 		)
 		await polling.refresh()
 		emit('changed')
@@ -466,13 +781,13 @@ function pendingChunks(table: MonitorTable): number {
 			v-if="nextUp && monitor?.recording_mode !== 'independent'"
 			class="cz-card cz-nextstep">
 			<div>
-				<strong>This round has finished.</strong>
+				<strong>{{ t('organizer.live.monitor.nextStep.finished') }}</strong>
 				<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-					Armed tables will start recording Round {{ nextUp.position }} automatically.
+					{{ t('organizer.live.monitor.nextStep.autoStart', { position: nextUp.position }) }}
 				</span>
 			</div>
 			<CzButton variant="primary" :icon="mdiPlay" :disabled="busy" @click="startNextRound">
-				Start Round {{ nextUp.position }}{{ nextUp.title ? ` — ${nextUp.title}` : '' }}
+				{{ t('organizer.live.monitor.nextStep.start', { position: nextUp.position }) }}{{ nextUp.title ? ` — ${nextUp.title}` : '' }}
 			</CzButton>
 		</div>
 
@@ -480,12 +795,113 @@ function pendingChunks(table: MonitorTable): number {
 			v-else-if="allRoundsDone"
 			class="cz-card cz-nextstep">
 			<div>
-				<strong>All rounds are done.</strong>
+				<strong>{{ t('organizer.live.monitor.nextStep.allDone') }}</strong>
 				<span class="cz-muted" style="display: block; font-size: 0.8125rem; margin-top: 2px">
-					Review the findings in the Analysis tab, then publish the report to the
-					table phones from the Report tab.
+					{{ t('organizer.live.monitor.nextStep.allDoneHint') }}
 				</span>
 			</div>
+		</div>
+
+		<!-- exception-first: the state of the room in one line -->
+		<div v-if="health" class="cz-health" :class="`cz-health--${health.tone}`" role="status">
+			<strong>{{ health.text }}</strong>
+			<span v-if="quietTables.length && attentionTables.length" class="cz-muted">
+				{{ t('organizer.live.monitor.health.quietFolded', { count: quietTables.length }, quietTables.length) }}
+			</span>
+			<span style="margin-left: auto">
+				<CzButton variant="tertiary" small data-test="sound" :title="t('organizer.live.monitor.sound.title')" @click="toggleSound">
+					{{ soundOn ? t('organizer.live.monitor.sound.on') : t('organizer.live.monitor.sound.off') }}
+				</CzButton>
+				<CzButton variant="tertiary" small data-test="advanced" @click="toggleAdvanced">
+					{{ advanced ? t('organizer.live.monitor.advanced.hide') : t('organizer.live.monitor.advanced.show') }}
+				</CzButton>
+			</span>
+		</div>
+
+		<!-- the facilitator's voice to the tables -->
+		<div v-if="monitor && monitor.status === 'ACTIVE'" class="cz-broadcast">
+			<div class="cz-broadcast__row">
+				<strong>{{ t('organizer.live.monitor.broadcast.title') }}</strong>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'TIME_LEFT', minutes: 10 })">
+					{{ t('organizer.live.monitor.broadcast.minLeft', { minutes: 10 }) }}
+				</CzButton>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'TIME_LEFT', minutes: 5 })">
+					{{ t('organizer.live.monitor.broadcast.minLeft', { minutes: 5 }) }}
+				</CzButton>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'TIME_LEFT', minutes: 1 })">
+					{{ t('organizer.live.monitor.broadcast.minLeft', { minutes: 1 }) }}
+				</CzButton>
+				<CzButton variant="secondary" small :disabled="messageBusy" @click="sendMessage({ kind: 'WRAP_UP', sound: true })">
+					{{ t('organizer.live.monitor.broadcast.wrapUp') }}
+				</CzButton>
+				<CzButton variant="tertiary" small @click="messagesOpen = !messagesOpen">
+					{{ messagesOpen ? t('organizer.live.monitor.broadcast.less') : t('organizer.live.monitor.broadcast.write') }}
+				</CzButton>
+				<label class="cz-broadcast__target">
+					{{ t('organizer.live.monitor.broadcast.to') }}
+					<select v-model="messageTarget">
+						<option :value="null">{{ t('organizer.live.monitor.broadcast.allTables') }}</option>
+						<option v-for="table in monitor.tables" :key="table.number" :value="table.number">
+							{{ tableName(table.number) }}
+						</option>
+					</select>
+				</label>
+			</div>
+			<form v-if="messagesOpen" class="cz-broadcast__row" @submit.prevent="sendCustom">
+				<input
+					v-model="messageText"
+					type="text"
+					maxlength="300"
+					:placeholder="t('organizer.live.monitor.broadcast.placeholder')"
+					:aria-label="t('organizer.live.monitor.broadcast.ariaLabel')"
+					style="flex: 1; min-width: 220px" />
+				<CzButton variant="primary" small type="submit" :disabled="messageBusy || !messageText.trim()">
+					{{ t('organizer.live.monitor.broadcast.send') }}
+				</CzButton>
+			</form>
+			<ul v-if="recentMessages.length" class="cz-broadcast__log">
+				<li v-for="message in recentMessages" :key="message.id">
+					<span class="cz-muted">{{ clockOf(message.created_at) }}</span>
+					<span v-if="message.target_table_number" class="cz-muted"> · {{ tableName(message.target_table_number) }}</span>
+					<span v-if="authorLabel(message)" class="cz-pill cz-pill--gray" style="margin-left: 4px">{{ authorLabel(message) }}</span>
+					— {{ message.text }}
+					<span class="cz-broadcast__delivery" :class="{ 'cz-broadcast__delivery--partial': message.not_seen_by.length }">
+						{{ deliveryText(message) }}
+					</span>
+				</li>
+			</ul>
+		</div>
+
+		<!-- what the AI facilitator said at the tables, and what people thought of it -->
+		<div v-if="anyAi" class="cz-card cz-broadcast" data-test="ai-log">
+			<div class="cz-row" style="gap: 8px; flex-wrap: wrap">
+				<strong>{{ t('organizer.live.monitor.ai.title') }}</strong>
+				<span class="cz-muted" style="font-size: 0.8125rem">
+					{{ interventions.length ? t('organizer.live.monitor.ai.nudges', { count: interventions.length }, interventions.length) : t('organizer.live.monitor.ai.nothingYet') }}
+				</span>
+				<CzButton v-if="interventions.length" variant="tertiary" small @click="aiLogOpen = !aiLogOpen">
+					{{ aiLogOpen ? t('organizer.live.monitor.ai.less') : t('organizer.live.monitor.ai.show') }}
+				</CzButton>
+			</div>
+			<ul v-if="aiLogOpen" class="cz-broadcast__log">
+				<li v-for="item in interventions.slice(0, 12)" :key="item.id">
+					<span class="cz-muted">{{ clockOf(item.created_at) }}</span>
+					<span class="cz-muted"> · {{ tableName(item.table_number) }} · {{ item.kind }}</span>
+					— {{ item.text }}
+					<span class="cz-broadcast__delivery" :class="{ 'cz-broadcast__delivery--partial': item.dismissed_at }">
+						{{
+							item.dismissed_at
+								? t('organizer.live.monitor.ai.dismissed')
+								: item.sent_to_table_at
+									? t('organizer.live.monitor.ai.sentOn')
+									: item.delivered_to === 'facilitator'
+										? t('organizer.live.monitor.ai.onFacilitatorPhone')
+										: t('organizer.live.monitor.ai.toTable')
+						}}
+						· 👍 {{ item.feedback.helpful }} · 👎 {{ item.feedback.not_helpful }}
+					</span>
+				</li>
+			</ul>
 		</div>
 
 		<div class="cz-countbar">
@@ -501,16 +917,21 @@ function pendingChunks(table: MonitorTable): number {
 					class="cz-pill"
 					:class="monitor.tables_ready === monitor.tables_total ? 'cz-pill--green' : 'cz-pill--amber'"
 					style="text-transform: none">
-					{{ monitor.tables_ready }}/{{ monitor.tables_total }} tables ready
+					{{ t('organizer.live.monitor.countbar.tablesReady', { ready: monitor.tables_ready, total: monitor.tables_total }) }}
 				</span>
-				<div class="cz-countbar__track">
-					<div class="cz-countbar__fill" :style="{ width: progress + '%' }"></div>
-				</div>
-				<span
-					v-if="remaining"
-					class="cz-countbar__time"
-					:class="{ 'cz-drifted': overrunning }">
-					{{ remaining }}
+				<template v-if="monitor.duration_minutes > 0">
+					<div class="cz-countbar__track">
+						<div class="cz-countbar__fill" :style="{ width: progress + '%' }"></div>
+					</div>
+					<span
+						v-if="remaining"
+						class="cz-countbar__time"
+						:class="{ 'cz-drifted': overrunning }">
+						{{ remaining }}
+					</span>
+				</template>
+				<span v-else class="cz-muted" style="font-size: 0.8125rem">
+					{{ t('organizer.setup.overview.rounds.noPlannedTime') }}
 				</span>
 				<template v-if="monitor.recording_mode !== 'independent'">
 					<!-- time is up: end it on time, but let the facilitator take the
@@ -518,13 +939,13 @@ function pendingChunks(table: MonitorTable): number {
 					     assembly is worse than a round running a minute long. -->
 					<template v-if="autoEndIn !== null">
 						<span class="cz-drifted" style="font-size: 0.8125rem" role="status">
-							Time is up — ending in {{ autoEndIn }}s
+							{{ t('organizer.live.monitor.countbar.timeUp', { seconds: autoEndIn }) }}
 						</span>
 						<CzButton variant="secondary" :disabled="busy" @click="extendRound">
-							Extend {{ EXTEND_MINUTES }} min
+							{{ t('organizer.live.monitor.countbar.extend', { minutes: EXTEND_MINUTES }) }}
 						</CzButton>
 						<CzButton variant="tertiary" :disabled="busy" @click="autoEndCancelled = true">
-							Keep going
+							{{ t('organizer.live.monitor.countbar.keepGoing') }}
 						</CzButton>
 					</template>
 					<CzButton
@@ -533,7 +954,7 @@ function pendingChunks(table: MonitorTable): number {
 						:icon="mdiPlay"
 						:disabled="busy"
 						@click="startRound">
-						Start round
+						{{ t('organizer.live.monitor.countbar.start') }}
 					</CzButton>
 					<CzButton
 						v-else-if="monitor.status === 'ACTIVE'"
@@ -541,37 +962,45 @@ function pendingChunks(table: MonitorTable): number {
 						:icon="mdiStop"
 						:disabled="busy"
 						@click="endRound">
-						End round
+						{{ t('organizer.live.monitor.countbar.end') }}
 					</CzButton>
 				</template>
 				<span v-else class="cz-muted" style="font-size: 0.8125rem">
-					Independent tables — each table records on its own schedule
+					{{ t('organizer.live.monitor.countbar.independent') }}
 				</span>
 			</template>
 		</div>
 
 		<CzConfirm
 			v-if="confirmReplace"
-			title="Hand this table to another phone?"
-			:message="`Table ${confirmReplace.number}'s phone has stopped responding. Its recording is finished with the audio already received — usually most of the round — and transcribed. The table can then record the rest on any phone by scanning the same QR code.`"
-			confirm-label="Replace device"
+			:title="t('organizer.live.monitor.handOver.title')"
+			:message="t('organizer.live.monitor.handOver.message', { number: confirmReplace.number })"
+			:confirm-label="t('organizer.live.monitor.handOver.confirm')"
 			tone="danger"
 			@confirm="replaceDevice"
 			@cancel="confirmReplace = null" />
 
 		<CzConfirm
+			v-if="confirmFinishRecording"
+			:title="t('organizer.live.monitor.finishConfirm.title')"
+			:message="t('organizer.live.monitor.finishConfirm.message', { number: confirmFinishRecording.number })"
+			:confirm-label="t('organizer.live.monitor.finishConfirm.confirm')"
+			@confirm="finishRecordingNow"
+			@cancel="confirmFinishRecording = null" />
+
+		<CzConfirm
 			v-if="confirmStartUnready && monitor"
-			title="Start with tables missing?"
-			:message="`Only ${monitor.tables_ready} of ${monitor.tables_total} tables are armed and ready. Tables that arm later can still join the round. Start anyway?`"
-			confirm-label="Start round"
+			:title="t('organizer.live.monitor.startUnready.title')"
+			:message="t('organizer.live.monitor.startUnready.message', { ready: monitor.tables_ready, total: monitor.tables_total })"
+			:confirm-label="t('organizer.live.monitor.startUnready.confirm')"
 			@confirm="startRound"
 			@cancel="confirmStartUnready = false" />
 
 		<CzEmptyState
 			v-if="!roundId"
 			:icon="mdiClipboardTextOutline"
-			title="This assembly has no rounds yet"
-			hint="Add a round on the Rounds tab to start recording." />
+			:title="t('organizer.live.monitor.empty.title')"
+			:hint="t('organizer.live.monitor.empty.hint')" />
 
 		<CzSkeleton v-else-if="!monitor" :rows="5" />
 
@@ -579,12 +1008,98 @@ function pendingChunks(table: MonitorTable): number {
 			<table class="cz-table">
 				<thead>
 					<tr>
-						<th>Table</th><th>Device</th><th>Recording</th><th>Elapsed</th><th>Upload</th><th>Local audio</th><th style="text-align: right">Actions</th>
+						<th>{{ t('organizer.live.monitor.columns.table') }}</th><th>{{ t('organizer.live.monitor.columns.device') }}</th><th>{{ t('organizer.live.monitor.columns.recording') }}</th><th>{{ t('organizer.live.monitor.columns.elapsed') }}</th><th>{{ t('organizer.live.monitor.columns.upload') }}</th><th>{{ t('organizer.live.monitor.columns.localAudio') }}</th><th style="text-align: right">{{ t('organizer.live.monitor.columns.actions') }}</th>
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-for="table in monitor.tables" :key="table.table_id">
-						<td><span class="cz-posbadge">{{ table.number }}</span></td>
+					<!-- healthy tables fold into one row; the ones needing a hand stay -->
+					<tr v-if="quietTables.length" class="cz-quietrow">
+						<td colspan="7">
+							<CzButton variant="tertiary" small @click="showQuiet = !showQuiet">
+								{{ showQuiet
+									? t('organizer.live.monitor.quiet.hide', { count: quietTables.length }, quietTables.length)
+									: t('organizer.live.monitor.quiet.show', { count: quietTables.length }, quietTables.length) }}
+							</CzButton>
+						</td>
+					</tr>
+					<tr
+						v-for="table in visibleTables"
+						:key="table.table_id"
+						:class="{ 'cz-row--quiet': isQuiet(table) }">
+						<td>
+							<span class="cz-posbadge">{{ table.number }}</span>
+							<!-- audio against the clock, per recorder: the phone that
+							     slept through ten minutes is red here, nowhere else -->
+							<div v-if="coverageBadges(table).length" class="cz-coverage-line" data-test="coverage">
+								<span
+									v-for="badge in coverageBadges(table)"
+									:key="badge.label"
+									class="cz-coverage"
+									:class="{ 'cz-coverage--low': badge.percent < COVERAGE_LOW_PERCENT }"
+									:title="t('organizer.live.monitor.coverageTitle')">
+									{{ badge.label }} {{ t('organizer.live.files.captured', { percent: badge.percent }) }}
+								</span>
+							</div>
+							<!-- each recorder's own recording: finish it from here, or say
+							     what the server already did with it (closed by itself after
+							     5 minutes of silence, closed from here earlier, or still
+							     receiving audio that arrived after such a close) -->
+							<ul v-if="recordingRecorders(table).length" class="cz-finishrows" data-test="finish-rows">
+								<li
+									v-for="entry in recordingRecorders(table)"
+									:key="'finish-' + entry.slot"
+									class="cz-muted"
+									style="font-size: 0.78rem; margin-top: 4px">
+									<CzButton
+										v-if="entry.recording.state === 'RECORDING' && !entry.recording.finish_requested"
+										small
+										variant="secondary"
+										data-test="finish-recording"
+										@click="confirmFinishRecording = { number: table.number, recording: entry.recording }">
+										{{ t('organizer.live.monitor.finishRecording') }}
+									</CzButton>
+									<span v-else-if="entry.recording.finish_requested && entry.recording.state === 'RECORDING'" data-test="finish-requested">
+										{{ t('organizer.live.monitor.finishRequested') }}
+									</span>
+									<span v-if="entry.recording.closed_by === 'silence'" data-test="closed-silence">
+										{{ t('organizer.live.monitor.closedSilence') }}
+									</span>
+									<span v-if="entry.recording.closed_by === 'organizer'" data-test="closed-organizer">
+										{{ t('organizer.live.monitor.closedOrganizer') }}
+									</span>
+									<span v-if="entry.recording.continued" data-test="continued">
+										{{ t('organizer.live.monitor.continued') }}
+									</span>
+								</li>
+							</ul>
+							<!-- a table with more than one recorder phone: say so, and
+							     which of them are reachable -->
+							<div
+								v-if="(table.recorders?.length ?? 0) > 1"
+								class="cz-muted"
+								style="font-size: 0.78rem; margin-top: 4px; white-space: nowrap">
+								{{ t('organizer.live.monitor.recorders.summary', {
+									count: table.recorders!.length,
+									labels: table.recorders!.filter((r) => r.connected).map((r) => r.label).join(', ') || t('organizer.live.monitor.recorders.none'),
+								}) }}
+							</div>
+							<!-- advanced: the heartbeat facts behind the pills, per recorder -->
+							<ul v-if="advanced && table.recorders?.length" class="cz-diag" data-test="diagnostics">
+								<li v-for="recorder in table.recorders" :key="recorder.slot">
+									<strong>{{ recorder.label }}</strong> {{ recorderFacts(recorder) }}
+								</li>
+							</ul>
+							<!-- the server's reasons, worded, with the fix in the row's
+							     Actions column rather than on a settings page -->
+							<ul v-if="table.readiness && table.readiness.reasons.length" class="cz-reasons">
+								<li
+									v-for="reason in table.readiness.reasons"
+									:key="reason.code + (reason.slot ?? '')"
+									:class="reason.severity === 'blocker' ? 'cz-reasons__blocker' : 'cz-reasons__warning'">
+									{{ reasonText(reason) }}
+								</li>
+							</ul>
+						</td>
 						<td><CzStatusPill :status="deviceState(table).status" :label="deviceState(table).label" /></td>
 						<td>
 							<CzStatusPill v-if="table.recording" :status="table.recording.state" />
@@ -628,11 +1143,11 @@ function pendingChunks(table: MonitorTable): number {
 									{{ table.device.status.acked_chunks }}/{{ table.device.status.local_chunks }}
 								</span>
 								<span v-if="pendingChunks(table) > 3" style="color: var(--cz-amber); font-weight: 600">
-									({{ pendingChunks(table) }} pending)
+									{{ t('organizer.live.monitor.upload.pending', { count: pendingChunks(table) }) }}
 								</span>
 							</template>
 							<span v-else-if="table.recording" style="font-variant-numeric: tabular-nums">
-								{{ table.recording.received_chunks }} received
+								{{ t('organizer.live.monitor.upload.received', { count: table.recording.received_chunks }) }}
 							</span>
 							<span v-else class="cz-muted">—</span>
 						</td>
@@ -648,27 +1163,27 @@ function pendingChunks(table: MonitorTable): number {
 							<CzStatusPill
 								v-if="captureInterrupted(table)"
 								status="STALLED"
-								label="capture interrupted" />
+								:label="t('organizer.live.monitor.pills.captureInterrupted')" />
 							<CzStatusPill
 								v-else-if="table.device.status.storage_ok === false"
 								status="OFFLINE"
-								label="storage error" />
+								:label="t('organizer.live.monitor.pills.storageError')" />
 							<!-- No wake lock: the screen will switch off at the phone's own
 							     timeout unless auto-lock is set to Never by hand. -->
 							<CzStatusPill
 								v-else-if="table.device.connected && table.device.status.screen_awake === false"
 								status="PROCESSING"
-								label="screen may lock" />
+								:label="t('organizer.live.monitor.pills.screenMayLock')" />
 							<CzStatusPill
 								v-else-if="lowBattery(table)"
 								status="PROCESSING"
-								:label="`battery ${Math.round((table.device.status.battery_level ?? 0) * 100)}%`" />
+								:label="t('organizer.live.monitor.pills.battery', { pct: Math.round((table.device.status.battery_level ?? 0) * 100) })" />
 							<CzStatusPill
 								v-else-if="lowStorage(table)"
 								status="PROCESSING"
-								:label="`low storage — ${Math.round(table.device.status.storage_free_mb ?? 0)} MB`" />
-							<CzStatusPill v-else-if="table.local_recording_safe" status="SAFE" label="✓ safe" />
-							<span v-else class="cz-muted">unknown</span>
+								:label="t('organizer.live.monitor.pills.lowStorage', { mb: Math.round(table.device.status.storage_free_mb ?? 0) })" />
+							<CzStatusPill v-else-if="table.local_recording_safe" status="SAFE" :label="t('organizer.live.monitor.pills.safe')" />
+							<span v-else class="cz-muted">{{ t('organizer.live.monitor.pills.unknown') }}</span>
 						</td>
 						<td style="text-align: right">
 							<div class="cz-row" style="gap: 4px; justify-content: flex-end; flex-wrap: nowrap">
@@ -678,40 +1193,70 @@ function pendingChunks(table: MonitorTable): number {
 									variant="primary"
 									:icon="mdiTextBoxPlusOutline"
 									:disabled="busy"
-									:title="table.recording.state === 'TRANSCRIBING' ? 'Retry transcription (use if it has been stuck)' : 'Transcribe'"
+									:title="table.recording.state === 'TRANSCRIBING' ? t('organizer.live.monitor.actions.retryTranscriptionTitle') : t('organizer.live.monitor.actions.transcribe')"
 									@click="transcribe(table.recording.id)" />
 								<CzButton
 									v-if="table.recording && table.recording.state === 'TRANSCRIBED'"
 									small
 									:variant="transcriptFor === table.recording.id ? 'primary' : 'secondary'"
 									:icon="mdiTextBoxOutline"
-									title="Transcript"
+									:title="t('organizer.live.monitor.actions.transcript')"
 									@click="showTranscript(table.recording.id)" />
+								<CzButton
+									v-if="table.help_request"
+									small
+									variant="primary"
+									:icon="mdiHandBackLeft"
+									:title="t('organizer.live.monitor.actions.acknowledgeTitle')"
+									:disabled="busy"
+									@click="acknowledgeHelp(table)">
+									{{ t('organizer.live.monitor.actions.acknowledge') }}
+								</CzButton>
+								<CzButton
+									v-if="(table.ai_facilitator ?? 'off') !== 'off'"
+									small
+									variant="secondary"
+									:title="t('organizer.live.monitor.actions.pauseAiTitle')"
+									:disabled="busy"
+									data-test="pause-ai"
+									@click="pauseAi(table, 'off')">
+									{{ t('organizer.live.monitor.actions.pauseAi') }}
+								</CzButton>
+								<CzButton
+									v-else-if="interventions.some((i) => i.table_number === table.number)"
+									small
+									variant="tertiary"
+									:title="t('organizer.live.monitor.actions.resumeAiTitle')"
+									:disabled="busy"
+									data-test="resume-ai"
+									@click="pauseAi(table, 'default')">
+									{{ t('organizer.live.monitor.actions.resumeAi') }}
+								</CzButton>
 								<CzButton
 									v-if="canReplaceDevice(table)"
 									small
 									variant="danger"
 									:icon="mdiCellphoneRemove"
-									title="This table's phone has stopped responding — hand the table to another device"
+									:title="t('organizer.live.monitor.actions.handOverTitle')"
 									:disabled="busy"
 									@click="confirmReplace = table">
-									Replace device
+									{{ t('organizer.live.monitor.actions.handOver') }}
 								</CzButton>
 								<CzButton
 									v-if="canRetryAssembly(table)"
 									small
 									variant="secondary"
 									:icon="mdiRefresh"
-									title="Assemble and transcribe the audio that reached the server before the phone stopped"
+									:title="t('organizer.live.monitor.actions.retryTitle')"
 									:disabled="busy"
 									@click="retryAssembly(table)">
-									Retry
+									{{ t('organizer.live.monitor.actions.retry') }}
 								</CzButton>
 								<CzButton
 									small
 									variant="tertiary"
 									:icon="mdiConsoleLine"
-									title="Device log"
+									:title="t('organizer.live.monitor.actions.deviceLog')"
 									@click="showDevice(table.number)" />
 							</div>
 						</td>
@@ -720,12 +1265,12 @@ function pendingChunks(table: MonitorTable): number {
 			</table>
 
 			<p v-if="monitor.tables.length === 0" class="cz-muted" style="margin-top: 14px">
-				<SvgIcon :path="mdiMonitorEye" :size="16" /> This round has no tables.
+				<SvgIcon :path="mdiMonitorEye" :size="16" /> {{ t('organizer.live.monitor.noTables') }}
 			</p>
 
 			<div v-if="transcriptFor" class="cz-card" style="margin-top: 16px">
 				<div class="cz-row cz-row--spread" style="margin-bottom: 8px">
-					<h3>Transcript</h3>
+					<h3>{{ t('organizer.live.monitor.transcript.title') }}</h3>
 					<span v-if="transcript" class="cz-muted" style="font-size: 0.78rem">
 						{{ transcript.provider }} · {{ transcript.model }} · {{ transcript.language.toUpperCase() }}
 					</span>
@@ -734,7 +1279,7 @@ function pendingChunks(table: MonitorTable): number {
 				<CzSkeleton v-else-if="!transcript" :rows="3" :height="36" />
 				<template v-else>
 					<p v-if="transcript.segments.length === 0" class="cz-muted">
-						The transcript is empty (no speech detected).
+						{{ t('organizer.live.monitor.transcript.empty') }}
 					</p>
 					<div v-else class="cz-convo">
 						<div
@@ -753,8 +1298,8 @@ function pendingChunks(table: MonitorTable): number {
 			</div>
 
 			<div v-if="openTable !== null" class="cz-card" style="margin-top: 16px">
-				<h3 style="margin-bottom: 10px">Table {{ openTable }} — device log (latest 50)</h3>
-				<p v-if="deviceLog.length === 0" class="cz-muted">No device log received yet.</p>
+				<h3 style="margin-bottom: 10px">{{ t('organizer.live.monitor.deviceLog.title', { number: openTable }) }}</h3>
+				<p v-if="deviceLog.length === 0" class="cz-muted">{{ t('organizer.live.monitor.deviceLog.empty') }}</p>
 				<div v-else class="cz-logpanel">{{ deviceLog.join('\n') }}</div>
 			</div>
 		</template>

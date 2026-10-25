@@ -8,6 +8,7 @@ endpoints that read and write provider API keys — see its docstring.
 
 import base64
 import binascii
+import time
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,7 +29,7 @@ log = get_logger(__name__)
 
 router = APIRouter(prefix="/admin")
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 
 
 def get_config_store(nc: Annotated[NextcloudApp, Depends(nc_app)]) -> provider_config.ConfigStore:
@@ -59,6 +60,8 @@ def require_admin(
     closed for everyone and silently removes Settings from real admins.
     `nc_app` already binds this client to the requesting user.
     """
+    if _admin_until.get(user, 0.0) > time.monotonic():
+        return user
     try:
         groups = nc.ocs("GET", "/ocs/v1.php/cloud/user").get("groups") or []
     except Exception:
@@ -69,8 +72,14 @@ def require_admin(
     if "admin" not in groups:
         log.warning("admin_route_refused", user=user)
         raise HTTPException(status_code=403, detail="Administrator rights are required")
+    _admin_until[user] = time.monotonic() + ADMIN_CHECK_TTL_SECONDS
     return user
 
+
+#: a positive admin check is remembered this long: the OCS call behind it
+#: cost about a second on every Settings request. A refusal is never cached.
+ADMIN_CHECK_TTL_SECONDS = 300
+_admin_until: dict[str, float] = {}
 
 AdminUser = Annotated[str, Depends(require_admin)]
 
@@ -82,7 +91,9 @@ def ping(user: AdminUser):
 
 @router.get("/providers")
 def get_providers(store: Store, user: AdminUser):
-    summary = provider_config.providers_summary(store)
+    # from the snapshot: opening Settings no longer asks Nextcloud for every
+    # field one call at a time (see provider_config.settings_summary)
+    summary = provider_config.settings_summary(store)
     # shown read-only in Settings so admins see what their extra
     # instructions are appended to
     summary["analysis"]["default_prompts"] = {
@@ -130,8 +141,23 @@ class ProvidersUpdate(BaseModel):
     analysis_api_key: str | None = Field(default=None, max_length=500)
     analysis_enabled: bool | None = None
     analysis_extra_instructions: str | None = Field(default=None, max_length=4000)
+    # the AI facilitator: its instance default level, its own model (blank
+    # falls back to the analysis model), and the thresholds behind its nudges
+    facilitator_level: Literal["off", "light", "normal", "active"] | None = None
+    facilitator_base_url: str | None = Field(default=None, max_length=500)
+    facilitator_model: str | None = Field(default=None, max_length=200)
+    facilitator_api_key: str | None = Field(default=None, max_length=500)
+    facilitator_interval_minutes: int | None = Field(default=None, ge=1, le=60)
+    facilitator_dominance_percent: int | None = Field(default=None, ge=40, le=95)
+    facilitator_silence_seconds: int | None = Field(default=None, ge=20, le=600)
     organization_name: str | None = Field(default=None, max_length=200)
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    consent_controller: str | None = Field(default=None, max_length=200)
+    consent_contact: str | None = Field(default=None, max_length=300)
+    org_address: str | None = Field(default=None, max_length=300)
+    org_dpo: str | None = Field(default=None, max_length=300)
+    org_hosting: str | None = Field(default=None, max_length=300)
+    org_authority: str | None = Field(default=None, max_length=300)
 
 
 # provider endpoints are used for outbound requests from inside the Nextcloud
@@ -175,11 +201,19 @@ def update_providers(data: ProvidersUpdate, store: Store, user: AdminUser, sessi
             values[field] = value.strip() if field in provider_config.KEY_FIELDS else value
     _validate_endpoints(values)
     changed = provider_config.set_settings(store, values)
-    provider_config.invalidate_snapshot()
-    # Read the summary back BEFORE the audit row opens the write transaction:
-    # providers_summary() is an OCS call to Nextcloud, and holding SQLite's
-    # single writer slot across it blocks every phone uploading a chunk.
-    summary = provider_config.providers_summary(store)
+    # One read pass: the snapshot refresh the phones need and the Settings
+    # summary this response returns are built together — BEFORE the audit row
+    # opens the write transaction, since every read is an OCS call to
+    # Nextcloud and holding SQLite's single writer slot across them blocks
+    # every phone uploading a chunk. Nothing changed: nothing to re-read.
+    if changed:
+        if id(store) == id(provider_config.default_store()):
+            summary = provider_config.refresh_config_snapshot(with_summary=True).summary
+        else:
+            provider_config.invalidate_snapshot()
+            summary = provider_config.providers_summary(store)
+    else:
+        summary = provider_config.settings_summary(store)
     record_audit_event(
         session, "providers_updated", actor=user, data={"fields": changed}
     )
@@ -187,7 +221,7 @@ def update_providers(data: ProvidersUpdate, store: Store, user: AdminUser, sessi
 
 
 class TestIn(BaseModel):
-    target: Literal["mistral", "deepgram", "whisper", "vosk", "analysis"]
+    target: Literal["mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator"]
     # lets the admin test what's typed in the form before saving it
     api_key: str | None = Field(default=None, max_length=500)
     base_url: str | None = Field(default=None, max_length=500)
@@ -204,6 +238,15 @@ def test_provider(data: TestIn, store: Store, user: AdminUser):
         override_base_url=(data.base_url or "").strip() or None,
         override_model=(data.model or "").strip() or None,
     )
+
+
+@router.post("/facilitator/tick")
+def facilitator_tick(user: AdminUser):
+    """Run the AI facilitator's minute now (it runs by itself from the sweep):
+    for a rehearsal or a smoke test that cannot wait for the clock."""
+    from citizens.services import facilitator
+
+    return {"delivered": facilitator.tick()}
 
 
 class LogoIn(BaseModel):

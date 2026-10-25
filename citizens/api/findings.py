@@ -25,11 +25,11 @@ from citizens.services.round_analysis import (
     enqueue_round_analysis_if_stale,
     tables_pending,
 )
-from citizens.services.speaking import round_speaking_balance
+from citizens.services.speaking import round_speaking_comparison, table_speaking_balance
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 
 
 def _finding_payload(session: Session, finding: Finding, table_numbers: dict[str, int]) -> dict:
@@ -121,6 +121,8 @@ def round_findings(round_id: str, user: CurrentUser, session: DB):
                 "analyzed": bool(
                     recording and recording.state in ("READY_FOR_REVIEW", "REVIEWED")
                 ),
+                # talk-time per detected voice, per logical table
+                "speaking_balance": table_speaking_balance(session, round_, table),
                 "findings": [_finding_payload(session, f, table_numbers) for f in table_findings],
             }
         )
@@ -131,10 +133,11 @@ def round_findings(round_id: str, user: CurrentUser, session: DB):
         "round_summary": round_.analysis_summary,
         "analysis_configured": provider_config.analysis_ready_cached(),
         "tables_with_findings": total_tables,
+        # the tables side by side (0.7): voices, largest/smallest share, ratio
+        "speaking_comparison": round_speaking_comparison(session, round_),
         "cross_table": [
             _finding_payload(session, f, table_numbers) for f in findings if f.scope == "round"
         ],
-        "speaking_balance": round_speaking_balance(session, round_),
         "tables": tables_payload,
         # the cross-table clustering has no state of its own on the round; a
         # failed one used to leave every table "ready" and nothing else

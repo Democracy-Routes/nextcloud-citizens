@@ -1,0 +1,153 @@
+// SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+/**
+ * Registration on a person's own phone (0.7): the table's code says which
+ * event and table, the person reads the same notice and fills the same form,
+ * and keeps a page that shows their consent and, once published, the report.
+ */
+import { flushPromises } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import ParticipantPage from '../../frontend/src/recorder/components/ParticipantPage.vue'
+import RegisterPage from '../../frontend/src/recorder/components/RegisterPage.vue'
+import { mountWithI18n } from './support/mount'
+
+const registerNotice = vi.fn()
+const registerSelf = vi.fn()
+const participantStatus = vi.fn()
+const validateSummary = vi.fn()
+
+vi.mock('../../frontend/src/recorder/api', () => ({
+	recorderApi: {
+		registerNotice: (...args: unknown[]) => registerNotice(...args),
+		registerSelf: (...args: unknown[]) => registerSelf(...args),
+		participantStatus: (...args: unknown[]) => participantStatus(...args),
+		validateSummary: (...args: unknown[]) => validateSummary(...args),
+		participantReport: vi.fn().mockResolvedValue({
+			assembly: { name: 'Bologna', participants: 1, tables: 1 },
+			rounds: [{ position: 1, title: 'Mobility', heading: 'Session 1 — Mobility', question: 'Q', summary: '', cross_table: [],
+				tables: [{ table_number: 7, summary: 'Table 7 talked about buses.', findings: [] }] }],
+		}),
+	},
+	RecorderApiError: class extends Error {},
+}))
+
+const NOTICE = {
+	version: '2026-10', language: 'en', hash: 'b'.repeat(64),
+	paragraphs: ['Comune is recording this discussion and is responsible for the data.'],
+	mode: 'required', participants: [],
+	assembly: { id: 'a1', name: 'Bologna', language: 'en', recording_mode: 'orchestrated' },
+	table_number: 7, color_key: 'blue',
+}
+
+beforeEach(() => {
+	registerNotice.mockReset()
+	registerSelf.mockReset()
+	participantStatus.mockReset()
+})
+
+describe('RegisterPage', () => {
+	it('shows the code\'s table and notice, registers, and hands over the page token', async () => {
+		registerNotice.mockResolvedValue(NOTICE)
+		registerSelf.mockResolvedValue({
+			participant_token: 'ptok', participant: { id: 'p', label: 'P001', name: 'Giulia' },
+			consent: { method: 'SELF_PHONE', recording: true }, table_number: 7, color_key: 'blue',
+		})
+		const wrapper = mountWithI18n(RegisterPage, { props: { token: 'code' } })
+		await flushPromises()
+		expect(registerNotice).toHaveBeenCalledWith('code')
+		expect(wrapper.text()).toContain('Register at Table 7')
+		expect(wrapper.find('[data-test="notice"]').text()).toContain('responsible for the data')
+		await wrapper.find('[data-test="register"]').trigger('click')
+		await wrapper.find('[data-test="name"]').setValue('Giulia')
+		await wrapper.find('[data-test="accept"]').setValue(true)
+		expect(wrapper.find('[data-test="refuse"]').text()).toBe('I do not consent')
+		await wrapper.find('[data-test="confirm"]').trigger('click')
+		await flushPromises()
+		expect(registerSelf).toHaveBeenCalledWith('code', expect.objectContaining({
+			name: 'Giulia', notice_hash: 'b'.repeat(64), recording_consent: true, publication_consent: true,
+		}))
+		expect(wrapper.emitted('registered')?.[0]).toEqual(['ptok'])
+	})
+
+	it('says when a code no longer works', async () => {
+		registerNotice.mockRejectedValue(new Error('HTTP 401'))
+		const wrapper = mountWithI18n(RegisterPage, { props: { token: 'dead' } })
+		await flushPromises()
+		expect(wrapper.text()).toContain('This code no longer works')
+		expect(wrapper.find('[data-test="register"]').exists()).toBe(false)
+	})
+})
+
+describe('ParticipantPage', () => {
+	it('shows where the person is registered, their consent, and the report once out', async () => {
+		participantStatus.mockResolvedValue({
+			assembly: { id: 'a1', name: 'Bologna', language: 'en', recording_mode: 'orchestrated' },
+			participant: { label: 'P001', name: 'Giulia' }, table_number: 7, color_key: 'blue',
+			consent: { recording: true, transcription: true, analysis: false, publication: false, confirmed_at: 'now' },
+			report_available: false, contact: 'privacy@example.org', controller: 'Comune',
+		})
+		const wrapper = mountWithI18n(ParticipantPage, { props: { token: 'ptok' } })
+		await flushPromises()
+		expect(wrapper.text()).toContain('Hello, Giulia')
+		expect(wrapper.text()).toContain('You are registered at Table 7.')
+		expect(wrapper.find('[data-test="consent"]').classes()).toContain('rc-yes')
+		expect(wrapper.find('[data-test="consent"]').text()).toContain('You consented to the recording')
+		expect(wrapper.text()).toContain('contact privacy@example.org')
+		expect(wrapper.text()).toContain('The report will appear here when the organizer publishes it.')
+		expect(wrapper.find('[data-test="report"]').exists()).toBe(false)
+
+		// once published: the same report the table phones read, and the
+		// summary of this person's table to validate
+		participantStatus.mockResolvedValue({
+			...(await participantStatus.mock.results[0].value), report_available: true,
+			rounds: [{ id: 'r1', position: 1, title: 'Mobility', status: 'ENDED', table_number: 7 }],
+			validations: {},
+		})
+		validateSummary.mockResolvedValue({ round_id: 'r1', verdict: 'MISSING', note: 'The bus' })
+		const later = mountWithI18n(ParticipantPage, { props: { token: 'ptok' } })
+		await flushPromises()
+		expect(later.text()).toContain('The report has been published.')
+		const card = later.find('[data-test="validate"]')
+		expect(card.text()).toContain('Table 7 talked about buses.')
+		await card.find('[data-test="missing"]').trigger('click')
+		await card.find('[data-test="note"]').setValue('The bus')
+		await card.find('[data-test="send-missing"]').trigger('click')
+		await flushPromises()
+		expect(validateSummary).toHaveBeenCalledWith('ptok', 'r1', 'MISSING', 'The bus')
+		expect(later.find('[data-test="answered"]').text()).toContain('You said something is missing')
+		await later.find('[data-test="report"]').trigger('click')
+		await flushPromises()
+		expect(later.text()).toContain('Bologna')
+		expect(later.find('[data-test="report"]').exists()).toBe(false)
+	})
+
+	it('registers a person who declines quotations, and says so on their page', async () => {
+		registerNotice.mockResolvedValue({ ...NOTICE, acceptance_quotations: 'I also agree to quotations in the report.' })
+		registerSelf.mockResolvedValue({
+			participant_token: 'ptok', participant: { id: 'p', label: 'P001', name: 'Giulia' },
+			consent: { method: 'SELF_PHONE', recording: true }, table_number: 7, color_key: 'blue',
+		})
+		const wrapper = mountWithI18n(RegisterPage, { props: { token: 'code' } })
+		await flushPromises()
+		await wrapper.find('[data-test="register"]').trigger('click')
+		expect(wrapper.findAll('.rc-tick')[1].text()).toBe('I also agree to quotations in the report.')
+		await wrapper.find('[data-test="name"]').setValue('Giulia')
+		await wrapper.find('[data-test="accept"]').setValue(true)
+		await wrapper.find('[data-test="quotations"]').setValue(false)
+		await wrapper.find('[data-test="confirm"]').trigger('click')
+		await flushPromises()
+		expect(registerSelf).toHaveBeenCalledWith('code', expect.objectContaining({
+			recording_consent: true, analysis_consent: true, publication_consent: false,
+		}))
+
+		participantStatus.mockResolvedValue({
+			assembly: { id: 'a1', name: 'Bologna', language: 'en', recording_mode: 'orchestrated' },
+			participant: { label: 'P001', name: 'Giulia' }, table_number: 7, color_key: 'blue',
+			consent: { recording: true, transcription: true, analysis: true, publication: false, confirmed_at: 'now' },
+			report_available: false, contact: 'privacy@example.org', controller: 'Comune',
+		})
+		const page = mountWithI18n(ParticipantPage, { props: { token: 'ptok' } })
+		await flushPromises()
+		expect(page.find('[data-test="consent"]').text()).toContain('but not to quotations in the report')
+	})
+})

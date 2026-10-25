@@ -5,6 +5,7 @@ the normalized transcript (brief §30–§33)."""
 
 import json
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
@@ -22,6 +23,7 @@ from citizens.providers.transcription.base import (
     TranscriptionError,
 )
 from citizens.services import provider_config
+from citizens.services.audit import record_audit_event
 
 log = get_logger(__name__)
 
@@ -122,6 +124,12 @@ def transcribe_recording(
     # `assembly` usable afterwards)
     session.commit()
     provider = provider_config.get_setting(store, "stt_provider")
+    # Record now never asked which language the table speaks: let an engine
+    # that can detect it do so, and keep the guess only for Vosk, which must
+    # pick a model up front
+    detect = bool(assembly and assembly.language_auto) and provider in DETECTING_PROVIDERS
+    if detect:
+        language = ""
 
     log.info(
         "stt_started",
@@ -174,6 +182,16 @@ def transcribe_recording(
     else:
         raise TranscriptionError(f"Unknown STT provider {provider}", permanent=True)
 
+    if assembly is not None and assembly.language_auto:
+        detected = normalized.language
+        if detect and not detected:
+            # the engine said nothing (observed with Mistral on 2026-10-11: an
+            # Italian table summarised in English): ask the analysis model
+            # from the text — an HTTP call, made before any further query
+            detected = detect_language_from_text(
+                store, " ".join(segment.text for segment in normalized.segments)
+            )
+        adopt_detected_language(session, assembly, detected, recording)
     transcript = store_transcript(session, recording, normalized)
     log.info(
         "stt_completed",
@@ -182,6 +200,78 @@ def transcribe_recording(
         segments=len(normalized.segments),
     )
     return transcript
+
+
+#: engines that return the language they heard when none is forced
+DETECTING_PROVIDERS = ("deepgram", "mistral", "whisper")
+
+#: how much of a transcript the language question gets: a few sentences decide it
+LANGUAGE_SAMPLE_CHARS = 1500
+LANGUAGE_SYSTEM = (
+    "You identify the language of a transcript. Answer with the ISO 639-1 code "
+    "only — one of: en, it, de, fr, es — or the word unknown."
+)
+
+
+def detect_language_from_text(store: provider_config.ConfigStore, text: str) -> str:
+    """The language of a transcript, asked of the analysis model, as an ISO
+    code the app knows — or "" when there is no text, no model, or no clear
+    answer. Never raises: a missing guess leaves the language as it was."""
+    from citizens.domain.schemas import Language
+    from citizens.providers.analysis.openai_compat import _chat
+    from citizens.services.analysis import AnalysisError, _analysis_config
+
+    sample = (text or "").strip()[:LANGUAGE_SAMPLE_CHARS]
+    if len(sample) < 20:
+        return ""
+    try:
+        base_url, key, model = _analysis_config(store)
+        answer = _chat(
+            base_url, key, model,
+            [{"role": "system", "content": LANGUAGE_SYSTEM}, {"role": "user", "content": sample}],
+        )
+    except (AnalysisError, Exception):
+        log.warning("language_text_detection_failed", exc_info=True)
+        return ""
+    code = "".join(ch for ch in (answer or "").strip().lower()[:8] if ch.isalpha())[:2]
+    if code not in Language.__args__:
+        log.info("language_text_detection_unclear", answer=(answer or "")[:40])
+        return ""
+    log.info("language_detected_from_text", language=code, sample_chars=len(sample))
+    return code
+
+
+def adopt_detected_language(
+    session: Session, assembly: Assembly, detected: str | None, recording: Recording
+) -> bool:
+    """The first final transcript of a Record-now session decides its language.
+
+    Only a language the app knows (schemas.Language), only when it differs,
+    and only while the assembly has no transcript yet — later tables never
+    flip it back, so the report stays in one language. Analysis prompts and
+    report wording read `assembly.language`, so everything downstream follows.
+    """
+    from citizens.domain.schemas import Language
+
+    code = (detected or "").strip().lower().replace("_", "-").split("-")[0]
+    if not code or code == assembly.language or code not in Language.__args__:
+        return False
+    already = session.execute(
+        select(func.count())
+        .select_from(Transcript)
+        .join(Recording, Transcript.recording_id == Recording.id)
+        .where(Recording.assembly_id == assembly.id)
+    ).scalar_one()
+    if already:
+        return False
+    previous = assembly.language
+    assembly.language = code
+    record_audit_event(
+        session, "language_detected", "assembly", assembly.id,
+        data={"from": previous, "to": code, "recording_id": recording.id},
+    )
+    log.info("language_detected", assembly_id=assembly.id, previous=previous, detected=code)
+    return True
 
 
 def store_transcript(
@@ -239,6 +329,30 @@ def store_transcript(
     return transcript
 
 
+def transcript_provenance(transcript: Transcript) -> dict:
+    """Where this transcript came from, stated explicitly.
+
+    `source_type` is "final" (the finished audio, transcribed by a batch
+    provider) or "live" (the round's live captions, adopted when final
+    transcription is off). The Transcript row IS the canonical record of its
+    recording — one per recording, and `store_transcript` replaces it when a
+    final transcription lands over a live one — so `canonical` is always true
+    here; it exists so a reader never has to infer the rule. A live-caption
+    file may also exist beside a final transcript (see the API), as the
+    provisional record it was.
+    """
+    return {
+        "source_type": transcript.source,
+        "provider": transcript.provider,
+        "model": transcript.model,
+        "language": transcript.language,
+        "recording_id": transcript.recording_id,
+        # ISO text, not a datetime: this payload is also written into exports
+        "created_at": transcript.created_at.isoformat() if transcript.created_at else None,
+        "canonical": True,
+    }
+
+
 def transcript_payload(transcript: Transcript) -> dict:
     return {
         "transcript_id": transcript.id,
@@ -247,6 +361,7 @@ def transcript_payload(transcript: Transcript) -> dict:
         "model": transcript.model,
         "language": transcript.language,
         "source": transcript.source,
+        "provenance": transcript_provenance(transcript),
         "segments": [
             {
                 "id": segment.id,

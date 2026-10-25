@@ -16,13 +16,22 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
-from citizens.db.models import Assembly, Recording
+from citizens.db.models import (
+    Assembly,
+    FacilitatorSession,
+    ParticipantSession,
+    RecorderInvite,
+    RecorderSession,
+    Recording,
+)
 from citizens.db.models.base import utcnow
 from citizens.db.session import session_scope
 from citizens.jobs.handlers import maybe_enqueue_round_analysis
 from citizens.logging_setup import get_logger
+from citizens.services import live_source
+from citizens.services import recording as rec_svc
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.live_captions import LIVE_CAPTIONS
@@ -149,6 +158,43 @@ def sweep_superseded_partials() -> int:
     return salvaged
 
 
+def sweep_server_closes() -> int:
+    """Finish recordings their phones have not: five minutes of silence, or
+    an organizer's Finish the phone has not answered in ninety seconds.
+
+    Runs before the stall sweep, which would otherwise abandon the same
+    recording at twenty minutes as UPLOAD_INCOMPLETE — no transcript until
+    somebody retries. Here the audio the server holds becomes a transcript
+    now, and the phone's later chunks go into a continuation
+    (services/recording.late_audio_target) rather than into a 409.
+    """
+    now = utcnow()
+    silent_cutoff = now - timedelta(seconds=rec_svc.AUTO_CLOSE_SILENT_SECONDS)
+    finish_cutoff = now - timedelta(seconds=rec_svc.FINISH_REQUEST_GRACE_SECONDS)
+    closed_ids: list[str] = []
+    with session_scope() as session:
+        candidates = session.execute(
+            select(Recording).where(
+                Recording.state == "RECORDING",
+                or_(
+                    Recording.updated_at < silent_cutoff,
+                    Recording.finish_requested_at < finish_cutoff,
+                ),
+            )
+        ).scalars()
+        for recording in candidates:
+            closed_by = "organizer" if (
+                recording.finish_requested_at is not None
+                and recording.finish_requested_at < finish_cutoff
+            ) else "silence"
+            if rec_svc.close_server_side(session, recording, closed_by) is not None:
+                closed_ids.append(recording.id)
+    # outside the transaction: the phone's /complete never comes for these
+    for recording_id in closed_ids:
+        LIVE_CAPTIONS.finish(recording_id)
+    return len(closed_ids)
+
+
 def sweep_stalled_uploads() -> int:
     """Give up on recordings that have made no progress, so the round can finish.
 
@@ -201,6 +247,8 @@ def sweep_stalled_uploads() -> int:
             if not recording.error_code:
                 recording.error_code = "UPLOAD_TIMED_OUT"
             transition(recording, "UPLOAD_INCOMPLETE")
+            # a backup recorder still recording inherits the live captions
+            live_source.release(session, recording)
             log.warning(
                 "upload_abandoned",
                 recording_id=recording.id,
@@ -334,6 +382,72 @@ def sweep_stale_exports() -> int:
     return removed
 
 
+#: expired phone sessions, facilitator and participant sessions and spent
+#: action codes are kept this long past their expiry — long enough for any
+#: audit question about an event, short enough that a busy instance does not
+#: carry every phone that ever scanned a code
+CLEANUP_AFTER_DAYS = 7
+
+
+def sweep_expired_sessions() -> int:
+    """Remove what expired more than CLEANUP_AFTER_DAYS ago and nothing
+    refers to any more (R24): recorder sessions that never recorded (a
+    session with a recording keeps the recording's provenance — its slot
+    label — and stays), their device logs, facilitator and participant
+    sessions, and single-use action codes whose sessions are gone."""
+    from citizens.config import get_settings
+    from citizens.storage.paths import device_log_path
+
+    cutoff = utcnow() - timedelta(days=CLEANUP_AFTER_DAYS)
+    removed = 0
+    log_ids: list[str] = []
+    with session_scope() as session:
+        recorded = select(Recording.recorder_session_id).where(
+            Recording.recorder_session_id.is_not(None)
+        )
+        for row in session.execute(
+            select(RecorderSession).where(
+                RecorderSession.expires_at < cutoff, RecorderSession.id.not_in(recorded)
+            )
+        ).scalars():
+            log_ids.append(row.id)
+            session.delete(row)
+            removed += 1
+        for model in (FacilitatorSession, ParticipantSession):
+            for row in session.execute(select(model).where(model.expires_at < cutoff)).scalars():
+                session.delete(row)
+                removed += 1
+        session.flush()
+        used = select(RecorderSession.invite_id)
+        for invite in session.execute(
+            select(RecorderInvite).where(
+                RecorderInvite.single_use.is_(True),
+                RecorderInvite.id.not_in(used),
+                or_(RecorderInvite.consumed_at < cutoff, RecorderInvite.expires_at < cutoff),
+            )
+        ).scalars():
+            session.delete(invite)
+            removed += 1
+    root = get_settings().app_persistent_storage
+    for session_id in log_ids:
+        device_log_path(root, session_id).unlink(missing_ok=True)
+    if removed:
+        log.info("expired_sessions_cleaned", removed=removed, device_logs=len(log_ids))
+    return removed
+
+
+def _zero_retention_sweep() -> int:
+    from citizens.services import zero_retention
+
+    return zero_retention.sweep()
+
+
+def _facilitator_tick() -> None:
+    from citizens.services import facilitator
+
+    facilitator.tick()
+
+
 def run_sweeps() -> None:
     from citizens.services import provider_config, public_url
 
@@ -344,11 +458,17 @@ def run_sweeps() -> None:
         # likewise everything the request path wants from Settings: read
         # here, served from memory to every poll and upload
         ("config_snapshot", provider_config.refresh_config_snapshot),
+        ("server_closes", sweep_server_closes),
         ("stalled_uploads", sweep_stalled_uploads),
         ("superseded_partials", sweep_superseded_partials),
         ("missed_enqueues", sweep_missed_enqueues),
         ("expired_audio", sweep_expired_audio),
+        ("zero_retention", _zero_retention_sweep),
+        ("expired_sessions", sweep_expired_sessions),
         ("stale_exports", sweep_stale_exports),
+        # the AI facilitator's minute: reads the snapshot, calls the model
+        # with no transaction open, writes one short delivery
+        ("ai_facilitator", _facilitator_tick),
     ):
         try:
             sweep()

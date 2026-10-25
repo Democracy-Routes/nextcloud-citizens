@@ -60,6 +60,13 @@ class _ReportPDF(FPDF):
         if regular.is_file() and bold.is_file():
             self.add_font("DejaVu", "", str(regular))
             self.add_font("DejaVu", "B", str(bold))
+            # fonts-dejavu-core ships no oblique Sans: an italic style must
+            # still resolve, or the first session with an objective (printed
+            # in italics) made every report PDF a 500. Upright stands in.
+            oblique = _FONT_DIR / "DejaVuSans-Oblique.ttf"
+            bold_oblique = _FONT_DIR / "DejaVuSans-BoldOblique.ttf"
+            self.add_font("DejaVu", "I", str(oblique if oblique.is_file() else regular))
+            self.add_font("DejaVu", "BI", str(bold_oblique if bold_oblique.is_file() else bold))
             self.family = "DejaVu"
 
     def footer(self) -> None:
@@ -165,6 +172,56 @@ def _balance_color(index: int, label: str) -> tuple:
     return BALANCE_OTHERS if label == "Others" else BALANCE_PALETTE[index % len(BALANCE_PALETTE)]
 
 
+def _synthesis(pdf: _ReportPDF, synthesis: dict | None, language: str | None) -> None:
+    """How the discussion developed across sessions, after the executive
+    summary: the narrative, one block per session, what was carried on."""
+    if not synthesis or not synthesis.get("narrative"):
+        return
+    pdf.section_banner(text(language, "synthesis_heading"))
+    pdf.text_block(synthesis["narrative"], height=5)
+    pdf.ln(1.5)
+    for stage in synthesis.get("stages") or []:
+        pdf.text_block(stage["title"], size=10.5, style="B", height=5)
+        pdf.text_block(stage["summary"], height=5)
+        pdf.ln(1.5)
+    carried = synthesis.get("carried_forward") or []
+    if carried:
+        pdf.text_block(text(language, "carried_forward"), size=9.5, style="B", color=MUTED, height=4.8)
+        for item in carried:
+            pdf.text_block(f"• {item}", size=9.5, height=4.8)
+        pdf.ln(1.5)
+
+
+def _speaking_comparison(pdf: _ReportPDF, rows: list[dict], language: str | None) -> None:
+    """The session's tables side by side — voices, largest/smallest share,
+    ratio — when at least two have a measured balance. Plain cells; the
+    ratio column is what a lopsided table stands out by."""
+    if len(rows) < 2:
+        return
+    pdf.group_heading(text(language, "speaking_comparison"), MUTED)
+    pdf.text_block(text(language, "speaking_comparison_caveat"), size=8.5, color=MUTED, height=4.4)
+    pdf.ln(1)
+    widths = (26, 22, 30, 30, 22)
+    columns = ("table", "voices", "largest", "smallest", "ratio")
+    headers = [text(language, f"comparison_col_{col}") for col in columns]
+    pdf.set_font(pdf.family, "B", 8.5)
+    pdf.set_text_color(*MUTED)
+    for width, header in zip(widths, headers, strict=True):
+        pdf.cell(width, 5.5, header)
+    pdf.ln(5.5)
+    pdf.set_font(pdf.family, "", 9)
+    pdf.set_text_color(*INK)
+    for row in rows:
+        cells = (
+            str(row["table_number"]), str(row["voices"]), f"{row['largest_percent']}%",
+            f"{row['smallest_percent']}%", f"{row['ratio']}×" if row.get("ratio") else "—",
+        )
+        for width, cell in zip(widths, cells, strict=True):
+            pdf.cell(width, 5.5, cell)
+        pdf.ln(5.5)
+    pdf.ln(2)
+
+
 def _speaking_balance(pdf: _ReportPDF, balance: dict, language: str | None) -> None:
     """Talk-time per detected voice: a 100%-stacked bar and a legend.
 
@@ -198,6 +255,8 @@ def _speaking_balance(pdf: _ReportPDF, balance: dict, language: str | None) -> N
             size=8.5, height=4.6, indent=5,
         )
     pdf.ln(0.5)
+    if balance.get("recorder_changed"):
+        pdf.text_block(text(language, "recorder_changed_caveat"), size=8, color=MUTED, height=4.2)
     pdf.text_block(caption, size=8, color=MUTED, height=4.2)
     pdf.ln(2.5)
 
@@ -362,6 +421,8 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             pdf.text_block(round_["summary"], height=5)
             pdf.ln(1.5)
 
+    _synthesis(pdf, report.get("synthesis"), language)
+
     plenary = report["assembly"].get("recording_mode") == "plenary"
     no_findings = text(language, "no_findings_yet")
 
@@ -371,14 +432,14 @@ def render_pdf(report: dict, logo_path: Path | None = None,
         if round_["question"]:
             pdf.text_block(f"“{round_['question']}”", size=11.5, style="B", color=ACCENT)
             pdf.ln(1.5)
+        if round_.get("objective"):
+            pdf.text_block(
+                f"{text(language, 'objective')}: {round_['objective']}", size=10, style="I"
+            )
+            pdf.ln(1.5)
         # The round summary is NOT repeated here: the Executive summary above
         # already carries every round's summary verbatim, and printing it a
         # second time at the head of each round section was pure duplication.
-
-        balance = round_.get("speaking_balance")
-        if balance and len(balance["voices"]) >= 2:
-            # one voice means no diarization — nothing worth printing
-            _speaking_balance(pdf, balance, language)
 
         if plenary:
             # One group = one table. Its findings ARE the round's findings, so
@@ -386,6 +447,9 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             # "Table detail / Table N" framing that a single group makes noise.
             table = round_["tables"][0] if round_["tables"] else None
             findings = table["findings"] if table else []
+            balance = table.get("speaking_balance") if table else None
+            if balance and len(balance["voices"]) >= 2:
+                _speaking_balance(pdf, balance, language)
             for type_, label, group in group_findings_by_type(findings, language):
                 pdf.group_heading(label, AMBER if type_ == "disagreement" else ACCENT)
                 for finding in group:
@@ -399,16 +463,30 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             for finding in group:
                 _finding(pdf, finding, cross=True, language=language)
 
+        _speaking_comparison(pdf, round_.get("speaking_comparison") or [], language)
+
+        def _balance_of(t: dict) -> dict | None:
+            b = t.get("speaking_balance")
+            # one voice means no diarization — nothing worth printing
+            return b if b and len(b["voices"]) >= 2 else None
+
         tables_with_content = [
-            t for t in round_["tables"] if t["findings"] or t["summary"]
+            t for t in round_["tables"] if t["findings"] or t["summary"] or _balance_of(t)
         ]
         if tables_with_content:
             pdf.group_heading(text(language, "table_detail"), MUTED)
             for table in tables_with_content:
+                # per table: summary → speaking balance → findings
                 pdf.eyebrow(text(language, "table", number=table["table_number"]), ACCENT)
+                if table.get("quotations_withheld"):
+                    pdf.text_block(text(language, "quotations_withheld"), size=9, color=MUTED,
+                                   height=4.6)
+                    pdf.ln(1)
                 if table["summary"]:
                     pdf.text_block(table["summary"], size=9.5, color=MUTED, height=4.8)
                     pdf.ln(1)
+                if _balance_of(table):
+                    _speaking_balance(pdf, table["speaking_balance"], language)
                 for finding in table["findings"]:
                     _finding(pdf, finding, cross=False, language=language)
                 pdf.ln(1)

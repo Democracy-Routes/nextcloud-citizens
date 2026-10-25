@@ -10,10 +10,20 @@ from citizens.db.models.assembly import (
 )
 from citizens.db.models.audit import AuditEvent
 from citizens.db.models.base import Base
+from citizens.db.models.consent import ConsentNotice, ParticipantConsent, ParticipantSession
+from citizens.db.models.facilitator import (
+    FacilitatorFeedback,
+    FacilitatorIntervention,
+    FacilitatorSession,
+    TableFacilitation,
+)
 from citizens.db.models.findings import Finding, FindingEvidence
+from citizens.db.models.help import HelpRequest
 from citizens.db.models.jobs import AppJob
+from citizens.db.models.messages import SessionMessage
 from citizens.db.models.recording import AudioChunk, RecorderSession, Recording
 from citizens.db.models.transcript import Transcript, TranscriptSegment, TranscriptWord
+from citizens.db.models.validation import SummaryValidation
 
 __all__ = [
     "Finding",
@@ -33,4 +43,14 @@ __all__ = [
     "Recording",
     "AudioChunk",
     "AppJob",
+    "SessionMessage",
+    "HelpRequest",
+    "ConsentNotice",
+    "ParticipantConsent",
+    "ParticipantSession",
+    "SummaryValidation",
+    "FacilitatorSession",
+    "FacilitatorIntervention",
+    "FacilitatorFeedback",
+    "TableFacilitation",
 ]

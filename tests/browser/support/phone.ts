@@ -80,11 +80,13 @@ export async function newPhone(browser: Browser, token: string): Promise<Phone> 
 
 	async function join(): Promise<void> {
 		await page.goto(`/recorder.html?chunkms=${CHUNK_MS}#/join/${encodeURIComponent(token)}`)
-		// Consent is shown once per device and every phone here is a fresh
-		// context, so it will appear — but waitFor, not isVisible: isVisible()
-		// answers immediately and ignores a timeout, which races the app's
-		// first render and silently skips the click.
-		const agree = page.getByRole('button', { name: /Everyone at this table agrees/ })
+		// The notice screen is shown once per device and every phone here is a
+		// fresh context, so it will appear — but waitFor, not isVisible:
+		// isVisible() answers immediately and ignores a timeout, which races
+		// the app's first render and silently skips the click. Assemblies made
+		// here are 'optional' (the API default), so "Everyone added — continue"
+		// is enabled without registering anyone.
+		const agree = page.getByRole('button', { name: /continue/ })
 		await agree.waitFor({ state: 'visible', timeout: 20_000 }).catch(() => undefined)
 		if (await agree.isVisible()) await agree.click()
 		await expect(page.getByText('Microphone test')).toBeVisible({ timeout: 20_000 })
@@ -151,9 +153,27 @@ export async function newPhone(browser: Browser, token: string): Promise<Phone> 
 
 export interface MonitorTable {
 	number: number
+	table_id: string
 	device: { connected: boolean; seconds_since_contact: number | null }
 	recording: { id: string; state: string; received_chunks: number } | null
 	superseded_recordings: { id: string; state: string }[]
+	// one entry per recorder slot (services/rounds.py:_table_recorders) — this
+	// is where a side-by-side second recorder's own state lives; `recording`
+	// above only ever reflects the table's newest recording
+	recorders: {
+		slot: number
+		recording: {
+			id: string
+			state: string
+			live_source: boolean
+			silent_seconds: number | null
+		} | null
+	}[]
+	// machine-readable "can this table record" (services/readiness.py)
+	readiness: {
+		status: string
+		reasons: { code: string; severity: string; slot: number | null }[]
+	}
 }
 
 export function monitor(roundId: string): { tables: MonitorTable[] } {
@@ -172,7 +192,13 @@ export function tableOne(roundId: string): MonitorTable {
 	return table as MonitorTable
 }
 
-/** Poll the monitor until table 1's recording reaches one of these states. */
+/** Poll the monitor until table 1's recording reaches one of these states.
+ *
+ * `table.recording` is only ever the table's NEWEST recording, and
+ * `superseded_recordings` only the ones a replacement took over from — so
+ * neither sees an older sibling that is still recording side by side and
+ * never gets superseded (stall.spec.ts's two-recorders case). `recorders[]`
+ * covers that: one entry per slot, each with its own recording's state. */
 export async function waitForState(
 	roundId: string,
 	recordingId: string,
@@ -184,7 +210,11 @@ export async function waitForState(
 	while (Date.now() < deadline) {
 		const { tables } = monitor(roundId)
 		for (const table of tables) {
-			const candidates = [table.recording, ...(table.superseded_recordings ?? [])]
+			const candidates = [
+				table.recording,
+				...(table.superseded_recordings ?? []),
+				...table.recorders.map((r) => r.recording),
+			]
 			for (const candidate of candidates) {
 				if (candidate && candidate.id === recordingId) {
 					last = candidate.state

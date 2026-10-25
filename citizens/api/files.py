@@ -19,17 +19,18 @@ from citizens.services import files as files_svc
 from citizens.services.assemblies import get_owned_assembly
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import has_live_job
+from citizens.services.table_recordings import recording_slots
 from citizens.storage import exports
 
 router = APIRouter()
 
-DB = Annotated[Session, Depends(get_db)]
+DB = Annotated[Session, Depends(get_db, scope="function")]
 # Reads go through a session that does NOT take SQLite's single writer slot.
 # Building an audio bundle copies every recording byte-for-byte and a session
 # export also renders the PDF; holding the write lock across that starved every
 # phone still uploading chunks, which surfaced as "database is locked" 500s
 # mid-event.
-ReadDB = Annotated[Session, Depends(get_read_db)]
+ReadDB = Annotated[Session, Depends(get_read_db, scope="function")]
 
 
 def _refuse_if_being_assembled(session: Session, recording: Recording) -> None:
@@ -82,10 +83,11 @@ def download_audio(recording_id: str, user: CurrentUser, session: ReadDB):
     position = next(
         (r.position for r in assembly.rounds if r.id == recording.round_id), 0
     )
+    slot = recording_slots(session, [recording]).get(recording.id, 1)
     return FileResponse(
         path,
         media_type=recording.mime_type.split(";")[0] or "audio/webm",
-        filename=files_svc.audio_filename(assembly, recording, position),
+        filename=files_svc.audio_filename(assembly, recording, position, slot),
         # without this the proxy caches it for an hour, so deleting the audio
         # and downloading again still returns the file
         headers={"Cache-Control": NO_STORE},

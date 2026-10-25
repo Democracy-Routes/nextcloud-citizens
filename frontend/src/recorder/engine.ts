@@ -119,6 +119,13 @@ export interface EngineState {
 	interruptedSince: number
 	/** every gap this recording has, for the table and the device log */
 	interruptions: Array<{ from: number; to: number; cause: CaptureLossCause }>
+	/** Audio that was NOT captured while the page was hidden, as the deficit
+	 * of chunks against the hidden time. The watchdog never judges a hidden
+	 * page (iOS mutes the track off-screen by design), so a browser that
+	 * simply stopped capturing in the background — a laptop tab, the
+	 * 2026-10-11 field test — came back with a climbing timer and no word
+	 * of the minutes it had lost. This is that word. */
+	hiddenGapMs: number
 	/** which MediaRecorder session the next chunk belongs to (0 = the first) */
 	segment: number
 }
@@ -145,6 +152,7 @@ export class RecorderEngine {
 		captureInterrupted: false,
 		interruptedSince: 0,
 		interruptions: [],
+		hiddenGapMs: 0,
 		segment: 0,
 	})
 
@@ -428,15 +436,29 @@ export class RecorderEngine {
 			return
 		}
 		if (this.hiddenSince) {
+			const hiddenMs = Date.now() - this.hiddenSince
 			// the line that says, per phone model, whether it records with
 			// the screen off: chunks that arrived while nobody was looking
 			clientLog('info', 'capture_after_background', {
-				hiddenMs: Date.now() - this.hiddenSince,
+				hiddenMs,
 				chunksWhileHidden: this.chunksWhileHidden,
 				sinceLastChunkMs: Date.now() - this.lastChunkAt,
 				phase: this.state.phase,
 				interrupted: this.state.captureInterrupted,
 			})
+			// fewer chunks than the hidden time called for: that audio is
+			// gone, and the table is told so (one interval of jitter allowed)
+			const deficit = Math.floor(hiddenMs / CHUNK_INTERVAL_MS) - this.chunksWhileHidden
+			if (this.state.phase === 'recording' && !this.state.captureInterrupted && deficit >= 2) {
+				const missingMs = deficit * CHUNK_INTERVAL_MS
+				this.state.hiddenGapMs += missingMs
+				clientLog('warn', 'capture_gap_while_hidden', {
+					hiddenMs,
+					chunksWhileHidden: this.chunksWhileHidden,
+					missingMs,
+				})
+				void ship()
+			}
 			this.hiddenSince = 0
 		}
 		if (this.state.captureInterrupted) {

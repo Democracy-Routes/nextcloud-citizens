@@ -171,17 +171,23 @@ def test_plenary_report_has_no_table_detail_heading(monkeypatch):
 
 def test_the_speaking_balance_strip_draws_once_when_voices_exist(monkeypatch):
     report = _report("Short but real quote text here.", findings=2)
-    report["rounds"][0]["speaking_balance"] = {
+    # per table, never per round
+    report["rounds"][0]["tables"][0]["speaking_balance"] = {
         "voices": [
             {"label": "A", "seconds": 300, "percent": 70},
             {"label": "B", "seconds": 129, "percent": 30},
         ],
         "total_seconds": 429,
         "from_recording_id": "rec-1",
+        "parts": 2,
+        "recorder_changed": True,
     }
     seen = _captured_text(lambda: render_pdf(report), monkeypatch)
     assert seen.count("Speaking balance") == 1
     assert any(t.startswith("Voice A — 70%") for t in seen)
+    assert any("fullest part only" in t for t in seen)
+    # drawn inside the table's section, after its heading
+    assert seen.index("Table 1") < seen.index("Speaking balance")
 
 
 def test_no_strip_without_diarized_voices(monkeypatch):
@@ -207,7 +213,7 @@ def _italian_report() -> dict:
             ],
         }
     ]
-    report["rounds"][0]["speaking_balance"] = {
+    report["rounds"][0]["tables"][0]["speaking_balance"] = {
         "voices": [
             {"label": "A", "seconds": 300, "percent": 70},
             {"label": "Others", "seconds": 129, "percent": 30},
@@ -232,7 +238,7 @@ def test_an_italian_report_is_drawn_in_italian(monkeypatch):
     ), "the cover meta line should carry an Italian date"
     assert "Metodo" in seen
     assert "Sintesi esecutiva" in seen
-    assert "Turno 1" in seen  # section banner and executive summary heading
+    assert "Sessione 1" in seen  # section banner and executive summary heading
     assert "Equilibrio degli interventi" in seen
     assert any(t.startswith("Voce A — 70%") for t in seen)
     assert any(t.startswith("Altri — 30%") for t in seen)
@@ -245,7 +251,7 @@ def test_an_italian_report_is_drawn_in_italian(monkeypatch):
     assert "Tavolo 1" in seen
 
     for english in (
-        "Assembly Report", "FINAL REPORT", "Method", "Executive summary", "Round 1",
+        "Assembly Report", "FINAL REPORT", "Method", "Executive summary", "Round 1", "Session 1",
         "Speaking balance", "Proposals", "Proposal", "draft — not reviewed", "Table detail",
         "Table 1", "Others — 30%",
     ):
@@ -259,3 +265,15 @@ def test_an_italian_report_lays_out_like_an_english_one():
     for number, page in enumerate(_pages(pdf), start=1):
         for height in _vertical_bars(page):
             assert height < A4_HEIGHT_PT * 0.6, f"page {number}: {height:.0f}pt bar"
+
+
+def test_a_session_with_an_objective_still_renders_when_only_two_dejavu_faces_exist():
+    """The objective line is italic. fonts-dejavu-core ships DejaVuSans and
+    DejaVuSans-Bold only, and an italic style that is not registered is an
+    FPDFException — which turned the report PDF of every assembly whose
+    sessions had an objective into a 500 (found by the 2026-10-12 rehearsal)."""
+    from citizens.services.report_pdf import render_pdf
+
+    report = _report("A quotation long enough to count as evidence here.")
+    report["rounds"][0]["objective"] = "Three concrete problems"
+    assert render_pdf(report).startswith(b"%PDF")

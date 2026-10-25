@@ -27,6 +27,7 @@ import contextlib
 import json
 import time
 import urllib.parse
+from pathlib import Path
 
 from citizens.config import get_settings
 from citizens.logging_setup import get_logger
@@ -53,6 +54,16 @@ DISPOSE_TIMEOUT_SECONDS = 20.0
 FINISH_TIMEOUT_SECONDS = 60.0
 FAILURE_COOLDOWN = 60.0
 KEEPALIVE_SECONDS = 5.0
+# PCM engines (Mistral, Vosk) are fed only what the phone sends. When the
+# phone stalls — a tab in the background, a brief disconnect — the socket goes
+# quiet and Mistral closes it within about half a minute (every
+# ConnectionClosedError in the 2026-10-11 log followed a hole in the upload
+# stream). After this long without audio the session sends real-time silence
+# instead, one second per second, so the connection and the engine's state
+# survive the stall; the silence is subtracted from the engine's timestamps so
+# the transcript of record keeps the recording's own clock.
+SILENCE_AFTER_SECONDS = 20.0
+SILENCE_FRAME_SECONDS = 1.0
 # how many lines the phone and the monitor are shown — a display window, not
 # the record. self.lines keeps everything; status() returns this many.
 MAX_LINES = 80
@@ -115,6 +126,37 @@ class _BaseSession:
         # cleanup — which is what kills ffmpeg — never runs.
         self.pcm_stream = None
         self.pump_task: asyncio.Task | None = None
+        # silence this session sent on its own while the phone was quiet, in
+        # seconds — the engine's clock runs ahead of the recording by this much
+        self.injected_seconds = 0.0
+        self._idle = False
+
+    async def next_audio(
+        self, idle_seconds: float = SILENCE_AFTER_SECONDS, frame_seconds: float = SILENCE_FRAME_SECONDS
+    ) -> bytes | None:
+        """The next PCM to send: the phone's audio, the None sentinel, or —
+        when nothing has arrived for `idle_seconds` — `frame_seconds` of
+        silence, then another every `frame_seconds` until audio returns."""
+        timeout = frame_seconds if self._idle else idle_seconds
+        try:
+            item = await asyncio.wait_for(self.queue.get(), timeout=timeout)
+        except TimeoutError:
+            if not self._idle:
+                log.info("live_stt_silence_keepalive", recording_id=self.recording_id)
+            self._idle = True
+            self.injected_seconds += frame_seconds
+            return bytes(int(live_audio.BYTES_PER_SECOND * frame_seconds))
+        if self._idle and item is not None:
+            log.info(
+                "live_stt_audio_resumed", recording_id=self.recording_id,
+                injected_seconds=round(self.injected_seconds, 1),
+            )
+        self._idle = False
+        return item
+
+    def recording_time(self, engine_seconds: float) -> float:
+        """An engine timestamp mapped back onto the recording's clock."""
+        return max(0.0, engine_seconds - self.injected_seconds)
 
     def add_line(
         self,
@@ -284,7 +326,7 @@ class VoskSession(_BaseSession):
                 log.info("live_stt_session_started", recording_id=self.recording_id, provider="vosk")
                 framer = live_audio.Framer(self.FRAME_SECONDS)
                 while True:
-                    item = await self.queue.get()
+                    item = await self.next_audio()
                     if item is None:
                         # the tail is part of the recording too — send it
                         # before the terminator, not after
@@ -322,15 +364,16 @@ class VoskSession(_BaseSession):
             self.set_provisional(data["partial"])
             return
         words = data.get("result") or []
+        clock = self.recording_time
         self.add_line(
             data.get("text", ""),
-            start=float(words[0]["start"]) if words else 0.0,
-            end=float(words[-1]["end"]) if words else None,
+            start=clock(float(words[0]["start"])) if words else 0.0,
+            end=clock(float(words[-1]["end"])) if words else None,
             # Vosk gives per-word timings and the batch path stores them; keep
             # them so a live transcript is as navigable as a final one
             words=[
-                {"text": w.get("word") or "", "start": float(w.get("start", 0.0)),
-                 "end": float(w.get("end", 0.0))}
+                {"text": w.get("word") or "", "start": clock(float(w.get("start", 0.0))),
+                 "end": clock(float(w.get("end", 0.0)))}
                 for w in words
             ],
         )
@@ -401,7 +444,7 @@ class MistralSession(_BaseSession):
 
                 try:
                     while True:
-                        item = await self.queue.get()
+                        item = await self.next_audio()
                         if item is None:
                             for frame in framer.flush():
                                 await append(frame)
@@ -443,8 +486,9 @@ class MistralSession(_BaseSession):
             # a segment supersedes the deltas accumulated for it
             self.add_line(
                 data.get("text") or self._pending,
-                start=float(data.get("start") or 0.0),
-                end=float(data["end"]) if data.get("end") is not None else None,
+                start=self.recording_time(float(data.get("start") or 0.0)),
+                end=(self.recording_time(float(data["end"]))
+                     if data.get("end") is not None else None),
                 speaker=data.get("speaker_id"),
             )
             self._pending = ""
@@ -644,12 +688,20 @@ class LiveCaptionManager:
         language: str,
         assembly_id: str = "",
         segment: int = 0,
+        header_path: Path | None = None,
     ) -> None:
         """Called from the (threadpool) chunk-upload path. Never raises.
 
         `segment` is which MediaRecorder session of the recording the bytes
         come from: a change means a fresh container header, which neither the
-        decoder nor a provider fed raw containers can take mid-stream."""
+        decoder nor a provider fed raw containers can take mid-stream.
+
+        `header_path` is the stored chunk that opened this segment, given
+        whenever `data` is not that chunk. A decoder or raw-container session
+        built NOW — because this phone was just promoted to live source, took
+        the source over from a sibling that stopped, or had its decoder reaped
+        while the provider was down — is seeded with that chunk's container
+        header before `data`, or it could decode nothing at all."""
         try:
             if self._loop is None or not config.get("enabled"):
                 return
@@ -662,7 +714,9 @@ class LiveCaptionManager:
             if provider in ("vosk", "whisper") and not config.get("endpoint"):
                 return
             asyncio.run_coroutine_threadsafe(
-                self._tracked_feed(recording_id, data, config, language, assembly_id, segment),
+                self._tracked_feed(
+                    recording_id, data, config, language, assembly_id, segment, header_path
+                ),
                 self._loop,
             )
         except Exception:
@@ -717,6 +771,7 @@ class LiveCaptionManager:
         language: str,
         assembly_id: str = "",
         segment: int = 0,
+        header_path: Path | None = None,
     ) -> None:
         """_feed_async, registered so finish() can fence behind it.
 
@@ -730,7 +785,9 @@ class LiveCaptionManager:
         if task is not None:
             pending.add(task)
         try:
-            await self._feed_async(recording_id, data, config, language, assembly_id, segment)
+            await self._feed_async(
+                recording_id, data, config, language, assembly_id, segment, header_path
+            )
         finally:
             if task is not None:
                 pending.discard(task)
@@ -745,6 +802,7 @@ class LiveCaptionManager:
         language: str,
         assembly_id: str = "",
         segment: int = 0,
+        header_path: Path | None = None,
     ) -> None:
         provider = config["provider"]
         wants_pcm = SESSION_TYPES[provider].wants_pcm
@@ -832,6 +890,10 @@ class LiveCaptionManager:
             # so the cooldown above could never see it, and every subsequent
             # ten-second chunk leaked another session, task and connection.
             self._sessions[recording_id] = session
+            # The container header, when this chunk is not the one that opened
+            # the segment: a decoder or raw-container session that starts here
+            # starts mid-stream and must be seeded with it (live_audio).
+            header = await self._load_header(recording_id, header_path)
             if wants_pcm:
                 stream = self._streams.get(recording_id)
                 if stream is None:
@@ -843,6 +905,8 @@ class LiveCaptionManager:
                         log.warning("live_stt_pcm_stream_failed", recording_id=recording_id)
                         return
                     self._streams[recording_id] = stream
+                    if header:
+                        stream.feed(header)
                 else:
                     # reusing the decoder that outlived a failed session: throw
                     # away the PCM it buffered during the reconnect gap, so the
@@ -855,6 +919,13 @@ class LiveCaptionManager:
                 session.pump_task = loop.create_task(
                     self._pump_pcm(session, session.pcm_stream)
                 )
+            elif header:
+                # a provider fed raw containers (Deepgram) is seeded the same
+                # way: the header goes down its queue ahead of this chunk
+                try:
+                    session.queue.put_nowait(header)
+                except asyncio.QueueFull:
+                    log.warning("live_stt_queue_full", recording_id=recording_id)
         session.last_fed = time.monotonic()
         if wants_pcm:
             stream = self._streams.get(recording_id)
@@ -865,6 +936,24 @@ class LiveCaptionManager:
             session.queue.put_nowait(data)
         except asyncio.QueueFull:
             log.warning("live_stt_queue_full", recording_id=recording_id)
+
+    async def _load_header(self, recording_id: str, header_path: Path | None) -> bytes:
+        """The container header of the segment's first chunk, read off the
+        event loop; empty when there is none to seed with (this chunk opened
+        the segment) or the file is gone (never, while recording — reclaim
+        waits for assembly)."""
+        if header_path is None:
+            return b""
+        try:
+            first_chunk = await asyncio.to_thread(header_path.read_bytes)
+        except OSError:
+            log.warning("live_stt_seed_unreadable", recording_id=recording_id,
+                        path=str(header_path))
+            return b""
+        header = live_audio.container_header(first_chunk)
+        log.info("live_stt_seeded", recording_id=recording_id, header_bytes=len(header),
+                 whole_chunk=len(header) == len(first_chunk))
+        return header
 
     async def _pump_pcm(self, session: "_BaseSession", stream) -> None:
         """Forward decoded PCM into the session queue until the stream ends."""

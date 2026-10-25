@@ -73,6 +73,11 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
             enqueue_job(session, "ANALYZE_ROUND", {"round_id": round_.id})
     assembly.closed_at = utcnow()
     assembly.status = "COMPLETE"
+    # how the discussion developed across sessions, once the sessions'
+    # analyses are in (a pending round analysis re-enqueues it when it lands)
+    from citizens.jobs.handlers import maybe_enqueue_synthesis
+
+    maybe_enqueue_synthesis(session, assembly)
     # Every phone still holds its table's audio — that is what makes recording
     # survive a bad network — and when those are the participants' own devices,
     # leaving it there is the surprising outcome. Each phone deletes only what
@@ -92,12 +97,25 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
         assembly_id=assembly.id,
         progress=assembly_progress(session, assembly),
     )
+    # an assembly that keeps nothing but its report: now, if everything is
+    # processed; otherwise the sweep does it once the last job is through
+    from citizens.services import zero_retention
+
+    zero_retention.apply_if_ready(session, assembly)
     return report
 
 
 def reopen_assembly(session: Session, assembly: Assembly) -> None:
     """Accept recordings again. The frozen snapshot stays in place, so phones
     keep showing the report exactly as it was at closing."""
+    if assembly.zero_retention_done_at is not None:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=409,
+            detail="ZERO_RETENTION_APPLIED: the audio and transcripts are gone; "
+                   "this assembly cannot be reopened",
+        )
     assembly.closed_at = None
     assembly.status = "ACTIVE"
     # Withdraw any standing purge request. The phone-facing flag is a bare

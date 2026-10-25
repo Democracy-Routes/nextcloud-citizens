@@ -2,10 +2,11 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { mdiCheck, mdiChevronDown, mdiChevronUp, mdiClose, mdiPencilOutline } from '@mdi/js'
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '../api'
 import { timestamp } from '../format'
-import { TYPE_LABELS } from '../labels'
+import { typeLabel } from '../labels'
 import type { FindingData } from '../types'
 import CzButton from './ui/CzButton.vue'
 import CzStatusPill from './ui/CzStatusPill.vue'
@@ -13,6 +14,7 @@ import { toast } from './ui/toast'
 
 const props = defineProps<{ finding: FindingData }>()
 const emit = defineEmits<{ changed: []; editing: [open: boolean] }>()
+const { t } = useI18n()
 
 const showEvidence = ref(false)
 const editing = ref(false)
@@ -63,21 +65,33 @@ async function apply(payload: { status?: string; title?: string; summary?: strin
 	}
 }
 
+const STATUS_LABEL_KEYS: Record<string, string> = {
+	DRAFT: 'organizer.results.finding.status.DRAFT',
+	APPROVED: 'organizer.results.finding.status.APPROVED',
+	EDITED_AND_APPROVED: 'organizer.results.finding.status.EDITED_AND_APPROVED',
+	REJECTED: 'organizer.results.finding.status.REJECTED',
+}
+
+const statusLabel = computed(() => {
+	const key = STATUS_LABEL_KEYS[props.finding.status]
+	return key ? t(key) : props.finding.status.replaceAll('_', ' ').toLowerCase()
+})
+
 </script>
 
 <template>
 	<div class="cz-card" style="padding: 14px 18px">
 		<template v-if="editing">
-			<div class="cz-field"><label>Title</label><input v-model="editTitle" type="text" /></div>
-			<div class="cz-field"><label>Summary</label><textarea v-model="editSummary" rows="3"></textarea></div>
+			<div class="cz-field"><label>{{ t('organizer.results.finding.title') }}</label><input v-model="editTitle" type="text" /></div>
+			<div class="cz-field"><label>{{ t('organizer.results.finding.summary') }}</label><textarea v-model="editSummary" rows="3"></textarea></div>
 			<div class="cz-row" style="justify-content: flex-end">
-				<CzButton variant="tertiary" small @click="setEditing(false)">Cancel</CzButton>
+				<CzButton variant="tertiary" small @click="setEditing(false)">{{ t('organizer.results.finding.cancel') }}</CzButton>
 				<CzButton
 					variant="primary"
 					small
 					:disabled="busy"
-					@click="apply({ title: editTitle, summary: editSummary, status: 'APPROVED' }, 'Finding edited and approved')">
-					Save &amp; approve
+					@click="apply({ title: editTitle, summary: editSummary, status: 'APPROVED' }, t('organizer.results.finding.toast.edited'))">
+					{{ t('organizer.results.finding.saveApprove') }}
 				</CzButton>
 			</div>
 		</template>
@@ -86,25 +100,25 @@ async function apply(payload: { status?: string; title?: string; summary?: strin
 				<div style="min-width: 0">
 					<div class="cz-row" style="gap: 6px; margin-bottom: 4px">
 						<span class="cz-pill" :class="`cz-pill--${TYPE_TONES[finding.type] ?? 'gray'}`" style="text-transform: none">
-							{{ TYPE_LABELS[finding.type] ?? finding.type.replaceAll('_', ' ') }}
+							{{ typeLabel(finding.type) }}
 						</span>
 						<span v-if="finding.scope === 'round' && finding.mentioned_table_count" class="cz-pill cz-pill--gray" style="text-transform: none">
-							Mentioned at {{ finding.mentioned_table_count }} table(s)
+							{{ t('organizer.results.finding.mentionedAt', { count: finding.mentioned_table_count }, finding.mentioned_table_count) }}
 						</span>
-						<span v-if="finding.support" class="cz-muted" style="font-size: 0.78rem">support: {{ finding.support }}</span>
+						<span v-if="finding.support" class="cz-muted" style="font-size: 0.78rem">{{ t('organizer.results.finding.support', { support: finding.support }) }}</span>
 					</div>
 					<strong>{{ finding.title }}</strong>
 					<p style="margin: 4px 0 0; font-size: 0.905rem">{{ finding.summary }}</p>
 				</div>
-				<CzStatusPill :status="STATUS_MAP[finding.status] ?? 'PROCESSING'" :label="finding.status.replaceAll('_', ' ').toLowerCase()" />
+				<CzStatusPill :status="STATUS_MAP[finding.status] ?? 'PROCESSING'" :label="statusLabel" />
 			</div>
 
 			<div class="cz-row" style="margin-top: 10px; gap: 6px">
 				<CzButton
 					v-if="finding.status === 'DRAFT' || finding.status === 'REJECTED'"
 					variant="primary" small :icon="mdiCheck" :disabled="busy"
-					@click="apply({ status: 'APPROVED' }, 'Finding approved')">
-					Approve
+					@click="apply({ status: 'APPROVED' }, t('organizer.results.finding.toast.approved'))">
+					{{ t('organizer.results.finding.approve') }}
 				</CzButton>
 				<!-- rejecting keeps a finding out of the published report, which is
 				     less recoverable than approving it — it should not be the
@@ -112,11 +126,11 @@ async function apply(payload: { status?: string; title?: string; summary?: strin
 				<CzButton
 					v-if="finding.status !== 'REJECTED'"
 					variant="secondary" small :icon="mdiClose" :disabled="busy"
-					@click="apply({ status: 'REJECTED' }, 'Finding rejected')">
-					Reject
+					@click="apply({ status: 'REJECTED' }, t('organizer.results.finding.toast.rejected'))">
+					{{ t('organizer.results.finding.reject') }}
 				</CzButton>
 				<CzButton variant="tertiary" small :icon="mdiPencilOutline" :disabled="busy" @click="startEdit">
-					Edit
+					{{ t('organizer.results.finding.edit') }}
 				</CzButton>
 				<span style="flex: 1"></span>
 				<CzButton
@@ -124,7 +138,7 @@ async function apply(payload: { status?: string; title?: string; summary?: strin
 					variant="tertiary" small
 					:icon="showEvidence ? mdiChevronUp : mdiChevronDown"
 					@click="showEvidence = !showEvidence">
-					{{ finding.evidence.length }} evidence excerpt(s)
+					{{ t('organizer.results.finding.excerpts', { count: finding.evidence.length }, finding.evidence.length) }}
 				</CzButton>
 			</div>
 
@@ -132,7 +146,7 @@ async function apply(payload: { status?: string; title?: string; summary?: strin
 				<div v-for="evidence in finding.evidence" :key="evidence.segment_id" class="cz-convo__seg cz-convo__seg--s1">
 					<span class="cz-convo__time">{{ timestamp(evidence.start) }}</span>
 					<div class="cz-convo__body">
-						<span class="cz-convo__speaker">{{ evidence.speaker || 'SPEAKER' }}</span>
+						<span class="cz-convo__speaker">{{ evidence.speaker || t('organizer.results.finding.speaker') }}</span>
 						<p class="cz-convo__text">“{{ evidence.text }}”</p>
 					</div>
 				</div>
