@@ -454,7 +454,13 @@ def _facilitator_tick() -> None:
     facilitator.tick()
 
 
+#: when the last full sweep pass finished (UTC), for the Settings About tab;
+#: None until the first pass of this process
+LAST_SWEEP_AT = None
+
+
 def run_sweeps() -> None:
+    global LAST_SWEEP_AT
     from citizens.services import provider_config, public_url
 
     for name, sweep in (
@@ -482,3 +488,4 @@ def run_sweeps() -> None:
             sweep()
         except Exception:
             log.error("sweep_failed", sweep=name, exc_info=True)
+    LAST_SWEEP_AT = utcnow()

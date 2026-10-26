@@ -378,6 +378,81 @@
 	margin-bottom: 14px;
 }
 
+/* Settings: one concern per card, its own Save in the header */
+#citizens-app .cz-settings-card__head {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	margin-bottom: 14px;
+}
+
+#citizens-app .cz-settings-card__head > svg {
+	flex: none;
+	margin-top: 2px;
+}
+
+#citizens-app .cz-settings-card__titles {
+	flex: 1;
+	min-width: 0;
+}
+
+#citizens-app .cz-settings-card__titles h3 {
+	margin: 0;
+}
+
+#citizens-app .cz-settings-card__titles p {
+	margin: 4px 0 0;
+	font-size: 0.845rem;
+}
+
+#citizens-app .cz-settings-card__head .cz-btn {
+	flex: none;
+	align-self: center;
+}
+
+#citizens-app .cz-about-links {
+	list-style: none;
+	padding: 0;
+	margin: 0 0 10px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 18px;
+	font-size: 0.875rem;
+}
+
+/* Settings → About: label / value pairs */
+#citizens-app .cz-about {
+	display: grid;
+	grid-template-columns: minmax(140px, 220px) 1fr;
+	gap: 6px 16px;
+	margin: 0;
+	font-size: 0.875rem;
+}
+
+#citizens-app .cz-about dt {
+	color: var(--cz-text-muted);
+}
+
+#citizens-app .cz-about dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+	#citizens-app .cz-about {
+		grid-template-columns: 1fr;
+		gap: 2px 0;
+	}
+
+	#citizens-app .cz-about dd {
+		margin-bottom: 8px;
+	}
+
+	#citizens-app .cz-settings-card__head {
+		flex-wrap: wrap;
+	}
+}
+
 #citizens-app .cz-card--hover {
 	transition: box-shadow 0.15s ease, transform 0.15s ease;
 	cursor: pointer;

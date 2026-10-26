@@ -14,7 +14,7 @@ recipients if you use a self-hosted engine (then nothing leaves your server).
 
 **Since 0.7 the phone produces the same record.** The notice on each table's
 phone is rendered by the server from the same facts plus the organization
-data entered in Settings → General (controller, address, contact, data-
+data entered in Settings → Organisation (controller, address, contact, data-
 protection contact, hosting, supervisory authority — the bracketed fields
 below), naming the transcription and analysis providers actually selected;
 each person registers against it individually — on the table's phone, or on

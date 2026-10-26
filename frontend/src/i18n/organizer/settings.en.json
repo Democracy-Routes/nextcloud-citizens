@@ -2,16 +2,13 @@
 	"page": {
 		"title": "Speech & AI settings",
 		"lead": "API keys are stored encrypted in Nextcloud and never reach browsers or table phones.",
-		"saving": "Saving…",
-		"save": "Save settings",
-		"saved": "Saved",
-		"unsaved": "You have unsaved changes. Saving applies every setting on every tab, not only this one.",
 		"settingsSaved": "Settings saved"
 	},
 	"tabs": {
-		"audio": "Audio",
 		"ai": "AI analysis",
-		"general": "General"
+		"transcription": "Transcription",
+		"organisation": "Organisation",
+		"about": "About"
 	},
 	"providers": {
 		"mistral": "Mistral (Voxtral)",
@@ -27,8 +24,6 @@
 	},
 	"audio": {
 		"title": "Transcription",
-		"selectedService": "Selected service:",
-		"selectedHint": "— the fields below configure it.",
 		"provisional": "Captions are provisional — the canonical transcript is always produced from the complete recording after the session.",
 		"test": "Test",
 		"keyConfigured": "configured — {hint} (type to replace)",
@@ -86,7 +81,11 @@
 			},
 			"engine": {
 				"running": "Engine running",
-				"stopped": "Engine not running"
+				"stopped": "Engine not running",
+				"title": "Vosk engine",
+				"lead": "Built in: the engine runs inside this app with models installed below. Server: a vosk-server you run elsewhere.",
+				"loaded": "{n} models loaded",
+				"none": "no model loaded"
 			},
 			"models": {
 				"memory": "{mb} MB free for models in this container",
@@ -107,8 +106,16 @@
 				"confirmRemove": "Remove {name}?",
 				"sizeHint": "{mb} MB",
 				"inUse": "in use",
-				"notInstalled": "not installed"
-			}
+				"notInstalled": "not installed",
+				"title": "Models",
+				"lead": "Install a model per language. Small models fit any server and answer fast; large ones are more accurate and need memory. Changes apply immediately."
+			},
+			"languages": {
+				"title": "Model per language",
+				"lead": "The language chosen for an assembly picks the model. A blank final model reuses the live one."
+			},
+			"advanced": "Advanced",
+			"advancedHide": "Hide advanced"
 		},
 		"modes": {
 			"both": "Tables see captions while they talk, and each recording is transcribed again afterwards from the complete audio. The final transcript is the record and the one the analysis reads.",
@@ -117,6 +124,11 @@
 			"liveOnly": "Nothing is transcribed a second time, so the analysis reads what was captured live — quicker and much cheaper, but captions can miss speech the engine could not keep up with. The audio is kept, so any table can be transcribed properly later from its Files tab.",
 			"noneTitle": "Nothing will be transcribed.",
 			"none": "Recordings are stored as audio and nothing else: no transcript, no analysis, and an empty report. Tick at least one box unless you only want the audio."
+		},
+		"serviceLead": "Which engine transcribes the tables, and whether they get captions while they talk, a transcript afterwards, or both.",
+		"limits": {
+			"title": "Limits",
+			"lead": "How many caption sessions and final transcriptions may run at once on the selected service. Uncapped, a room full of phones can saturate a self-hosted server or a provider's rate limit — and then every phone's captions fail at once."
 		}
 	},
 	"ai": {
@@ -200,5 +212,54 @@
 		"kb": "{n} KB",
 		"mb": "{n} MB",
 		"gb": "{n} GB"
+	},
+	"card": {
+		"save": "Save",
+		"saving": "Saving…",
+		"saved": "Saved"
+	},
+	"about": {
+		"state": "State",
+		"storage": "Storage",
+		"versionTitle": "Version",
+		"versionLead": "What is running on this server.",
+		"version": "App version",
+		"schema": "Database schema",
+		"unknown": "unknown",
+		"engineTitle": "Transcription engine",
+		"engineLead": "The engine the table phones talk to right now.",
+		"provider": "Service",
+		"mode": "Vosk engine",
+		"modeBuiltin": "Built in",
+		"modeServer": "Server URL",
+		"running": "Running",
+		"stopped": "Stopped",
+		"loaded": "Models loaded",
+		"none": "none",
+		"inUse": "In use",
+		"memory": "Memory free for models",
+		"lastError": "Last error",
+		"storageTitle": "Storage and jobs",
+		"storageLead": "The data volume and the background work queue.",
+		"diskFree": "Disk free",
+		"storageOk": "Storage writable",
+		"storageError": "Storage not writable",
+		"queued": "Queued",
+		"jobsRunning": "Running",
+		"retry": "Retrying",
+		"failed": "Failed",
+		"newestFailure": "Newest failure",
+		"lastSweep": "Last housekeeping pass",
+		"never": "not yet",
+		"docsTitle": "Documentation",
+		"docsLead": "Guides for administrators and facilitators.",
+		"adminGuide": "Administration guide",
+		"facilitatorGuide": "Facilitator guide",
+		"checklist": "Event checklist",
+		"privacy": "Privacy and data protection",
+		"deviceReportHint": "The device report of an assembly is in its Files tab.",
+		"loading": "Loading…",
+		"mb": "{mb} MB",
+		"gb": "{gb} GB"
 	}
 }

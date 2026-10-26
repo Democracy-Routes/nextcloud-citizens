@@ -2,16 +2,13 @@
 	"page": {
 		"title": "Impostazioni voce e IA",
 		"lead": "Le chiavi API sono salvate cifrate in Nextcloud e non arrivano mai ai browser o ai telefoni dei tavoli.",
-		"saving": "Salvataggio…",
-		"save": "Salva le impostazioni",
-		"saved": "Salvato",
-		"unsaved": "Ci sono modifiche non salvate. Salvare applica tutte le impostazioni di tutte le schede, non solo quella visualizzata.",
 		"settingsSaved": "Impostazioni salvate"
 	},
 	"tabs": {
-		"audio": "Audio",
 		"ai": "Analisi IA",
-		"general": "Generale"
+		"transcription": "Trascrizione",
+		"organisation": "Organizzazione",
+		"about": "Informazioni"
 	},
 	"providers": {
 		"mistral": "Mistral (Voxtral)",
@@ -27,8 +24,6 @@
 	},
 	"audio": {
 		"title": "Trascrizione",
-		"selectedService": "Servizio selezionato:",
-		"selectedHint": "— i campi sotto lo configurano.",
 		"provisional": "I sottotitoli sono provvisori — la trascrizione definitiva viene sempre prodotta dalla registrazione completa dopo la sessione.",
 		"test": "Prova",
 		"keyConfigured": "configurata — {hint} (scrivi per sostituirla)",
@@ -86,7 +81,11 @@
 			},
 			"engine": {
 				"running": "Motore attivo",
-				"stopped": "Motore non attivo"
+				"stopped": "Motore non attivo",
+				"title": "Motore Vosk",
+				"lead": "Integrato: il motore funziona dentro questa app, con i modelli installati qui sotto. Server: un vosk-server gestito altrove.",
+				"loaded": "{n} modelli caricati",
+				"none": "nessun modello caricato"
 			},
 			"models": {
 				"memory": "{mb} MB liberi per i modelli in questo contenitore",
@@ -107,8 +106,16 @@
 				"confirmRemove": "Rimuovere {name}?",
 				"sizeHint": "{mb} MB",
 				"inUse": "in uso",
-				"notInstalled": "non installato"
-			}
+				"notInstalled": "non installato",
+				"title": "Modelli",
+				"lead": "Installa un modello per ogni lingua. I modelli piccoli vanno bene su qualsiasi server e rispondono in fretta; quelli grandi sono più accurati e richiedono memoria. Le modifiche si applicano subito."
+			},
+			"languages": {
+				"title": "Modello per lingua",
+				"lead": "La lingua scelta per un'assemblea determina il modello. Un modello finale vuoto riusa quello in diretta."
+			},
+			"advanced": "Avanzate",
+			"advancedHide": "Nascondi le avanzate"
 		},
 		"modes": {
 			"both": "I tavoli vedono i sottotitoli mentre parlano, e ogni registrazione viene trascritta di nuovo in seguito a partire dall'audio completo. La trascrizione finale è il verbale ed è quella letta dall'analisi.",
@@ -117,6 +124,11 @@
 			"liveOnly": "Nulla viene trascritto una seconda volta, quindi l'analisi legge quanto è stato catturato in diretta — più rapido e molto più economico, ma i sottotitoli possono perdere il parlato che il motore non è riuscito a seguire. L'audio viene conservato, quindi ogni tavolo può essere trascritto correttamente in seguito dalla sua scheda File.",
 			"noneTitle": "Non verrà trascritto nulla.",
 			"none": "Le registrazioni vengono salvate come solo audio: nessuna trascrizione, nessuna analisi e un report vuoto. Seleziona almeno una casella a meno che tu non voglia soltanto l'audio."
+		},
+		"serviceLead": "Quale motore trascrive i tavoli, e se ricevono i sottotitoli mentre parlano, una trascrizione in seguito, oppure entrambi.",
+		"limits": {
+			"title": "Limiti",
+			"lead": "Quante sessioni di sottotitoli e quante trascrizioni finali possono essere eseguite contemporaneamente sul servizio selezionato. Senza limite, una sala piena di telefoni può saturare un server autogestito o il limite di richieste di un fornitore — e allora i sottotitoli di tutti i telefoni falliscono insieme."
 		}
 	},
 	"ai": {
@@ -200,5 +212,54 @@
 		"kb": "{n} KB",
 		"mb": "{n} MB",
 		"gb": "{n} GB"
+	},
+	"card": {
+		"save": "Salva",
+		"saving": "Salvataggio…",
+		"saved": "Salvato"
+	},
+	"about": {
+		"state": "Stato",
+		"storage": "Archiviazione",
+		"versionTitle": "Versione",
+		"versionLead": "Ciò che è in esecuzione su questo server.",
+		"version": "Versione dell'app",
+		"schema": "Schema del database",
+		"unknown": "sconosciuta",
+		"engineTitle": "Motore di trascrizione",
+		"engineLead": "Il motore con cui parlano in questo momento i telefoni dei tavoli.",
+		"provider": "Servizio",
+		"mode": "Motore Vosk",
+		"modeBuiltin": "Integrato",
+		"modeServer": "URL del server",
+		"running": "Attivo",
+		"stopped": "Non attivo",
+		"loaded": "Modelli caricati",
+		"none": "nessuno",
+		"inUse": "In uso",
+		"memory": "Memoria libera per i modelli",
+		"lastError": "Ultimo errore",
+		"storageTitle": "Archiviazione e attività",
+		"storageLead": "Il volume dei dati e la coda delle attività in background.",
+		"diskFree": "Spazio libero su disco",
+		"storageOk": "Archiviazione scrivibile",
+		"storageError": "Archiviazione non scrivibile",
+		"queued": "In coda",
+		"jobsRunning": "In esecuzione",
+		"retry": "Nuovo tentativo",
+		"failed": "Non riuscite",
+		"newestFailure": "Errore più recente",
+		"lastSweep": "Ultima pulizia periodica",
+		"never": "non ancora",
+		"docsTitle": "Documentazione",
+		"docsLead": "Guide per amministratori e facilitatori.",
+		"adminGuide": "Guida all'amministrazione",
+		"facilitatorGuide": "Guida per i facilitatori",
+		"checklist": "Lista di controllo dell'evento",
+		"privacy": "Privacy e protezione dei dati",
+		"deviceReportHint": "Il report dei dispositivi di un'assemblea si trova nella sua scheda File.",
+		"loading": "Caricamento…",
+		"mb": "{mb} MB",
+		"gb": "{gb} GB"
 	}
 }

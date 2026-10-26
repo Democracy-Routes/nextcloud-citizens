@@ -228,6 +228,76 @@ def update_providers(data: ProvidersUpdate, store: Store, user: AdminUser, sessi
     return summary
 
 
+@router.get("/about")
+def about(user: AdminUser, session: DB):
+    """What the About tab of Settings shows: the running version and schema,
+    the transcription engine's state, storage and the job queue. Opened by
+    a person, never polled — so it may do a little work."""
+    import shutil
+
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy import func, select
+
+    from citizens.config import get_settings
+    from citizens.db.models import AppJob
+    from citizens.jobs import sweep
+    from citizens.services.vosk_builtin import BUILTIN
+    from citizens.storage.paths import temp_dir
+
+    settings = get_settings()
+    snapshot = provider_config.config_snapshot()
+
+    counts = {state: 0 for state in ("QUEUED", "RUNNING", "RETRY", "FAILED")}
+    for state, n in session.execute(
+        select(AppJob.state, func.count()).group_by(AppJob.state)
+    ).all():
+        if state in counts:
+            counts[state] = n
+    newest_failure = session.execute(
+        select(AppJob).where(AppJob.state == "FAILED").order_by(AppJob.updated_at.desc()).limit(1)
+    ).scalar_one_or_none()
+
+    # on the request's own connection: a second one would wait for this
+    # session's lock (SQLite) and the About tab would open with a blank
+    try:
+        schema_revision = MigrationContext.configure(session.connection()).get_current_revision()
+    except Exception:
+        log.warning("about_schema_revision_unavailable", exc_info=True)
+        schema_revision = None
+
+    try:
+        disk_free_gb = round(shutil.disk_usage(settings.app_persistent_storage).free / 1024**3, 1)
+    except OSError:
+        disk_free_gb = None
+    storage_ok = temp_dir(settings.app_persistent_storage).is_dir()
+
+    return {
+        "version": settings.app_version,
+        "schema_revision": schema_revision,
+        "stt_provider": snapshot.live_stt.get("provider"),
+        "vosk_mode": "builtin" if snapshot.vosk_builtin else "server",
+        "engine": BUILTIN.status(),
+        "disk_free_gb": disk_free_gb,
+        "storage_ok": storage_ok,
+        "jobs": {
+            "queued": counts["QUEUED"],
+            "running": counts["RUNNING"],
+            "retry": counts["RETRY"],
+            "failed": counts["FAILED"],
+            "newest_failure": None
+            if newest_failure is None
+            else {
+                "type": newest_failure.type,
+                "last_error": newest_failure.last_error,
+                "updated_at": newest_failure.updated_at.isoformat()
+                if newest_failure.updated_at is not None
+                else None,
+            },
+        },
+        "last_sweep_at": sweep.LAST_SWEEP_AT.isoformat() if sweep.LAST_SWEEP_AT else None,
+    }
+
+
 @router.get("/vosk/models")
 def vosk_models_overview(user: AdminUser):
     """Installed and available speech models for the built-in engine, with

@@ -6,6 +6,16 @@ All notable changes to Nextcloud Citizens.
 
 ### For the organizer
 
+- Settings reorganised into four tabs — Transcription, AI, Organisation,
+  About — each a column of cards with its own Save: a card's button lights up
+  only when that card changed and saves only its own keys, so the single
+  page-wide Save (and its "unsaved on another tab" surprise) is gone. Only
+  the selected transcription service shows its card; Vosk is three cards
+  (engine, models, model per language) with the legacy model label under
+  Advanced. The About tab shows version, schema revision, engine state,
+  disk, job queue and the last housekeeping pass, with links to the guides.
+- The organizer page derives its API base from the versioned bundle URL
+  (0.8's loader): fixes "Nextcloud cannot be reached … JSON parse" on Home.
 - Vosk can run built into the app: Settings → Audio → Vosk offers a built-in
   engine beside a Vosk server at a URL, with a model table per language
   (small and large), one-click Install with progress and Cancel, and Remove
@@ -22,6 +32,8 @@ All notable changes to Nextcloud Citizens.
   and stops the separate Vosk container; `CITIZENS_MEMORY` overrides it.
 - New admin routes: `GET /admin/vosk/models`, `POST .../{name}/install`,
   `POST .../{name}/cancel`, `DELETE .../{name}`.
+- New admin route `GET /admin/about` (version, schema revision, engine
+  state, disk, job counts, newest failure, last sweep) for the About tab.
 
 ## 0.7.0-beta.1 — 2026-10-16
 

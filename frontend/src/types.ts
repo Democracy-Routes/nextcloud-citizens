@@ -518,6 +518,32 @@ export interface VoskModelsResponse {
 
 export type SttProvider = 'mistral' | 'deepgram' | 'whisper' | 'vosk'
 
+/** GET /admin/about — the Settings About tab */
+export interface AboutInfo {
+	version: string
+	schema_revision: string | null
+	stt_provider: SttProvider | null
+	vosk_mode: VoskMode
+	engine: {
+		running: boolean
+		port: number
+		loaded: string[]
+		in_use: Record<string, number>
+		last_error: string | null
+		memory_available_bytes: number | null
+	}
+	disk_free_gb: number | null
+	storage_ok: boolean
+	jobs: {
+		queued: number
+		running: number
+		retry: number
+		failed: number
+		newest_failure: { type: string; last_error: string; updated_at: string | null } | null
+	}
+	last_sweep_at: string | null
+}
+
 export interface ProvidersSummary {
 	organization_name: string
 	audio_retention_days: number

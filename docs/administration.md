@@ -107,6 +107,16 @@ audio, but performs no transcription and no analysis.
 
 Open **Citizens → Settings** (visible to Nextcloud administrators only).
 
+Settings has four tabs — **Transcription**, **AI**, **Organisation** and
+**About** — each a column of cards, one concern per card. **Every card has
+its own Save button**, enabled only when something in that card changed, and
+it saves only that card: changing the retention never commits a half-typed
+API key on another tab. The Vosk model table and the logo apply immediately
+and have no Save. The About tab shows the running version, the database
+schema, the transcription engine's state, disk space, the job queue and the
+time of the last housekeeping pass — the first things to read into a
+support request.
+
 **Transcription.** Four engines are supported:
 
 | Engine | Runs | Speaker labels | Live captions |
@@ -183,7 +193,7 @@ used to open their own caption session, now opens one.
 
 Vosk needs **a separate model per language**, but one engine can hold several:
 each recording names the model it wants, and the language you set on an assembly
-chooses it. Settings → Audio → Vosk has an **Engine** choice:
+chooses it. Settings → Transcription → *Vosk engine* has an **Engine** choice:
 
 * **Built-in engine** — the engine runs inside the app container, on a loopback
   socket nobody else can reach, and loads models that you install from Settings
@@ -194,7 +204,7 @@ chooses it. Settings → Audio → Vosk has an **Engine** choice:
 
 ### Built-in engine
 
-Choose **Built-in engine** under Settings → Audio → Vosk. The page shows whether
+Choose **Built in** under Settings → Transcription → *Vosk engine*. The card shows whether
 the engine is running, how much memory is free for models in this container, and
 a table of models per language, each **small** or **large**:
 
@@ -243,7 +253,7 @@ scripts/vosk-model.sh vosk-model-small-de-0.15     add German
 scripts/vosk-down.sh                               stop (--purge deletes models)
 ```
 
-In Settings → Audio → Vosk, set the server URL and, for each language, the
+In Settings → Transcription → *Vosk engine*, set the server URL and, in *Model per language*, for each language the
 **model name** — switching model is editing that name:
 
 ```
@@ -388,7 +398,7 @@ server — the same analysis `scripts/device-report.py` prints from the host
 built on `citizens/services/device_report.py`. It never contains audio —
 only event names, timestamps and the phone's user agent.
 
-**Automatic retention.** Settings → General sets how many days after an assembly
+**Automatic retention.** Settings → Organisation → *Retention* sets how many days after an assembly
 is **closed** its audio is deleted; `0` keeps it indefinitely, and an individual
 assembly can override the instance default. Deletion runs from a periodic sweep
 and is audit-logged. It removes **audio only** — transcripts, findings and

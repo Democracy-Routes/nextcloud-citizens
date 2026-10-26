@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type {
+	AboutInfo,
 	Intervention,
 	Assembly,
 	AssemblyCreated,
@@ -185,6 +186,7 @@ export const api = {
 		}),
 
 	adminPing: () => request<{ ok: boolean }>('GET', '/api/v1/admin/ping'),
+	about: () => request<AboutInfo>('GET', '/api/v1/admin/about'),
 	getProviders: () => request<ProvidersSummary>('GET', '/api/v1/admin/providers'),
 	updateProviders: (payload: Record<string, unknown>) =>
 		request<ProvidersSummary>('PUT', '/api/v1/admin/providers', payload),
