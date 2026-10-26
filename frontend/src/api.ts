@@ -33,6 +33,10 @@ import type {
 
 // Derive the ExApp base URL from our own <script src>, so the app works both
 // through /apps/app_api/proxy/citizens/... and a /exapps/citizens rewrite.
+export function baseFromScriptSrc(src: string): string {
+	return src.replace(/\/js\/citizens-main(\.bundle)?\.js.*$/, '')
+}
+
 function detectBase(): string {
 	const current = document.currentScript as HTMLScriptElement | null
 	const el =
@@ -40,7 +44,12 @@ function detectBase(): string {
 			? current
 			: document.querySelector<HTMLScriptElement>('script[src*="citizens-main"]')
 	if (el && el.src) {
-		return el.src.replace(/\/js\/citizens-main\.js.*$/, '')
+		// Since 0.8 the registered `js/citizens-main.js` is a loader and the
+		// code runs from `js/citizens-main.bundle.js?v=<version>`: both names
+		// must strip, or the base is the bundle URL itself and every API call
+		// downloads the bundle again (the "cannot be reached — JSON parse"
+		// banner on the Home page after the 0.8 deploy).
+		return baseFromScriptSrc(el.src)
 	}
 	return '/exapps/citizens'
 }
