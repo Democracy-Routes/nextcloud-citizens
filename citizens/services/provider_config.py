@@ -628,11 +628,12 @@ class ConfigStore(Protocol):
     def delete_value(self, key: str) -> None: ...
 
 
-_background_store: "AppConfigStore | None" = None
+_background_store: "ConfigStore | None" = None
 
 
-def default_store() -> "AppConfigStore":
-    """Store for non-request contexts (background jobs).
+def default_store() -> "ConfigStore":
+    """Store for non-request contexts (background jobs) — and, in standalone
+    mode, for every request too, since there is no per-user Nextcloud client.
 
     The client is built once and reused: nc_py_api fetches
     /cloud/capabilities on each new instance, so constructing one per call
@@ -640,10 +641,23 @@ def default_store() -> "AppConfigStore":
     """
     global _background_store
     if _background_store is None:
-        from nc_py_api import NextcloudApp
+        from citizens.config import get_settings
 
-        _background_store = AppConfigStore(NextcloudApp())
+        if get_settings().is_standalone():
+            from citizens.services.config_store import SqliteConfigStore
+
+            _background_store = SqliteConfigStore()
+        else:
+            from nc_py_api import NextcloudApp
+
+            _background_store = AppConfigStore(NextcloudApp())
     return _background_store
+
+
+def reset_default_store() -> None:
+    """Forget the cached store (tests switching modes)."""
+    global _background_store
+    _background_store = None
 
 
 class AppConfigStore:

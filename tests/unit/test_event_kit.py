@@ -58,6 +58,7 @@ def test_every_language_has_the_full_kit_text_and_never_falls_back_to_english(la
     assert set(_TEXT[lang]) == set(_TEXT["en"])
     assert all(isinstance(v, str) and v.strip() for v in _TEXT[lang].values())
     if lang != "en":
-        assert _t(lang, "table", number=3) != _t("en", "table", number=3)
+        # "TABLE" is the same word in French; the scan line never is
+        assert _t(lang, "scan") != _t("en", "scan")
         assert _t(lang, "notice") != _t("en", "notice")
     assert _t(lang, "table", number=3).isupper() and "3" in _t(lang, "table", number=3)

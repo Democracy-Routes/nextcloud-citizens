@@ -80,7 +80,8 @@ def test_blank_organization_fields_are_omitted_and_italian_has_the_garante():
     assert "Garante per la protezione dei dati personali (www.garanteprivacy.it)" in text
     assert notice.language == "it"
     # a language without a notice reads English
-    english = render_notice("de", {})
+    # a language we do not ship falls back to English (0.9 ships "de")
+    english = render_notice("pt", {})
     assert english.text.startswith("The organiser is recording this discussion")
     assert "No transcription engine is configured" in english.text
     assert "the data protection authority of your country" in english.text

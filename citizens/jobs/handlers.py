@@ -498,6 +498,10 @@ HANDLERS = {
     "INSTALL_VOSK_MODEL": lambda session, payload: __import__(
         "citizens.services.vosk_models", fromlist=["handle_install_vosk_model"]
     ).handle_install_vosk_model(session, payload),
+    # standalone mode's account mails (services/mail.py)
+    "SEND_MAIL": lambda session, payload: __import__(
+        "citizens.services.mail", fromlist=["handle_send_mail"]
+    ).handle_send_mail(session, payload),
     "ASSEMBLE_AUDIO": handle_assemble_audio,
     "TRANSCRIBE_FINAL": handle_transcribe_final,
     "TRANSCRIBE_FROM_LIVE": handle_transcribe_from_live,

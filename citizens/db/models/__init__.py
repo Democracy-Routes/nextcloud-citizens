@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from citizens.db.models.accounts import AccountToken, AppConfig, AppUser
 from citizens.db.models.assembly import (
     Assembly,
     Participant,
@@ -26,6 +27,9 @@ from citizens.db.models.transcript import Transcript, TranscriptSegment, Transcr
 from citizens.db.models.validation import SummaryValidation
 
 __all__ = [
+    "AccountToken",
+    "AppConfig",
+    "AppUser",
     "Finding",
     "FindingEvidence",
     "Transcript",

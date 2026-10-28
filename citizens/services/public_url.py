@@ -59,9 +59,17 @@ def _override() -> str:
     return ""
 
 
+#: standalone mode serves the page itself, at the public URL's root
+STANDALONE_RECORDER_PATH = "/recorder.html"
+
+
 def recorder_page_url() -> str:
     """The recorder page's public URL. Pure read: safe inside a transaction."""
     override = _override()
+    if get_settings().is_standalone():
+        # CITIZENS_PUBLIC_URL is required in standalone mode (config.py);
+        # an empty one yields a relative link rather than a wrong host
+        return override + STANDALONE_RECORDER_PATH
     if override:
         return override + RECORDER_PATH
     with _lock:
@@ -90,6 +98,10 @@ def refresh() -> str:
     """
     global _resolved
     settings = get_settings()
+    if settings.is_standalone():
+        # nothing to ask: the operator's CITIZENS_PUBLIC_URL is the address
+        _announce("CITIZENS_PUBLIC_URL", recorder_page_url())
+        return recorder_page_url()
     if _override():
         _announce("CITIZENS_PUBLIC_URL", recorder_page_url())
         return recorder_page_url()

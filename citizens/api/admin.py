@@ -11,13 +11,12 @@ import binascii
 import time
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
-from nc_py_api import NextcloudApp
-from nc_py_api.ex_app import nc_app
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from citizens.config import get_settings
 from citizens.db.session import get_db
 from citizens.logging_setup import get_logger
 from citizens.security.identity import CurrentUser
@@ -32,17 +31,32 @@ router = APIRouter(prefix="/admin")
 DB = Annotated[Session, Depends(get_db, scope="function")]
 
 
-def get_config_store(nc: Annotated[NextcloudApp, Depends(nc_app)]) -> provider_config.ConfigStore:
+def get_nc(request: Request):
+    """The requesting user's Nextcloud client in Nextcloud mode; None in
+    standalone mode, where there is no Nextcloud to talk to. A dependency so
+    tests can stand in a fake for it."""
+    if get_settings().is_standalone():
+        return None
+    from nc_py_api.ex_app import nc_app
+
+    return nc_app(request)
+
+
+NcClient = Annotated[object, Depends(get_nc)]
+
+
+def get_config_store(nc: NcClient) -> provider_config.ConfigStore:
+    """Nextcloud mode: this user's app-config client. Standalone: the one
+    SQLite store (services/config_store.py)."""
+    if nc is None:
+        return provider_config.default_store()
     return provider_config.AppConfigStore(nc)
 
 
 Store = Annotated[provider_config.ConfigStore, Depends(get_config_store)]
 
 
-def require_admin(
-    nc: Annotated[NextcloudApp, Depends(nc_app)],
-    user: CurrentUser,
-) -> str:
+def require_admin(nc: NcClient, user: CurrentUser) -> str:
     """Defence in depth for the routes that read and write provider API keys.
 
     The proxy already restricts these paths to administrators, but that rests
@@ -60,6 +74,11 @@ def require_admin(
     closed for everyone and silently removes Settings from real admins.
     `nc_app` already binds this client to the requesting user.
     """
+    if nc is None:
+        # standalone mode: the account's role, no Nextcloud involved
+        from citizens.security import standalone_auth
+
+        return standalone_auth.require_admin(user)
     if _admin_until.get(user, 0.0) > time.monotonic():
         return user
     try:

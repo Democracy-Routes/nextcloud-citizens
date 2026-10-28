@@ -67,16 +67,32 @@ def token_key(token: str) -> str:
 
 
 def client_ip(request: Request) -> str:
-    """AppAPI sets `x-origin-ip` itself, stripping any client-supplied copy, so
-    it is the only trustworthy client address behind the proxy. X-Forwarded-For
-    is accepted only as a fallback for direct deployments — it is
-    client-controlled, and preferring it let anyone reset their own bucket with
-    a made-up header.
+    """Nextcloud mode: AppAPI sets `x-origin-ip` itself, stripping any
+    client-supplied copy, so it is the only trustworthy client address behind
+    the proxy. X-Forwarded-For is accepted only as a fallback for direct
+    deployments — it is client-controlled, and preferring it let anyone reset
+    their own bucket with a made-up header.
+
+    Standalone mode: nobody strips headers for us, so `x-origin-ip` is just
+    another client header and is ignored. X-Forwarded-For is believed only
+    when the direct peer is one of CITIZENS_TRUSTED_PROXIES (the operator's
+    reverse proxy), and then its last hop — the address that proxy saw.
     """
+    from citizens.config import get_settings
+
+    settings = get_settings()
+    peer = request.client.host if request.client else "unknown"
+    if settings.is_standalone():
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded and peer in settings.trusted_proxies():
+            hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+            if hops:
+                return hops[-1]
+        return peer
     origin = request.headers.get("x-origin-ip", "").strip()
     if origin:
         return origin
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
         return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return peer
