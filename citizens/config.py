@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # Provided by AppAPI / the container environment
     app_id: str = "citizens"
-    app_version: str = "0.8.0-alpha.1"
+    app_version: str = "0.9.0-alpha.1"
     app_host: str = "0.0.0.0"
     app_port: int = 23000
     app_secret: str = ""

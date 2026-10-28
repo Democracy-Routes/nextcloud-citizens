@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Nextcloud Citizens ExApp."""
 
-__version__ = "0.8.0-alpha.1"
+__version__ = "0.9.0-alpha.1"
