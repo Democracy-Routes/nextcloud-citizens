@@ -2,6 +2,35 @@
 
 All notable changes to Nextcloud Citizens.
 
+## Unreleased (0.9)
+
+### For the organizer
+
+- Standalone mode: Citizens runs without Nextcloud. Organizers sign in with
+  an account; an administrator invites them from Settings -> Organisation ->
+  Users, by mail or with a link copied from the log. The organizer page is
+  served by the app itself.
+- German, French and Spanish for the organizer, the recorder, the consent
+  notice, the event kit and the report.
+
+### Operations
+
+- `CITIZENS_MODE=standalone` switches the mode; a value that is neither
+  `standalone` nor `nextcloud` stops startup with `mode_invalid`.
+- Settings are kept in an SQLite table in standalone mode.
+- Invitation and reset mails over SMTP (`CITIZENS_SMTP_URL`,
+  `CITIZENS_MAIL_FROM`); without SMTP the links go to the log.
+- Operator commands: `python -m citizens.standalone create-admin`,
+  `set-password`, `list-users`. An optional first administrator can come
+  from `CITIZENS_BOOTSTRAP_ADMIN_USER` and `..._PASSWORD`.
+- `CITIZENS_TRUSTED_PROXIES` tells login rate limiting which proxy's
+  `X-Forwarded-For` to believe.
+- `docker-compose.standalone.yml`, `.env.standalone.example`,
+  `scripts/standalone-up.sh` and `scripts/standalone-down.sh`; see
+  `docs/standalone.md`. `scripts/backup-citizens-data.sh` takes the volume
+  name as an optional first argument.
+- FastAPI and Starlette are pinned.
+
 ## Unreleased (0.8)
 
 ### For the organizer

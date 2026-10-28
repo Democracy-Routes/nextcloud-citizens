@@ -152,6 +152,60 @@ _TEXT = {
             "Se non sei stato tu, non cambia nulla: ignora questo messaggio.\n"
         ),
     },
+    "de": {
+        "invite_subject": "Dein Citizens-Konto bei {instance}",
+        "invite_body": (
+            "Hallo {name},\n\n"
+            "Für dich wurde ein Konto bei Citizens auf {instance} angelegt.\n"
+            "Wähle dein Passwort mit diesem Link (gültig für {hours} Stunden):\n\n"
+            "{link}\n\n"
+            "Falls du das nicht erwartet hast, kannst du diese Nachricht ignorieren.\n"
+        ),
+        "reset_subject": "Citizens-Passwort zurücksetzen",
+        "reset_body": (
+            "Hallo {name},\n\n"
+            "Jemand hat darum gebeten, das Passwort deines Citizens-Kontos bei {instance} zurückzusetzen.\n"
+            "Wähle ein neues Passwort mit diesem Link (gültig für {hours} Stunden):\n\n"
+            "{link}\n\n"
+            "Falls du es nicht warst, ändert sich nichts: ignoriere diese Nachricht.\n"
+        ),
+    },
+    "fr": {
+        "invite_subject": "Ton compte Citizens sur {instance}",
+        "invite_body": (
+            "Bonjour {name},\n\n"
+            "Un compte a été créé pour toi sur Citizens, {instance}.\n"
+            "Choisis ton mot de passe avec ce lien (valable {hours} heures) :\n\n"
+            "{link}\n\n"
+            "Si tu ne t'y attendais pas, tu peux ignorer ce message.\n"
+        ),
+        "reset_subject": "Réinitialise ton mot de passe Citizens",
+        "reset_body": (
+            "Bonjour {name},\n\n"
+            "Quelqu'un a demandé la réinitialisation du mot de passe de ton compte Citizens sur {instance}.\n"
+            "Choisis un nouveau mot de passe avec ce lien (valable {hours} heures) :\n\n"
+            "{link}\n\n"
+            "Si ce n'était pas toi, rien ne change : ignore ce message.\n"
+        ),
+    },
+    "es": {
+        "invite_subject": "Tu cuenta de Citizens en {instance}",
+        "invite_body": (
+            "Hola {name},\n\n"
+            "Se ha creado una cuenta para ti en Citizens, {instance}.\n"
+            "Elige tu contraseña con este enlace (válido durante {hours} horas):\n\n"
+            "{link}\n\n"
+            "Si no lo esperabas, puedes ignorar este mensaje.\n"
+        ),
+        "reset_subject": "Restablece tu contraseña de Citizens",
+        "reset_body": (
+            "Hola {name},\n\n"
+            "Alguien ha solicitado restablecer la contraseña de tu cuenta de Citizens en {instance}.\n"
+            "Elige una nueva contraseña con este enlace (válido durante {hours} horas):\n\n"
+            "{link}\n\n"
+            "Si no has sido tú, no cambia nada: ignora este mensaje.\n"
+        ),
+    },
 }
 
 

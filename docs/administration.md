@@ -19,6 +19,10 @@ the API keys it needs, and understanding what leaves your server.
 
 ## 2. Install
 
+Citizens runs in two modes. This guide describes the Nextcloud mode, an
+ExApp installed through AppAPI. To run it without Nextcloud, with its own
+accounts and Settings, follow the [standalone guide](standalone.md).
+
 ### From the App Store
 
 Settings → Administration → **External Apps** → find *Citizens* → **Install**.

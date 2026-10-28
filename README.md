@@ -107,6 +107,12 @@ Then open **Citizens → Settings** to add a speech-to-text key and an analysis
 endpoint. Until you do, the app records and stores audio but sends nothing
 anywhere. See the [administration guide](docs/administration.md).
 
+## Run it without Nextcloud
+
+Since 0.9 the same app can run on its own: one Docker container with its own
+accounts and Settings, behind your reverse proxy. See the
+[standalone guide](docs/standalone.md).
+
 ## What leaves your server
 
 | Step | Data | Destination | Condition |

@@ -8,12 +8,20 @@
 # until this existed.
 #
 #   sh scripts/backup-citizens-data.sh                 # into /root/backups
+#   sh scripts/backup-citizens-data.sh <volume>        # another volume, e.g. the
+#                                                      # standalone one
 #   BACKUP_ROOT=/mnt/x CITIZENS_BACKUP_REMOTE=user@host:/backups/citizens sh scripts/backup-citizens-data.sh
 #
 # Restore: docs/administration.md § Backups.
 set -eu
 # nc_app_citizens_data: the volume AppAPI creates when it deploys the image
 # itself; citizens_data: the hand-run deployment's (scripts/event-up.sh).
+# standalone mode: the compose project prefix is added to the volume name
+# (see `docker volume ls`), e.g. nextcloud-citizen_citizens_standalone_data.
+# A volume given as the first argument wins over $VOLUME.
+if [ -n "${1:-}" ]; then
+    VOLUME="$1"
+fi
 if [ -z "${VOLUME:-}" ]; then
     if docker volume inspect nc_app_citizens_data >/dev/null 2>&1; then
         VOLUME=nc_app_citizens_data

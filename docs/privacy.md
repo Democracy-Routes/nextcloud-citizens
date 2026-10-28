@@ -24,6 +24,11 @@ Everything Citizens stores lives under the ExApp's own persistent storage
 
 Citizens never reads or writes Nextcloud user files.
 
+In standalone mode (no Nextcloud), organizer accounts are stored in the app
+database. An account holds a username, a display name and an email address,
+and a password hash. Invitation and password-reset links are stored hashed and
+expire. Deleting an account removes the account and its links.
+
 ## What leaves the server
 
 **Nothing, until an administrator configures a provider.** A fresh install

@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Citizens in standalone mode (no Nextcloud). One container, one data volume.
+# Guide: docs/standalone.md
+#
+#   cp .env.standalone.example .env.standalone   # then edit it
+#   sh scripts/standalone-up.sh
+#
+# The app listens on 127.0.0.1 only. Your reverse proxy terminates HTTPS and
+# forwards to it; there is no proxy in this file on purpose.
+services:
+  citizens:
+    image: citizens-standalone
+    build: .
+    env_file: .env.standalone
+    environment:
+      APP_PERSISTENT_STORAGE: /data
+    volumes:
+      - citizens_standalone_data:/data
+    ports:
+      - "127.0.0.1:${CITIZENS_PORT:-23000}:23000"
+    # 2 GB is enough for cloud speech-to-text and small Vosk models.
+    # Use 6g for large Vosk models.
+    mem_limit: 2g
+    memswap_limit: 2g
+    restart: unless-stopped
+    # The healthcheck is the one baked into the image (/heartbeat).
+
+volumes:
+  citizens_standalone_data:

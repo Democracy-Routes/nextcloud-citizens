@@ -47,3 +47,7 @@ frontend/playwright-report/
 # Bug-audit backlogs list unfixed weaknesses in a live civic app; kept local
 # only (the public CHANGELOG carries the fixed-only narrative).
 docs/bug-audit-*.md
+
+# Standalone mode secrets
+.env.standalone
+!.env.standalone.example
