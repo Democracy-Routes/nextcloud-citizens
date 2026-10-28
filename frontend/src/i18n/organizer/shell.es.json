@@ -163,5 +163,34 @@
 		"revokeTitle": "¿Revocar todos los códigos de mesa?",
 		"revokeMessage": "Todos los códigos QR impresos o compartidos dejan de funcionar de inmediato. Los teléfonos que ya están grabando conservan su sesión.",
 		"revokeConfirm": "Revocar todos"
+	},
+	"auth": {
+		"title": "Iniciar sesión",
+		"lead": "Inicia sesión con tu cuenta de Citizens.",
+		"username": "Nombre de usuario",
+		"password": "Contraseña",
+		"signIn": "Iniciar sesión",
+		"signingIn": "Iniciando sesión…",
+		"forgot": "¿Olvidaste la contraseña?",
+		"forgotTitle": "Restablecer la contraseña",
+		"forgotLead": "Escribe el correo electrónico de tu cuenta y te enviaremos un enlace.",
+		"resetByAdmin": "El correo no está configurado en este servidor, así que las contraseñas las restablece un administrador. Pídele un nuevo enlace a alguno de ellos.",
+		"email": "Correo electrónico",
+		"sendLink": "Enviar el enlace",
+		"resetSent": "Si esa dirección tiene una cuenta, un enlace va de camino.",
+		"backToSignIn": "Volver a iniciar sesión",
+		"setTitle": "Elige una contraseña",
+		"setLead": "Elige una contraseña de al menos {min} caracteres. Después iniciarás sesión automáticamente.",
+		"newPassword": "Nueva contraseña",
+		"repeatPassword": "Repite la contraseña",
+		"tooShort": "Al menos {min} caracteres.",
+		"mismatch": "Las dos contraseñas no coinciden.",
+		"setSubmit": "Guardar la contraseña e iniciar sesión",
+		"unreachable": "No se puede contactar con el servidor.",
+		"retry": "Reintentar"
+	},
+	"account": {
+		"language": "Idioma",
+		"signOut": "Cerrar sesión"
 	}
 }

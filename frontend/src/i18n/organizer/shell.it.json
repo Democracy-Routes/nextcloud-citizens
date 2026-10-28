@@ -163,5 +163,34 @@
 		"revokeTitle": "Revocare tutti i codici dei tavoli?",
 		"revokeMessage": "Ogni codice QR stampato o condiviso smette subito di funzionare. I telefoni che stanno già registrando mantengono la loro sessione.",
 		"revokeConfirm": "Revoca tutti"
+	},
+	"auth": {
+		"title": "Accedi",
+		"lead": "Accedi con il tuo account Citizens.",
+		"username": "Nome utente",
+		"password": "Password",
+		"signIn": "Accedi",
+		"signingIn": "Accesso in corso…",
+		"forgot": "Password dimenticata?",
+		"forgotTitle": "Reimposta la password",
+		"forgotLead": "Inserisci l'indirizzo email del tuo account e ti invieremo un link.",
+		"resetByAdmin": "L'email non è configurata su questo server: le password vengono reimpostate da un amministratore. Chiedi a uno di loro un nuovo link.",
+		"email": "Indirizzo email",
+		"sendLink": "Invia il link",
+		"resetSent": "Se questo indirizzo ha un account, un link è in arrivo.",
+		"backToSignIn": "Torna all'accesso",
+		"setTitle": "Scegli una password",
+		"setLead": "Scegli una password di almeno {min} caratteri. Poi accederai automaticamente.",
+		"newPassword": "Nuova password",
+		"repeatPassword": "Ripeti la password",
+		"tooShort": "Almeno {min} caratteri.",
+		"mismatch": "Le due password sono diverse.",
+		"setSubmit": "Imposta la password e accedi",
+		"unreachable": "Il server non è raggiungibile.",
+		"retry": "Riprova"
+	},
+	"account": {
+		"language": "Lingua",
+		"signOut": "Esci"
 	}
 }

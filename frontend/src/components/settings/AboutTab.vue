@@ -6,6 +6,7 @@ import { mdiBookOpenOutline, mdiDatabaseOutline, mdiInformationOutline, mdiMicro
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../api'
+import { auth } from '../../auth'
 import { describeError } from '../../errors'
 import type { AboutInfo } from '../../types'
 import SettingsCard from './SettingsCard.vue'
@@ -63,6 +64,18 @@ function when(iso: string | null): string {
 				<dd>{{ info.version }}</dd>
 				<dt>{{ t('organizer.settings.about.schema') }}</dt>
 				<dd>{{ info.schema_revision ?? t('organizer.settings.about.unknown') }}</dd>
+				<template v-if="auth.config">
+					<dt>{{ t('organizer.settings.about.runMode') }}</dt>
+					<dd data-test="about-run-mode">
+						{{ auth.config.mode === 'standalone' ? t('organizer.settings.about.runStandalone') : t('organizer.settings.about.runNextcloud') }}
+					</dd>
+					<template v-if="auth.config.mode === 'standalone'">
+						<dt>{{ t('organizer.settings.about.signIn') }}</dt>
+						<dd>{{ auth.config.login.oidc ? t('organizer.settings.about.signInPasswordOidc') : t('organizer.settings.about.signInPassword') }}</dd>
+						<dt>{{ t('organizer.settings.about.mail') }}</dt>
+						<dd>{{ auth.config.mail ? t('organizer.settings.about.mailConfigured') : t('organizer.settings.about.mailNotConfigured') }}</dd>
+					</template>
+				</template>
 			</dl>
 		</SettingsCard>
 

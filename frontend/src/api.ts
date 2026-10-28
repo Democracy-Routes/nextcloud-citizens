@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type {
 	AboutInfo,
+	Account,
+	AccountCreated,
+	AuthConfig,
+	Me,
 	Intervention,
 	Assembly,
 	AssemblyCreated,
@@ -69,10 +73,27 @@ export class ApiError extends Error {
 // Partial updates use PUT, never PATCH: AppAPI's proxy registers handlers for
 // GET/POST/PUT/DELETE only, so a PATCH is answered 405 by Nextcloud's router
 // and never reaches the app. tests/unit/test_proxy_verbs.py enforces this.
+// Standalone mode refuses an unsafe request that does not name its client
+// (the cookie alone must not be enough for a cross-site form post), so every
+// request carries the header in both modes; Nextcloud ignores it.
+const CLIENT_HEADERS = { 'X-Citizens-Client': 'organizer' }
+
+// An expired session in standalone mode: the shell registers a handler that
+// brings the login view back. The sign-in calls themselves answer 401 for
+// ordinary reasons (wrong password, signed out) and are exempt.
+let unauthorizedHandler: (() => void) | null = null
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+	unauthorizedHandler = handler
+}
+const AUTH_EXEMPT = ['/api/v1/auth/login', '/api/v1/auth/me', '/api/v1/auth/set-password']
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
 	const response = await fetch(BASE + path, {
 		method,
-		headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+		headers:
+			body === undefined
+				? { ...CLIENT_HEADERS }
+				: { ...CLIENT_HEADERS, 'Content-Type': 'application/json' },
 		body: body === undefined ? undefined : JSON.stringify(body),
 		credentials: 'same-origin',
 	})
@@ -84,6 +105,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 		} catch {
 			/* not JSON */
 		}
+		if (response.status === 401 && unauthorizedHandler && !AUTH_EXEMPT.some((p) => path.startsWith(p))) {
+			unauthorizedHandler()
+		}
 		throw new ApiError(response.status, detail)
 	}
 	if (response.status === 204) return undefined as T
@@ -91,6 +115,43 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
+	// ---- sign-in and accounts (standalone mode; config and me answer in both)
+	authConfig: () => request<AuthConfig>('GET', '/api/v1/auth/config'),
+	me: () => request<Me>('GET', '/api/v1/auth/me'),
+	updateMe: (data: {
+		display_name?: string
+		language?: string
+		current_password?: string
+		password?: string
+	}) => request<Account>('PUT', '/api/v1/auth/me', data),
+	login: (data: { username: string; password: string }) =>
+		request<Account>('POST', '/api/v1/auth/login', data),
+	logout: () => request<void>('POST', '/api/v1/auth/logout'),
+	requestReset: (email: string) => request<{ ok: boolean }>('POST', '/api/v1/auth/reset', { email }),
+	setPassword: (data: { token: string; password: string }) =>
+		request<Account>('POST', '/api/v1/auth/set-password', data),
+	listUsers: () => request<{ users: Account[]; mail: boolean }>('GET', '/api/v1/admin/users'),
+	createUser: (data: {
+		username: string
+		display_name: string
+		email: string | null
+		role: 'admin' | 'organizer'
+		language: string
+	}) => request<AccountCreated>('POST', '/api/v1/admin/users', data),
+	updateUser: (
+		id: string,
+		data: {
+			display_name?: string
+			email?: string
+			role?: 'admin' | 'organizer'
+			language?: string
+			disabled?: boolean
+		},
+	) => request<Account>('PUT', `/api/v1/admin/users/${id}`, data),
+	inviteUser: (id: string) =>
+		request<{ ok: boolean; mail: boolean }>('POST', `/api/v1/admin/users/${id}/invite`),
+	deleteUser: (id: string) => request<void>('DELETE', `/api/v1/admin/users/${id}`),
+
 	listAssemblies: () => request<Assembly[]>('GET', '/api/v1/assemblies'),
 	createAssembly: (data: {
 		name: string

@@ -787,3 +787,37 @@ export interface RoundMonitor {
 	 * tab used to read these from the assembly prop, which nothing refreshed. */
 	rounds: { id: string; position: number; title: string; status: string }[]
 }
+
+/** GET /api/v1/auth/config: how this instance signs people in. */
+export interface AuthConfig {
+	mode: 'nextcloud' | 'standalone'
+	version: string
+	login: { password: boolean; oidc: boolean }
+	mail: boolean
+	languages: string[]
+}
+
+/** An account of the standalone mode. */
+export interface Account {
+	id: string
+	username: string
+	display_name: string
+	email: string | null
+	email_verified: boolean
+	role: 'admin' | 'organizer'
+	language: string
+	has_password: boolean
+	oidc: boolean
+	disabled: boolean
+	created_at: string | null
+	last_login_at: string | null
+	mode?: 'standalone'
+}
+
+export interface AccountCreated extends Account {
+	/** a set-password mail was queued */
+	invited: boolean
+}
+
+/** GET /api/v1/auth/me: the account in standalone mode, only the id in Nextcloud. */
+export type Me = Account | { id: string; mode: 'nextcloud' }

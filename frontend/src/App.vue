@@ -6,6 +6,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { describeError, type UiError } from './errors'
 import { api, ApiError } from './api'
+import AccountMenu from './components/auth/AccountMenu.vue'
+import { isStandalone } from './auth'
 import AssemblyDetail from './components/AssemblyDetail.vue'
 import AssemblyWizard from './components/AssemblyWizard.vue'
 import HomeView from './components/HomeView.vue'
@@ -25,6 +27,7 @@ type View =
 	| { name: 'detail'; id: string }
 	| { name: 'settings' }
 
+const emit = defineEmits<{ 'signed-out': [] }>()
 const { t, te } = useI18n()
 
 const assemblies = ref<Assembly[]>([])
@@ -321,8 +324,10 @@ async function recordNow(): Promise<void> {
 				{{ t('organizer.shell.app.empty') }}
 			</p>
 		</nav>
-		<div v-if="isAdmin" class="cz-sidebar__bottom">
+		<div v-if="isAdmin || isStandalone" class="cz-sidebar__bottom">
+			<AccountMenu v-if="isStandalone" @signed-out="emit('signed-out')" />
 			<button
+				v-if="isAdmin"
 				class="cz-navitem"
 				:class="{ 'cz-navitem--active': view.name === 'settings' }"
 				@click="openSettings">

@@ -163,5 +163,34 @@
 		"revokeTitle": "Révoquer tous les codes de table ?",
 		"revokeMessage": "Tous les codes QR imprimés ou partagés cessent immédiatement de fonctionner. Les téléphones qui enregistrent déjà conservent leur session.",
 		"revokeConfirm": "Tout révoquer"
+	},
+	"auth": {
+		"title": "Connexion",
+		"lead": "Connectez-vous avec votre compte Citizens.",
+		"username": "Nom d'utilisateur",
+		"password": "Mot de passe",
+		"signIn": "Se connecter",
+		"signingIn": "Connexion en cours…",
+		"forgot": "Mot de passe oublié ?",
+		"forgotTitle": "Réinitialiser votre mot de passe",
+		"forgotLead": "Saisissez l'adresse e-mail de votre compte et nous vous enverrons un lien.",
+		"resetByAdmin": "L'e-mail n'est pas configuré sur ce serveur : les mots de passe sont réinitialisés par un administrateur. Demandez un nouveau lien à l'un d'eux.",
+		"email": "Adresse e-mail",
+		"sendLink": "Envoyer le lien",
+		"resetSent": "Si cette adresse correspond à un compte, un lien est en route.",
+		"backToSignIn": "Retour à la connexion",
+		"setTitle": "Choisissez un mot de passe",
+		"setLead": "Choisissez un mot de passe d'au moins {min} caractères. Vous serez ensuite connecté.",
+		"newPassword": "Nouveau mot de passe",
+		"repeatPassword": "Répétez le mot de passe",
+		"tooShort": "Au moins {min} caractères.",
+		"mismatch": "Les deux mots de passe sont différents.",
+		"setSubmit": "Définir le mot de passe et se connecter",
+		"unreachable": "Le serveur est injoignable.",
+		"retry": "Réessayer"
+	},
+	"account": {
+		"language": "Langue",
+		"signOut": "Se déconnecter"
 	}
 }

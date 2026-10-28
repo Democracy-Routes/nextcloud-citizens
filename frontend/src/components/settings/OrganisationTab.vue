@@ -6,9 +6,11 @@ import { mdiDeleteClockOutline, mdiImageOutline, mdiShieldAccountOutline } from 
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../../api'
+import { isStandalone } from '../../auth'
 import CzButton from '../ui/CzButton.vue'
 import { toast } from '../ui/toast'
 import SettingsCard from './SettingsCard.vue'
+import UsersCard from './UsersCard.vue'
 import { useSettingsForm, type CardId } from './useSettingsForm'
 
 const { t } = useI18n()
@@ -82,6 +84,8 @@ async function removeLogo(): Promise<void> {
 
 <template>
 	<div v-if="summary" class="cz-settings-column">
+		<UsersCard v-if="isStandalone" />
+
 		<SettingsCard
 			:icon="mdiShieldAccountOutline"
 			:title="t('organizer.settings.org.title')"

@@ -163,5 +163,34 @@
 		"revokeTitle": "Revoke all table codes?",
 		"revokeMessage": "Every printed or shared QR code stops working immediately. Phones already recording keep their session.",
 		"revokeConfirm": "Revoke all"
+	},
+	"auth": {
+		"title": "Sign in",
+		"lead": "Sign in with your Citizens account.",
+		"username": "Username",
+		"password": "Password",
+		"signIn": "Sign in",
+		"signingIn": "Signing in…",
+		"forgot": "Forgot password?",
+		"forgotTitle": "Reset your password",
+		"forgotLead": "Enter the email address of your account and we will send you a link.",
+		"resetByAdmin": "Email is not set up on this server, so passwords are reset by an administrator. Ask one of them for a new link.",
+		"email": "Email address",
+		"sendLink": "Send link",
+		"resetSent": "If that address has an account, a link is on its way.",
+		"backToSignIn": "Back to sign in",
+		"setTitle": "Choose a password",
+		"setLead": "Choose a password of at least {min} characters. You will be signed in afterwards.",
+		"newPassword": "New password",
+		"repeatPassword": "Repeat the password",
+		"tooShort": "At least {min} characters.",
+		"mismatch": "The two passwords differ.",
+		"setSubmit": "Set password and sign in",
+		"unreachable": "The server cannot be reached.",
+		"retry": "Try again"
+	},
+	"account": {
+		"language": "Language",
+		"signOut": "Sign out"
 	}
 }

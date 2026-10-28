@@ -3,7 +3,7 @@
 import { createApp } from 'vue'
 import { i18n, setLocale } from './i18n'
 import { installOrganizerCatalogue } from './i18n/organizer'
-import App from './App.vue'
+import AuthGate from './components/auth/AuthGate.vue'
 import './style.css'
 
 function mount(): void {
@@ -15,7 +15,7 @@ function mount(): void {
 	// Nextcloud sets the document language from the user's own preference
 	setLocale(document.documentElement.lang)
 	installOrganizerCatalogue()
-	createApp(App).use(i18n).mount(root)
+	createApp(AuthGate).use(i18n).mount(root)
 }
 
 if (document.readyState === 'loading') {

@@ -403,10 +403,15 @@ class TestCatalogueParity:
 
 
 class TestLookup:
-    def test_a_missing_key_falls_back_to_english(self):
-        # German has only its dates; everything else reads English
+    def test_a_missing_key_falls_back_to_english(self, monkeypatch):
+        # since 0.9 every shipped language is complete (the parity test in
+        # test_consent_notice.py); a key a future language lacks reads English
+        from citizens.services import report_text
+
+        assert text("de", "assembly_report") != "Assembly Report"
+        partial = {k: v for k, v in report_text.CATALOGUE["de"].items() if k != "assembly_report"}
+        monkeypatch.setitem(report_text.CATALOGUE, "de", partial)
         assert text("de", "assembly_report") == "Assembly Report"
-        assert text("fr", "type_plural.proposal") == "Proposals"
 
     def test_an_unknown_language_reads_english(self):
         assert text("xx", "assembly_report") == "Assembly Report"

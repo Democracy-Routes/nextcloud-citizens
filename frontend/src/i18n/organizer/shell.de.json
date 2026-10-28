@@ -163,5 +163,34 @@
 		"revokeTitle": "Alle Tischcodes widerrufen?",
 		"revokeMessage": "Jeder gedruckte oder geteilte QR-Code funktioniert sofort nicht mehr. Telefone, die bereits aufnehmen, behalten ihre Sitzung.",
 		"revokeConfirm": "Alle widerrufen"
+	},
+	"auth": {
+		"title": "Anmelden",
+		"lead": "Melden Sie sich mit Ihrem Citizens-Konto an.",
+		"username": "Benutzername",
+		"password": "Passwort",
+		"signIn": "Anmelden",
+		"signingIn": "Anmeldung läuft …",
+		"forgot": "Passwort vergessen?",
+		"forgotTitle": "Passwort zurücksetzen",
+		"forgotLead": "Geben Sie die E-Mail-Adresse Ihres Kontos ein, wir senden Ihnen einen Link.",
+		"resetByAdmin": "Auf diesem Server ist keine E-Mail eingerichtet, daher setzt eine Administratorin oder ein Administrator Passwörter zurück. Bitten Sie eine dieser Personen um einen neuen Link.",
+		"email": "E-Mail-Adresse",
+		"sendLink": "Link senden",
+		"resetSent": "Falls diese Adresse ein Konto hat, ist ein Link unterwegs.",
+		"backToSignIn": "Zurück zur Anmeldung",
+		"setTitle": "Passwort wählen",
+		"setLead": "Wählen Sie ein Passwort mit mindestens {min} Zeichen. Danach sind Sie angemeldet.",
+		"newPassword": "Neues Passwort",
+		"repeatPassword": "Passwort wiederholen",
+		"tooShort": "Mindestens {min} Zeichen.",
+		"mismatch": "Die beiden Passwörter stimmen nicht überein.",
+		"setSubmit": "Passwort setzen und anmelden",
+		"unreachable": "Der Server ist nicht erreichbar.",
+		"retry": "Erneut versuchen"
+	},
+	"account": {
+		"language": "Sprache",
+		"signOut": "Abmelden"
 	}
 }
