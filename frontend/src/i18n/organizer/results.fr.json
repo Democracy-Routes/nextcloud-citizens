@@ -1,0 +1,254 @@
+{
+	"labels": {
+		"type": {
+			"proposal": "Proposition",
+			"agreement": "Point de consensus",
+			"disagreement": "Point de divergence",
+			"concern": "Préoccupation",
+			"question": "Question ouverte",
+			"minority_position": "Position minoritaire",
+			"new_idea": "Idée émergente"
+		},
+		"typePlural": {
+			"proposal": "Propositions",
+			"agreement": "Points de consensus",
+			"disagreement": "Points de divergence",
+			"concern": "Préoccupations exprimées",
+			"question": "Questions ouvertes",
+			"minority_position": "Positions minoritaires",
+			"new_idea": "Idées émergentes"
+		},
+		"otherFindings": "Autres résultats",
+		"round": "Session {position}",
+		"roundTitled": "Session {position} — {title}"
+	},
+	"analysis": {
+		"pausedWhileEditing": "En pause pendant la modification",
+		"filterStatus": "Filtrer par statut de relecture",
+		"filterType": "Filtrer par type de résultat",
+		"filters": {
+			"all": "Tous les résultats",
+			"draft": "À relire",
+			"approved": "Approuvés",
+			"rejected": "Rejetés"
+		},
+		"allTypes": "Tous les types",
+		"approveDrafts": "Approuver {count} brouillons | Approuver {count} brouillon | Approuver {count} brouillons",
+		"rerun": "Relancer l'analyse",
+		"run": "Lancer l'analyse",
+		"noSessionsTitle": "Cette assemblée n'a pas encore de session",
+		"noSessionsHint": "Ajoutez une session dans l'onglet Sessions ; les résultats apparaissent ici une fois ses tables analysées.",
+		"inProgress": "Analyse en cours",
+		"running": "{count} en cours",
+		"queued": "{count} en file d'attente",
+		"waitingRetry": "{count} en attente de nouvelle tentative",
+		"cancelPending": "Annuler les analyses en attente",
+		"table": "Table {number}",
+		"failed": "L'analyse a échoué",
+		"failedFor": "pour {count} table(s) :",
+		"clusteringFailed": "Le regroupement entre tables a échoué",
+		"rerunClustering": "Relancer uniquement le regroupement",
+		"notConfiguredTitle": "L'analyse IA n'est pas configurée",
+		"notConfiguredHint": "Un administrateur doit ajouter une clé d'API d'analyse (Mistral, Ollama Cloud ou tout point d'accès compatible OpenAI) dans les Paramètres. L'analyse s'exécute ensuite automatiquement après la transcription de chaque table.",
+		"inProgressTitle": "Analyse en cours…",
+		"noFindingsTitle": "Aucun résultat pour l'instant",
+		"inProgressHint": "Les tables sont en cours d'analyse — les résultats apparaissent ici automatiquement.",
+		"noFindingsHint": "Les résultats apparaissent automatiquement une fois les tables enregistrées et transcrites, ou lancez l'analyse manuellement.",
+		"runNow": "Lancer l'analyse maintenant",
+		"noMatchTitle": "Aucun résultat ne correspond à ce filtre",
+		"noMatchHint": "Modifiez les filtres ci-dessus pour voir les autres résultats de cette session.",
+		"comparison": {
+			"title": "Équilibre des prises de parole entre les tables",
+			"intro": "Chaque ligne mesure une table séparément — les voix sont détectées, non identifiées, et le temps de parole est une estimation, pas une mesure d'influence.",
+			"colTable": "Table",
+			"colVoices": "Voix",
+			"colLargest": "Part la plus grande",
+			"colSmallest": "Part la plus petite",
+			"colRatio": "Rapport",
+			"recorderChanged": "enregistreur changé"
+		},
+		"acrossTables": "Toutes tables confondues",
+		"aggregatedFrom": "— agrégé à partir de {count} table(s)",
+		"crossTableNote": "Les résultats entre tables sont régénérés chaque fois qu'une table termine son analyse, relectures comprises — relisez-les après la dernière table.",
+		"aiSummary": "SYNTHÈSE IA",
+		"analyzedNoFindings": "Analysé — aucun résultat substantiel pour la question de la session dans cette discussion.",
+		"footer": "Les résultats de l'IA sont des brouillons tant qu'une personne ne les a pas approuvés ; les synthèses sont des descriptions neutres générées par l'IA. Chaque résultat cite des éléments de la transcription ; « mentionné à N tables » n'est jamais une mesure du soutien des participant·e·s.",
+		"toast": {
+			"approved": "{count} résultat(s) approuvé(s)",
+			"nothingToAnalyze": "Rien à analyser — aucune table n'a encore de transcription prête",
+			"queued": "Analyse mise en file pour {count} table(s)",
+			"cancelledRunning": "{cancelled} tâche(s) en attente annulée(s) ; {running} déjà en cours se termineront",
+			"cancelled": "{count} tâche(s) en attente annulée(s)",
+			"reclusterQueued": "Regroupement entre tables mis en file",
+			"reclusterAlready": "Le regroupement est déjà en file"
+		},
+		"confirmApprove": {
+			"title": "Approuver tous les résultats en brouillon ?",
+			"message": "{count} résultat(s) en brouillon de cette session seront marqués comme approuvés et inclus dans le rapport. Les résultats rejetés ne sont pas touchés, et vous pourrez encore modifier ou rejeter n'importe lequel ensuite.",
+			"confirm": "Approuver tous les brouillons"
+		},
+		"confirmRerun": {
+			"title": "Relancer l'analyse ?",
+			"messageReviewed": "Tous les résultats de cette session — y compris les {count} que vous avez déjà approuvés ou modifiés — sont remplacés par un nouvel ensemble généré. Les relectures faites jusqu'ici devront être refaites.",
+			"messageDrafts": "Tous les résultats en brouillon de cette session sont remplacés par de nouveaux résultats générés.",
+			"confirm": "Relancer l'analyse"
+		},
+		"confirmRecluster": {
+			"title": "Relancer le regroupement entre tables ?",
+			"message": "Les {count} résultat(s) entre tables que vous avez déjà approuvés ou modifiés sont remplacés par un nouvel ensemble généré, ainsi que les brouillons. Les résultats par table ne sont pas touchés.",
+			"confirm": "Relancer le regroupement"
+		},
+		"replaceWord": "remplacer"
+	},
+	"report": {
+		"toast": {
+			"closed": "{Thing} est clôturée — le rapport final est prêt",
+			"reopened": "{Thing} est rouverte — les tables peuvent de nouveau enregistrer",
+			"unpublished": "Le rapport n'est plus visible sur les téléphones des tables",
+			"published": "Rapport publié — les téléphones des tables peuvent maintenant le consulter et le télécharger",
+			"synthesisQueued": "Synthèse mise en file — elle apparaîtra ici dans une minute ou deux",
+			"refreshed": "La version publiée correspond maintenant au rapport actuel",
+			"downloadFailed": "Le rapport n'a pas pu être téléchargé — vérifiez le bloqueur de fenêtres contextuelles"
+		},
+		"synthesisFailed": "La synthèse entre les sessions a échoué ({reason}). Relancez-la d'ici une fois la cause corrigée.",
+		"roundAnalysisFailed": "L'analyse de la session {position} entre les tables a échoué ({reason}).",
+		"finalTitle": "Rapport final · clôturé le {date}",
+		"quotationsWithheld": "Citations retenues : une personne participante assise à cette table n'a pas consenti à être citée.",
+		"finalHint": "{Thing} est clôturée : les tables ne peuvent plus enregistrer, et ceci est le rapport définitif. Les participant·e·s continuent de lire cette version même si vous rouvrez — approuvez d'autres résultats et appuyez sur Mettre à jour pour les diffuser.",
+		"allDoneTitle": "Les {count} tables ont terminé.",
+		"allDoneHint": "Clôturez {thing} pour créer le rapport final et activer les téléchargements.",
+		"interimTitle": "Rapport intermédiaire — {complete} tables sur {expected} ont terminé toutes les sessions",
+		"interimHint": "Ceci est un aperçu de {thing} encore en cours. La clôture crée le rapport final et active les téléchargements — vous pourrez rouvrir plus tard.",
+		"close": "Clôturer {thing} et créer le rapport final",
+		"updating": "Mise à jour…",
+		"updatePublished": "Mettre à jour la version publiée",
+		"reopen": "Rouvrir {thing}",
+		"synthesis": {
+			"title": "Comment la discussion a évolué",
+			"haveLead": "Un chapitre couvrant l'ensemble des sessions, rédigé à partir de leurs synthèses et des résultats entre tables approuvés",
+			"haveTail": "Il est refait à la clôture, une fois l'analyse de chaque session disponible.",
+			"none": "Dès qu'au moins deux sessions ont une synthèse, le modèle d'analyse rédige comment la discussion a évolué de la première session à la dernière. Cela se fait tout seul à la clôture ; générez-la plus tôt ici.",
+			"queued": "En file d'attente…",
+			"again": "Générer à nouveau",
+			"generate": "Générer la synthèse",
+			"carried": "Repris d'une session à la suivante"
+		},
+		"includeDrafts": "Inclure les brouillons non relus (clairement signalés)",
+		"preparing": "Préparation…",
+		"pdf": "PDF",
+		"markdown": "Markdown",
+		"json": "JSON",
+		"downloadsLocked": "Les téléchargements sont disponibles une fois que {thing} est clôturée.",
+		"publishedTitle": "Publié sur les téléphones des tables",
+		"unpublishedTitle": "Pas encore publié sur les téléphones des tables",
+		"publishedHint": "Les téléphones d'enregistrement peuvent consulter ce rapport et télécharger le PDF (résultats approuvés et synthèses IA uniquement — les brouillons restent privés).",
+		"unpublishedHint": "La publication permet aux téléphones d'enregistrement de consulter ce rapport et de télécharger le PDF. Seuls les résultats approuvés et les synthèses IA sont partagés.",
+		"unpublish": "Dépublier",
+		"publish": "Publier le rapport aux tables",
+		"emptyTitle": "Rien à rapporter pour l'instant",
+		"emptyHintDrafts": "Aucun résultat n'existe encore — enregistrez les tables et lancez d'abord l'analyse.",
+		"emptyHintApproved": "Aucun résultat approuvé pour l'instant. Approuvez des résultats dans l'onglet Analyse, ou incluez les brouillons pour un aperçu.",
+		"assemblyReport": "{name} — Rapport de l'assemblée",
+		"participants": "{count} participant·e·s",
+		"tables": "{count} tables",
+		"acrossTables": "Toutes tables confondues",
+		"draftPill": "BROUILLON — non relu",
+		"mentionedAt": "Mentionné à {count} table(s)",
+		"speaker": "Intervenant·e",
+		"evidenceRemoved": "Éléments de preuve supprimés avec la transcription",
+		"table": "Table {number}",
+		"aiSummary": "SYNTHÈSE IA",
+		"looksRight": "✓ {count} jugent cela juste",
+		"flaggedMissing": "· ⚠ {count} signalent un manque",
+		"confirmClose": {
+			"title": "Clôturer {thing} et créer le rapport final ?",
+			"missingTables": "Les tables {tables} n'ont jamais enregistré — elles n'apparaîtront pas dans le rapport final. ",
+			"body": "Les tables ne pourront plus enregistrer après la clôture, et le rapport devient définitif. Vous pourrez rouvrir {thing} plus tard si une table en retard doit enregistrer.",
+			"confirm": "Clôturer {thing}"
+		},
+		"confirmUnpublish": {
+			"title": "Arrêter de partager le rapport avec les tables ?",
+			"message": "Chaque téléphone de table qui lit actuellement le rapport en perd immédiatement l'accès. Vous pourrez le publier à nouveau à tout moment.",
+			"confirm": "Dépublier"
+		},
+		"confirmReopen": {
+			"title": "Rouvrir {thing} ?",
+			"message": "Les tables peuvent de nouveau enregistrer et le rapport cesse d'être définitif. Les participant·e·s continuent de lire la version figée à la clôture de {thing}, jusqu'à ce que vous la clôturiez à nouveau.",
+			"confirm": "Rouvrir {thing}"
+		},
+		"confirmPublish": {
+			"title": "Publier le rapport sur les téléphones des tables ?",
+			"message": "Le téléphone d'enregistrement de chaque table pourra consulter ce rapport et télécharger le PDF. Seuls les résultats approuvés et les synthèses IA sont inclus — les brouillons non relus restent privés. Vous pouvez dépublier à tout moment.",
+			"confirm": "Publier"
+		}
+	},
+	"finding": {
+		"title": "Titre",
+		"summary": "Synthèse",
+		"cancel": "Annuler",
+		"saveApprove": "Enregistrer et approuver",
+		"mentionedAt": "Mentionné à {count} table(s)",
+		"support": "soutien : {support}",
+		"approve": "Approuver",
+		"reject": "Rejeter",
+		"edit": "Modifier",
+		"excerpts": "{count} citation(s) à l'appui",
+		"speaker": "INTERVENANT·E",
+		"status": {
+			"DRAFT": "brouillon",
+			"APPROVED": "approuvé",
+			"EDITED_AND_APPROVED": "modifié et approuvé",
+			"REJECTED": "rejeté"
+		},
+		"toast": {
+			"edited": "Résultat modifié et approuvé",
+			"approved": "Résultat approuvé",
+			"rejected": "Résultat rejeté"
+		}
+	},
+	"speaking": {
+		"eyebrow": "ÉQUILIBRE DES PRISES DE PAROLE",
+		"caveat": "Le téléphone qui enregistrait cette table a changé pendant la session ; les voix ne peuvent pas être rapprochées d'une partie à l'autre, ce calcul ne porte donc que sur la partie la plus complète.",
+		"ariaLabel": "Part du temps de parole par voix détectée",
+		"voice": "Voix {label}",
+		"others": "Autres",
+		"note": "Voix détectées, non identifiées par leur nom — issues de l'enregistrement le plus net. Une estimation du temps de parole, pas de la participation ni de l'influence."
+	},
+	"failure": {
+		"retrying": "Nouvelle tentative automatique — essai {attempt} sur {max}.",
+		"retryingNext": "Nouvelle tentative automatique — essai {attempt} sur {max}, prochain dans {seconds} s.",
+		"reason": {
+			"PROVIDER_AUTH": "Le fournisseur a rejeté la clé d'API ou ce modèle (HTTP 401/403). Vérifiez la clé, l'abonnement et le nom du modèle dans les Paramètres, puis relancez.",
+			"PROVIDER_RATE_LIMIT": "Le fournisseur limite le débit des requêtes (HTTP 429). La tâche attend et réessaie d'elle-même — ne lancez pas une autre exécution.",
+			"PROVIDER_TIMEOUT": "Le fournisseur n'a pas répondu à temps. La tâche réessaie d'elle-même ; si elle continue d'échouer, le fournisseur est lent ou injoignable.",
+			"PROVIDER_HTTP": "Le fournisseur a renvoyé une erreur. La tâche réessaie d'elle-même, sauf si le fournisseur a purement et simplement rejeté la requête.",
+			"SCHEMA_INVALID": "Le modèle a répondu, mais pas dans le format requis, trois fois de suite. Relancez ; si cela se répète, essayez un autre modèle.",
+			"NOT_CONFIGURED": "Aucun fournisseur n'est configuré pour cette étape — ajoutez la clé ou le point d'accès dans les Paramètres.",
+			"NO_TRANSCRIPT": "Il n'y a aucune transcription à analyser. Transcrivez d'abord l'enregistrement.",
+			"AUDIO_MISSING": "Le fichier audio est absent du serveur ; il ne peut donc pas être transcrit à nouveau.",
+			"RERUN_EMPTY": "La nouvelle analyse n'a renvoyé aucun résultat pour une table qui en avait déjà ; les résultats précédents ont donc été conservés. Rien n'a été perdu ; relancez l'analyse si vous souhaitiez les remplacer.",
+			"CANCELLED": "Annulé par un organisateur. Relancez quand vous êtes prêt.",
+			"UNKNOWN": "Échec pour une raison que l'application n'a pas reconnue ; le détail ci-dessous est ce que le serveur a consigné."
+		},
+		"code": {
+			"STORAGE_FULL": "Le serveur a manqué d'espace pendant l'assemblage de cet enregistrement. L'audio envoyé est toujours là — libérez de l'espace, puis réessayez.",
+			"CHUNKS_GONE": "Des parties de l'envoi manquent dans le stockage ; l'audio ne peut donc pas être reconstitué. Cette table doit enregistrer à nouveau la session.",
+			"CHUNK_CORRUPTED": "Un morceau de l'envoi a échoué à la vérification de somme de contrôle ; l'audio n'est donc pas fiable. Cette table doit enregistrer à nouveau la session.",
+			"AUDIO_DELETED": "L'audio a été supprimé pendant son assemblage.",
+			"UPLOAD_TIMED_OUT": "Le téléphone a cessé d'envoyer et n'est pas revenu. Ce qui est parvenu au serveur est conservé ; la table peut enregistrer à nouveau.",
+			"UPLOAD_ABANDONED": "L'attente de cet envoi a été interrompue par un organisateur. L'audio déjà reçu est conservé.",
+			"RATE_LIMITED": "Le fournisseur limite le débit des requêtes (HTTP 429). La tâche attend et réessaie d'elle-même — ne lancez pas une autre exécution.",
+			"LIVE_CAPTIONS_MISSING": "La transcription finale est désactivée et les sous-titres en direct n'ont jamais produit de transcription. Retranscrivez à partir de l'audio stocké.",
+			"LIVE_CAPTIONS_UNREADABLE": "La transcription finale est désactivée et le fichier de sous-titres n'a pas pu être lu. Retranscrivez à partir de l'audio stocké.",
+			"LIVE_CAPTIONS_EMPTY": "La transcription finale est désactivée et les sous-titres ne contenaient aucun texte. Retranscrivez à partir de l'audio stocké.",
+			"DEVICE_SILENT": "Le téléphone est devenu silencieux en pleine session et la table a été libérée. Ce qui est parvenu au serveur est conservé.",
+			"ROUND_CONTINUED": "La table a terminé plus tôt alors que la session était encore ouverte, puis a continué : voici la première partie de la session, le reste se trouve dans l'enregistrement en dessous."
+		},
+		"state": {
+			"AUDIO_INVALID": "L'audio envoyé n'a pas pu être validé.",
+			"TRANSCRIPTION_FAILED": "Le fournisseur de transcription n'a pas renvoyé de transcription. L'audio est intact ; on peut donc réessayer.",
+			"ANALYSIS_FAILED": "L'analyse IA ne s'est pas terminée. La transcription est intacte ; on peut donc relancer l'analyse.",
+			"UPLOAD_INCOMPLETE": "L'enregistrement n'est pas parvenu en entier au serveur."
+		}
+	}
+}

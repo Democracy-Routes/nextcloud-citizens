@@ -1,0 +1,231 @@
+{
+	"overview": {
+		"nextStep": "Nächster Schritt",
+		"next": {
+			"liveText": "Sitzung {position} läuft live – behalten Sie Tischzustand und Aufnahmen im Blick.",
+			"liveAction": "Live-Ansicht öffnen",
+			"roundsText": "Legen Sie zunächst die Diskussionssitzungen und ihre Fragen fest.",
+			"roundsAction": "Sitzungen hinzufügen",
+			"participantsText": "Fügen Sie Teilnehmende hinzu – anonyme Kennungen wie P001 genügen.",
+			"participantsAction": "Teilnehmende hinzufügen",
+			"qrText": "Erzeugen Sie die QR-Codes für die Recorder und drucken Sie einen pro Tisch.",
+			"qrAction": "QR-Codes erzeugen",
+			"readyText": "Alles ist vorbereitet. Starten Sie eine Sitzung in der Live-Ansicht, wenn die Diskussion beginnt."
+		},
+		"stats": {
+			"participants": "Teilnehmende",
+			"tables": "Tische",
+			"sessionsHeld": "Durchgeführte Sitzungen",
+			"activeQr": "Aktive QR-Codes"
+		},
+		"details": {
+			"title": "Details der Versammlung",
+			"edit": "Bearbeiten",
+			"add": "Hinzufügen",
+			"name": "Name",
+			"description": "Beschreibung",
+			"language": "Sprache",
+			"languageDetected": "Aus der Aufnahme erkannt: Diese Sitzung wurde mit „Jetzt aufnehmen“ gestartet, daher bestimmt das erste Transkript die Sprache von Analyse und Bericht. Wenn Sie hier eine Sprache wählen, wird sie stattdessen festgelegt.",
+			"languageRetranscribes": "Eine Änderung transkribiert jetzt alle Aufnahmen erneut.",
+			"languageChangeTitle": "Sprache ändern?",
+			"languageChangeConfirm": "Jede Aufnahme mit Audio wird erneut auf {language} transkribiert. Ergebnisse und Bericht folgen. Fortfahren?",
+			"languageChangeConfirmButton": "Fortfahren",
+			"languageChanged": "{count} Aufnahmen zur Transkription auf {language} eingereiht | {count} Aufnahme zur Transkription auf {language} eingereiht | {count} Aufnahmen zur Transkription auf {language} eingereiht",
+			"languageSessionActive": "Beenden Sie zuerst die Sitzung, die gerade aufgenommen wird.",
+			"autoPurge": "Audio von den Tisch-Telefonen löschen, wenn die Sitzung geschlossen wird",
+			"autoPurgeHint": "Jedes Telefon behält eine Kopie des Audios seines Tisches, damit die Aufnahme ein schlechtes Netz übersteht. Damit werden die Telefone aufgefordert, sie zu löschen, sobald die Versammlung beendet ist – das ist besonders wichtig, wenn Teilnehmende ihre eigenen Telefone benutzt haben. Ein Telefon löscht nur Audio, das der Server bereits bestätigt hat, sodass dadurch keine letzte Kopie verloren gehen kann. Schalten Sie es aus, um die Kopien auf den Telefonen zu behalten, bis Sie den Export heruntergeladen haben.",
+			"consent": "Einwilligung am Tisch",
+			"consentRequired": "Erforderlich – ein Tisch nimmt erst auf, wenn eine dort registrierte Person eingewilligt hat",
+			"consentOptional": "Optional – der Hinweis wird angezeigt und die Registrierung angeboten, nichts wird blockiert",
+			"consentHint": "Jede Person registriert sich einzeln auf dem Telefon des Tisches oder auf dem eigenen (Name, optionale E-Mail, ausdrückliche Häkchen zum vom Server erzeugten Hinweis). Der Nachweis – wer, was, welcher Hinweis – wird bei der Versammlung aufbewahrt und mit exportiert. „Erforderlich“ ist die Einstellung für eine organisierte Versammlung; „Optional“ passt zu einer spontanen Sitzung.",
+			"aiFacilitator": "KI-Assistent",
+			"aiLevel": {
+				"default": "Standard aus den Einstellungen ({level})",
+				"off": "Aus",
+				"light": "Dezent – höchstens zwei Impulse pro Sitzung",
+				"normal": "Normal – höchstens vier",
+				"active": "Aktiv – höchstens acht"
+			},
+			"aiHint": "Eine kurze Frage oder Erinnerung auf den Telefonen des Tisches, wenn die Zeit abläuft, im Raum Stille einkehrt oder die Diskussion abschweift – zuerst an das eigene Telefon der Moderation, sofern eines verbunden ist, und erst dann an den Tisch. Jeder Tisch kann ihn von seinem Telefon aus ausschalten; im Reiter „Live“ lässt er sich pausieren.",
+			"aiNotConfigured": "Auf diesem Server noch nicht eingerichtet (Einstellungen → KI).",
+			"redactNames": "Namen, die aus der KI-Analyse herausgehalten werden",
+			"redactPlaceholder": "Anna, Simone, Alessandro",
+			"redactHint": "Die Sprecherkennungen sind bereits anonym, aber Menschen nennen einander laut beim Namen, und das Transkript hält fest, was gesagt wurde. Hier aufgeführte Namen – und die Namen aller importierten Teilnehmenden – werden durch „Person A“, „Person B“ ersetzt, bevor das Transkript an den Analysedienst gesendet wird. Das auf diesem Server gespeicherte Transkript bleibt unverändert, sodass Zitate im Bericht weiterhin zeigen, was tatsächlich gesagt wurde. Das Audio, das zur Transkription gesendet wird, ist davon nicht betroffen: Verwenden Sie eine selbst gehostete Engine, wenn das wichtig ist.",
+			"cancel": "Abbrechen",
+			"save": "Speichern",
+			"noDescription": "Keine Beschreibung. Name und Sprache in der Kopfzeile werden hier bearbeitet."
+		},
+		"languages": {
+			"en": "English",
+			"it": "Italiano",
+			"de": "Deutsch",
+			"fr": "Français",
+			"es": "Español"
+		},
+		"instructions": {
+			"title": "Anweisungen für die KI-Analyse",
+			"placeholder": "Z. B. Diese Versammlung befasst sich mit städtischer Mobilität. „PUMS“ bezeichnet den Mobilitätsplan der Stadt.",
+			"empty": "Optionaler Kontext für die KI bei der Analyse dieser Versammlung – Thema, lokales Glossar, Schwerpunkte."
+		},
+		"retention": {
+			"label": "Aufbewahrung des Audios",
+			"default": "Standard der Instanz",
+			"days": "Audio {days} Tage nach dem Schließen löschen",
+			"zero": "Keine Aufbewahrung: nur den Bericht behalten",
+			"zeroHelp": "Sobald die Versammlung geschlossen und verarbeitet ist, werden Audio und Transkripte gelöscht und ein PDF des Berichts bleibt erhalten. Das lässt sich nicht rückgängig machen, und die Versammlung kann nicht wieder geöffnet werden.",
+			"applied": "Keine Aufbewahrung angewendet am {time}"
+		},
+		"sessions": {
+			"title": "Sitzungen",
+			"liveView": "Live-Ansicht",
+			"none": "Noch keine Sitzungen festgelegt.",
+			"untitled": "Sitzung ohne Titel",
+			"noQuestion": "Keine Frage festgelegt",
+			"minutes": "{minutes} Min."
+		},
+		"rounds": {
+			"noPlannedTime": "Keine geplante Dauer"
+		},
+		"danger": {
+			"title": "Gefahrenbereich",
+			"body": "Beim Löschen dieser Versammlung werden jede Sitzung, Aufnahme, jedes Transkript, Ergebnis und jeder Bericht endgültig entfernt. Es gibt kein Rückgängigmachen und keine Sicherung.",
+			"delete": "Diese Versammlung löschen"
+		}
+	},
+	"rounds": {
+		"deleteNoRecordings": "Die Sitzung und ihre Tische werden gelöscht. Sie enthält keine Aufnahmen.",
+		"deleteWithRecordings": "Die Sitzung, ihre Tische und ihre {count} Aufnahmen werden endgültig gelöscht, einschließlich des Audios. | Die Sitzung, ihre Tische und ihre {count} Aufnahme werden endgültig gelöscht, einschließlich des Audios. | Die Sitzung, ihre Tische und ihre {count} Aufnahmen werden endgültig gelöscht, einschließlich des Audios.",
+		"emptyTitle": "Noch keine Sitzungen",
+		"emptyHint": "Jede Sitzung ist eine Diskussion mit eigener Frage, eigenem Ziel und eigener Dauer.",
+		"addFirst": "Erste Sitzung hinzufügen",
+		"title": "Titel",
+		"duration": "Dauer (Min.)",
+		"question": "Frage / Impuls",
+		"objective": "Ziel (optional)",
+		"objectivePlaceholder": "Drei konkrete Vorschläge erarbeiten.",
+		"cancel": "Abbrechen",
+		"save": "Sitzung speichern",
+		"untitled": "Sitzung ohne Titel",
+		"noQuestion": "Noch keine Frage festgelegt.",
+		"minutes": "{minutes} Min.",
+		"objectiveLine": "Ziel: {objective}",
+		"moveUp": "Nach oben",
+		"moveDown": "Nach unten",
+		"edit": "Bearbeiten",
+		"delete": "Löschen",
+		"endBeforeDelete": "Beenden Sie die Sitzung, bevor Sie sie löschen",
+		"promote": {
+			"title": "Weitere Sitzung hinzufügen",
+			"body": "Eine Sitzung ist eine Diskussion. Mit einer zweiten wird daraus eine Versammlung – eine Veranstaltung aus mehreren Sitzungen mit denselben Personen – und sie erhält einen Namen.",
+			"eventName": "Name der Veranstaltung",
+			"confirm": "Zur Versammlung machen und Sitzung hinzufügen",
+			"addAnother": "Weitere Sitzung hinzufügen"
+		},
+		"add": "Sitzung hinzufügen",
+		"confirmTitle": "Sitzung löschen?",
+		"confirmLabel": "Sitzung löschen"
+	},
+	"participants": {
+		"copyFailed": "Kopieren fehlgeschlagen – markieren Sie den Link und kopieren Sie ihn von Hand",
+		"consentActions": {
+			"change": "Hat es sich anders überlegt",
+			"withdraw": "Widerruft die Einwilligung",
+			"move": "An einen anderen Tisch gewechselt",
+			"done": {
+				"change": "{who} willigt wieder ein",
+				"withdraw": "{who} hat die Einwilligung widerrufen",
+				"move": "{who} als gewechselt markiert"
+			}
+		},
+		"consentConfirm": {
+			"change": {
+				"title": "{who} hat es sich anders überlegt?",
+				"message": "Eine neue Einwilligung auf Wort von {who} festhalten: Aufnahme, Transkription, Analyse und Zitate. Der Tisch kann wieder aufnehmen, sobald dort niemand mehr sitzt, der ablehnt.",
+				"confirm": "Einwilligung festhalten"
+			},
+			"withdraw": {
+				"title": "{who} widerruft die Einwilligung?",
+				"message": "Ein neuer Vorgang mit allen Feldern ohne Häkchen. Was bisher aufgenommen wurde, bleibt erhalten und wird verarbeitet; der Tisch kann erst wieder aufnehmen, wenn die Person als gewechselt markiert wird oder es sich anders überlegt.",
+				"confirm": "Widerruf festhalten"
+			},
+			"move": {
+				"title": "{who} als gewechselt markieren?",
+				"message": "Die Person verlässt die Liste ihres Tisches für die noch folgenden Sitzungen – das Vorgehen des Raums bei einer Ablehnung ist ein Tisch, der nicht aufgenommen wird. Ihr Einwilligungsnachweis bleibt unberührt; weisen Sie ihr dort, wo sie jetzt sitzt, namentlich wieder einen Platz zu.",
+				"confirm": "Als gewechselt markieren"
+			}
+		},
+		"source": {
+			"table": "Tisch {number}",
+			"ownPhone": "eigenes Telefon",
+			"tablePhone": "Telefon des Tisches",
+			"paper": "Papier"
+		},
+		"consentTitle": {
+			"none": "Keine Einwilligung erfasst",
+			"recording": "Aufnahme",
+			"transcription": "Transkription",
+			"analysis": "Analyse",
+			"quotations": "Zitate",
+			"yes": "ja",
+			"no": "nein",
+			"summary": "{ticks} – Hinweis {version} ({hash}), {at}"
+		},
+		"imported": "{count} Teilnehmende importiert | {count} Teilnehmende importiert | {count} Teilnehmende importiert",
+		"labelPlaceholder": "Kennung (z. B. P001)",
+		"namePlaceholder": "Name (optional)",
+		"add": "Hinzufügen",
+		"csvImport": "CSV-Import",
+		"prefill": "50 anonyme vorbelegen",
+		"registerTitle": "Einwilligungsregister – eine Zeile pro erfasster Einwilligung, mit den Hinweistexten",
+		"registerCsv": "Einwilligungsregister (CSV)",
+		"registerPdf": "PDF",
+		"csvHintBefore": "Kopfzeile",
+		"csvHintAfter": "– Namen und E-Mail-Adressen sind optional. Anonyme Kennungen genügen.",
+		"import": "Teilnehmende importieren",
+		"registration": {
+			"title": "Link zur Voranmeldung",
+			"body": "Senden Sie ihn vor der Veranstaltung: Die Personen lesen den Hinweis und registrieren sich von zu Hause. Am Eingang weist „Finde deinen Namen“ auf dem Telefon eines beliebigen Tisches ihnen einen Platz zu. Ein Link für die ganze Versammlung, 30 Tage gültig, wird zusammen mit den Tischcodes widerrufen.",
+			"counts": "{total} vorab registriert · {seated} platziert.",
+			"copied": "Link kopiert",
+			"copy": "Link kopieren",
+			"create": "Link erstellen",
+			"qrLabel": "QR-Code zur Voranmeldung"
+		},
+		"emptyTitle": "Noch keine Teilnehmenden",
+		"emptyHint": "Teilnehmende können vollständig anonym bleiben – mit „50 anonyme vorbelegen“ erzeugen Sie P001…P050 mit einem Klick.",
+		"count": "{count} Teilnehmende | {count} Teilnehmende | {count} Teilnehmende",
+		"columns": {
+			"label": "Kennung",
+			"name": "Name",
+			"email": "E-Mail",
+			"consent": "Einwilligung"
+		},
+		"consented": "✓ eingewilligt",
+		"refused": "✗ abgelehnt",
+		"remove": "Entfernen",
+		"removeTitle": "Person entfernen?",
+		"removeMessage": "{who} wird aus dieser Versammlung entfernt.",
+		"removeLabel": "Entfernen"
+	},
+	"tables": {
+		"remixNote": "{seated} platziert · {pairs} Paare, die schon zusammen saßen | {seated} platziert · {pairs} Paar, das schon zusammen saß | {seated} platziert · {pairs} Paare, die schon zusammen saßen",
+		"goalTitle": "Wie die Personen für diese Sitzung platziert werden",
+		"goal": {
+			"newPeople": "Neue Menschen kennenlernen",
+			"random": "Zufällig",
+			"continuity": "Bisherige Sitzordnung beibehalten"
+		},
+		"remix": "Neue Sitzordnung",
+		"copyPrevious": "Vorherige Sitzung übernehmen",
+		"emptyTitle": "Keine Tische in dieser Sitzung",
+		"emptyHint": "Tische werden mit der Sitzung erstellt, ausgehend von der Tischanzahl der Versammlung. Wenn diese Anzahl null war, hat diese Sitzung keine Tische und keine QR-Codes, und eine weitere Sitzung hilft nicht – die Versammlung muss neu erstellt werden.",
+		"unseatedTitle": "Noch niemand ist platziert",
+		"unseatedHint": "Alle Teilnehmenden zufällig auf Tische verteilen oder die Sitzordnung der vorherigen Sitzung übernehmen.",
+		"randomize": "Zufällige Zuteilung",
+		"table": "Tisch {number}",
+		"seated": "{count} platziert",
+		"empty": "Leer",
+		"moveTo": "An Tisch verschieben",
+		"tableShort": "T{number}"
+	}
+}

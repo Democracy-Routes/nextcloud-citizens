@@ -1,0 +1,254 @@
+{
+	"labels": {
+		"type": {
+			"proposal": "Vorschlag",
+			"agreement": "Konsenspunkt",
+			"disagreement": "Dissenspunkt",
+			"concern": "Bedenken",
+			"question": "Offene Frage",
+			"minority_position": "Minderheitsposition",
+			"new_idea": "Aufkommende Idee"
+		},
+		"typePlural": {
+			"proposal": "Vorschläge",
+			"agreement": "Konsenspunkte",
+			"disagreement": "Dissenspunkte",
+			"concern": "Geäußerte Bedenken",
+			"question": "Offene Fragen",
+			"minority_position": "Minderheitspositionen",
+			"new_idea": "Aufkommende Ideen"
+		},
+		"otherFindings": "Weitere Ergebnisse",
+		"round": "Sitzung {position}",
+		"roundTitled": "Sitzung {position} – {title}"
+	},
+	"analysis": {
+		"pausedWhileEditing": "Pausiert, solange Sie bearbeiten",
+		"filterStatus": "Nach Prüfstatus filtern",
+		"filterType": "Nach Art des Ergebnisses filtern",
+		"filters": {
+			"all": "Alle Ergebnisse",
+			"draft": "Zu prüfen",
+			"approved": "Genehmigt",
+			"rejected": "Abgelehnt"
+		},
+		"allTypes": "Alle Arten",
+		"approveDrafts": "{count} Entwürfe genehmigen | {count} Entwurf genehmigen | {count} Entwürfe genehmigen",
+		"rerun": "Analyse erneut ausführen",
+		"run": "Analyse ausführen",
+		"noSessionsTitle": "Diese Versammlung hat noch keine Sitzungen",
+		"noSessionsHint": "Fügen Sie im Reiter „Sitzungen“ eine Sitzung hinzu; Ergebnisse erscheinen hier, sobald ihre Tische analysiert wurden.",
+		"inProgress": "Analyse läuft",
+		"running": "{count} laufen",
+		"queued": "{count} in der Warteschlange",
+		"waitingRetry": "{count} warten auf einen neuen Versuch",
+		"cancelPending": "Ausstehende Analyse abbrechen",
+		"table": "Tisch {number}",
+		"failed": "Analyse fehlgeschlagen",
+		"failedFor": "für {count} Tisch(e):",
+		"clusteringFailed": "Tischübergreifende Gruppierung fehlgeschlagen",
+		"rerunClustering": "Nur Gruppierung erneut ausführen",
+		"notConfiguredTitle": "Die KI-Analyse ist nicht eingerichtet",
+		"notConfiguredHint": "Eine Administration muss in den Einstellungen einen API-Schlüssel für die Analyse hinterlegen (Mistral, Ollama Cloud oder einen beliebigen OpenAI-kompatiblen Endpunkt). Danach läuft die Analyse automatisch, nachdem ein Tisch transkribiert wurde.",
+		"inProgressTitle": "Analyse läuft…",
+		"noFindingsTitle": "Noch keine Ergebnisse",
+		"inProgressHint": "Die Tische werden analysiert – die Ergebnisse erscheinen hier automatisch.",
+		"noFindingsHint": "Ergebnisse erscheinen automatisch, nachdem die Tische aufgenommen und transkribiert wurden, oder Sie führen die Analyse manuell aus.",
+		"runNow": "Analyse jetzt ausführen",
+		"noMatchTitle": "Keine Ergebnisse passen zu diesem Filter",
+		"noMatchHint": "Ändern Sie die Filter oben, um die übrigen Ergebnisse dieser Sitzung zu sehen.",
+		"comparison": {
+			"title": "Redeanteile über die Tische hinweg",
+			"intro": "Jede Zeile misst einen Tisch für sich – Stimmen werden erkannt, nicht identifiziert, und die Redezeit ist eine Schätzung, kein Maß für Einfluss.",
+			"colTable": "Tisch",
+			"colVoices": "Stimmen",
+			"colLargest": "Größter Anteil",
+			"colSmallest": "Kleinster Anteil",
+			"colRatio": "Verhältnis",
+			"recorderChanged": "Telefon gewechselt"
+		},
+		"acrossTables": "Über alle Tische",
+		"aggregatedFrom": "– zusammengeführt aus {count} Tisch(en)",
+		"crossTableNote": "Tischübergreifende Ergebnisse werden jedes Mal neu erzeugt, wenn ein Tisch seine Analyse abschließt, einschließlich der Prüfungen – prüfen Sie sie nach dem letzten Tisch.",
+		"aiSummary": "KI-ZUSAMMENFASSUNG",
+		"analyzedNoFindings": "Analysiert – in dieser Diskussion keine inhaltlichen Ergebnisse zur Frage der Sitzung.",
+		"footer": "KI-Ergebnisse sind Entwürfe, bis ein Mensch sie genehmigt; Zusammenfassungen sind KI-erzeugte, neutrale Beschreibungen. Jedes Ergebnis belegt sich mit Transkriptstellen; „an N Tischen erwähnt“ ist nie ein Maß für die Zustimmung der Teilnehmenden.",
+		"toast": {
+			"approved": "{count} Ergebnis(se) genehmigt",
+			"nothingToAnalyze": "Nichts zu analysieren – noch kein Tisch hat ein fertiges Transkript",
+			"queued": "Analyse für {count} Tisch(e) eingereiht",
+			"cancelledRunning": "{cancelled} ausstehende(r) Auftrag/Aufträge abgebrochen; {running} bereits laufende werden abgeschlossen",
+			"cancelled": "{count} ausstehende(r) Auftrag/Aufträge abgebrochen",
+			"reclusterQueued": "Tischübergreifende Gruppierung eingereiht",
+			"reclusterAlready": "Die Gruppierung ist bereits eingereiht"
+		},
+		"confirmApprove": {
+			"title": "Alle Entwurfs-Ergebnisse genehmigen?",
+			"message": "{count} Entwurfs-Ergebnis(se) dieser Sitzung werden als genehmigt markiert und in den Bericht aufgenommen. Abgelehnte Ergebnisse bleiben unberührt, und Sie können danach jedes davon noch bearbeiten oder ablehnen.",
+			"confirm": "Alle Entwürfe genehmigen"
+		},
+		"confirmRerun": {
+			"title": "Die Analyse erneut ausführen?",
+			"messageReviewed": "Alle Ergebnisse dieser Sitzung – einschließlich der {count}, die Sie bereits genehmigt oder bearbeitet haben – werden durch einen neu erzeugten Satz ersetzt. Bisherige Prüfungen müssen wiederholt werden.",
+			"messageDrafts": "Alle Entwurfs-Ergebnisse dieser Sitzung werden durch neu erzeugte ersetzt.",
+			"confirm": "Analyse erneut ausführen"
+		},
+		"confirmRecluster": {
+			"title": "Die tischübergreifende Gruppierung erneut ausführen?",
+			"message": "Die {count} tischübergreifenden Ergebnisse, die Sie bereits genehmigt oder bearbeitet haben, werden zusammen mit den Entwürfen durch einen neu erzeugten Satz ersetzt. Die Ergebnisse der einzelnen Tische bleiben unberührt.",
+			"confirm": "Gruppierung erneut ausführen"
+		},
+		"replaceWord": "ersetzen"
+	},
+	"report": {
+		"toast": {
+			"closed": "{Thing} ist geschlossen – der Abschlussbericht ist fertig",
+			"reopened": "{Thing} ist wieder geöffnet – die Tische können wieder aufnehmen",
+			"unpublished": "Der Bericht ist auf den Tisch-Telefonen nicht mehr sichtbar",
+			"published": "Bericht veröffentlicht – die Tisch-Telefone können ihn jetzt ansehen und herunterladen",
+			"synthesisQueued": "Synthese eingereiht – sie erscheint hier in ein bis zwei Minuten",
+			"refreshed": "Die veröffentlichte Version entspricht jetzt dem aktuellen Bericht",
+			"downloadFailed": "Der Bericht konnte nicht heruntergeladen werden – prüfen Sie den Popup-Blocker"
+		},
+		"synthesisFailed": "Die Synthese über die Sitzungen hinweg ist fehlgeschlagen ({reason}). Führen Sie sie von hier aus erneut aus, sobald die Ursache behoben ist.",
+		"roundAnalysisFailed": "Die tischübergreifende Analyse von Sitzung {position} ist fehlgeschlagen ({reason}).",
+		"finalTitle": "Abschlussbericht · geschlossen {date}",
+		"quotationsWithheld": "Zitate zurückgehalten: Eine an diesem Tisch sitzende Person hat nicht eingewilligt, zitiert zu werden.",
+		"finalHint": "{Thing} ist geschlossen: Die Tische können nicht mehr aufnehmen, und dies ist der endgültige Bericht. Die Teilnehmenden lesen weiterhin diese Version, auch wenn Sie wieder öffnen – genehmigen Sie weitere Ergebnisse und klicken Sie auf „Aktualisieren“, um sie zu übernehmen.",
+		"allDoneTitle": "Alle {count} Tische sind fertig.",
+		"allDoneHint": "Schließen Sie {thing}, um den Abschlussbericht zu erstellen und die Downloads freizuschalten.",
+		"interimTitle": "Zwischenbericht – {complete} von {expected} Tischen haben alle Sitzungen abgeschlossen",
+		"interimHint": "Dies ist eine Vorschau auf {thing}, die noch läuft. Mit dem Schließen entsteht der Abschlussbericht und die Downloads werden freigeschaltet – Sie können später wieder öffnen.",
+		"close": "Abschlussbericht erstellen und {thing} schließen",
+		"updating": "Wird aktualisiert…",
+		"updatePublished": "Veröffentlichte Version aktualisieren",
+		"reopen": "Jetzt {thing} wieder öffnen",
+		"synthesis": {
+			"title": "Wie sich die Diskussion entwickelt hat",
+			"haveLead": "Ein Kapitel über die Sitzungen hinweg, verfasst aus ihren Zusammenfassungen und den genehmigten tischübergreifenden Ergebnissen",
+			"haveTail": "Es wird beim Schließen neu erstellt, sobald die Analyse jeder Sitzung vorliegt.",
+			"none": "Sobald mindestens zwei Sitzungen eine Zusammenfassung haben, schreibt das Analysemodell, wie sich die Diskussion von der ersten bis zur letzten Sitzung entwickelt hat. Das geschieht beim Schließen von selbst; hier können Sie es früher erzeugen.",
+			"queued": "In der Warteschlange…",
+			"again": "Erneut erzeugen",
+			"generate": "Synthese erzeugen",
+			"carried": "Von einer Sitzung in die nächste übernommen"
+		},
+		"includeDrafts": "Ungeprüfte Entwürfe einbeziehen (deutlich markiert)",
+		"preparing": "Wird vorbereitet…",
+		"pdf": "PDF",
+		"markdown": "Markdown",
+		"json": "JSON",
+		"downloadsLocked": "Die Downloads stehen zur Verfügung, sobald {thing} geschlossen ist.",
+		"publishedTitle": "Auf den Tisch-Telefonen veröffentlicht",
+		"unpublishedTitle": "Noch nicht auf den Tisch-Telefonen veröffentlicht",
+		"publishedHint": "Aufnehmende Telefone können diesen Bericht ansehen und das PDF herunterladen (nur genehmigte Ergebnisse und KI-Zusammenfassungen – Entwürfe bleiben privat).",
+		"unpublishedHint": "Durch das Veröffentlichen können die aufnehmenden Telefone diesen Bericht ansehen und das PDF herunterladen. Geteilt werden nur genehmigte Ergebnisse und KI-Zusammenfassungen.",
+		"unpublish": "Veröffentlichung zurücknehmen",
+		"publish": "Bericht für die Tische veröffentlichen",
+		"emptyTitle": "Noch nichts zu berichten",
+		"emptyHintDrafts": "Es gibt noch keine Ergebnisse – nehmen Sie zuerst an den Tischen auf und führen Sie die Analyse aus.",
+		"emptyHintApproved": "Noch keine genehmigten Ergebnisse. Genehmigen Sie Ergebnisse im Reiter „Analyse“ oder beziehen Sie Entwürfe für eine Vorschau ein.",
+		"assemblyReport": "{name} – Bericht der Versammlung",
+		"participants": "{count} Teilnehmende",
+		"tables": "{count} Tische",
+		"acrossTables": "Über alle Tische",
+		"draftPill": "ENTWURF – nicht geprüft",
+		"mentionedAt": "An {count} Tisch(en) erwähnt",
+		"speaker": "Person",
+		"evidenceRemoved": "Beleg mit dem Transkript entfernt",
+		"table": "Tisch {number}",
+		"aiSummary": "KI-ZUSAMMENFASSUNG",
+		"looksRight": "✓ {count} sagen: stimmt so",
+		"flaggedMissing": "· ⚠ {count} melden, dass etwas fehlt",
+		"confirmClose": {
+			"title": "Abschlussbericht erstellen und {thing} schließen?",
+			"missingTables": "Die Tische {tables} haben nie aufgenommen – sie erscheinen nicht im Abschlussbericht. ",
+			"body": "Nach dem Schließen können die Tische nicht mehr aufnehmen, und der Bericht wird endgültig. Sie können {thing} später wieder öffnen, falls ein verspäteter Tisch aufnehmen muss.",
+			"confirm": "Jetzt {thing} schließen"
+		},
+		"confirmUnpublish": {
+			"title": "Den Bericht nicht mehr mit den Tischen teilen?",
+			"message": "Jedes Tisch-Telefon, das den Bericht gerade liest, verliert sofort den Zugriff darauf. Sie können ihn jederzeit erneut veröffentlichen.",
+			"confirm": "Veröffentlichung zurücknehmen"
+		},
+		"confirmReopen": {
+			"title": "Soll {thing} wieder geöffnet werden?",
+			"message": "Die Tische können wieder aufnehmen, und der Bericht ist nicht mehr endgültig. Die Teilnehmenden lesen weiterhin die Version, die beim Schließen von {thing} eingefroren wurde, bis Sie sie erneut schließen.",
+			"confirm": "Jetzt {thing} wieder öffnen"
+		},
+		"confirmPublish": {
+			"title": "Bericht auf den Tisch-Telefonen veröffentlichen?",
+			"message": "Das aufnehmende Telefon jedes Tisches kann diesen Bericht ansehen und das PDF herunterladen. Enthalten sind nur genehmigte Ergebnisse und KI-Zusammenfassungen – ungeprüfte Entwürfe bleiben privat. Sie können die Veröffentlichung jederzeit zurücknehmen.",
+			"confirm": "Veröffentlichen"
+		}
+	},
+	"finding": {
+		"title": "Titel",
+		"summary": "Zusammenfassung",
+		"cancel": "Abbrechen",
+		"saveApprove": "Speichern & genehmigen",
+		"mentionedAt": "An {count} Tisch(en) erwähnt",
+		"support": "Unterstützung: {support}",
+		"approve": "Genehmigen",
+		"reject": "Ablehnen",
+		"edit": "Bearbeiten",
+		"excerpts": "{count} belegende(s) Zitat(e)",
+		"speaker": "PERSON",
+		"status": {
+			"DRAFT": "Entwurf",
+			"APPROVED": "genehmigt",
+			"EDITED_AND_APPROVED": "bearbeitet und genehmigt",
+			"REJECTED": "abgelehnt"
+		},
+		"toast": {
+			"edited": "Ergebnis bearbeitet und genehmigt",
+			"approved": "Ergebnis genehmigt",
+			"rejected": "Ergebnis abgelehnt"
+		}
+	},
+	"speaking": {
+		"eyebrow": "REDEANTEILE",
+		"caveat": "Das Telefon, das diesen Tisch aufnimmt, wurde während der Sitzung gewechselt; Stimmen lassen sich nicht über die Teile hinweg zuordnen, daher gilt dies nur für den längsten Teil.",
+		"ariaLabel": "Anteil der Redezeit pro erkannter Stimme",
+		"voice": "Stimme {label}",
+		"others": "Andere",
+		"note": "Erkannte Stimmen, nicht namentlich identifiziert – aus der klarsten Einzelaufnahme. Eine Schätzung der Redezeit, nicht der Beteiligung oder des Einflusses."
+	},
+	"failure": {
+		"retrying": "Neuer Versuch erfolgt automatisch – Versuch {attempt} von {max}.",
+		"retryingNext": "Neuer Versuch erfolgt automatisch – Versuch {attempt} von {max}, nächster in {seconds} s.",
+		"reason": {
+			"PROVIDER_AUTH": "Der Anbieter hat den API-Schlüssel oder dieses Modell abgelehnt (HTTP 401/403). Prüfen Sie Schlüssel, Tarif und Modellnamen in den Einstellungen und führen Sie es dann erneut aus.",
+			"PROVIDER_RATE_LIMIT": "Der Anbieter begrenzt die Anfragen (HTTP 429). Der Auftrag wartet und versucht es von selbst erneut – starten Sie keinen weiteren Lauf.",
+			"PROVIDER_TIMEOUT": "Der Anbieter hat nicht rechtzeitig geantwortet. Der Auftrag versucht es von selbst erneut; wenn er weiter scheitert, ist der Anbieter langsam oder nicht erreichbar.",
+			"PROVIDER_HTTP": "Der Anbieter hat einen Fehler zurückgegeben. Der Auftrag versucht es von selbst erneut, es sei denn, der Anbieter hat die Anfrage von vornherein abgelehnt.",
+			"SCHEMA_INVALID": "Das Modell hat geantwortet, aber dreimal hintereinander nicht im erforderlichen Format. Führen Sie es erneut aus; wenn es sich wiederholt, probieren Sie ein anderes Modell.",
+			"NOT_CONFIGURED": "Für diesen Schritt ist kein Anbieter eingerichtet – hinterlegen Sie Schlüssel oder Endpunkt in den Einstellungen.",
+			"NO_TRANSCRIPT": "Es gibt kein Transkript zum Analysieren. Transkribieren Sie zuerst die Aufnahme.",
+			"AUDIO_MISSING": "Die Audiodatei fehlt auf dem Server, daher kann sie nicht erneut transkribiert werden.",
+			"RERUN_EMPTY": "Die neue Analyse lieferte für einen Tisch, der bereits Ergebnisse hatte, keine, daher wurden die bisherigen Ergebnisse behalten. Nichts ging verloren; führen Sie die Analyse erneut aus, wenn Sie sie ersetzen wollten.",
+			"CANCELLED": "Von der Organisation abgebrochen. Führen Sie es erneut aus, wenn Sie bereit sind.",
+			"UNKNOWN": "Es ist aus einem Grund fehlgeschlagen, den die App nicht erkannt hat; das Detail unten ist das, was der Server festgehalten hat."
+		},
+		"code": {
+			"STORAGE_FULL": "Dem Server ging beim Zusammensetzen dieser Aufnahme der Speicherplatz aus. Das hochgeladene Audio ist noch vorhanden – schaffen Sie Platz und versuchen Sie es erneut.",
+			"CHUNKS_GONE": "Teile des Uploads fehlen im Speicher, daher kann das Audio nicht wiederhergestellt werden. Dieser Tisch muss die Sitzung erneut aufnehmen.",
+			"CHUNK_CORRUPTED": "Ein Teil des Uploads hat die Prüfsumme nicht bestanden, daher ist dem Audio nicht zu trauen. Dieser Tisch muss die Sitzung erneut aufnehmen.",
+			"AUDIO_DELETED": "Das Audio wurde gelöscht, während es zusammengesetzt wurde.",
+			"UPLOAD_TIMED_OUT": "Das Telefon hat den Upload abgebrochen und sich nicht wieder gemeldet. Alles, was den Server erreicht hat, bleibt erhalten; der Tisch kann erneut aufnehmen.",
+			"UPLOAD_ABANDONED": "Das Warten auf diesen Upload wurde von der Organisation beendet. Das bereits eingegangene Audio bleibt erhalten.",
+			"RATE_LIMITED": "Der Anbieter begrenzt die Anfragen (HTTP 429). Der Auftrag wartet und versucht es von selbst erneut – starten Sie keinen weiteren Lauf.",
+			"LIVE_CAPTIONS_MISSING": "Die endgültige Transkription ist aus, und die Live-Untertitel haben nie ein Transkript erzeugt. Transkribieren Sie aus dem gespeicherten Audio neu.",
+			"LIVE_CAPTIONS_UNREADABLE": "Die endgültige Transkription ist aus, und die Untertiteldatei konnte nicht gelesen werden. Transkribieren Sie aus dem gespeicherten Audio neu.",
+			"LIVE_CAPTIONS_EMPTY": "Die endgültige Transkription ist aus, und die Untertitel enthielten keinen Text. Transkribieren Sie aus dem gespeicherten Audio neu.",
+			"DEVICE_SILENT": "Das Telefon wurde mitten in der Sitzung still, und der Tisch wurde freigegeben. Alles, was den Server erreicht hat, bleibt erhalten.",
+			"ROUND_CONTINUED": "Der Tisch hat frühzeitig beendet, während die Sitzung noch offen war, und dann weitergemacht: Dies ist der erste Teil der Sitzung, der Rest steht in der Aufnahme darunter."
+		},
+		"state": {
+			"AUDIO_INVALID": "Das hochgeladene Audio konnte nicht bestätigt werden.",
+			"TRANSCRIPTION_FAILED": "Der Transkriptionsanbieter hat kein Transkript geliefert. Das Audio ist unberührt, daher kann es erneut versucht werden.",
+			"ANALYSIS_FAILED": "Die KI-Analyse wurde nicht abgeschlossen. Das Transkript ist unberührt, daher kann sie erneut ausgeführt werden.",
+			"UPLOAD_INCOMPLETE": "Nicht die gesamte Aufnahme hat den Server erreicht."
+		}
+	}
+}

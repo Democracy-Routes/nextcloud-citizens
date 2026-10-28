@@ -1,0 +1,22 @@
+{
+	"spaces": {
+		"plan": "Planen",
+		"run": "Durchführen",
+		"results": "Ergebnisse"
+	},
+	"timeline": {
+		"participants": "{count} von {expected} Teilnehmenden",
+		"participantsNoTarget": "{count} Teilnehmende",
+		"tables": "{count} Tische | {count} Tisch | {count} Tische",
+		"wholeRoom": "Ganzer Raum",
+		"sessions": "{count} Sitzungen | {count} Sitzung | {count} Sitzungen",
+		"untitled": "Sitzung {position}",
+		"liveNow": "Jetzt live",
+		"notStarted": "Nicht gestartet",
+		"ended": "Beendet",
+		"processing": "In Verarbeitung",
+		"review": "In Prüfung",
+		"closed": "Geschlossen",
+		"openLive": "Reiter „Live“ für Sitzung {position} öffnen"
+	}
+}

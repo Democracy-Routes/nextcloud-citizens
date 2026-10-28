@@ -1,0 +1,327 @@
+{
+	"monitor": {
+		"tableN": "Tisch {number}",
+		"toast": {
+			"acknowledged": "Tisch {number}: bestätigt",
+			"aiPaused": "Tisch {number}: KI-Assistent pausiert",
+			"aiResumed": "Tisch {number}: KI-Assistent fortgesetzt",
+			"extended": "Sitzung um {minutes} Minuten verlängert",
+			"started": "Sitzung gestartet – bereite Tische nehmen jetzt auf",
+			"ended": "Sitzung beendet",
+			"transcriptionQueued": "Transkription eingereiht",
+			"assembling": "Tisch {number}: Das auf dem Server eingegangene Audio wird zusammengesetzt",
+			"releasedAssembling": "Tisch {number} freigegeben – seine bisherige Aufnahme wird transkribiert",
+			"releasedEmpty": "Tisch {number} freigegeben – er hatte noch kein Audio hochgeladen"
+		},
+		"delivery": {
+			"none": "kein Tisch in dieser Sitzung",
+			"all": "Zugestellt {total}/{total}",
+			"partial": "Zugestellt {seen}/{total} · {names} noch nicht"
+		},
+		"author": {
+			"ai": "KI",
+			"facilitator": "Moderation"
+		},
+		"reasons": {
+			"NO_RECORDER": "kein Telefon beigetreten – zeigen Sie dem Tisch seinen QR-Code",
+			"RECORDER_OFFLINE": "Telefon antwortet nicht",
+			"MIC_UNAVAILABLE": "Mikrofon nimmt nicht auf – tippen Sie auf das Telefon, um es zu erlauben",
+			"LOW_STORAGE": "Speicher knapp – Telefon nach dieser Sitzung austauschen oder Speicher freigeben",
+			"LOW_BATTERY": "Akku schwach – fragen Sie den Tisch nach einem Ersatztelefon",
+			"UPLOAD_STALLED": "Upload-Rückstau – prüfen Sie das WLAN vor Ort",
+			"LIVE_STT_UNAVAILABLE": "Live-Untertitel an diesem Tisch aus",
+			"HELP_REQUESTED": "der Tisch bittet um Hilfe",
+			"PARTICIPANT_CONSENT_MISSING": "noch niemand am Tisch hat eingewilligt – registrieren Sie eine Person auf dem Telefon des Tisches",
+			"PARTICIPANT_REFUSED": "eine Person an diesem Tisch hat die Aufnahme abgelehnt – markieren Sie sie als an einen Tisch gewechselt, der nicht aufgenommen wird, oder halten Sie fest, dass sie es sich anders überlegt hat",
+			"CAPTURE_SILENT": "seit {seconds} s ist kein Audio beim Server eingegangen – das Telefon schläft möglicherweise oder ist im Hintergrund: Öffnen Sie darauf den Recorder",
+			"recorderSuffix": "(Telefon {letter})"
+		},
+		"helpKinds": {
+			"TECHNICAL": "technisches Problem",
+			"ORGANIZER": "möchte die Organisation sprechen",
+			"PROCESS": "Frage zum Ablauf"
+		},
+		"facts": {
+			"line": "Akku {pct} · {storage} · {pending} · {age} · {screen} · {visible} · {capture} · {rec}",
+			"mbFree": "{mb} MB frei",
+			"chunksPending": "{count} Teile ausstehend",
+			"neverHeard": "nie gehört",
+			"heartbeat": "Lebenszeichen vor {seconds} s",
+			"screenAwake": "Bildschirm an",
+			"screenMayLock": "Bildschirm kann sich sperren",
+			"background": "im Hintergrund",
+			"foreground": "im Vordergrund",
+			"captureInterrupted": "Aufnahme unterbrochen",
+			"capturing": "nimmt auf",
+			"noRecording": "keine Aufnahme"
+		},
+		"health": {
+			"ok": "Alles läuft normal.",
+			"attention": "{count} Tisch braucht Aufmerksamkeit{blocked}. | {count} Tische brauchen Aufmerksamkeit{blocked}.",
+			"cannotRecord": "· {count} können nicht aufnehmen",
+			"quietFolded": "{count} Tisch ist in Ordnung und unten eingeklappt. | {count} Tische sind in Ordnung und unten eingeklappt."
+		},
+		"sound": {
+			"on": "Ton an",
+			"off": "Ton aus",
+			"title": "Ein kurzer Ton auf diesem Computer, wenn ein Tisch rot wird oder das Audio eines Telefons nicht mehr ankommt"
+		},
+		"advanced": {
+			"show": "Erweiterte Diagnose",
+			"hide": "Diagnose ausblenden"
+		},
+		"device": {
+			"armed": "bereit",
+			"background": "im Hintergrund",
+			"connected": "verbunden",
+			"none": "kein Telefon"
+		},
+		"prior": {
+			"continued": "früherer Teil – der Tisch hat weitergemacht",
+			"rejoined": "früherer Teil – das Telefon hat sich neu verbunden",
+			"silent": "früherer Teil – das Telefon wurde still",
+			"handedOver": "früherer Teil – das Telefon wurde übergeben"
+		},
+		"nextStep": {
+			"finished": "Diese Sitzung ist abgeschlossen.",
+			"autoStart": "Bereite Tische beginnen Sitzung {position} automatisch aufzunehmen.",
+			"start": "Sitzung {position} starten",
+			"allDone": "Alle Sitzungen sind abgeschlossen.",
+			"allDoneHint": "Prüfen Sie die Ergebnisse im Reiter „Analyse“ und veröffentlichen Sie dann im Reiter „Bericht“ den Bericht auf den Tisch-Telefonen."
+		},
+		"broadcast": {
+			"title": "Nachricht an die Tische",
+			"minLeft": "noch {minutes} Min.",
+			"wrapUp": "Zum Ende kommen",
+			"less": "Weniger",
+			"write": "Nachricht schreiben",
+			"to": "an",
+			"allTables": "alle Tische",
+			"placeholder": "Ein Impuls oder eine Anweisung für die Tische",
+			"ariaLabel": "Nachricht an die Tische",
+			"send": "Senden"
+		},
+		"ai": {
+			"title": "KI-Assistent",
+			"nudges": "{count} Impuls in dieser Sitzung | {count} Impulse in dieser Sitzung",
+			"nothingYet": "noch nichts gesagt",
+			"show": "Anzeigen",
+			"less": "Weniger",
+			"dismissed": "von der Moderation verworfen",
+			"sentOn": "von der Moderation weitergeleitet",
+			"onFacilitatorPhone": "auf dem Telefon der Moderation",
+			"toTable": "an den Tisch"
+		},
+		"countbar": {
+			"tablesReady": "{ready}/{total} Tische bereit",
+			"timeUp": "Die Zeit ist um – Ende in {seconds} s",
+			"extend": "{minutes} Min. verlängern",
+			"keepGoing": "Weitermachen",
+			"start": "Sitzung starten",
+			"end": "Sitzung beenden",
+			"independent": "Unabhängige Tische – jeder Tisch nimmt nach eigenem Zeitplan auf"
+		},
+		"handOver": {
+			"title": "Diesen Tisch an ein anderes Telefon übergeben?",
+			"message": "Das Telefon von Tisch {number} antwortet nicht mehr. Seine Aufnahme wird mit dem bereits eingegangenen Audio – meist dem Großteil der Sitzung – abgeschlossen und transkribiert. Der Tisch kann den Rest dann auf einem beliebigen Telefon aufnehmen, indem er denselben QR-Code scannt.",
+			"confirm": "Tisch übergeben"
+		},
+		"finishRecording": "Aufnahme beenden",
+		"finishRequested": "Wird beendet… das Telefon wurde dazu aufgefordert",
+		"closedSilence": "Vom Server nach 5 Minuten Stille beendet",
+		"closedOrganizer": "Von hier aus beendet",
+		"continued": "Nach dem Abschluss eingegangenes Audio, behalten",
+		"finishConfirm": {
+			"title": "Aufnahme dieses Tisches beenden?",
+			"message": "Die Aufnahme von Tisch {number} wird jetzt mit dem bereits eingegangenen Audio beendet. Das Telefon wird aufgefordert zu stoppen; nichts, was es bisher aufgenommen hat, geht verloren.",
+			"confirm": "Aufnahme beenden"
+		},
+		"startUnready": {
+			"title": "Starten, obwohl Tische fehlen?",
+			"message": "Nur {ready} von {total} Tischen sind bereit. Tische, die später bereit werden, können der Sitzung noch beitreten. Trotzdem starten?",
+			"confirm": "Sitzung starten"
+		},
+		"empty": {
+			"title": "Diese Versammlung hat noch keine Sitzungen",
+			"hint": "Fügen Sie im Reiter „Sitzungen“ eine Sitzung hinzu, um mit der Aufnahme zu beginnen."
+		},
+		"columns": {
+			"table": "Tisch",
+			"device": "Telefon",
+			"recording": "Aufnahme",
+			"elapsed": "Verstrichen",
+			"upload": "Upload",
+			"localAudio": "Lokales Audio",
+			"actions": "Aktionen"
+		},
+		"quiet": {
+			"show": "{count} Tisch läuft normal – anzeigen | {count} Tische laufen normal – anzeigen",
+			"hide": "{count} Tisch läuft normal – ausblenden | {count} Tische laufen normal – ausblenden"
+		},
+		"finishedAt": "beendet {time}",
+		"recorderRow": {
+			"connected": "verbunden",
+			"lastSeen": "{age}",
+			"live": "Untertitel",
+			"liveTitle": "Die Untertitel dieses Telefons sind die, die der Raum liest"
+		},
+		"coverageTitle": "Erfasstes Audio im Verhältnis zur Zeit, in der dieses Telefon aufgenommen hat – rot unter 95 %: Dieses Telefon hat einen Teil der Diskussion verpasst",
+		"pills": {
+			"captureInterrupted": "Aufnahme unterbrochen",
+			"storageError": "Speicherfehler",
+			"screenMayLock": "Bildschirm kann sich sperren",
+			"battery": "Akku {pct} %",
+			"lowStorage": "Speicher knapp – {mb} MB",
+			"safe": "✓ gesichert",
+			"unknown": "unbekannt"
+		},
+		"upload": {
+			"pending": "({count} ausstehend)",
+			"received": "{count} eingegangen"
+		},
+		"actions": {
+			"retryTranscriptionTitle": "Transkription wiederholen (falls sie hängt)",
+			"transcribe": "Transkribieren",
+			"transcript": "Transkript",
+			"acknowledgeTitle": "Der Tisch hat sich gemeldet – lassen Sie ihn wissen, dass Sie es gesehen haben",
+			"acknowledge": "Bestätigen",
+			"pauseAiTitle": "KI-Assistent an diesem Tisch pausieren",
+			"pauseAi": "KI pausieren",
+			"resumeAiTitle": "Den KI-Assistenten an diesem Tisch wieder sprechen lassen (mit der Stufe der Versammlung)",
+			"resumeAi": "KI fortsetzen",
+			"handOverTitle": "Das Telefon dieses Tisches antwortet nicht mehr – Tisch an ein anderes Telefon übergeben",
+			"handOver": "Tisch übergeben",
+			"retryTitle": "Das Audio zusammensetzen und transkribieren, das vor dem Ausfall des Telefons beim Server eingegangen ist",
+			"retry": "Wiederholen",
+			"deviceLog": "Telefonprotokoll"
+		},
+		"noTables": "Diese Sitzung hat keine Tische.",
+		"transcript": {
+			"title": "Transkript",
+			"empty": "Das Transkript ist leer (keine Sprache erkannt)."
+		},
+		"deviceLog": {
+			"title": "Tisch {number} – Telefonprotokoll (letzte 50)",
+			"empty": "Noch kein Telefonprotokoll eingegangen."
+		}
+	},
+	"files": {
+		"toast": {
+			"purgeNone": "Mit dieser Versammlung hat sich noch kein Tisch-Telefon verbunden",
+			"purgeAsked": "{count} Tisch-Telefon wurde aufgefordert, seine Kopie zu löschen | {count} Tisch-Telefone wurden aufgefordert, ihre Kopie zu löschen",
+			"assembling": "Tisch {number} wird erneut zusammengesetzt",
+			"retranscribing": "Wird aus dem gespeicherten Audio erneut transkribiert – das kann einige Minuten dauern",
+			"transcriptDeletedRetranscribable": "Transkript gelöscht – diese Aufnahme kann erneut transkribiert werden",
+			"transcriptDeleted": "Transkript gelöscht",
+			"transcriptsDeleted": "{count} Transkript gelöscht | {count} Transkripte gelöscht",
+			"audioDeleted": "Audio gelöscht – {size} freigegeben",
+			"recordingsCleared": "{count} Aufnahme bereinigt – {size} freigegeben | {count} Aufnahmen bereinigt – {size} freigegeben"
+		},
+		"header": {
+			"title": "Audiodateien & Exporte",
+			"recordings": "{count} Aufnahme | {count} Aufnahmen",
+			"audioDeleted": "· {count} mit gelöschtem Audio",
+			"downloadAll": "Gesamtes Audio herunterladen",
+			"exportFull": "Gesamte Sitzung exportieren",
+			"deleteAllAudio": "Gesamtes Audio löschen",
+			"deleteAllTranscripts": "Alle Transkripte löschen",
+			"purge": "Audio von den Tisch-Telefonen löschen"
+		},
+		"coverage": {
+			"askedOnClose": "Die Telefone wurden beim Schließen der Sitzung aufgefordert, das Audio dieser Versammlung zu löschen.",
+			"cleared": "{cleared} von {devices}",
+			"reported": "Die Telefone haben zuletzt keine lokalen Aufnahmen gemeldet.",
+			"stillHolding": "{count} halten noch Audio.",
+			"unknown": "{count} haben keine Anzahl lokaler Aufnahmen gemeldet.",
+			"note": "Diese Zahlen schließen Telefone ein, die früher beigetreten sind. Bei erneutem Beitritt kann dasselbe Telefon mehrfach gezählt werden; abgelaufene oder widerrufene Telefon-Links müssen eventuell von Hand bereinigt werden."
+		},
+		"keptPastRetention": "{count} Aufnahme wurde über die Aufbewahrungsfrist hinaus behalten, weil es kein Transkript dazu gibt – für sie ist das Audio die einzige Aufzeichnung der Diskussion. Wiederholen Sie die Transkription oder löschen Sie sie bewusst. | {count} Aufnahmen wurden über die Aufbewahrungsfrist hinaus behalten, weil es kein Transkript dazu gibt – für sie ist das Audio die einzige Aufzeichnung der Diskussion. Wiederholen Sie die Transkription oder löschen Sie sie bewusst.",
+		"exportHint": "Der vollständige Sitzungsexport bündelt Metadaten, Audio, Transkripte und den Bericht – genug, um diese Versammlung auf einen anderen Server zu übertragen. Beim Löschen des Audios bleiben Transkripte, Ergebnisse und der Bericht erhalten.",
+		"empty": {
+			"title": "Noch keine Aufnahmen",
+			"hint": "Audiodateien erscheinen hier, sobald die Tische aufnehmen und synchronisieren."
+		},
+		"captured": "{percent} %",
+		"capturedTitle": "{audio} Audio in {wall} Aufnahmezeit",
+		"columns": {
+			"table": "Tisch",
+			"duration": "Dauer",
+			"size": "Größe",
+			"state": "Status",
+			"transcript": "Transkript",
+			"actions": "Aktionen"
+		},
+		"audioDeleted": "Audio gelöscht",
+		"liveTitle": "Aus den Live-Untertiteln, keine Transkription des fertigen Audios",
+		"live": "live",
+		"closedSilence": "vom Server nach 5 Min. Stille beendet",
+		"closedOrganizer": "im Reiter „Live“ beendet",
+		"audioAdded": "Audio hinzugefügt um {time}",
+		"actions": {
+			"download": "Herunterladen",
+			"deleteAudioTitle": "Audio löschen",
+			"audio": "Audio",
+			"retryTitle": "Audio erneut zusammensetzen",
+			"retry": "Wiederholen",
+			"retranscribeTitle": "Aus dem gespeicherten Audio erneut transkribieren",
+			"retranscribe": "Neu transkribieren",
+			"deleteTranscriptTitle": "Transkript löschen",
+			"transcript": "Transkript"
+		},
+		"confirmRetranscribe": {
+			"title": "Diesen Tisch erneut transkribieren?",
+			"message": "Tisch {number} wird aus seinem gespeicherten Audio erneut transkribiert{replacing}. Zitate in bestehenden Ergebnissen beziehen sich auf den alten Text und werden daher als entfernt markiert; die Analyse läuft erneut. Das Audio bleibt unberührt.",
+			"replacingLive": ", wobei das aus den Live-Untertiteln gewonnene Transkript ersetzt wird",
+			"replacingCurrent": ", wobei das aktuelle Transkript ersetzt wird",
+			"confirm": "Erneut transkribieren"
+		},
+		"confirmDeleteAudio": {
+			"title": "Audio dieses Tisches löschen?",
+			"message": "Das Audio von Tisch {number} wird endgültig gelöscht und lässt sich nicht wiederherstellen. Sein Transkript, die Ergebnisse und der Bericht bleiben erhalten – die Aufnahme kann aber nie wieder transkribiert werden.",
+			"confirm": "Audio löschen"
+		},
+		"confirmDeleteTranscript": {
+			"title": "Transkript dieses Tisches löschen?",
+			"message": "Der Wortlaut von Tisch {number} wird endgültig gelöscht – einschließlich der Zitate in den Ergebnissen und im veröffentlichten Bericht. Die Ergebnisse und KI-Zusammenfassungen bleiben erhalten. {audioNote}",
+			"audioStillHere": "Das Audio ist noch vorhanden, daher kann diese Aufnahme erneut transkribiert werden.",
+			"audioGone": "Sein Audio ist bereits gelöscht, daher lässt sich das Transkript nicht neu erstellen.",
+			"confirm": "Transkript löschen"
+		},
+		"confirmPurge": {
+			"title": "Audio dieser Versammlung von den Tisch-Telefonen löschen?",
+			"message": "Jedes Telefon hält noch das Audio, das es aufgenommen hat. Damit werden die Telefone aufgefordert, es zu löschen – aber nur die Teile, die der Server bereits bestätigt hat, sodass nichts verloren gehen kann. Es erreicht Telefone, deren Recorder noch geöffnet ist; ein Telefon, das geschlossen und mitgenommen wurde, löscht sich selbst, sobald es wieder geöffnet wird.",
+			"confirm": "Telefone bereinigen"
+		},
+		"confirmAllTranscripts": {
+			"title": "Alle Transkripte dieser Sitzung löschen?",
+			"message": "Der Wortlaut aller Tische wird endgültig gelöscht, einschließlich der Zitate in den Ergebnissen und im veröffentlichten Bericht. Ergebnisse und KI-Zusammenfassungen bleiben erhalten. Tische, deren Audio noch vorhanden ist, können erneut transkribiert werden.",
+			"confirm": "Alle Transkripte löschen"
+		},
+		"confirmAllAudio": {
+			"title": "Gesamtes Audio dieser Sitzung löschen?",
+			"scaleBytes": "Alle {size} aufgenommenes Audio",
+			"scaleAll": "Das gesamte aufgenommene Audio",
+			"message": "{scale} wird endgültig gelöscht und lässt sich nicht wiederherstellen. Transkripte, Ergebnisse und der Bericht bleiben erhalten. Laden Sie vorher herunter oder exportieren Sie, falls Sie eine Kopie brauchen.",
+			"confirm": "Gesamtes Audio löschen"
+		},
+		"deviceReport": {
+			"title": "Telefonbericht",
+			"load": "Bericht laden",
+			"loading": "Wird geladen…",
+			"summary": "{phones} Telefone mit Protokoll von {sessions}; {gaps} mit einer Lücke über 15 s",
+			"empty": "Noch kein Telefon hat ein Protokoll gesendet",
+			"showText": "Als Text anzeigen",
+			"hideText": "Text ausblenden",
+			"row": "Tisch {number} · Telefon {letter}",
+			"rowNoTable": "Telefon {letter}",
+			"standalone": "als App installiert",
+			"chunks": "{count} Teil gespeichert | {count} Teile gespeichert",
+			"uploadFailures": "{count} Upload-Fehler | {count} Upload-Fehler",
+			"hiddenWindow": "{seconds} s verborgen, {count} Teil erfasst | {seconds} s verborgen, {count} Teile erfasst",
+			"hiddenWindowOngoing": "noch verborgen, {count} Teil erfasst | noch verborgen, {count} Teile erfasst",
+			"gap": "Lücke von {seconds} s vor Teil {seq}",
+			"gapNoSeq": "Lücke von {seconds} s",
+			"notableTitle": "Bemerkenswerte Ereignisse"
+		}
+	}
+}

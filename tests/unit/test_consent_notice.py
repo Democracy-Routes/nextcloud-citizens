@@ -5,7 +5,10 @@ data-handling facts, in the assembly's language, hashed exactly as shown —
 so a stored hash proves what a person read. Blank fields are omitted, never
 printed as placeholders; the selected providers are named."""
 
-from citizens.services.consent_notice import NOTICE_VERSION, notice_hash, render_notice
+import pytest
+
+from citizens.services import report_text
+from citizens.services.consent_notice import _TEXT, NOTICE_VERSION, notice_hash, render_notice
 
 HANDLING = {
     "stt_provider": "vosk", "stt_provider_label": "Vosk", "stt_configured": True, "stt_hosted": False,
@@ -91,3 +94,38 @@ def test_a_local_analysis_endpoint_and_a_custom_authority():
     assert "summarised by an AI model running on the organisation's own server" in notice.text
     assert "Recipients:" not in notice.text  # Vosk local, analysis local: nobody outside
     assert "lodge a complaint with the Garante per la protezione dei dati personali" in notice.text
+
+
+@pytest.mark.parametrize("lang", ["en", "it", "de", "fr", "es"])
+def test_every_language_has_the_full_notice_and_never_falls_back_to_english(lang):
+    assert set(_TEXT[lang]) == set(_TEXT["en"])
+    assert all(isinstance(v, str) and v.strip() for v in _TEXT[lang].values())
+    notice = render_notice(lang, HANDLING, organization=ORG)
+    english = render_notice("en", HANDLING, organization=ORG)
+    assert notice.language == lang
+    assert len(notice.paragraphs) == len(english.paragraphs)
+    if lang != "en":
+        assert notice.paragraphs[1] != english.paragraphs[1]  # "what"
+        assert notice.text != english.text
+
+
+# values that are the same word in English and in that language, by nature
+_SAME_AS_ENGLISH = {
+    "de": {"month.4", "month.8", "month.9", "month.11"},
+    "fr": {"tables_count", "comparison_col_table", "round", "round_titled", "table", "date_format"},
+    "es": set(),
+}
+
+
+@pytest.mark.parametrize("lang", ["en", "it", "de", "fr", "es"])
+def test_the_report_catalogue_is_complete_in_every_language(lang):
+    # report_text is the other text catalogue a language must be complete in:
+    # a key missing from one language would silently print English in the PDF
+    english = report_text.CATALOGUE["en"]
+    strings = report_text.CATALOGUE[lang]
+    assert set(strings) == set(english)
+    assert all(v.strip() for v in strings.values())
+    if lang in _SAME_AS_ENGLISH:
+        untranslated = {k for k, v in strings.items()
+                        if v == english[k] and len(v) >= 4 and k not in _SAME_AS_ENGLISH[lang]}
+        assert not untranslated

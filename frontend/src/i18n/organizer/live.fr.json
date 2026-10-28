@@ -1,0 +1,327 @@
+{
+	"monitor": {
+		"tableN": "Table {number}",
+		"toast": {
+			"acknowledged": "Table {number} : prise en compte",
+			"aiPaused": "Table {number} : assistant IA mis en pause",
+			"aiResumed": "Table {number} : assistant IA relancé",
+			"extended": "Session prolongée de {minutes} minutes",
+			"started": "Session démarrée — les tables prêtes enregistrent maintenant",
+			"ended": "Session terminée",
+			"transcriptionQueued": "Transcription mise en file",
+			"assembling": "Table {number} : assemblage de l'audio parvenu au serveur",
+			"releasedAssembling": "Table {number} libérée — son enregistrement jusqu'ici est en cours de transcription",
+			"releasedEmpty": "Table {number} libérée — elle n'avait encore envoyé aucun audio"
+		},
+		"delivery": {
+			"none": "aucune table dans cette session",
+			"all": "Remis {total}/{total}",
+			"partial": "Remis {seen}/{total} · pas encore : {names}"
+		},
+		"author": {
+			"ai": "IA",
+			"facilitator": "Facilitateur"
+		},
+		"reasons": {
+			"NO_RECORDER": "aucun téléphone n'a rejoint — montrez son code QR à la table",
+			"RECORDER_OFFLINE": "le téléphone ne répond pas",
+			"MIC_UNAVAILABLE": "le microphone ne capte pas — touchez le téléphone pour l'autoriser",
+			"LOW_STORAGE": "stockage faible — échangez ou libérez le téléphone après cette session",
+			"LOW_BATTERY": "batterie faible — demandez un téléphone de secours à la table",
+			"UPLOAD_STALLED": "envois en retard — vérifiez le Wi-Fi du lieu",
+			"LIVE_STT_UNAVAILABLE": "sous-titres en direct désactivés à cette table",
+			"HELP_REQUESTED": "la table demande de l'aide",
+			"PARTICIPANT_CONSENT_MISSING": "personne à la table n'a encore consenti — inscrivez un·e participant·e sur le téléphone de la table",
+			"PARTICIPANT_REFUSED": "une personne assise ici a refusé d'être enregistrée — marquez-la comme déplacée vers une table non enregistrée, ou notez qu'elle a changé d'avis",
+			"CAPTURE_SILENT": "aucun audio n'est parvenu au serveur depuis {seconds} s — le téléphone est peut-être en veille ou en arrière-plan : ouvrez l'enregistreur dessus",
+			"recorderSuffix": "(enregistreur {letter})"
+		},
+		"helpKinds": {
+			"TECHNICAL": "problème technique",
+			"ORGANIZER": "demande l'organisateur",
+			"PROCESS": "question sur le déroulement"
+		},
+		"facts": {
+			"line": "batterie {pct} · {storage} · {pending} · {age} · {screen} · {visible} · {capture} · {rec}",
+			"mbFree": "{mb} Mo libres",
+			"chunksPending": "{count} segments en attente",
+			"neverHeard": "jamais entendu",
+			"heartbeat": "signal il y a {seconds} s",
+			"screenAwake": "écran allumé",
+			"screenMayLock": "l'écran peut se verrouiller",
+			"background": "en arrière-plan",
+			"foreground": "au premier plan",
+			"captureInterrupted": "capture interrompue",
+			"capturing": "capture en cours",
+			"noRecording": "pas d'enregistrement"
+		},
+		"health": {
+			"ok": "Tout fonctionne normalement.",
+			"attention": "{count} table demande de l'attention{blocked}. | {count} tables demandent de l'attention{blocked}.",
+			"cannotRecord": "· {count} ne peuvent pas enregistrer",
+			"quietFolded": "{count} table va bien et est repliée ci-dessous. | {count} tables vont bien et sont repliées ci-dessous."
+		},
+		"sound": {
+			"on": "Son activé",
+			"off": "Son désactivé",
+			"title": "Un bref signal sonore sur cet ordinateur quand une table passe au rouge ou que l'audio d'un enregistreur cesse d'arriver"
+		},
+		"advanced": {
+			"show": "Diagnostics avancés",
+			"hide": "Masquer les diagnostics"
+		},
+		"device": {
+			"armed": "prêt",
+			"background": "en arrière-plan",
+			"connected": "connecté",
+			"none": "aucun téléphone"
+		},
+		"prior": {
+			"continued": "partie précédente — la table a continué",
+			"rejoined": "partie précédente — le téléphone s'est reconnecté",
+			"silent": "partie précédente — le téléphone est devenu silencieux",
+			"handedOver": "partie précédente — le téléphone a été remplacé"
+		},
+		"nextStep": {
+			"finished": "Cette session est terminée.",
+			"autoStart": "Les tables prêtes commenceront automatiquement à enregistrer la session {position}.",
+			"start": "Démarrer la session {position}",
+			"allDone": "Toutes les sessions sont terminées.",
+			"allDoneHint": "Examinez les résultats dans l'onglet Analyse, puis publiez le rapport sur les téléphones des tables depuis l'onglet Rapport."
+		},
+		"broadcast": {
+			"title": "Écrire aux tables",
+			"minLeft": "{minutes} min restantes",
+			"wrapUp": "Conclure",
+			"less": "Moins",
+			"write": "Écrire un message",
+			"to": "à",
+			"allTables": "toutes les tables",
+			"placeholder": "Une relance ou une consigne pour les tables",
+			"ariaLabel": "Message aux tables",
+			"send": "Envoyer"
+		},
+		"ai": {
+			"title": "Assistant IA",
+			"nudges": "{count} relance dans cette session | {count} relances dans cette session",
+			"nothingYet": "rien dit pour l'instant",
+			"show": "Afficher",
+			"less": "Moins",
+			"dismissed": "écartée par le facilitateur",
+			"sentOn": "transmise par le facilitateur",
+			"onFacilitatorPhone": "sur le téléphone du facilitateur",
+			"toTable": "à la table"
+		},
+		"countbar": {
+			"tablesReady": "{ready}/{total} tables prêtes",
+			"timeUp": "Le temps est écoulé — fin dans {seconds} s",
+			"extend": "Prolonger de {minutes} min",
+			"keepGoing": "Continuer",
+			"start": "Démarrer la session",
+			"end": "Terminer la session",
+			"independent": "Tables indépendantes — chaque table enregistre à son propre rythme"
+		},
+		"handOver": {
+			"title": "Transférer cette table à un autre téléphone ?",
+			"message": "Le téléphone de la table {number} ne répond plus. Son enregistrement est terminé avec l'audio déjà reçu — généralement la majeure partie de la session — et transcrit. La table peut ensuite enregistrer la suite sur n'importe quel téléphone en scannant le même code QR.",
+			"confirm": "Transférer la table"
+		},
+		"finishRecording": "Terminer l'enregistrement",
+		"finishRequested": "Fin en cours… le téléphone a été sollicité",
+		"closedSilence": "Terminé par le serveur après 5 minutes de silence",
+		"closedOrganizer": "Terminé depuis ici",
+		"continued": "Audio arrivé après la clôture, conservé",
+		"finishConfirm": {
+			"title": "Terminer l'enregistrement de cette table ?",
+			"message": "L'enregistrement de la table {number} sera terminé maintenant, avec l'audio déjà reçu. Le téléphone recevra la demande de s'arrêter ; rien de ce qu'il a enregistré jusqu'ici n'est perdu.",
+			"confirm": "Terminer l'enregistrement"
+		},
+		"startUnready": {
+			"title": "Démarrer avec des tables manquantes ?",
+			"message": "Seules {ready} tables sur {total} sont prêtes. Les tables qui seront prêtes plus tard pourront encore rejoindre la session. Démarrer quand même ?",
+			"confirm": "Démarrer la session"
+		},
+		"empty": {
+			"title": "Cette assemblée n'a pas encore de session",
+			"hint": "Ajoutez une session dans l'onglet Sessions pour commencer à enregistrer."
+		},
+		"columns": {
+			"table": "Table",
+			"device": "Téléphone",
+			"recording": "Enregistrement",
+			"elapsed": "Écoulé",
+			"upload": "Envoi",
+			"localAudio": "Audio local",
+			"actions": "Actions"
+		},
+		"quiet": {
+			"show": "{count} table fonctionne normalement — afficher | {count} tables fonctionnent normalement — afficher",
+			"hide": "{count} table fonctionne normalement — masquer | {count} tables fonctionnent normalement — masquer"
+		},
+		"finishedAt": "terminé à {time}",
+		"recorderRow": {
+			"connected": "connecté",
+			"lastSeen": "{age}",
+			"live": "sous-titres",
+			"liveTitle": "Les sous-titres de cet enregistreur sont ceux que la salle lit"
+		},
+		"coverageTitle": "Audio capté par rapport au temps pendant lequel cet enregistreur a enregistré — rouge sous 95 % : ce téléphone a manqué une partie de la discussion",
+		"pills": {
+			"captureInterrupted": "capture interrompue",
+			"storageError": "erreur de stockage",
+			"screenMayLock": "l'écran peut se verrouiller",
+			"battery": "batterie {pct} %",
+			"lowStorage": "stockage faible — {mb} Mo",
+			"safe": "✓ en sécurité",
+			"unknown": "inconnu"
+		},
+		"upload": {
+			"pending": "({count} en attente)",
+			"received": "{count} reçus"
+		},
+		"actions": {
+			"retryTranscriptionTitle": "Relancer la transcription (à utiliser si elle est bloquée)",
+			"transcribe": "Transcrire",
+			"transcript": "Transcription",
+			"acknowledgeTitle": "La table a levé la main — indiquez-lui que vous l'avez vue",
+			"acknowledge": "Prendre en compte",
+			"pauseAiTitle": "Mettre en pause l'assistant IA à cette table",
+			"pauseAi": "Pause IA",
+			"resumeAiTitle": "Laisser l'assistant IA reprendre la parole à cette table (au niveau de l'assemblée)",
+			"resumeAi": "Relancer l'IA",
+			"handOverTitle": "Le téléphone de cette table ne répond plus — transférez la table à un autre téléphone",
+			"handOver": "Transférer la table",
+			"retryTitle": "Assembler et transcrire l'audio parvenu au serveur avant l'arrêt du téléphone",
+			"retry": "Réessayer",
+			"deviceLog": "Journal du téléphone"
+		},
+		"noTables": "Cette session n'a aucune table.",
+		"transcript": {
+			"title": "Transcription",
+			"empty": "La transcription est vide (aucune parole détectée)."
+		},
+		"deviceLog": {
+			"title": "Table {number} — journal du téléphone (50 derniers)",
+			"empty": "Aucun journal de téléphone reçu pour l'instant."
+		}
+	},
+	"files": {
+		"toast": {
+			"purgeNone": "Aucun téléphone de table ne s'est connecté à cette assemblée",
+			"purgeAsked": "{count} téléphone de table prié d'effacer sa copie | {count} téléphones de table priés d'effacer leur copie",
+			"assembling": "Nouvel assemblage de la table {number}",
+			"retranscribing": "Nouvelle transcription à partir de l'audio stocké — cela peut prendre quelques minutes",
+			"transcriptDeletedRetranscribable": "Transcription supprimée — cet enregistrement peut être transcrit à nouveau",
+			"transcriptDeleted": "Transcription supprimée",
+			"transcriptsDeleted": "{count} transcription supprimée | {count} transcriptions supprimées",
+			"audioDeleted": "Audio supprimé — {size} libérés",
+			"recordingsCleared": "{count} enregistrement effacé — {size} libérés | {count} enregistrements effacés — {size} libérés"
+		},
+		"header": {
+			"title": "Fichiers audio et exports",
+			"recordings": "{count} enregistrement | {count} enregistrements",
+			"audioDeleted": "· {count} dont l'audio est supprimé",
+			"downloadAll": "Télécharger tout l'audio",
+			"exportFull": "Exporter la session complète",
+			"deleteAllAudio": "Supprimer tout l'audio",
+			"deleteAllTranscripts": "Supprimer toutes les transcriptions",
+			"purge": "Effacer l'audio des téléphones de table"
+		},
+		"coverage": {
+			"askedOnClose": "Les téléphones ont été priés d'effacer l'audio de cette assemblée à la clôture de la session.",
+			"cleared": "{cleared} sur {devices}",
+			"reported": "les téléphones ont signalé en dernier ne plus avoir d'enregistrement local.",
+			"stillHolding": "{count} conservent encore de l'audio.",
+			"unknown": "{count} n'ont pas signalé le nombre de leurs enregistrements locaux.",
+			"note": "Ces comptes incluent les téléphones qui se sont connectés plus tôt. Une nouvelle connexion peut compter plusieurs fois le même téléphone ; les liens de téléphone expirés ou révoqués peuvent nécessiter un nettoyage manuel."
+		},
+		"keptPastRetention": "{count} enregistrement a été conservé au-delà de la durée de conservation parce qu'aucune transcription n'existe pour lui — pour celui-ci, l'audio est la seule trace de la discussion. Relancez la transcription, ou supprimez-le délibérément. | {count} enregistrements ont été conservés au-delà de la durée de conservation parce qu'aucune transcription n'existe pour eux — pour ceux-ci, l'audio est la seule trace de la discussion. Relancez la transcription, ou supprimez-les délibérément.",
+		"exportHint": "L'export complet de la session regroupe métadonnées, audio, transcriptions et rapport — de quoi déplacer cette assemblée vers un autre serveur. Supprimer l'audio conserve les transcriptions, les résultats et le rapport.",
+		"empty": {
+			"title": "Aucun enregistrement pour l'instant",
+			"hint": "Les fichiers audio apparaissent ici dès que les tables enregistrent et se synchronisent."
+		},
+		"captured": "{percent} %",
+		"capturedTitle": "{audio} d'audio pour {wall} d'enregistrement",
+		"columns": {
+			"table": "Table",
+			"duration": "Durée",
+			"size": "Taille",
+			"state": "État",
+			"transcript": "Transcription",
+			"actions": "Actions"
+		},
+		"audioDeleted": "audio supprimé",
+		"liveTitle": "Issue des sous-titres en direct, et non d'une transcription de l'audio terminé",
+		"live": "direct",
+		"closedSilence": "terminé par le serveur après 5 min de silence",
+		"closedOrganizer": "terminé depuis l'onglet Direct",
+		"audioAdded": "audio ajouté à {time}",
+		"actions": {
+			"download": "Télécharger",
+			"deleteAudioTitle": "Supprimer l'audio",
+			"audio": "Audio",
+			"retryTitle": "Réessayer d'assembler l'audio",
+			"retry": "Réessayer",
+			"retranscribeTitle": "Transcrire à nouveau à partir de l'audio stocké",
+			"retranscribe": "Retranscrire",
+			"deleteTranscriptTitle": "Supprimer la transcription",
+			"transcript": "Transcription"
+		},
+		"confirmRetranscribe": {
+			"title": "Transcrire à nouveau cette table ?",
+			"message": "La table {number} sera transcrite à nouveau à partir de son audio stocké{replacing}. Les citations des résultats existants renvoient à l'ancien texte ; elles sont donc marquées comme supprimées, et l'analyse est relancée. L'audio n'est pas touché.",
+			"replacingLive": ", en remplaçant la transcription issue des sous-titres en direct",
+			"replacingCurrent": ", en remplaçant la transcription actuelle",
+			"confirm": "Transcrire à nouveau"
+		},
+		"confirmDeleteAudio": {
+			"title": "Supprimer l'audio de cette table ?",
+			"message": "L'audio de la table {number} sera supprimé définitivement et ne pourra pas être récupéré. Sa transcription, ses résultats et le rapport sont conservés — mais l'enregistrement ne pourra plus jamais être retranscrit.",
+			"confirm": "Supprimer l'audio"
+		},
+		"confirmDeleteTranscript": {
+			"title": "Supprimer la transcription de cette table ?",
+			"message": "Le texte intégral de la table {number} sera effacé définitivement — y compris les citations affichées dans les résultats et dans le rapport publié. Les résultats et les synthèses IA restent. {audioNote}",
+			"audioStillHere": "L'audio est toujours là : cet enregistrement peut donc être transcrit à nouveau.",
+			"audioGone": "Son audio est déjà supprimé : la transcription ne pourra donc pas être recréée.",
+			"confirm": "Supprimer la transcription"
+		},
+		"confirmPurge": {
+			"title": "Effacer l'audio de cette assemblée des téléphones de table ?",
+			"message": "Chaque téléphone conserve encore l'audio qu'il a enregistré. Cette action leur demande de le supprimer — mais seulement les parties que le serveur a déjà confirmées, donc rien ne peut être perdu. Elle atteint les téléphones dont l'enregistreur est encore ouvert ; un téléphone fermé et emporté s'effacera de lui-même s'il est rouvert.",
+			"confirm": "Effacer les téléphones"
+		},
+		"confirmAllTranscripts": {
+			"title": "Supprimer toutes les transcriptions de cette session ?",
+			"message": "Le texte intégral de chaque table sera effacé définitivement, y compris les citations des résultats et du rapport publié. Les résultats et les synthèses IA restent. Les tables dont l'audio est encore présent peuvent être transcrites à nouveau.",
+			"confirm": "Supprimer toutes les transcriptions"
+		},
+		"confirmAllAudio": {
+			"title": "Supprimer tout l'audio de cette session ?",
+			"scaleBytes": "Les {size} d'audio enregistré",
+			"scaleAll": "Tout l'audio enregistré",
+			"message": "{scale} sera supprimé définitivement et ne pourra pas être récupéré. Les transcriptions, les résultats et le rapport sont conservés. Téléchargez ou exportez d'abord si vous avez besoin d'une copie.",
+			"confirm": "Supprimer tout l'audio"
+		},
+		"deviceReport": {
+			"title": "Rapport des téléphones",
+			"load": "Charger le rapport",
+			"loading": "Chargement…",
+			"summary": "{phones} téléphones avec un journal sur {sessions} ; {gaps} avec une interruption de plus de 15 s",
+			"empty": "Aucun téléphone n'a encore envoyé de journal",
+			"showText": "Afficher en texte",
+			"hideText": "Masquer le texte",
+			"row": "Table {number} · Enregistreur {letter}",
+			"rowNoTable": "Enregistreur {letter}",
+			"standalone": "installée comme application",
+			"chunks": "{count} segment sauvegardé | {count} segments sauvegardés",
+			"uploadFailures": "{count} échec d'envoi | {count} échecs d'envoi",
+			"hiddenWindow": "masquée {seconds} s, {count} segment capté | masquée {seconds} s, {count} segments captés",
+			"hiddenWindowOngoing": "toujours masquée, {count} segment capté | toujours masquée, {count} segments captés",
+			"gap": "interruption de {seconds} s avant le segment {seq}",
+			"gapNoSeq": "interruption de {seconds} s",
+			"notableTitle": "Événements notables"
+		}
+	}
+}

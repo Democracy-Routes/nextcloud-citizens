@@ -1,0 +1,22 @@
+{
+	"spaces": {
+		"plan": "Preparación",
+		"run": "En curso",
+		"results": "Resultados"
+	},
+	"timeline": {
+		"participants": "{count} de {expected} participantes",
+		"participantsNoTarget": "{count} participantes",
+		"tables": "{count} mesas | {count} mesa | {count} mesas",
+		"wholeRoom": "Toda la sala",
+		"sessions": "{count} sesiones | {count} sesión | {count} sesiones",
+		"untitled": "Sesión {position}",
+		"liveNow": "En directo ahora",
+		"notStarted": "Sin empezar",
+		"ended": "Terminada",
+		"processing": "Procesando",
+		"review": "En revisión",
+		"closed": "Cerrada",
+		"openLive": "Abre la pestaña En directo de la sesión {position}"
+	}
+}

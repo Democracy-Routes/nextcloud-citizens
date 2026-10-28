@@ -243,6 +243,340 @@ _TEXT = {
         ),
         "fallback_controller": "L'organizzazione",
     },
+    "de": {
+        "who": "{controller} nimmt diese Diskussion auf und ist für deine Daten verantwortlich{address}.",
+        "who_contact": " Kontakt: {contact}.",
+        "who_dpo": " Kontakt für den Datenschutz: {dpo}.",
+        "what": (
+            "Während der Diskussion an deinem Tisch nimmt das Telefon auf dem Tisch den Ton auf. "
+            "Aus dieser Aufnahme erstellen wir ein schriftliches Transkript und, mit Hilfe "
+            "künstlicher Intelligenz, eine Zusammenfassung der angesprochenen Punkte (Vorschläge, "
+            "Vereinbarungen, Bedenken, Fragen, Minderheitenmeinungen). Der Name, den du bei der "
+            "Anmeldung angibst, und die E-Mail-Adresse, falls du eine angeben möchtest, werden in "
+            "der Teilnehmerliste gespeichert."
+        ),
+        "why": (
+            "Warum, und auf welcher Rechtsgrundlage: um die Diskussion getreu zu dokumentieren und "
+            "den Bericht der Versammlung zu erstellen. Die Rechtsgrundlage ist deine ausdrückliche "
+            "Einwilligung (Art. 6 Abs. 1 Buchst. a DSGVO und, weil das, was in einer Debatte gesagt "
+            "wird, politische Meinungen offenbaren kann, Art. 9 Abs. 2 Buchst. a DSGVO). Es steht "
+            "dir frei, nicht einzuwilligen: Die Diskussion an deinem Tisch kann auch ohne "
+            "Aufnahme durch das Telefon weitergehen."
+        ),
+        "how_phone_purge": (
+            "Das Telefon an deinem Tisch behält eine Kopie der Aufnahme, bis der Server sie "
+            "erhalten hat; die Kopie wird vom Telefon gelöscht, wenn die Versammlung geschlossen "
+            "wird."
+        ),
+        "how_phone_keep": (
+            "Das Telefon an deinem Tisch behält eine Kopie der Aufnahme, bis der Server sie "
+            "erhalten hat und die Organisation die Telefone leert."
+        ),
+        "engine_hosted": (
+            "Die Aufnahme wird an {engine} gesendet, einen Dienst außerhalb des eigenen Servers "
+            "der Organisation, um in Text umgewandelt zu werden."
+        ),
+        "engine_local": (
+            "Die Aufnahme wird von {engine} auf dem eigenen Server der Organisation transkribiert; "
+            "der Ton wird an kein externes Unternehmen gesendet."
+        ),
+        "engine_none": (
+            "Es ist kein Transkriptionsdienst eingerichtet, daher bleibt der Ton auf diesem Server."
+        ),
+        "analysis_hosted": (
+            "Das schriftliche Transkript — niemals der Ton — wird an {provider} gesendet, einen "
+            "externen KI-Dienst, um die Zusammenfassung und die Ergebnisse zu entwerfen."
+        ),
+        "analysis_hosted_unnamed": (
+            "Das schriftliche Transkript — niemals der Ton — wird an einen externen KI-Dienst "
+            "gesendet, um die Zusammenfassung und die Ergebnisse zu entwerfen."
+        ),
+        "analysis_local": (
+            "Das schriftliche Transkript wird von einem KI-Modell zusammengefasst, das auf dem "
+            "eigenen Server der Organisation läuft."
+        ),
+        "analysis_none": (
+            "Es wird keine KI-Analyse durchgeführt; es wird nur das Transkript erstellt."
+        ),
+        "speakers": (
+            "Sprechende werden nur als \"Speaker 1\", \"Speaker 2\" bezeichnet: Es gibt keine "
+            "Stimmerkennung, und die Aufnahme ist nicht mit deiner Identität verknüpft. Laut "
+            "ausgesprochene Namen erscheinen im Transkript so, wie sie gesagt wurden; die Namen "
+            "der gelisteten Teilnehmenden werden durch Pseudonyme ersetzt, bevor irgendein Text "
+            "den Server verlässt."
+        ),
+        "review": (
+            "Jedes von der KI erzeugte Ergebnis wird von einer Person geprüft, bevor etwas "
+            "veröffentlicht wird, und der Bericht gibt an, dass KI verwendet wurde. Der Bericht "
+            "kann kurze anonyme Zitate von deinem Tisch enthalten; er wird mit den Teilnehmenden "
+            "geteilt und kann von der Organisation veröffentlicht werden."
+        ),
+        "where": "Wo deine Daten gespeichert werden: auf dem Server der Organisation{hosting}.{recipients}",
+        "where_hosting": " bei {hosting}",
+        "where_recipients": " Empfänger: {recipients}.",
+        "retention_days": (
+            "Wie lange: Die Tonaufnahme wird {days} Tage nach dem Schluss der Versammlung gelöscht. "
+            "Das Transkript, die Zusammenfassungen und der Bericht werden zusammen mit der "
+            "Teilnehmerliste als Dokumentation der Versammlung aufbewahrt."
+        ),
+        "retention_none": (
+            "Wie lange: Die Tonaufnahme wird aufbewahrt, bis eine organisierende Person sie löscht. "
+            "Das Transkript, die Zusammenfassungen und der Bericht werden zusammen mit der "
+            "Teilnehmerliste als Dokumentation der Versammlung aufbewahrt."
+        ),
+        "retention_zero": (
+            "Wie lange: Die Tonaufnahme und das Transkript werden gelöscht, sobald die Versammlung "
+            "geschlossen und ihr Bericht geschrieben ist. Nur der Bericht — Zusammenfassungen und "
+            "Zitate — wird zusammen mit der Teilnehmerliste als Dokumentation der Versammlung "
+            "aufbewahrt."
+        ),
+        "rights": (
+            "Deine Rechte: Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, "
+            "Datenübertragbarkeit, Widerspruch und jederzeitiger Widerruf der Einwilligung (die "
+            "Rechtmäßigkeit der bis dahin erfolgten Verarbeitung bleibt unberührt){contact}. Da die "
+            "Stimmen in der Aufnahme nicht getrennt sind, bedeutet eine Löschung nach der Sitzung, "
+            "dass auf Anfrage die Aufnahme und das Transkript deines Tisches gelöscht werden. Du "
+            "kannst Beschwerde bei {authority} einlegen."
+        ),
+        "rights_contact": " — schreibe an {contact}",
+        "authority_default": "der Datenschutzbehörde deines Landes",
+        "choice": (
+            "Die Teilnahme setzt nicht voraus, aufgenommen zu werden: Wenn du nicht einwilligst, "
+            "kannst du an einem Tisch sitzen, der nicht aufgenommen wird."
+        ),
+        "accept": (
+            "Mit der Anmeldung erklärst du, diese Information gelesen zu haben, und willigst in die "
+            "Tonaufnahme der Diskussion an deinem Tisch, in deren Transkription und in die "
+            "KI-gestützte Analyse ein."
+        ),
+        "accept_quotations": (
+            "Ich bin außerdem damit einverstanden, dass kurze anonyme Zitate von meinem Tisch in "
+            "den Bericht der Versammlung aufgenommen werden, der veröffentlicht werden kann."
+        ),
+        "fallback_controller": "Die Organisation",
+    },
+    "fr": {
+        "who": "{controller} enregistre cette discussion et est responsable de tes données{address}.",
+        "who_contact": " Contact : {contact}.",
+        "who_dpo": " Contact pour la protection des données : {dpo}.",
+        "what": (
+            "Pendant la discussion à ta table, le téléphone posé sur la table enregistre le son. "
+            "À partir de cet enregistrement, nous produisons une transcription écrite et, avec "
+            "l'aide de l'intelligence artificielle, une synthèse des points soulevés (propositions, "
+            "accords, préoccupations, questions, positions minoritaires). Le nom que tu indiques "
+            "lors de l'inscription, et l'adresse e-mail si tu choisis d'en donner une, sont "
+            "conservés dans la liste des participants."
+        ),
+        "why": (
+            "Pourquoi, et sur quelle base juridique : pour documenter fidèlement la discussion et "
+            "produire le rapport de l'assemblée. La base juridique est ton consentement explicite "
+            "(art. 6, par. 1, point a) du RGPD et, parce que ce qui est dit dans un débat peut "
+            "révéler des opinions politiques, art. 9, par. 2, point a) du RGPD). Tu es libre de ne "
+            "pas consentir : la discussion à ta table peut se poursuivre sans que le téléphone "
+            "t'enregistre."
+        ),
+        "how_phone_purge": (
+            "Le téléphone à ta table conserve une copie de l'enregistrement jusqu'à ce que le "
+            "serveur l'ait reçu ; la copie est supprimée du téléphone à la clôture de "
+            "l'assemblée."
+        ),
+        "how_phone_keep": (
+            "Le téléphone à ta table conserve une copie de l'enregistrement jusqu'à ce que le "
+            "serveur l'ait reçu et que l'organisation vide les téléphones."
+        ),
+        "engine_hosted": (
+            "L'enregistrement est envoyé à {engine}, un service extérieur au serveur propre de "
+            "l'organisation, pour être transformé en texte."
+        ),
+        "engine_local": (
+            "L'enregistrement est transcrit par {engine} sur le serveur propre de l'organisation ; "
+            "le son n'est envoyé à aucune entreprise extérieure."
+        ),
+        "engine_none": (
+            "Aucun moteur de transcription n'est configuré, le son reste donc sur ce serveur."
+        ),
+        "analysis_hosted": (
+            "La transcription écrite — jamais le son — est envoyée à {provider}, un service d'IA "
+            "extérieur, pour rédiger la synthèse et les conclusions."
+        ),
+        "analysis_hosted_unnamed": (
+            "La transcription écrite — jamais le son — est envoyée à un service d'IA extérieur "
+            "pour rédiger la synthèse et les conclusions."
+        ),
+        "analysis_local": (
+            "La transcription écrite est résumée par un modèle d'IA qui fonctionne sur le serveur "
+            "propre de l'organisation."
+        ),
+        "analysis_none": (
+            "Aucune analyse par IA n'est effectuée ; seule la transcription est produite."
+        ),
+        "speakers": (
+            "Les personnes qui parlent sont désignées uniquement comme \"Speaker 1\", "
+            "\"Speaker 2\" : il n'y a pas de reconnaissance vocale, et l'enregistrement n'est pas "
+            "lié à ton identité. Les noms prononcés à voix haute apparaissent dans la "
+            "transcription tels qu'ils ont été dits ; les noms des participants inscrits sont "
+            "remplacés par des pseudonymes avant que tout texte ne quitte le serveur."
+        ),
+        "review": (
+            "Chaque résultat produit par l'IA est relu par une personne avant toute publication, "
+            "et le rapport indique que l'IA a été utilisée. Le rapport peut contenir de courtes "
+            "citations anonymes de ta table ; il est partagé avec les participants et peut être "
+            "publié par l'organisation."
+        ),
+        "where": "Où tes données sont conservées : sur le serveur de l'organisation{hosting}.{recipients}",
+        "where_hosting": " chez {hosting}",
+        "where_recipients": " Destinataires : {recipients}.",
+        "retention_days": (
+            "Combien de temps : l'enregistrement audio est supprimé {days} jours après la clôture "
+            "de l'assemblée. La transcription, les synthèses et le rapport sont conservés comme "
+            "documentation de l'assemblée, avec la liste des participants."
+        ),
+        "retention_none": (
+            "Combien de temps : l'enregistrement audio est conservé jusqu'à ce qu'une personne de "
+            "l'organisation le supprime. La transcription, les synthèses et le rapport sont "
+            "conservés comme documentation de l'assemblée, avec la liste des participants."
+        ),
+        "retention_zero": (
+            "Combien de temps : l'enregistrement audio et la transcription sont supprimés dès que "
+            "l'assemblée est clôturée et que son rapport est rédigé. Seul le rapport — synthèses "
+            "et citations — est conservé comme documentation de l'assemblée, avec la liste des "
+            "participants."
+        ),
+        "rights": (
+            "Tes droits : accès, rectification, effacement, limitation, portabilité, opposition "
+            "et retrait du consentement à tout moment (sans remettre en cause les traitements "
+            "déjà effectués){contact}. Comme les voix ne sont pas séparées dans "
+            "l'enregistrement, l'effacement après la session signifie, sur demande, la "
+            "suppression de l'enregistrement et de la transcription de ta table. Tu peux "
+            "introduire une réclamation auprès de {authority}."
+        ),
+        "rights_contact": " — écris à {contact}",
+        "authority_default": "l'autorité de protection des données de ton pays",
+        "choice": (
+            "Participer n'exige pas d'être enregistré : si tu ne consens pas, tu peux t'asseoir "
+            "à une table qui n'est pas enregistrée."
+        ),
+        "accept": (
+            "En t'inscrivant, tu déclares avoir lu cette information et tu consens à "
+            "l'enregistrement audio de la discussion à ta table, à sa transcription et à son "
+            "analyse assistée par l'IA."
+        ),
+        "accept_quotations": (
+            "J'accepte aussi que de courtes citations anonymes de ma table soient incluses dans "
+            "le rapport de l'assemblée, qui peut être publié."
+        ),
+        "fallback_controller": "L'organisation",
+    },
+    "es": {
+        "who": "{controller} graba esta discusión y es responsable de tus datos{address}.",
+        "who_contact": " Contacto: {contact}.",
+        "who_dpo": " Contacto de protección de datos: {dpo}.",
+        "what": (
+            "Durante la discusión en tu mesa, el teléfono que está sobre la mesa graba el audio. "
+            "A partir de esa grabación producimos una transcripción escrita y, con la ayuda de la "
+            "inteligencia artificial, un resumen de los puntos planteados (propuestas, acuerdos, "
+            "preocupaciones, preguntas, posiciones minoritarias). El nombre que indicas al "
+            "registrarte, y el correo electrónico si decides facilitarlo, se conservan en la "
+            "lista de participantes."
+        ),
+        "why": (
+            "Por qué, y con qué base jurídica: para documentar fielmente la discusión y elaborar "
+            "el informe de la asamblea. La base jurídica es tu consentimiento explícito "
+            "(art. 6.1.a) del RGPD y, porque lo que se dice en un debate puede revelar opiniones "
+            "políticas, art. 9.2.a) del RGPD). Eres libre de no consentir: la discusión en tu "
+            "mesa puede continuar sin que el teléfono te grabe."
+        ),
+        "how_phone_purge": (
+            "El teléfono de tu mesa conserva una copia de la grabación hasta que el servidor la "
+            "haya recibido; la copia se borra del teléfono cuando se cierra la asamblea."
+        ),
+        "how_phone_keep": (
+            "El teléfono de tu mesa conserva una copia de la grabación hasta que el servidor la "
+            "haya recibido y la organización vacíe los teléfonos."
+        ),
+        "engine_hosted": (
+            "La grabación se envía a {engine}, un servicio ajeno al servidor propio de la "
+            "organización, para convertirla en texto."
+        ),
+        "engine_local": (
+            "La grabación la transcribe {engine} en el servidor propio de la organización; el "
+            "audio no se envía a ninguna empresa externa."
+        ),
+        "engine_none": (
+            "No hay ningún motor de transcripción configurado, por lo que el audio se queda en "
+            "este servidor."
+        ),
+        "analysis_hosted": (
+            "La transcripción escrita — nunca el audio — se envía a {provider}, un servicio de IA "
+            "externo, para redactar el resumen y las conclusiones."
+        ),
+        "analysis_hosted_unnamed": (
+            "La transcripción escrita — nunca el audio — se envía a un servicio de IA externo "
+            "para redactar el resumen y las conclusiones."
+        ),
+        "analysis_local": (
+            "La transcripción escrita la resume un modelo de IA que se ejecuta en el servidor "
+            "propio de la organización."
+        ),
+        "analysis_none": (
+            "No se realiza ningún análisis con IA; solo se produce la transcripción."
+        ),
+        "speakers": (
+            "Quienes hablan se identifican solo como \"Speaker 1\", \"Speaker 2\": no hay "
+            "reconocimiento de voz y la grabación no está vinculada a tu identidad. Los nombres "
+            "dichos en voz alta aparecen en la transcripción tal como se dijeron; los nombres de "
+            "los participantes registrados se sustituyen por seudónimos antes de que cualquier "
+            "texto salga del servidor."
+        ),
+        "review": (
+            "Todo resultado producido por la IA es revisado por una persona antes de publicar "
+            "nada, y el informe indica que se usó IA. El informe puede contener citas breves y "
+            "anónimas de tu mesa; se comparte con los participantes y la organización puede "
+            "publicarlo."
+        ),
+        "where": "Dónde se conservan tus datos: en el servidor de la organización{hosting}.{recipients}",
+        "where_hosting": " en {hosting}",
+        "where_recipients": " Destinatarios: {recipients}.",
+        "retention_days": (
+            "Durante cuánto tiempo: la grabación de audio se borra {days} días después del cierre "
+            "de la asamblea. La transcripción, los resúmenes y el informe se conservan como "
+            "documentación de la asamblea, junto con la lista de participantes."
+        ),
+        "retention_none": (
+            "Durante cuánto tiempo: la grabación de audio se conserva hasta que una persona de la "
+            "organización la borre. La transcripción, los resúmenes y el informe se conservan "
+            "como documentación de la asamblea, junto con la lista de participantes."
+        ),
+        "retention_zero": (
+            "Durante cuánto tiempo: la grabación de audio y la transcripción se borran en cuanto "
+            "se cierra la asamblea y se redacta su informe. Solo el informe — resúmenes y "
+            "citas — se conserva como documentación de la asamblea, junto con la lista de "
+            "participantes."
+        ),
+        "rights": (
+            "Tus derechos: acceso, rectificación, supresión, limitación, portabilidad, oposición "
+            "y retirada del consentimiento en cualquier momento (sin que ello afecte a los "
+            "tratamientos ya realizados){contact}. Como las voces no están separadas en la "
+            "grabación, la supresión después de la sesión supone, a petición tuya, borrar la "
+            "grabación y la transcripción de tu mesa. Puedes presentar una reclamación ante "
+            "{authority}."
+        ),
+        "rights_contact": " — escribe a {contact}",
+        "authority_default": "la autoridad de protección de datos de tu país",
+        "choice": (
+            "Participar no exige que te graben: si no consientes, puedes sentarte en una mesa "
+            "que no se graba."
+        ),
+        "accept": (
+            "Al registrarte declaras que has leído este aviso y consientes la grabación de audio "
+            "de la discusión en tu mesa, su transcripción y su análisis asistido por IA."
+        ),
+        "accept_quotations": (
+            "También acepto que citas breves y anónimas de mi mesa se incluyan en el informe de "
+            "la asamblea, que puede ser publicado."
+        ),
+        "fallback_controller": "La organización",
+    },
 }
 
 

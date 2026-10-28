@@ -5,8 +5,10 @@ in the assembly's language, and a valid PDF whatever the assembly has."""
 
 from types import SimpleNamespace
 
+import pytest
+
 from citizens.services.consent_notice import render_notice
-from citizens.services.event_kit import render_event_kit
+from citizens.services.event_kit import _TEXT, _t, render_event_kit
 
 HANDLING = {
     "stt_provider": "vosk", "stt_configured": True, "stt_hosted": False,
@@ -49,3 +51,13 @@ def test_the_kit_prints_the_consent_notice_itself():
     # decompressed, so assert on the renderer's contract instead
     assert notice.paragraphs[0].startswith("Comune registra questa discussione")
     assert "Contatto: privacy@example.org." in notice.paragraphs[0]
+
+
+@pytest.mark.parametrize("lang", ["en", "it", "de", "fr", "es"])
+def test_every_language_has_the_full_kit_text_and_never_falls_back_to_english(lang):
+    assert set(_TEXT[lang]) == set(_TEXT["en"])
+    assert all(isinstance(v, str) and v.strip() for v in _TEXT[lang].values())
+    if lang != "en":
+        assert _t(lang, "table", number=3) != _t("en", "table", number=3)
+        assert _t(lang, "notice") != _t("en", "notice")
+    assert _t(lang, "table", number=3).isupper() and "3" in _t(lang, "table", number=3)

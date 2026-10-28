@@ -1,0 +1,265 @@
+{
+	"page": {
+		"title": "Sprach- & KI-Einstellungen",
+		"lead": "API-Schlüssel werden verschlüsselt in Nextcloud gespeichert und gelangen nie in Browser oder Tisch-Telefone.",
+		"settingsSaved": "Einstellungen gespeichert"
+	},
+	"tabs": {
+		"ai": "KI-Analyse",
+		"transcription": "Transkription",
+		"organisation": "Organisation",
+		"about": "Info"
+	},
+	"providers": {
+		"mistral": "Mistral (Voxtral)",
+		"deepgram": "Deepgram",
+		"whisper": "Whisper (OpenAI-kompatibel)",
+		"vosk": "Vosk (offline)"
+	},
+	"captionNote": {
+		"deepgram": "Live-Untertitel werden nativ gestreamt und enthalten Sprecherkennungen.",
+		"mistral": "Live-Untertitel nutzen Voxtral Realtime; die Echtzeitausgabe enthält keine Sprecherkennungen.",
+		"whisper": "Live-Untertitel entstehen aus gleitenden 20-Sekunden-Fenstern, daher kann eine Zeile überarbeitet werden, wenn mehr Audio eintrifft.",
+		"vosk": "Live-Untertitel werden nativ von Ihrem Vosk-Server gestreamt, ohne Zeichensetzung und ohne Sprecherkennungen."
+	},
+	"audio": {
+		"title": "Transkription",
+		"provisional": "Untertitel sind vorläufig – das maßgebliche Transkript wird nach der Sitzung immer aus der vollständigen Aufnahme erstellt.",
+		"test": "Testen",
+		"keyConfigured": "eingerichtet – {hint} (zum Ersetzen eintippen)",
+		"pasteKey": "API-Schlüssel einfügen",
+		"liveHead": "Live-Transkription (vorläufige Untertitel)",
+		"finalHead": "Endgültige Transkription (maßgeblich)",
+		"liveModelAria": "Modell für die Live-Transkription",
+		"finalModelAria": "Modell für die endgültige Transkription",
+		"finalHint": "Wird nach jeder Sitzung für das maßgebliche Transkript verwendet.",
+		"maxLive": "Max. gleichzeitige Live-Untertitel-Sitzungen",
+		"maxFinal": "Max. gleichzeitige endgültige Transkriptionen",
+		"maxLiveHint": "Serverweit; eine Sitzung pro aufnehmendem Telefon. Telefone über der Grenze nehmen weiter auf – ihre Untertitel warten auf einen freien Platz.",
+		"maxFinalHint": "Serverweit, mit eigenem Pool – eine ausgelastete Live-Veranstaltung blockiert sie nie.",
+		"mistral": {
+			"key": "Mistral-API-Schlüssel",
+			"liveHint": "Voxtral Realtime. Wird getrennt von der endgültigen Transkription abgerechnet."
+		},
+		"deepgram": {
+			"key": "Deepgram-API-Schlüssel",
+			"liveHint": "Wird nativ gestreamt und enthält Sprecherkennungen.",
+			"endpoint": "Endpunkt für Live-Untertitel",
+			"endpointHint": "Jeder Server, der das Streaming-Protokoll von Deepgram spricht, funktioniert hier – zum Beispiel ein selbst gehosteter WhisperLiveKit, der die Untertitel auf Ihrer eigenen Infrastruktur hält."
+		},
+		"whisper": {
+			"baseUrl": "Basis-URL des Endpunkts",
+			"baseUrlHint": "Jeder OpenAI-kompatible Transkriptions-Endpunkt: OpenAI selbst oder ein Server, den Sie betreiben (Speaches, whisper.cpp, LocalAI, vLLM, WhisperX). Bei einem eigenen Server verlässt das Audio nie Ihre Infrastruktur.",
+			"sameAsFinal": "wie endgültig",
+			"liveHint": "Optional – Untertitel transkribieren ein gleitendes Fenster alle paar Sekunden neu, daher hält ein kleineres Modell günstiger mit. Leer verwendet das endgültige Modell weiter.",
+			"finalHint": "Ein Name, der „diarize“ enthält (z. B. gpt-4o-transcribe-diarize), wird im Diarisierungsmodus angefragt und liefert Sprecherkennungen.",
+			"key": "API-Schlüssel (optional)",
+			"keyHint": "Von OpenAI vorausgesetzt; die meisten selbst gehosteten Server brauchen keinen.",
+			"noDiarizationTitle": "Keine Sprechertrennung.",
+			"noDiarization": "Standard-Whisper liefert Text mit Zeitstempeln, sagt aber nicht, wer gesprochen hat; Transkripte und Zitate im Bericht erscheinen daher ohne Sprecherkennungen. Server mit Diarisierung (auf WhisperX basierend oder das diarisierende Modell von OpenAI) werden automatisch genutzt, wenn sie diese liefern."
+		},
+		"vosk": {
+			"url": "URL des Vosk-Servers",
+			"urlHint": "Eine vosk-server-Instanz, die Sie betreiben (zum Beispiel das Image alphacep/kaldi-en auf Port 2700). Kein API-Schlüssel, kein Internet: Das Audio verlässt Ihr Netzwerk nie.",
+			"perLanguage": "Modell für jede Sprache",
+			"perLanguageHint": "Vosk benötigt für jede Sprache ein eigenes Modell, und ein Server kann mehrere enthalten. Die für eine Versammlung gewählte Sprache bestimmt das Modell. Geben Sie den {name} des Modells ein – ein Modellwechsel bedeutet, diesen Namen zu ändern. Lassen Sie eine Sprache leer, bis Sie sie brauchen; laden Sie ein Modell mit {command} herunter.",
+			"perLanguageName": "Namen",
+			"language": "Sprache",
+			"notConfigured": "nicht eingerichtet",
+			"sameAsLive": "wie live",
+			"liveModelFor": "Live-Untertitel-Modell für {language}",
+			"finalModelFor": "Modell für das endgültige Transkript für {language}",
+			"blankHint": "Ein leeres endgültiges Modell verwendet das Live-Modell weiter. Eine vollständig leere Sprache greift auf das Modell zurück, mit dem der Server gestartet wurde, sodass eine halb ausgefüllte Tabelle nie verhindert, dass eine Aufnahme transkribiert wird.",
+			"label": "Modellbezeichnung (optional)",
+			"labelHint": "Wird zur Orientierung mit dem Transkript festgehalten und nur für eine Sprache ohne Zeile oben als Modell verwendet.",
+			"plainTitle": "Offline, aber schlichtere Ausgabe.",
+			"plain": "Vosk liefert Text in Kleinbuchstaben ohne Zeichensetzung und trennt keine Sprechenden. Es ist die richtige Wahl, wenn nichts die Räumlichkeiten verlassen darf; Deepgram oder ein diarisierender Whisper-Server liefern eine weit besser lesbare Aufzeichnung der Versammlung.",
+			"mode": {
+				"label": "Engine",
+				"builtin": "Integrierte Engine (unten installierte Modelle)",
+				"server": "Vosk-Server unter einer URL"
+			},
+			"engine": {
+				"running": "Engine läuft",
+				"stopped": "Engine läuft nicht",
+				"title": "Vosk-Engine",
+				"lead": "Integriert: Die Engine läuft innerhalb dieser App mit unten installierten Modellen. Server: ein vosk-server, den Sie andernorts betreiben.",
+				"loaded": "{n} Modelle geladen",
+				"none": "kein Modell geladen"
+			},
+			"models": {
+				"memory": "{mb} MB Speicher für Modelle in diesem Container frei",
+				"memoryUnknown": "Freier Speicher unbekannt",
+				"install": "Installieren",
+				"remove": "Entfernen",
+				"cancel": "Abbrechen",
+				"installed": "installiert",
+				"kindSmall": "klein",
+				"kindLarge": "groß",
+				"kindCustom": "benutzerdefiniert",
+				"phase": {
+					"queued": "eingereiht",
+					"downloading": "wird heruntergeladen",
+					"unpacking": "wird entpackt",
+					"failed": "fehlgeschlagen"
+				},
+				"confirmRemove": "{name} entfernen?",
+				"sizeHint": "{mb} MB",
+				"inUse": "in Verwendung",
+				"notInstalled": "nicht installiert",
+				"title": "Modelle",
+				"lead": "Installieren Sie ein Modell pro Sprache. Kleine Modelle passen auf jeden Server und antworten schnell; große sind genauer und brauchen Speicher. Änderungen gelten sofort."
+			},
+			"languages": {
+				"title": "Modell pro Sprache",
+				"lead": "Die für eine Versammlung gewählte Sprache bestimmt das Modell. Ein leeres endgültiges Modell verwendet das Live-Modell weiter."
+			},
+			"advanced": "Erweitert",
+			"advancedHide": "Erweiterte Optionen ausblenden"
+		},
+		"modes": {
+			"both": "Die Tische sehen Untertitel, während sie sprechen, und jede Aufnahme wird danach aus dem vollständigen Audio erneut transkribiert. Das endgültige Transkript ist die Aufzeichnung und das, was die Analyse liest.",
+			"finalOnly": "Keine Untertitel während der Sitzung. Jede Aufnahme wird nach dem Hochladen transkribiert, und dieses Transkript ist die Aufzeichnung.",
+			"liveOnlyTitle": "Die Untertitel sind die Aufzeichnung.",
+			"liveOnly": "Nichts wird ein zweites Mal transkribiert, daher liest die Analyse, was live erfasst wurde – schneller und viel günstiger, aber Untertitel können Sprache verpassen, mit der die Engine nicht Schritt halten konnte. Das Audio bleibt erhalten, sodass jeder Tisch später im Reiter „Dateien“ ordentlich transkribiert werden kann.",
+			"noneTitle": "Nichts wird transkribiert.",
+			"none": "Aufnahmen werden nur als Audio gespeichert und sonst nichts: kein Transkript, keine Analyse und ein leerer Bericht. Setzen Sie mindestens ein Häkchen, es sei denn, Sie wollen nur das Audio."
+		},
+		"serviceLead": "Welche Engine die Tische transkribiert und ob sie Untertitel während des Sprechens, ein Transkript danach oder beides erhalten.",
+		"limits": {
+			"title": "Grenzen",
+			"lead": "Wie viele Untertitel-Sitzungen und endgültige Transkriptionen gleichzeitig auf dem gewählten Dienst laufen dürfen. Ohne Begrenzung kann ein Raum voller Telefone einen selbst gehosteten Server oder das Ratenlimit eines Anbieters auslasten – und dann fallen die Untertitel aller Telefone gleichzeitig aus."
+		}
+	},
+	"ai": {
+		"title": "KI-Analyse",
+		"lead": "Jeder OpenAI-kompatible Endpunkt funktioniert: Mistral (Standard), Ollama Cloud, ein entfernter Ollama-Server, vLLM…",
+		"auto": "Analyse automatisch ausführen, nachdem ein Tisch transkribiert wurde",
+		"baseUrl": "Basis-URL",
+		"model": "Modell",
+		"key": "API-Schlüssel",
+		"extra": "Zusätzliche Analyseanweisungen (optional)",
+		"extraPlaceholder": "Z. B. Schwerpunkt auf Verkehr und Wohnen. Formelles Italienisch verwenden. „PUMS“ als Mobilitätsplan der Stadt behandeln.",
+		"extraHint": "Wird an die eingebauten Prompts für die Tisch- und Sitzungsanalyse angehängt. Ausgabeformat und die verpflichtenden Belegverweise lassen sich nicht überschreiben.",
+		"showPrompts": "Die eingebauten Prompts anzeigen, an die Ihre Anweisungen angehängt werden",
+		"hidePrompts": "Eingebaute Prompts ausblenden",
+		"tablePrompt": "TISCHANALYSE (schreibgeschützt)",
+		"roundPrompt": "SITZUNGSAUSWERTUNG (schreibgeschützt)"
+	},
+	"facilitator": {
+		"title": "KI-Assistent",
+		"lead": "Eine leise Stimme neben jedem Tisch während einer Sitzung: eine kurze Frage oder Erinnerung, wenn die Zeit abläuft, es im Raum still wird, die Diskussion abschweift oder – wo die Engine Sprechende kennzeichnet – eine Stimme dominiert. Sie erreicht zuerst das eigene Telefon der Moderation und die Telefone des Tisches nur, wenn kein Moderationstelefon verbunden ist. Jede Versammlung kann ihre eigene Stufe wählen; dies ist der Standard.",
+		"level": "Standardstufe für neue Versammlungen",
+		"levels": {
+			"off": "Aus",
+			"light": "Dezent (2 pro Sitzung)",
+			"normal": "Normal (4)",
+			"active": "Aktiv (8)"
+		},
+		"baseUrl": "Basis-URL (leer: der Analyse-Endpunkt)",
+		"model": "Modell (leer: das Analysemodell)",
+		"key": "API-Schlüssel (leer: der Analyseschlüssel)",
+		"showThresholds": "Schwellenwerte…",
+		"hideThresholds": "Schwellenwerte ausblenden",
+		"interval": "Minuten zwischen zwei Impulsen an einem Tisch",
+		"dominance": "Eine Stimme über diesem Anteil gilt als dominierend (%)",
+		"silence": "Sekunden Stille vor einer offenen Frage"
+	},
+	"retention": {
+		"title": "Aufbewahrung des Audios",
+		"lead": "Löscht das Roh-Audio einer Versammlung so viele Tage, nachdem sie {closed} wurde. Transkripte, Ergebnisse und Berichte werden dadurch nie entfernt – nur die Aufnahmen. Einzelne Versammlungen können dies überschreiben, und die Organisation kann Audio jederzeit früher im Reiter „Dateien“ löschen.",
+		"closed": "geschlossen",
+		"days": "Tage, die das Audio nach dem Schließen aufbewahrt wird",
+		"deletedAfter": "Das Audio wird {days} Tage nach dem Schließen einer Versammlung gelöscht. Die Tisch-Telefone werden darüber vor der Aufnahme informiert.",
+		"keptForever": "Das Audio wird aufbewahrt, bis jemand es löscht. Die Tisch-Telefone werden darüber vor der Aufnahme informiert."
+	},
+	"org": {
+		"title": "Daten der Organisation",
+		"lead": "Der Hinweis, den Personen vor der Registrierung an einem Tisch lesen, wird vom Server aus diesen Feldern und den aktuellen Fakten zur Datenverarbeitung (die gewählten Anbieter für Transkription und Analyse, Aufbewahrung, die lokale Kopie auf den Telefonen) in der Sprache der Versammlung erstellt; jede Einwilligung wird mit dem Hash des angezeigten Textes gespeichert. Leere Felder werden im Hinweis einfach weggelassen. Dieselben Daten füllen das gedruckte Veranstaltungs-Set und das Papierformular.",
+		"controller": "Verantwortlicher (rechtlicher Name)",
+		"controllerPlaceholder": "Die Organisation",
+		"controllerHint": "Wer für die Daten verantwortlich ist. Leer: der Name der Organisation.",
+		"address": "Postanschrift",
+		"contact": "Kontakt für Datenanfragen (E-Mail)",
+		"dpo": "Kontakt Datenschutz (DSB)",
+		"dpoPlaceholder": "Name · dpo{'@'}example.org",
+		"hosting": "Hosting-Anbieter und Land",
+		"hostingPlaceholder": "Hetzner, Deutschland (EU)",
+		"hostingHint": "Wo dieser Server läuft – „Wo Ihre Daten gespeichert werden“ im Hinweis.",
+		"authority": "Aufsichtsbehörde",
+		"authorityHint": "Wohin eine Beschwerde geht. Leer: der italienische Garante für Versammlungen in Italien, sonst „die Datenschutzbehörde Ihres Landes“."
+	},
+	"branding": {
+		"title": "Organisation",
+		"lead": "Name und Logo erscheinen in Kopf- und Fußzeile der PDF-Berichte. Logo: PNG oder JPEG, bis zu 1 MB.",
+		"name": "Name der Organisation",
+		"logoAlt": "Logo der Organisation",
+		"replaceLogo": "Logo ersetzen",
+		"uploadLogo": "Logo hochladen",
+		"remove": "Entfernen",
+		"tooLarge": "Das Logo darf höchstens 1 MB groß sein",
+		"logoSaved": "Logo gespeichert – es erscheint auf den PDF-Berichten",
+		"logoRemoved": "Logo entfernt"
+	},
+	"ui": {
+		"loading": "Wird geladen"
+	},
+	"format": {
+		"secondsAgo": "vor {n} s",
+		"minutesAgo": "vor {n} Min.",
+		"hoursAgo": "vor {n} Std.",
+		"daysAgo": "vor {n} T.",
+		"kb": "{n} KB",
+		"mb": "{n} MB",
+		"gb": "{n} GB"
+	},
+	"card": {
+		"save": "Speichern",
+		"saving": "Wird gespeichert…",
+		"saved": "Gespeichert"
+	},
+	"about": {
+		"state": "Status",
+		"storage": "Speicher",
+		"versionTitle": "Version",
+		"versionLead": "Was auf diesem Server läuft.",
+		"version": "App-Version",
+		"schema": "Datenbankschema",
+		"unknown": "unbekannt",
+		"engineTitle": "Transkriptions-Engine",
+		"engineLead": "Die Engine, mit der die Tisch-Telefone gerade kommunizieren.",
+		"provider": "Dienst",
+		"mode": "Vosk-Engine",
+		"modeBuiltin": "Integriert",
+		"modeServer": "Server-URL",
+		"running": "Läuft",
+		"stopped": "Angehalten",
+		"loaded": "Geladene Modelle",
+		"none": "keine",
+		"inUse": "In Verwendung",
+		"memory": "Freier Speicher für Modelle",
+		"lastError": "Letzter Fehler",
+		"storageTitle": "Speicher und Aufträge",
+		"storageLead": "Das Datenvolumen und die Warteschlange für Hintergrundaufgaben.",
+		"diskFree": "Freier Festplattenplatz",
+		"storageOk": "Speicher beschreibbar",
+		"storageError": "Speicher nicht beschreibbar",
+		"queued": "In der Warteschlange",
+		"jobsRunning": "Laufend",
+		"retry": "Neuer Versuch",
+		"failed": "Fehlgeschlagen",
+		"newestFailure": "Neuester Fehler",
+		"lastSweep": "Letzter Aufräumlauf",
+		"never": "noch nicht",
+		"docsTitle": "Dokumentation",
+		"docsLead": "Anleitungen für Administration und Moderation.",
+		"adminGuide": "Administrationsanleitung",
+		"facilitatorGuide": "Moderationsanleitung",
+		"checklist": "Checkliste für die Veranstaltung",
+		"privacy": "Datenschutz",
+		"deviceReportHint": "Der Telefonbericht einer Versammlung steht in ihrem Reiter „Dateien“.",
+		"loading": "Wird geladen…",
+		"mb": "{mb} MB",
+		"gb": "{gb} GB"
+	}
+}

@@ -1,0 +1,231 @@
+{
+	"overview": {
+		"nextStep": "Siguiente paso",
+		"next": {
+			"liveText": "La sesión {position} está en directo: vigila el estado de las mesas y las grabaciones.",
+			"liveAction": "Abrir la vista en directo",
+			"roundsText": "Empieza definiendo las sesiones de discusión y sus preguntas.",
+			"roundsAction": "Añadir sesiones",
+			"participantsText": "Añade participantes: bastan etiquetas anónimas como P001.",
+			"participantsAction": "Añadir participantes",
+			"qrText": "Genera los códigos QR de los grabadores e imprime uno por mesa.",
+			"qrAction": "Generar códigos QR",
+			"readyText": "Todo está preparado. Inicia una sesión desde la vista en directo cuando empiece la discusión."
+		},
+		"stats": {
+			"participants": "Participantes",
+			"tables": "Mesas",
+			"sessionsHeld": "Sesiones celebradas",
+			"activeQr": "Códigos QR activos"
+		},
+		"details": {
+			"title": "Datos de la asamblea",
+			"edit": "Editar",
+			"add": "Añadir",
+			"name": "Nombre",
+			"description": "Descripción",
+			"language": "Idioma",
+			"languageDetected": "Detectado a partir de la grabación: esta Sesión se inició con Grabar ahora, así que la primera transcripción decide el idioma del análisis y del informe. Si eliges uno aquí, queda fijado.",
+			"languageRetranscribes": "Cambiarlo ahora vuelve a transcribir todas las grabaciones.",
+			"languageChangeTitle": "¿Cambiar el idioma?",
+			"languageChangeConfirm": "Todas las grabaciones con audio se transcribirán de nuevo en {language}. Los resultados y el informe se actualizarán en consecuencia. ¿Continuar?",
+			"languageChangeConfirmButton": "Continuar",
+			"languageChanged": "{count} grabaciones en cola para transcribir en {language} | {count} grabación en cola para transcribir en {language} | {count} grabaciones en cola para transcribir en {language}",
+			"languageSessionActive": "Termina primero la sesión que se está grabando.",
+			"autoPurge": "Borrar el audio de los teléfonos de las mesas al cerrar la sesión",
+			"autoPurgeHint": "Cada teléfono conserva una copia del audio de su mesa para que la grabación resista una mala red. Esta opción les pide que la borren cuando termine la asamblea, lo cual importa sobre todo cuando los participantes usaron sus propios teléfonos. Un teléfono solo borra audio que el servidor ya ha confirmado, así que esto no puede eliminar la última copia. Desactívala para conservar las copias de los teléfonos hasta que hayas descargado la exportación.",
+			"consent": "Consentimiento en la mesa",
+			"consentRequired": "Obligatorio: una mesa solo graba cuando una persona registrada en ella ha dado su consentimiento",
+			"consentOptional": "Opcional: se muestra el aviso y se ofrece el registro, pero no se bloquea nada",
+			"consentHint": "Cada persona se registra individualmente en el teléfono de la mesa o en el suyo propio (nombre, correo opcional, casillas marcadas de forma explícita frente al aviso que genera el servidor). El registro —quién, qué, qué aviso— se conserva con la asamblea y se exporta. Obligatorio es el ajuste para una asamblea organizada; Opcional encaja con una sesión espontánea.",
+			"aiFacilitator": "Asistente de IA",
+			"aiLevel": {
+				"default": "Predeterminado de Ajustes ({level})",
+				"off": "Desactivado",
+				"light": "Ligero — como máximo dos avisos por sesión",
+				"normal": "Normal — como máximo cuatro",
+				"active": "Activo — como máximo ocho"
+			},
+			"aiHint": "Una pregunta o recordatorio breve en los teléfonos de la mesa cuando se acaba el tiempo, la sala se queda en silencio o la discusión se desvía: primero al teléfono del propio facilitador si hay uno conectado, y solo después a la mesa. Cada mesa puede desactivarlo desde su teléfono; la pestaña En directo puede ponerlo en pausa.",
+			"aiNotConfigured": "Todavía no está configurado en este servidor (Ajustes → IA).",
+			"redactNames": "Nombres que no deben llegar al análisis de IA",
+			"redactPlaceholder": "Anna, Simone, Alessandro",
+			"redactHint": "Las etiquetas de quienes hablan ya son anónimas, pero la gente se nombra en voz alta y la transcripción recoge lo que se dijo. Los nombres de esta lista —y el nombre de cualquier participante importado— se sustituyen por “Persona A”, “Persona B” antes de enviar la transcripción al servicio de análisis. La transcripción guardada en este servidor no cambia, así que las citas del informe siguen mostrando lo que se dijo realmente. Esto no afecta al audio enviado para su transcripción: si eso importa, usa un motor autoalojado.",
+			"cancel": "Cancelar",
+			"save": "Guardar",
+			"noDescription": "Sin descripción. El nombre y el idioma que se muestran en la cabecera se editan aquí."
+		},
+		"languages": {
+			"en": "English",
+			"it": "Italiano",
+			"de": "Deutsch",
+			"fr": "Français",
+			"es": "Español"
+		},
+		"instructions": {
+			"title": "Instrucciones de análisis de IA",
+			"placeholder": "Ej.: Esta asamblea trata sobre movilidad urbana. “PUMS” significa el plan de movilidad de la ciudad.",
+			"empty": "Contexto opcional que se entrega a la IA al analizar esta asamblea: tema, glosario local, áreas de interés."
+		},
+		"retention": {
+			"label": "Conservación del audio",
+			"default": "Valor predeterminado de la instancia",
+			"days": "Eliminar el audio {days} días después del cierre",
+			"zero": "Conservación cero: guardar solo el informe",
+			"zeroHelp": "Cuando la asamblea se cierra y se procesa, se eliminan el audio y las transcripciones y se conserva un PDF del informe. No se puede deshacer y la asamblea no puede reabrirse.",
+			"applied": "Conservación cero aplicada el {time}"
+		},
+		"sessions": {
+			"title": "Sesiones",
+			"liveView": "Vista en directo",
+			"none": "Todavía no hay sesiones definidas.",
+			"untitled": "Sesión sin título",
+			"noQuestion": "Sin pregunta definida",
+			"minutes": "{minutes} min"
+		},
+		"rounds": {
+			"noPlannedTime": "Sin tiempo previsto"
+		},
+		"danger": {
+			"title": "Zona de peligro",
+			"body": "Eliminar esta asamblea borra de forma permanente todas las sesiones, grabaciones, transcripciones, resultados e informes. No se puede deshacer y no hay copia de seguridad.",
+			"delete": "Eliminar esta asamblea"
+		}
+	},
+	"rounds": {
+		"deleteNoRecordings": "Se eliminarán la sesión y sus mesas. No tiene grabaciones.",
+		"deleteWithRecordings": "La sesión, sus mesas y sus {count} grabaciones se eliminarán de forma permanente, incluido el audio. | La sesión, sus mesas y su {count} grabación se eliminarán de forma permanente, incluido el audio. | La sesión, sus mesas y sus {count} grabaciones se eliminarán de forma permanente, incluido el audio.",
+		"emptyTitle": "Todavía no hay sesiones",
+		"emptyHint": "Cada sesión es una discusión con su propia pregunta, objetivo y duración.",
+		"addFirst": "Añadir la primera sesión",
+		"title": "Título",
+		"duration": "Duración (min)",
+		"question": "Pregunta / propuesta",
+		"objective": "Objetivo (opcional)",
+		"objectivePlaceholder": "Elaborar tres propuestas concretas.",
+		"cancel": "Cancelar",
+		"save": "Guardar sesión",
+		"untitled": "Sesión sin título",
+		"noQuestion": "Todavía no hay pregunta definida.",
+		"minutes": "{minutes} min",
+		"objectiveLine": "Objetivo: {objective}",
+		"moveUp": "Subir",
+		"moveDown": "Bajar",
+		"edit": "Editar",
+		"delete": "Eliminar",
+		"endBeforeDelete": "Termina la sesión antes de eliminarla",
+		"promote": {
+			"title": "Añadir otra sesión",
+			"body": "Una Sesión es una discusión. Con una segunda pasa a ser una Asamblea —un evento de varias sesiones con las mismas personas— y recibe un nombre.",
+			"eventName": "Nombre del evento",
+			"confirm": "Convertir en Asamblea y añadir una sesión",
+			"addAnother": "Añadir otra sesión"
+		},
+		"add": "Añadir sesión",
+		"confirmTitle": "¿Eliminar la sesión?",
+		"confirmLabel": "Eliminar sesión"
+	},
+	"participants": {
+		"copyFailed": "No se pudo copiar: selecciona el enlace y cópialo a mano",
+		"consentActions": {
+			"change": "Cambió de opinión",
+			"withdraw": "Retira el consentimiento",
+			"move": "Pasó a otra mesa",
+			"done": {
+				"change": "{who} vuelve a dar su consentimiento",
+				"withdraw": "{who} retiró su consentimiento",
+				"move": "{who} marcado/a como trasladado/a"
+			}
+		},
+		"consentConfirm": {
+			"change": {
+				"title": "¿{who} cambió de opinión?",
+				"message": "Registrar un nuevo acto de consentimiento según lo que dice {who}: grabación, transcripción, análisis y citas. Su mesa podrá volver a grabar cuando nadie sentado en ella lo rechace.",
+				"confirm": "Registrar el consentimiento"
+			},
+			"withdraw": {
+				"title": "¿{who} retira su consentimiento?",
+				"message": "Un nuevo acto con todas las casillas desmarcadas. Lo grabado hasta ahora se conserva y se procesa; su mesa no podrá volver a grabar hasta que se la marque como trasladada o cambie de opinión.",
+				"confirm": "Registrar la retirada"
+			},
+			"move": {
+				"title": "¿Marcar a {who} como trasladado/a?",
+				"message": "Sale de la lista de su mesa para las sesiones que quedan: el procedimiento de la sala ante un rechazo es una mesa que no se graba. Su registro de consentimiento no se modifica; vuelve a sentarla por su nombre donde esté ahora.",
+				"confirm": "Marcar como trasladado/a"
+			}
+		},
+		"source": {
+			"table": "Mesa {number}",
+			"ownPhone": "teléfono propio",
+			"tablePhone": "teléfono de la mesa",
+			"paper": "papel"
+		},
+		"consentTitle": {
+			"none": "Sin consentimiento registrado",
+			"recording": "grabación",
+			"transcription": "transcripción",
+			"analysis": "análisis",
+			"quotations": "citas",
+			"yes": "sí",
+			"no": "no",
+			"summary": "{ticks} — aviso {version} ({hash}), {at}"
+		},
+		"imported": "{count} participantes importados | {count} participante importado | {count} participantes importados",
+		"labelPlaceholder": "Etiqueta (p. ej. P001)",
+		"namePlaceholder": "Nombre (opcional)",
+		"add": "Añadir",
+		"csvImport": "Importar CSV",
+		"prefill": "Rellenar con 50 anónimos",
+		"registerTitle": "Registro de consentimientos — una fila por consentimiento registrado, con los textos del aviso",
+		"registerCsv": "Registro de consentimientos (CSV)",
+		"registerPdf": "PDF",
+		"csvHintBefore": "Cabecera",
+		"csvHintAfter": "— los nombres y correos son opcionales. Bastan etiquetas anónimas.",
+		"import": "Importar participantes",
+		"registration": {
+			"title": "Enlace de preinscripción",
+			"body": "Envíalo antes del evento: la gente lee el aviso y se registra desde casa. En la puerta, “Busca tu nombre” en el teléfono de cualquier mesa los sienta. Un enlace para toda la asamblea, válido 30 días, que se revoca junto con los códigos de mesa.",
+			"counts": "{total} registrados de antemano · {seated} sentados.",
+			"copied": "Enlace copiado",
+			"copy": "Copiar enlace",
+			"create": "Crear el enlace",
+			"qrLabel": "Código QR de preinscripción"
+		},
+		"emptyTitle": "Todavía no hay participantes",
+		"emptyHint": "Los participantes pueden ser totalmente anónimos: usa “Rellenar con 50 anónimos” para generar P001…P050 con un clic.",
+		"count": "{count} participantes | {count} participante | {count} participantes",
+		"columns": {
+			"label": "Etiqueta",
+			"name": "Nombre",
+			"email": "Correo",
+			"consent": "Consentimiento"
+		},
+		"consented": "✓ consintió",
+		"refused": "✗ rechazó",
+		"remove": "Quitar",
+		"removeTitle": "¿Quitar al participante?",
+		"removeMessage": "{who} se quitará de esta asamblea.",
+		"removeLabel": "Quitar"
+	},
+	"tables": {
+		"remixNote": "{seated} sentados · {pairs} parejas que ya se sentaron juntas | {seated} sentados · {pairs} pareja que ya se sentó junta | {seated} sentados · {pairs} parejas que ya se sentaron juntas",
+		"goalTitle": "Cómo sentar a las personas en esta sesión",
+		"goal": {
+			"newPeople": "Conocer gente nueva",
+			"random": "Al azar",
+			"continuity": "Mantener la distribución anterior"
+		},
+		"remix": "Nueva distribución",
+		"copyPrevious": "Copiar la sesión anterior",
+		"emptyTitle": "No hay mesas en esta sesión",
+		"emptyHint": "Las mesas se crean con la sesión, a partir del número de mesas de la asamblea. Si ese número era cero, esta sesión no tiene mesas ni códigos QR, y añadir otra sesión no ayudará: hay que crear de nuevo la asamblea.",
+		"unseatedTitle": "Todavía no hay nadie sentado",
+		"unseatedHint": "Asigna al azar a todos los participantes a las mesas, o copia la distribución de la sesión anterior.",
+		"randomize": "Asignación al azar",
+		"table": "Mesa {number}",
+		"seated": "{count} sentados",
+		"empty": "Vacía",
+		"moveTo": "Pasar a la mesa",
+		"tableShort": "M{number}"
+	}
+}

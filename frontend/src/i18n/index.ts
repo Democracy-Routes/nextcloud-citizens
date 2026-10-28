@@ -2,21 +2,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /** Translation for both bundles.
  *
- * The deployment is Italian. Every string used to be an English literal in a
- * template, including the consent text a citizen taps to agree to being
- * recorded — so a room discussing Italian mobility policy, producing an
- * Italian transcript and an Italian report, read English instructions.
+ * The first deployment was Italian. Every string used to be an English
+ * literal in a template, including the consent text a citizen taps to agree
+ * to being recorded — so a room discussing Italian mobility policy, producing
+ * an Italian transcript and an Italian report, read English instructions.
  *
  * Catalogues are plain JSON so a translator can work on them without touching
- * code, and tests/frontend/i18n-catalogue.spec.ts fails the build if a key
- * exists in English but not in Italian. Untranslated text cannot reach a
- * phone by being forgotten.
+ * code, and tests/frontend/i18n.spec.ts fails the build if a key exists in
+ * English but not in every other language. Untranslated text cannot reach a
+ * phone by being forgotten. 0.9 ships the five languages an assembly can be
+ * held in (ASSEMBLY_LANGUAGES): the phones follow the room, the organizer
+ * follows the person.
  */
 import { createI18n } from 'vue-i18n'
+import de from './de.json'
 import en from './en.json'
+import es from './es.json'
+import fr from './fr.json'
 import it from './it.json'
 
-export const SUPPORTED_LOCALES = ['en', 'it'] as const
+export const SUPPORTED_LOCALES = ['en', 'it', 'de', 'fr', 'es'] as const
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
 
 export const DEFAULT_LOCALE: SupportedLocale = 'en'
@@ -24,7 +29,7 @@ export const DEFAULT_LOCALE: SupportedLocale = 'en'
 /** The shared catalogue per language: recorder, errors, states… The
  * organizer UI's strings (`organizer.*`) live in ./organizer and are merged in
  * by the organizer entry only, so the phones' bundle does not carry them. */
-export const catalogues = { en, it }
+export const catalogues: Record<SupportedLocale, typeof en> = { en, it, de, fr, es }
 
 export const i18n = createI18n({
 	legacy: false,

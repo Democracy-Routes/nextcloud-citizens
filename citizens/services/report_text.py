@@ -316,11 +316,392 @@ CATALOGUE: dict[str, dict[str, str]] = {
         "date_format": "{day} {month} {year}",
         **_months(_MONTHS_IT),
     },
-    # Headings and notes for these three fall back to English until someone
-    # who writes the language well fills them in; only the date is native.
-    "de": {"date_format": "{day}. {month} {year}", **_months(_MONTHS_DE)},
-    "fr": {"date_format": "{day} {month} {year}", **_months(_MONTHS_FR)},
-    "es": {"date_format": "{day} de {month} de {year}", **_months(_MONTHS_ES)},
+    "de": {
+        "assembly_report": "Bericht der Versammlung",
+        "final_report": "ABSCHLUSSBERICHT",
+        "closed_on": "geschlossen am {date}",
+        "interim_report": "ZWISCHENBERICHT",
+        "tables_completed_all_rounds": (
+            "{complete} von {expected} Tischen haben alle Runden abgeschlossen"
+        ),
+        "tables_contributing": "Beitragende Tische: {contributed} von {expected}",
+        "participants": "Teilnehmende: {count} (erwartet {expected})",
+        "tables": "Tische: {count}",
+        "language": "Sprache: {code}",
+        "objective": "Ziel",
+        "participants_expected": "{count} Teilnehmende (erwartet {expected})",
+        "tables_count": "{count} Tische",
+        "tables_contributed_to_report": (
+            "{contributed} von {expected} Tischen haben zu diesem Bericht beigetragen"
+        ),
+        "method_heading": "Methode",
+        "method": (
+            "Bürgerversammlung in Präsenz: Die Teilnehmenden diskutierten an kleinen Tischen; "
+            "ein Telefon an jedem Tisch nahm das Gespräch auf, das tischweise transkribiert und "
+            "analysiert und anschließend über alle Tische hinweg zusammengeführt wurde."
+        ),
+        "method_diarized": (
+            "Bürgerversammlung in Präsenz: Die Teilnehmenden diskutierten an kleinen Tischen; "
+            "ein Telefon an jedem Tisch nahm das Gespräch auf, das mit Sprechertrennung "
+            "transkribiert, tischweise analysiert und anschließend über alle Tische hinweg "
+            "zusammengeführt wurde."
+        ),
+        "methodology_note": (
+            "KI wurde zur Unterstützung von Transkription und Analyse eingesetzt. "
+            "Die Zusammenfassungen der Diskussionen sind von der KI erstellte neutrale "
+            "Beschreibungen. „An N Tischen erwähnt“ gibt an, an wie vielen Diskussionstischen "
+            "ein Thema angesprochen wurde; es ist kein Maß für die Unterstützung durch die "
+            "Teilnehmenden."
+        ),
+        "methodology_reviewed": "Die Ergebnisse wurden von einer organisierenden Person geprüft.",
+        "transcript_engines": "Spracherkennung: {engines}.",
+        "source_live": "Live-Untertitel",
+        "live_transcript_note": (
+            "Die Transkripte dieser Versammlung stammen aus den Live-Untertiteln, die entstanden, "
+            "während an den Tischen gesprochen wurde, und nicht aus einer separaten Transkription "
+            "der vollständigen Aufnahmen. Untertitel entstehen unter Zeitdruck und können Gesprochenes "
+            "auslassen, dem die Engine nicht folgen konnte; daher können Passagen fehlen oder "
+            "weniger genau sein als der Ton selbst."
+        ),
+        "device_replaced_note": (
+            "Das Telefon mindestens eines Tisches fiel während einer Runde aus, und die Diskussion "
+            "wurde auf einem anderen Gerät fortgesetzt. Beide Teile wurden gemeinsam als ein "
+            "Gespräch transkribiert und analysiert; ein kurzer Abschnitt dazwischen wurde nicht "
+            "aufgenommen."
+        ),
+        "consent_registered_note": (
+            "{registered} Teilnehmende haben sich an den Tischen einzeln anhand der "
+            "Aufnahmeinformation registriert; {consenting} haben der Aufnahme zugestimmt."
+        ),
+        "validation_note": (
+            "{answered} Teilnehmende haben angegeben, ob die Zusammenfassung ihres Tisches die "
+            "Diskussion wiedergab; {missing} haben darauf hingewiesen, dass etwas fehlt, zur "
+            "Prüfung durch die Organisation."
+        ),
+        "synthesis_heading": "Wie sich die Diskussion entwickelt hat",
+        "carried_forward": "Von einer Sitzung in die nächste übernommen",
+        "speaking_comparison": "Redeanteile im Vergleich der Tische",
+        "speaking_comparison_caveat": (
+            "Jede Zeile misst einen Tisch für sich; Stimmen werden erkannt, nicht identifiziert, "
+            "und die Redezeit ist eine Schätzung, kein Maß für Einfluss."
+        ),
+        "comparison_col_table": "Tisch",
+        "comparison_col_voices": "Stimmen",
+        "comparison_col_largest": "Größter Anteil",
+        "comparison_col_smallest": "Kleinster Anteil",
+        "comparison_col_ratio": "Verhältnis",
+        "executive_summary": "Zusammenfassung für die Leitung",
+        "executive_summary_note": (
+            "Von der KI erstellter Überblick über jede Runde an allen Tischen; es folgen die "
+            "Einzelheiten und die von Menschen geprüften Ergebnisse."
+        ),
+        "round": "Sitzung {position}",
+        "round_titled": "Sitzung {position} — {title}",
+        "ai_summary": "KI-Zusammenfassung",
+        "speaking_balance": "Verteilung der Redebeiträge",
+        "recorder_changed_caveat": (
+            "Das Telefon, das diesen Tisch aufnahm, wurde während der Sitzung gewechselt; Stimmen "
+            "lassen sich zwischen den Teilen nicht zuordnen, daher bezieht sich die Verteilung "
+            "nur auf den umfangreichsten Teil."
+        ),
+        "voice": "Stimme {label}",
+        "others": "Andere",
+        "voices_caveat": (
+            "Erkannte Stimmen, nicht namentlich identifiziert — aus der klarsten einzelnen "
+            "Aufnahme. Redezeit, nicht Einfluss."
+        ),
+        "across_all_tables": "Über alle Tische hinweg",
+        "table_detail": "Details je Tisch",
+        "table": "Tisch {number}",
+        "no_findings_yet": "Für diese Runde liegen noch keine Ergebnisse vor.",
+        "draft_not_reviewed": "ENTWURF — noch nicht geprüft",
+        "draft_badge": "Entwurf — nicht geprüft",
+        "mentioned_at_tables": "An {count} Tischen erwähnt",
+        "mentioned_at_one_table": "An {count} Tisch erwähnt",
+        "speaker": "Teilnehmende Person",
+        "evidence_removed": "Belege wurden mit dem Transkript entfernt.",
+        "quotations_withheld": (
+            "Zitate von diesem Tisch werden nicht wiedergegeben: Eine hier sitzende teilnehmende "
+            "Person hat nicht zugestimmt, zitiert zu werden."
+        ),
+        "quotations_withheld_note": (
+            "Wörtliche Zitate werden für Tische zurückgehalten, an denen eine sitzende teilnehmende "
+            "Person nicht zugestimmt hat, zitiert zu werden; die Ergebnisse dieser Tische beruhen "
+            "allein auf der Analyse."
+        ),
+        "type_plural.proposal": "Vorschläge",
+        "type_plural.agreement": "Konsenspunkte",
+        "type_plural.disagreement": "Divergenzpunkte",
+        "type_plural.concern": "Geäußerte Bedenken",
+        "type_plural.question": "Offene Fragen",
+        "type_plural.minority_position": "Minderheitenpositionen",
+        "type_plural.new_idea": "Aufkommende Ideen",
+        "type_plural.other": "Weitere Ergebnisse",
+        "type_singular.proposal": "Vorschlag",
+        "type_singular.agreement": "Konsenspunkt",
+        "type_singular.disagreement": "Divergenzpunkt",
+        "type_singular.concern": "Bedenken",
+        "type_singular.question": "Offene Frage",
+        "type_singular.minority_position": "Minderheitenposition",
+        "type_singular.new_idea": "Aufkommende Idee",
+        "date_format": "{day}. {month} {year}",
+        **_months(_MONTHS_DE),
+    },
+    "fr": {
+        "assembly_report": "Rapport de l'assemblée",
+        "final_report": "RAPPORT FINAL",
+        "closed_on": "clôturée le {date}",
+        "interim_report": "RAPPORT INTERMÉDIAIRE",
+        "tables_completed_all_rounds": (
+            "{complete} tables sur {expected} ont terminé tous les tours"
+        ),
+        "tables_contributing": "Tables contributrices : {contributed} sur {expected}",
+        "participants": "Participants : {count} (attendus : {expected})",
+        "tables": "Tables : {count}",
+        "language": "Langue : {code}",
+        "objective": "Objectif",
+        "participants_expected": "{count} participants (attendus : {expected})",
+        "tables_count": "{count} tables",
+        "tables_contributed_to_report": (
+            "{contributed} tables sur {expected} ont contribué à ce rapport"
+        ),
+        "method_heading": "Méthode",
+        "method": (
+            "Assemblée citoyenne en présentiel : les participants ont discuté en petites tables ; "
+            "un téléphone à chaque table a enregistré la conversation, qui a été transcrite et "
+            "analysée table par table, puis agrégée sur l'ensemble des tables."
+        ),
+        "method_diarized": (
+            "Assemblée citoyenne en présentiel : les participants ont discuté en petites tables ; "
+            "un téléphone à chaque table a enregistré la conversation, qui a été transcrite avec "
+            "distinction des locuteurs et analysée table par table, puis agrégée sur l'ensemble "
+            "des tables."
+        ),
+        "methodology_note": (
+            "L'IA a été utilisée pour assister la transcription et l'analyse. "
+            "Les synthèses des discussions sont des descriptions neutres générées par l'IA. "
+            "« Mentionné à N tables » indique à combien de tables de discussion un sujet a été "
+            "soulevé ; ce n'est pas une mesure du soutien des participants."
+        ),
+        "methodology_reviewed": "Les résultats ont été relus par une personne de l'organisation.",
+        "transcript_engines": "Reconnaissance vocale : {engines}.",
+        "source_live": "sous-titres en direct",
+        "live_transcript_note": (
+            "Les transcriptions de cette assemblée proviennent des sous-titres en direct produits "
+            "pendant que les tables parlaient, et non d'une transcription distincte des "
+            "enregistrements complets. Les sous-titres sont produits dans l'urgence et peuvent "
+            "manquer des paroles que le moteur n'a pas pu suivre ; des passages peuvent donc "
+            "être absents ou moins exacts que le son lui-même."
+        ),
+        "device_replaced_note": (
+            "Le téléphone d'au moins une table a cessé de fonctionner pendant un tour et la "
+            "discussion s'est poursuivie sur un autre appareil. Les deux parties ont été "
+            "transcrites et analysées ensemble comme une seule conversation ; un court intervalle "
+            "entre les deux n'a pas été enregistré."
+        ),
+        "consent_registered_note": (
+            "{registered} participants se sont inscrits individuellement aux tables au regard de "
+            "l'information sur l'enregistrement ; {consenting} ont consenti à être enregistrés."
+        ),
+        "validation_note": (
+            "{answered} participants ont indiqué si la synthèse de leur table reflétait la "
+            "discussion ; {missing} ont signalé qu'il manquait quelque chose, à examiner par "
+            "l'organisation."
+        ),
+        "synthesis_heading": "Comment la discussion a évolué",
+        "carried_forward": "Reporté d'une session à la suivante",
+        "speaking_comparison": "Équilibre de la parole entre les tables",
+        "speaking_comparison_caveat": (
+            "Chaque ligne mesure une table isolément ; les voix sont détectées, non identifiées, "
+            "et le temps de parole est une estimation, non une mesure d'influence."
+        ),
+        "comparison_col_table": "Table",
+        "comparison_col_voices": "Voix",
+        "comparison_col_largest": "Part la plus grande",
+        "comparison_col_smallest": "Part la plus petite",
+        "comparison_col_ratio": "Rapport",
+        "executive_summary": "Synthèse exécutive",
+        "executive_summary_note": (
+            "Aperçu généré par l'IA de chaque tour sur l'ensemble des tables ; les détails et les "
+            "résultats relus par une personne suivent."
+        ),
+        "round": "Session {position}",
+        "round_titled": "Session {position} — {title}",
+        "ai_summary": "Synthèse de l'IA",
+        "speaking_balance": "Répartition de la parole",
+        "recorder_changed_caveat": (
+            "Le téléphone qui enregistrait cette table a changé pendant la session ; les voix ne "
+            "peuvent pas être rapprochées d'une partie à l'autre, la répartition ne porte donc "
+            "que sur la partie la plus complète."
+        ),
+        "voice": "Voix {label}",
+        "others": "Autres",
+        "voices_caveat": (
+            "Voix détectées, non identifiées par leur nom — à partir de l'enregistrement unique "
+            "le plus net. Temps de parole, non influence."
+        ),
+        "across_all_tables": "Sur l'ensemble des tables",
+        "table_detail": "Détail par table",
+        "table": "Table {number}",
+        "no_findings_yet": "Aucun résultat pour ce tour pour le moment.",
+        "draft_not_reviewed": "BROUILLON — pas encore relu",
+        "draft_badge": "brouillon — non relu",
+        "mentioned_at_tables": "Mentionné à {count} tables",
+        "mentioned_at_one_table": "Mentionné à {count} table",
+        "speaker": "Participant",
+        "evidence_removed": "Éléments de preuve supprimés avec la transcription.",
+        "quotations_withheld": (
+            "Les citations de cette table ne sont pas reproduites : un participant assis ici n'a "
+            "pas consenti à être cité."
+        ),
+        "quotations_withheld_note": (
+            "Les citations textuelles sont omises pour les tables où un participant assis n'a pas "
+            "consenti à être cité ; les résultats de ces tables reposent sur la seule analyse."
+        ),
+        "type_plural.proposal": "Propositions",
+        "type_plural.agreement": "Points de consensus",
+        "type_plural.disagreement": "Points de divergence",
+        "type_plural.concern": "Préoccupations exprimées",
+        "type_plural.question": "Questions ouvertes",
+        "type_plural.minority_position": "Positions minoritaires",
+        "type_plural.new_idea": "Idées émergentes",
+        "type_plural.other": "Autres résultats",
+        "type_singular.proposal": "Proposition",
+        "type_singular.agreement": "Point de consensus",
+        "type_singular.disagreement": "Point de divergence",
+        "type_singular.concern": "Préoccupation",
+        "type_singular.question": "Question ouverte",
+        "type_singular.minority_position": "Position minoritaire",
+        "type_singular.new_idea": "Idée émergente",
+        "date_format": "{day} {month} {year}",
+        **_months(_MONTHS_FR),
+    },
+    "es": {
+        "assembly_report": "Informe de la asamblea",
+        "final_report": "INFORME FINAL",
+        "closed_on": "cerrada el {date}",
+        "interim_report": "INFORME PROVISIONAL",
+        "tables_completed_all_rounds": (
+            "{complete} de {expected} mesas han completado todas las rondas"
+        ),
+        "tables_contributing": "Mesas que han contribuido: {contributed} de {expected}",
+        "participants": "Participantes: {count} (previstos {expected})",
+        "tables": "Mesas: {count}",
+        "language": "Idioma: {code}",
+        "objective": "Objetivo",
+        "participants_expected": "{count} participantes (previstos {expected})",
+        "tables_count": "{count} mesas",
+        "tables_contributed_to_report": (
+            "{contributed} de {expected} mesas han contribuido a este informe"
+        ),
+        "method_heading": "Método",
+        "method": (
+            "Asamblea ciudadana presencial: los participantes debatieron en mesas pequeñas; "
+            "un teléfono en cada mesa grabó la conversación, que se transcribió y analizó mesa "
+            "por mesa y después se agregó entre todas las mesas."
+        ),
+        "method_diarized": (
+            "Asamblea ciudadana presencial: los participantes debatieron en mesas pequeñas; "
+            "un teléfono en cada mesa grabó la conversación, que se transcribió con distinción "
+            "de voces y se analizó mesa por mesa, y después se agregó entre todas las mesas."
+        ),
+        "methodology_note": (
+            "Se usó IA como apoyo para la transcripción y el análisis. "
+            "Los resúmenes de las discusiones son descripciones neutrales generadas por IA. "
+            "«Mencionado en N mesas» indica en cuántas mesas de discusión se planteó un tema; "
+            "no es una medida del apoyo de los participantes."
+        ),
+        "methodology_reviewed": "Los resultados fueron revisados por una persona de la organización.",
+        "transcript_engines": "Reconocimiento de voz: {engines}.",
+        "source_live": "subtítulos en directo",
+        "live_transcript_note": (
+            "Las transcripciones de esta asamblea proceden de los subtítulos en directo "
+            "producidos mientras las mesas hablaban, no de una transcripción independiente de las "
+            "grabaciones completas. Los subtítulos se generan con presión de tiempo y pueden "
+            "omitir habla que el motor no logró seguir, por lo que algunos pasajes pueden faltar "
+            "o ser menos precisos que el propio audio."
+        ),
+        "device_replaced_note": (
+            "El teléfono de al menos una mesa dejó de funcionar durante una ronda y la discusión "
+            "continuó en otro dispositivo. Ambas partes se transcribieron y analizaron juntas como "
+            "una sola conversación; un breve tramo entre las dos no se grabó."
+        ),
+        "consent_registered_note": (
+            "{registered} participantes se registraron individualmente en las mesas conforme al "
+            "aviso de grabación; {consenting} consintieron ser grabados."
+        ),
+        "validation_note": (
+            "{answered} participantes indicaron si el resumen de su mesa reflejaba la discusión; "
+            "{missing} señalaron que faltaba algo, para que la organización lo revise."
+        ),
+        "synthesis_heading": "Cómo se desarrolló la discusión",
+        "carried_forward": "Trasladado de una sesión a la siguiente",
+        "speaking_comparison": "Equilibrio de intervenciones entre mesas",
+        "speaking_comparison_caveat": (
+            "Cada línea mide una mesa por sí sola; las voces se detectan, no se identifican, y "
+            "el tiempo de palabra es una estimación, no una medida de influencia."
+        ),
+        "comparison_col_table": "Mesa",
+        "comparison_col_voices": "Voces",
+        "comparison_col_largest": "Mayor proporción",
+        "comparison_col_smallest": "Menor proporción",
+        "comparison_col_ratio": "Relación",
+        "executive_summary": "Resumen ejecutivo",
+        "executive_summary_note": (
+            "Panorama generado por IA de cada ronda en todas las mesas; a continuación se "
+            "presentan los detalles y los resultados revisados por una persona."
+        ),
+        "round": "Sesión {position}",
+        "round_titled": "Sesión {position} — {title}",
+        "ai_summary": "Resumen de la IA",
+        "speaking_balance": "Equilibrio de intervenciones",
+        "recorder_changed_caveat": (
+            "El teléfono que grababa esta mesa cambió durante la sesión; las voces no pueden "
+            "emparejarse entre las partes, por lo que el equilibrio abarca solo la parte más "
+            "completa."
+        ),
+        "voice": "Voz {label}",
+        "others": "Otros",
+        "voices_caveat": (
+            "Voces detectadas, no identificadas por nombre — a partir de la grabación individual "
+            "más nítida. Tiempo de palabra, no influencia."
+        ),
+        "across_all_tables": "En todas las mesas",
+        "table_detail": "Detalle por mesa",
+        "table": "Mesa {number}",
+        "no_findings_yet": "Todavía no hay resultados para esta ronda.",
+        "draft_not_reviewed": "BORRADOR — aún sin revisar",
+        "draft_badge": "borrador — sin revisar",
+        "mentioned_at_tables": "Mencionado en {count} mesas",
+        "mentioned_at_one_table": "Mencionado en {count} mesa",
+        "speaker": "Participante",
+        "evidence_removed": "Pruebas eliminadas junto con la transcripción.",
+        "quotations_withheld": (
+            "No se incluyen citas de esta mesa: un participante sentado aquí no consintió ser "
+            "citado."
+        ),
+        "quotations_withheld_note": (
+            "Se omiten las citas textuales de las mesas en las que un participante sentado no "
+            "consintió ser citado; los resultados de esas mesas se basan únicamente en el análisis."
+        ),
+        "type_plural.proposal": "Propuestas",
+        "type_plural.agreement": "Puntos de consenso",
+        "type_plural.disagreement": "Puntos de divergencia",
+        "type_plural.concern": "Preocupaciones planteadas",
+        "type_plural.question": "Preguntas abiertas",
+        "type_plural.minority_position": "Posiciones minoritarias",
+        "type_plural.new_idea": "Ideas emergentes",
+        "type_plural.other": "Otros resultados",
+        "type_singular.proposal": "Propuesta",
+        "type_singular.agreement": "Punto de consenso",
+        "type_singular.disagreement": "Punto de divergencia",
+        "type_singular.concern": "Preocupación",
+        "type_singular.question": "Pregunta abierta",
+        "type_singular.minority_position": "Posición minoritaria",
+        "type_singular.new_idea": "Idea emergente",
+        "date_format": "{day} de {month} de {year}",
+        **_months(_MONTHS_ES),
+    },
 }
 
 DEFAULT_LANGUAGE = "en"

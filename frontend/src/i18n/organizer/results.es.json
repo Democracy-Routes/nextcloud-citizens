@@ -1,0 +1,254 @@
+{
+	"labels": {
+		"type": {
+			"proposal": "Propuesta",
+			"agreement": "Punto de consenso",
+			"disagreement": "Punto de divergencia",
+			"concern": "Preocupación",
+			"question": "Pregunta abierta",
+			"minority_position": "Posición minoritaria",
+			"new_idea": "Idea emergente"
+		},
+		"typePlural": {
+			"proposal": "Propuestas",
+			"agreement": "Puntos de consenso",
+			"disagreement": "Puntos de divergencia",
+			"concern": "Preocupaciones planteadas",
+			"question": "Preguntas abiertas",
+			"minority_position": "Posiciones minoritarias",
+			"new_idea": "Ideas emergentes"
+		},
+		"otherFindings": "Otros resultados",
+		"round": "Sesión {position}",
+		"roundTitled": "Sesión {position} — {title}"
+	},
+	"analysis": {
+		"pausedWhileEditing": "En pausa mientras editas",
+		"filterStatus": "Filtrar por estado de revisión",
+		"filterType": "Filtrar por tipo de resultado",
+		"filters": {
+			"all": "Todos los resultados",
+			"draft": "Pendientes de revisión",
+			"approved": "Aprobados",
+			"rejected": "Rechazados"
+		},
+		"allTypes": "Todos los tipos",
+		"approveDrafts": "Aprobar {count} borradores | Aprobar {count} borrador | Aprobar {count} borradores",
+		"rerun": "Repetir el análisis",
+		"run": "Ejecutar el análisis",
+		"noSessionsTitle": "Esta asamblea todavía no tiene sesiones",
+		"noSessionsHint": "Añade una sesión en la pestaña Sesiones; los resultados aparecen aquí cuando se hayan analizado sus mesas.",
+		"inProgress": "Análisis en curso",
+		"running": "{count} en ejecución",
+		"queued": "{count} en cola",
+		"waitingRetry": "{count} esperando para reintentar",
+		"cancelPending": "Cancelar el análisis pendiente",
+		"table": "Mesa {number}",
+		"failed": "El análisis falló",
+		"failedFor": "en {count} mesa(s):",
+		"clusteringFailed": "Falló la agrupación entre mesas",
+		"rerunClustering": "Repetir solo la agrupación",
+		"notConfiguredTitle": "El análisis de IA no está configurado",
+		"notConfiguredHint": "Un administrador debe añadir una clave de API de análisis (Mistral, Ollama Cloud o cualquier endpoint compatible con OpenAI) en Ajustes. Después, el análisis se ejecuta automáticamente tras transcribir cada mesa.",
+		"inProgressTitle": "Análisis en curso…",
+		"noFindingsTitle": "Todavía no hay resultados",
+		"inProgressHint": "Se están analizando las mesas: los resultados aparecen aquí automáticamente.",
+		"noFindingsHint": "Los resultados aparecen automáticamente después de grabar y transcribir las mesas, o ejecuta el análisis manualmente.",
+		"runNow": "Ejecutar el análisis ahora",
+		"noMatchTitle": "Ningún resultado coincide con este filtro",
+		"noMatchHint": "Cambia los filtros de arriba para ver el resto de los resultados de esta sesión.",
+		"comparison": {
+			"title": "Reparto de la palabra entre mesas",
+			"intro": "Cada línea mide una mesa por separado: las voces se detectan, no se identifican, y el tiempo de palabra es una estimación, no una medida de influencia.",
+			"colTable": "Mesa",
+			"colVoices": "Voces",
+			"colLargest": "Mayor proporción",
+			"colSmallest": "Menor proporción",
+			"colRatio": "Razón",
+			"recorderChanged": "el grabador cambió"
+		},
+		"acrossTables": "En todas las mesas",
+		"aggregatedFrom": "— agregado de {count} mesa(s)",
+		"crossTableNote": "Los resultados entre mesas se regeneran cada vez que una mesa termina su análisis, revisiones incluidas: revísalos después de la última mesa.",
+		"aiSummary": "RESUMEN DE IA",
+		"analyzedNoFindings": "Analizado: no hay resultados sustantivos para la pregunta de la sesión en esta discusión.",
+		"footer": "Los resultados de la IA son borradores hasta que una persona los aprueba; los resúmenes son descripciones neutrales generadas por IA. Cada resultado cita evidencia de la transcripción; “mencionado en N mesas” nunca mide el apoyo de los participantes.",
+		"toast": {
+			"approved": "{count} resultado(s) aprobado(s)",
+			"nothingToAnalyze": "Nada que analizar: ninguna mesa tiene aún una transcripción lista",
+			"queued": "Análisis en cola para {count} mesa(s)",
+			"cancelledRunning": "{cancelled} trabajo(s) pendiente(s) cancelado(s); los {running} que ya se están ejecutando terminarán",
+			"cancelled": "{count} trabajo(s) pendiente(s) cancelado(s)",
+			"reclusterQueued": "Agrupación entre mesas en cola",
+			"reclusterAlready": "La agrupación ya está en cola"
+		},
+		"confirmApprove": {
+			"title": "¿Aprobar todos los resultados en borrador?",
+			"message": "{count} resultado(s) en borrador de esta sesión se marcarán como aprobados y se incluirán en el informe. Los resultados rechazados no se tocan, y después aún puedes editar o rechazar cualquiera de ellos.",
+			"confirm": "Aprobar todos los borradores"
+		},
+		"confirmRerun": {
+			"title": "¿Ejecutar el análisis de nuevo?",
+			"messageReviewed": "Todos los resultados de esta sesión —incluidos los {count} que ya aprobaste o editaste— se sustituyen por un conjunto recién generado. Habrá que repetir las revisiones hechas hasta ahora.",
+			"messageDrafts": "Todos los resultados en borrador de esta sesión se sustituyen por otros recién generados.",
+			"confirm": "Ejecutar el análisis de nuevo"
+		},
+		"confirmRecluster": {
+			"title": "¿Repetir la agrupación entre mesas?",
+			"message": "Los {count} resultado(s) entre mesas que ya aprobaste o editaste se sustituyen por un conjunto recién generado, junto con los borradores. Los resultados de cada mesa no se tocan.",
+			"confirm": "Repetir la agrupación"
+		},
+		"replaceWord": "reemplazar"
+	},
+	"report": {
+		"toast": {
+			"closed": "{Thing} está cerrada: el informe final está listo",
+			"reopened": "{Thing} está reabierta: las mesas pueden volver a grabar",
+			"unpublished": "El informe ya no es visible en los teléfonos de las mesas",
+			"published": "Informe publicado: los teléfonos de las mesas ya pueden verlo y descargarlo",
+			"synthesisQueued": "Síntesis en cola: aparecerá aquí en uno o dos minutos",
+			"refreshed": "La versión publicada ya coincide con el informe actual",
+			"downloadFailed": "No se pudo descargar el informe: revisa el bloqueador de ventanas emergentes"
+		},
+		"synthesisFailed": "Falló la síntesis entre sesiones ({reason}). Vuelve a ejecutarla desde aquí cuando se haya corregido la causa.",
+		"roundAnalysisFailed": "Falló el análisis entre mesas de la Sesión {position} ({reason}).",
+		"finalTitle": "Informe final · cerrado el {date}",
+		"quotationsWithheld": "Citas omitidas: una persona sentada en esta mesa no dio su consentimiento para ser citada.",
+		"finalHint": "{Thing} está cerrada: las mesas ya no pueden grabar y este es el informe definitivo. Los participantes siguen leyendo esta versión aunque la reabras: aprueba más resultados y pulsa Actualizar para publicarlos.",
+		"allDoneTitle": "Las {count} mesas han terminado.",
+		"allDoneHint": "Cierra {thing} para crear el informe final y habilitar las descargas.",
+		"interimTitle": "Informe provisional — {complete} de {expected} mesas han completado todas las sesiones",
+		"interimHint": "Esta es una vista previa de {thing} todavía en curso. Al cerrarla se crea el informe final y se habilitan las descargas; puedes reabrirla más tarde.",
+		"close": "Cerrar {thing} y crear el informe final",
+		"updating": "Actualizando…",
+		"updatePublished": "Actualizar la versión publicada",
+		"reopen": "Reabrir {thing}",
+		"synthesis": {
+			"title": "Cómo evolucionó la discusión",
+			"haveLead": "Un capítulo que abarca las sesiones, escrito a partir de sus resúmenes y de los resultados entre mesas aprobados",
+			"haveTail": "Se rehace al cerrar, cuando el análisis de todas las sesiones esté completo.",
+			"none": "Cuando al menos dos sesiones tengan un resumen, el modelo de análisis redacta cómo se desarrolló la discusión desde la primera sesión hasta la última. Ocurre solo al cerrar; genéralo antes desde aquí.",
+			"queued": "En cola…",
+			"again": "Generar de nuevo",
+			"generate": "Generar síntesis",
+			"carried": "Trasladado de una sesión a la siguiente"
+		},
+		"includeDrafts": "Incluir borradores sin revisar (claramente marcados)",
+		"preparing": "Preparando…",
+		"pdf": "PDF",
+		"markdown": "Markdown",
+		"json": "JSON",
+		"downloadsLocked": "Las descargas estarán disponibles cuando {thing} se cierre.",
+		"publishedTitle": "Publicado en los teléfonos de las mesas",
+		"unpublishedTitle": "Todavía no publicado en los teléfonos de las mesas",
+		"publishedHint": "Los teléfonos grabadores pueden ver este informe y descargar el PDF (solo resultados aprobados y resúmenes de IA; los borradores siguen siendo privados).",
+		"unpublishedHint": "Al publicarlo, los teléfonos grabadores pueden ver este informe y descargar el PDF. Solo se comparten los resultados aprobados y los resúmenes de IA.",
+		"unpublish": "Dejar de publicar",
+		"publish": "Publicar el informe en las mesas",
+		"emptyTitle": "Todavía no hay nada que informar",
+		"emptyHintDrafts": "Todavía no existen resultados: graba las mesas y ejecuta primero el análisis.",
+		"emptyHintApproved": "Todavía no hay resultados aprobados. Aprueba resultados en la pestaña Análisis, o incluye los borradores para verlos en vista previa.",
+		"assemblyReport": "{name} — Informe de la asamblea",
+		"participants": "{count} participantes",
+		"tables": "{count} mesas",
+		"acrossTables": "En todas las mesas",
+		"draftPill": "BORRADOR — sin revisar",
+		"mentionedAt": "Mencionado en {count} mesa(s)",
+		"speaker": "Persona",
+		"evidenceRemoved": "Evidencia eliminada junto con la transcripción",
+		"table": "Mesa {number}",
+		"aiSummary": "RESUMEN DE IA",
+		"looksRight": "✓ {count} lo ven correcto",
+		"flaggedMissing": "· ⚠ {count} señalaron que falta algo",
+		"confirmClose": {
+			"title": "¿Cerrar {thing} y crear el informe final?",
+			"missingTables": "Las mesas {tables} nunca grabaron: no aparecerán en el informe final. ",
+			"body": "Después de cerrar, las mesas ya no pueden grabar y el informe pasa a ser definitivo. Puedes reabrir {thing} más tarde si una mesa rezagada necesita grabar.",
+			"confirm": "Cerrar {thing}"
+		},
+		"confirmUnpublish": {
+			"title": "¿Dejar de compartir el informe con las mesas?",
+			"message": "Todos los teléfonos de mesa que están leyendo el informe pierden el acceso de inmediato. Puedes volver a publicarlo en cualquier momento.",
+			"confirm": "Dejar de publicar"
+		},
+		"confirmReopen": {
+			"title": "¿Reabrir {thing}?",
+			"message": "Las mesas pueden volver a grabar y el informe deja de ser definitivo. Los participantes siguen leyendo la versión que se congeló cuando {thing} se cerró, hasta que la cierres de nuevo.",
+			"confirm": "Reabrir {thing}"
+		},
+		"confirmPublish": {
+			"title": "¿Publicar el informe en los teléfonos de las mesas?",
+			"message": "El teléfono grabador de cada mesa podrá ver este informe y descargar el PDF. Solo se incluyen los resultados aprobados y los resúmenes de IA; los borradores sin revisar siguen siendo privados. Puedes dejar de publicarlo en cualquier momento.",
+			"confirm": "Publicar"
+		}
+	},
+	"finding": {
+		"title": "Título",
+		"summary": "Resumen",
+		"cancel": "Cancelar",
+		"saveApprove": "Guardar y aprobar",
+		"mentionedAt": "Mencionado en {count} mesa(s)",
+		"support": "apoyo: {support}",
+		"approve": "Aprobar",
+		"reject": "Rechazar",
+		"edit": "Editar",
+		"excerpts": "{count} cita(s) de respaldo",
+		"speaker": "PERSONA",
+		"status": {
+			"DRAFT": "borrador",
+			"APPROVED": "aprobado",
+			"EDITED_AND_APPROVED": "editado y aprobado",
+			"REJECTED": "rechazado"
+		},
+		"toast": {
+			"edited": "Resultado editado y aprobado",
+			"approved": "Resultado aprobado",
+			"rejected": "Resultado rechazado"
+		}
+	},
+	"speaking": {
+		"eyebrow": "REPARTO DE LA PALABRA",
+		"caveat": "El teléfono que grababa esta mesa cambió durante la sesión; las voces no pueden emparejarse entre las partes, por lo que esto abarca solo la parte más completa.",
+		"ariaLabel": "Proporción del tiempo de palabra por voz detectada",
+		"voice": "Voz {label}",
+		"others": "Otras",
+		"note": "Voces detectadas, no identificadas por su nombre — de la grabación individual más clara. Una estimación del tiempo de palabra, no de la participación ni de la influencia."
+	},
+	"failure": {
+		"retrying": "Reintentando automáticamente — intento {attempt} de {max}.",
+		"retryingNext": "Reintentando automáticamente — intento {attempt} de {max}, el siguiente en {seconds} s.",
+		"reason": {
+			"PROVIDER_AUTH": "El proveedor rechazó la clave de API o este modelo (HTTP 401/403). Comprueba la clave, el plan y el nombre del modelo en Ajustes y vuelve a ejecutarlo.",
+			"PROVIDER_RATE_LIMIT": "El proveedor está limitando las solicitudes (HTTP 429). El trabajo espera y reintenta por sí solo: no inicies otra ejecución.",
+			"PROVIDER_TIMEOUT": "El proveedor no respondió a tiempo. El trabajo reintenta por sí solo; si sigue fallando, el proveedor está lento o inaccesible.",
+			"PROVIDER_HTTP": "El proveedor devolvió un error. El trabajo reintenta por sí solo, salvo que el proveedor haya rechazado la solicitud de plano.",
+			"SCHEMA_INVALID": "El modelo respondió, pero no en el formato requerido, tres veces seguidas. Vuelve a ejecutarlo; si se repite, prueba con otro modelo.",
+			"NOT_CONFIGURED": "No hay ningún proveedor configurado para este paso: añade la clave o el endpoint en Ajustes.",
+			"NO_TRANSCRIPT": "No hay transcripción que analizar. Transcribe primero la grabación.",
+			"AUDIO_MISSING": "Falta el archivo de audio en el servidor, por lo que no se puede transcribir de nuevo.",
+			"RERUN_EMPTY": "El nuevo análisis no devolvió ningún resultado para una mesa que ya tenía algunos, así que se conservaron los resultados anteriores. No se perdió nada; vuelve a ejecutar el análisis si querías sustituirlos.",
+			"CANCELLED": "Cancelado por un organizador. Vuelve a ejecutarlo cuando estés listo.",
+			"UNKNOWN": "Falló por un motivo que la aplicación no reconoció; el detalle de abajo es lo que registró el servidor."
+		},
+		"code": {
+			"STORAGE_FULL": "Al servidor se le acabó el espacio mientras ensamblaba esta grabación. El audio subido sigue aquí: libera espacio y vuelve a intentarlo.",
+			"CHUNKS_GONE": "Faltan partes de la subida en el almacenamiento, por lo que no se puede reconstruir el audio. Esta mesa debe grabar la sesión de nuevo.",
+			"CHUNK_CORRUPTED": "Un fragmento de la subida no superó la suma de verificación, por lo que no se puede confiar en el audio. Esta mesa debe grabar la sesión de nuevo.",
+			"AUDIO_DELETED": "El audio se eliminó mientras se ensamblaba.",
+			"UPLOAD_TIMED_OUT": "El teléfono dejó de subir y no volvió. Lo que llegó al servidor se conserva; la mesa puede volver a grabar.",
+			"UPLOAD_ABANDONED": "Un organizador detuvo la espera de esta subida. El audio ya recibido se conserva.",
+			"RATE_LIMITED": "El proveedor está limitando las solicitudes (HTTP 429). El trabajo espera y reintenta por sí solo: no inicies otra ejecución.",
+			"LIVE_CAPTIONS_MISSING": "La transcripción final está desactivada y los subtítulos en directo nunca produjeron una transcripción. Vuelve a transcribir a partir del audio guardado.",
+			"LIVE_CAPTIONS_UNREADABLE": "La transcripción final está desactivada y no se pudo leer el archivo de subtítulos. Vuelve a transcribir a partir del audio guardado.",
+			"LIVE_CAPTIONS_EMPTY": "La transcripción final está desactivada y los subtítulos no contenían texto. Vuelve a transcribir a partir del audio guardado.",
+			"DEVICE_SILENT": "El teléfono dejó de dar señal a mitad de la sesión y la mesa fue liberada. Lo que llegó al servidor se conserva.",
+			"ROUND_CONTINUED": "La mesa terminó antes de tiempo mientras la sesión seguía abierta y luego continuó: esta es la primera parte de la sesión; el resto está en la grabación de debajo."
+		},
+		"state": {
+			"AUDIO_INVALID": "No se pudo validar el audio subido.",
+			"TRANSCRIPTION_FAILED": "El proveedor de transcripción no devolvió ninguna transcripción. El audio está intacto, por lo que se puede volver a intentar.",
+			"ANALYSIS_FAILED": "El análisis de IA no se completó. La transcripción está intacta, por lo que se puede volver a ejecutar.",
+			"UPLOAD_INCOMPLETE": "No toda la grabación llegó al servidor."
+		}
+	}
+}
