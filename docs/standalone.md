@@ -102,10 +102,16 @@ Open `CITIZENS_PUBLIC_URL` in a browser and sign in.
 
 To add an organizer, go to **Settings -> Organisation -> Users** and add the
 person. With SMTP set up, they get a mail with a link to choose a password.
-Without it, the link is written to the app log
-(`docker compose -f docker-compose.standalone.yml logs citizens`). Send it to
-them yourself. Links expire. The same card resets passwords, disables
-accounts and deletes them.
+Without it, no usable link exists: the log shows the mail with the link
+redacted. Set the password from the command line instead:
+
+```
+docker compose -f docker-compose.standalone.yml exec citizens \
+  python -m citizens.standalone set-password --username anna
+```
+
+Links expire after 7 days (invitations) or 2 hours (resets). The same card
+sends a new link, changes roles, disables accounts and deletes them.
 
 ## 5. What the phones open
 
