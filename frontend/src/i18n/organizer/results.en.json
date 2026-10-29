@@ -250,5 +250,46 @@
 			"ANALYSIS_FAILED": "The AI analysis did not complete. The transcript is untouched, so this can be run again.",
 			"UPLOAD_INCOMPLETE": "Not all of the recording reached the server."
 		}
+	},
+	"seeds": {
+		"title": "Polis seeds",
+		"lead": "Short statements written from the approved findings, for a Polis conversation. Review each one; only approved statements are exported.",
+		"empty": { "title": "No statements yet", "hint": "Approve findings in the Analysis tab, then generate statements here. You can also write them by hand." },
+		"generate": "Generate statements",
+		"regenerate": "Generate again",
+		"queued": "Queued…",
+		"generateHint": "Generating again replaces drafts you have not touched; reviewed, edited and hand-written statements stay.",
+		"notConfigured": "AI analysis is not configured — add an analysis API key in Settings. You can still write statements by hand.",
+		"noFindings": "Approve at least one finding in the Analysis tab first.",
+		"add": "Add a statement",
+		"addPlaceholder": "One idea, one sentence, that a stranger can agree or disagree with",
+		"save": "Save",
+		"cancel": "Cancel",
+		"approve": "Approve",
+		"reject": "Reject",
+		"reopen": "Back to draft",
+		"delete": "Delete",
+		"moveUp": "Move up",
+		"moveDown": "Move down",
+		"status": { "DRAFT": "Draft", "APPROVED": "Approved", "REJECTED": "Rejected", "EXPORTED": "Exported" },
+		"origin": { "ai": "AI", "manual": "By hand" },
+		"edited": "Edited",
+		"stale": "The finding this came from was replaced — re-read this statement",
+		"chars": "{count}/{max}",
+		"tooLong": "Keep statements under {soft} characters; the Polis limit is {max}.",
+		"summary": "{approved} approved · {rejected} rejected · {drafts} to review",
+		"exportCsv": "Download CSV",
+		"exportJson": "Download JSON",
+		"exportHint": "Export opens once every statement is approved or rejected. Paste the statements into the Polis seed box, or import the file.",
+		"failed": "The statement generation failed ({reason}). Run it again once the cause is fixed.",
+		"confirmDelete": "Delete this statement?",
+		"confirmRegenerate": "Generate again? Drafts you have not touched are replaced.",
+		"toast": {
+			"queued": "Statements queued — they appear here in a minute or two",
+			"saved": "Statement saved",
+			"deleted": "Statement deleted",
+			"downloadFailed": "The file could not be downloaded — check the pop-up blocker",
+			"notReady": "Review every statement before exporting"
+		}
 	}
 }

@@ -114,7 +114,8 @@
 			"monitor": "In diretta",
 			"analysis": "Analisi",
 			"report": "Report",
-			"files": "File"
+			"files": "File",
+			"seeds": "Polis seeds"
 		},
 		"rename": "Rinomina",
 		"sessionEyebrow": "Sessione",

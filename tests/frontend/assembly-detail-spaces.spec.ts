@@ -122,6 +122,6 @@ describe('the assembly detail spaces', () => {
 		expect(wrapper.find('[data-test="subtabs"] .cz-tab--active').text()).toBe('QR codes')
 		// and Results' sub-tabs are the three result tabs
 		await wrapper.findAll('[data-test="spaces"] .cz-tab')[2].trigger('click')
-		expect(wrapper.findAll('[data-test="subtabs"] .cz-tab').map((t) => t.text())).toEqual(['Analysis', 'Report', 'Files'])
+		expect(wrapper.findAll('[data-test="subtabs"] .cz-tab').map((t) => t.text())).toEqual(['Analysis', 'Report', 'Polis seeds', 'Files'])
 	})
 })

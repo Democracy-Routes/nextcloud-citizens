@@ -114,7 +114,8 @@
 			"monitor": "En directo",
 			"analysis": "Análisis",
 			"report": "Informe",
-			"files": "Archivos"
+			"files": "Archivos",
+			"seeds": "Semillas de Polis"
 		},
 		"rename": "Renombrar",
 		"sessionEyebrow": "Sesión",

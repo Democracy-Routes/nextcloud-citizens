@@ -250,5 +250,57 @@
 			"ANALYSIS_FAILED": "L'analisi con l'IA non è stata completata. La trascrizione è intatta, quindi si può ripetere.",
 			"UPLOAD_INCOMPLETE": "Non tutta la registrazione è arrivata al server."
 		}
+	},
+	"seeds": {
+		"title": "Polis seeds",
+		"lead": "Brevi affermazioni scritte a partire dai risultati approvati, per una conversazione Polis. Controlla ciascuna: solo quelle approvate vengono esportate.",
+		"empty": {
+			"title": "Ancora nessuna affermazione",
+			"hint": "Approva i risultati nella scheda Analisi, poi genera qui le affermazioni. Puoi anche scriverle a mano."
+		},
+		"generate": "Genera affermazioni",
+		"regenerate": "Genera di nuovo",
+		"queued": "In coda…",
+		"generateHint": "Generando di nuovo si sostituiscono le bozze che non hai toccato; le affermazioni controllate, modificate e scritte a mano restano.",
+		"notConfigured": "L'analisi con l'IA non è configurata: aggiungi una chiave API per l'analisi nelle Impostazioni. Puoi comunque scrivere le affermazioni a mano.",
+		"noFindings": "Prima approva almeno un risultato nella scheda Analisi.",
+		"add": "Aggiungi un'affermazione",
+		"addPlaceholder": "Un'idea, una frase, su cui uno sconosciuto possa essere d'accordo o meno",
+		"save": "Salva",
+		"cancel": "Annulla",
+		"approve": "Approva",
+		"reject": "Scarta",
+		"reopen": "Torna a bozza",
+		"delete": "Elimina",
+		"moveUp": "Sposta su",
+		"moveDown": "Sposta giù",
+		"status": {
+			"DRAFT": "Bozza",
+			"APPROVED": "Approvata",
+			"REJECTED": "Scartata",
+			"EXPORTED": "Esportata"
+		},
+		"origin": {
+			"ai": "IA",
+			"manual": "A mano"
+		},
+		"edited": "Modificata",
+		"stale": "Il risultato da cui deriva è stato sostituito: rileggi questa affermazione",
+		"chars": "{count}/{max}",
+		"tooLong": "Mantieni le affermazioni sotto i {soft} caratteri; il limite di Polis è {max}.",
+		"summary": "{approved} approvate · {rejected} scartate · {drafts} da controllare",
+		"exportCsv": "Scarica CSV",
+		"exportJson": "Scarica JSON",
+		"exportHint": "L'esportazione si apre quando ogni affermazione è approvata o scartata. Incolla le affermazioni nel campo seed di Polis, oppure importa il file.",
+		"failed": "La generazione delle affermazioni non è riuscita ({reason}). Riavviala dopo aver risolto la causa.",
+		"confirmDelete": "Eliminare questa affermazione?",
+		"confirmRegenerate": "Generare di nuovo? Le bozze che non hai toccato vengono sostituite.",
+		"toast": {
+			"queued": "Affermazioni in coda: compaiono qui tra uno o due minuti",
+			"saved": "Affermazione salvata",
+			"deleted": "Affermazione eliminata",
+			"downloadFailed": "Impossibile scaricare il file: controlla il blocco dei pop-up",
+			"notReady": "Controlla ogni affermazione prima di esportare"
+		}
 	}
 }

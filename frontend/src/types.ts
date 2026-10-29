@@ -821,3 +821,28 @@ export interface AccountCreated extends Account {
 
 /** GET /api/v1/auth/me: the account in standalone mode, only the id in Nextcloud. */
 export type Me = Account | { id: string; mode: 'nextcloud' }
+
+export interface StatementSeed {
+	id: string
+	text: string
+	status: 'DRAFT' | 'APPROVED' | 'REJECTED' | 'EXPORTED'
+	position: number
+	origin: 'ai' | 'manual'
+	finding_id: string | null
+	edited: boolean
+	stale: boolean
+	reviewed_by: string | null
+	exported_at: string | null
+}
+
+export interface SeedsListing {
+	assembly_id: string
+	language: string
+	analysis_configured: boolean
+	findings_approved: number
+	ready_to_export: boolean
+	max_chars: number
+	soft_chars: number
+	job: JobInfo | null
+	seeds: StatementSeed[]
+}

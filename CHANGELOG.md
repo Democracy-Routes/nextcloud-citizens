@@ -12,6 +12,17 @@ All notable changes to Nextcloud Citizens.
   served by the app itself.
 - German, French and Spanish for the organizer, the recorder, the consent
   notice, the event kit and the report.
+- Polis seeds: Results -> Polis seeds turns the approved findings into short,
+  neutral statements (one to three per finding, under 140 characters, never
+  more than 400) for a PolisOrbis conversation. Edit, approve, reject,
+  reorder, add by hand, delete, or generate again; regeneration replaces only
+  untouched drafts. When the analysis is re-run, statements written from a
+  replaced finding keep their text and are flagged as stale. Works in both
+  modes; see `docs/polis-seeds.md`.
+- Seeds export, available once every statement is approved or rejected:
+  `<assembly>-statements.csv` (`position,statement`) or
+  `<assembly>-statements.json` (schema `citizens.statement-seeds/1`). The
+  files hold statement text only. Exported statements are marked EXPORTED.
 
 ### Operations
 
@@ -30,6 +41,9 @@ All notable changes to Nextcloud Citizens.
   `docs/standalone.md`. `scripts/backup-citizens-data.sh` takes the volume
   name as an optional first argument.
 - FastAPI and Starlette are pinned.
+- Migration 0040 adds the table `statement_seeds`. New job type
+  `SEED_STATEMENTS`; audit events `seeds_generation_requested`, `seed_added`,
+  `seed_reviewed`, `seed_deleted`, `seeds_exported`.
 
 ## Unreleased (0.8)
 

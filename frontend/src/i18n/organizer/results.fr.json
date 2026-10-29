@@ -250,5 +250,57 @@
 			"ANALYSIS_FAILED": "L'analyse IA ne s'est pas terminée. La transcription est intacte ; on peut donc relancer l'analyse.",
 			"UPLOAD_INCOMPLETE": "L'enregistrement n'est pas parvenu en entier au serveur."
 		}
+	},
+	"seeds": {
+		"title": "Seeds Polis",
+		"lead": "Courtes affirmations rédigées à partir des résultats approuvés, pour une conversation Polis. Relisez-les une par une : seules les affirmations approuvées sont exportées.",
+		"empty": {
+			"title": "Aucune affirmation pour l'instant",
+			"hint": "Approuvez des résultats dans l'onglet Analyse, puis générez ici les affirmations. Vous pouvez aussi les écrire à la main."
+		},
+		"generate": "Générer les affirmations",
+		"regenerate": "Générer à nouveau",
+		"queued": "En file d'attente…",
+		"generateHint": "Générer à nouveau remplace les brouillons que vous n'avez pas touchés ; les affirmations relues, modifiées ou écrites à la main sont conservées.",
+		"notConfigured": "L'analyse IA n'est pas configurée : ajoutez une clé API d'analyse dans les Paramètres. Vous pouvez quand même écrire les affirmations à la main.",
+		"noFindings": "Approuvez d'abord au moins un résultat dans l'onglet Analyse.",
+		"add": "Ajouter une affirmation",
+		"addPlaceholder": "Une idée, une phrase, à laquelle un inconnu peut adhérer ou non",
+		"save": "Enregistrer",
+		"cancel": "Annuler",
+		"approve": "Approuver",
+		"reject": "Rejeter",
+		"reopen": "Repasser en brouillon",
+		"delete": "Supprimer",
+		"moveUp": "Monter",
+		"moveDown": "Descendre",
+		"status": {
+			"DRAFT": "Brouillon",
+			"APPROVED": "Approuvée",
+			"REJECTED": "Rejetée",
+			"EXPORTED": "Exportée"
+		},
+		"origin": {
+			"ai": "IA",
+			"manual": "À la main"
+		},
+		"edited": "Modifiée",
+		"stale": "Le résultat dont elle provient a été remplacé ; relisez cette affirmation",
+		"chars": "{count}/{max}",
+		"tooLong": "Gardez les affirmations sous {soft} caractères ; la limite de Polis est de {max}.",
+		"summary": "{approved} approuvées · {rejected} rejetées · {drafts} à relire",
+		"exportCsv": "Télécharger le CSV",
+		"exportJson": "Télécharger le JSON",
+		"exportHint": "L'export s'ouvre dès que chaque affirmation est approuvée ou rejetée. Collez les affirmations dans la zone de seeds de Polis, ou importez le fichier.",
+		"failed": "La génération des affirmations a échoué ({reason}). Relancez-la une fois la cause corrigée.",
+		"confirmDelete": "Supprimer cette affirmation ?",
+		"confirmRegenerate": "Générer à nouveau ? Les brouillons que vous n'avez pas touchés sont remplacés.",
+		"toast": {
+			"queued": "Affirmations en file d'attente ; elles apparaîtront ici dans une minute ou deux",
+			"saved": "Affirmation enregistrée",
+			"deleted": "Affirmation supprimée",
+			"downloadFailed": "Le fichier n'a pas pu être téléchargé ; vérifiez le bloqueur de fenêtres contextuelles",
+			"notReady": "Relisez chaque affirmation avant d'exporter"
+		}
 	}
 }

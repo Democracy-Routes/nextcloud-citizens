@@ -147,6 +147,16 @@ starts** — see "Consent" below.
   already spent, are deleted seven days after they expired — including that
   phone's device log. A session that did make a recording is kept, because it
   is that recording's record of which phone made it.
+* **Polis seeds (0.9) are statement text only.** The statements the model
+  writes from approved findings, and the CSV or JSON file you export, contain
+  the statement text, its position, and the assembly's name, language and
+  export time. They never contain evidence, quotations, transcript text, table
+  numbers, participant data or Citizens ids. The file is meant to leave the
+  server (it is pasted into a Polis conversation), so read the statements
+  before approving them. Only the findings' text is sent to the analysis
+  provider to write them, never audio. Seeds are deleted with the assembly;
+  a statement can also be deleted on its own, and the export is audit-logged
+  by count and format, never by content.
 * **Not implemented:** there is no automatic deletion of transcripts or
   findings, and no data-subject-request tooling. Both are manual today.
 

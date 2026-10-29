@@ -114,7 +114,8 @@
 			"monitor": "Live",
 			"analysis": "Analyse",
 			"report": "Bericht",
-			"files": "Dateien"
+			"files": "Dateien",
+			"seeds": "Polis-Seeds"
 		},
 		"rename": "Umbenennen",
 		"sessionEyebrow": "Sitzung",

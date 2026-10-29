@@ -28,6 +28,8 @@ import type {
 	HelpRequest,
 	RegistrationLink,
 	RoundMonitor,
+	SeedsListing,
+	StatementSeed,
 	SessionCreate,
 	SessionCreated,
 	SessionMessage,
@@ -343,6 +345,23 @@ export const api = {
 	/** Queue "How the discussion developed" across sessions (at least two with a summary). */
 	generateSynthesis: (assemblyId: string) =>
 		request<{ queued: boolean; sessions: number }>('POST', `/api/v1/assemblies/${assemblyId}/synthesis`),
+
+	// ---- Polis seeds
+	listSeeds: (assemblyId: string) =>
+		request<SeedsListing>('GET', `/api/v1/assemblies/${assemblyId}/seeds`),
+	generateSeeds: (assemblyId: string) =>
+		request<{ queued: boolean }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/generate`),
+	createSeed: (assemblyId: string, text: string) =>
+		request<StatementSeed>('POST', `/api/v1/assemblies/${assemblyId}/seeds`, { text }),
+	updateSeed: (
+		assemblyId: string,
+		seedId: string,
+		payload: { text?: string; status?: 'DRAFT' | 'APPROVED' | 'REJECTED' },
+	) => request<StatementSeed>('PUT', `/api/v1/assemblies/${assemblyId}/seeds/${seedId}`, payload),
+	reorderSeeds: (assemblyId: string, ids: string[]) =>
+		request<{ seeds: StatementSeed[] }>('PUT', `/api/v1/assemblies/${assemblyId}/seeds/order`, { ids }),
+	deleteSeed: (assemblyId: string, seedId: string) =>
+		request<void>('DELETE', `/api/v1/assemblies/${assemblyId}/seeds/${seedId}`),
 
 	listFiles: (assemblyId: string) =>
 		request<FilesListing>('GET', `/api/v1/assemblies/${assemblyId}/files`),

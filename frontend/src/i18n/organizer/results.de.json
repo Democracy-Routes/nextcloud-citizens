@@ -250,5 +250,57 @@
 			"ANALYSIS_FAILED": "Die KI-Analyse wurde nicht abgeschlossen. Das Transkript ist unberührt, daher kann sie erneut ausgeführt werden.",
 			"UPLOAD_INCOMPLETE": "Nicht die gesamte Aufnahme hat den Server erreicht."
 		}
+	},
+	"seeds": {
+		"title": "Polis-Seeds",
+		"lead": "Kurze Aussagen für eine Polis-Konversation, formuliert aus den genehmigten Ergebnissen. Prüfen Sie jede einzelne; nur genehmigte Aussagen werden exportiert.",
+		"empty": {
+			"title": "Noch keine Aussagen",
+			"hint": "Genehmigen Sie Ergebnisse im Tab „Analyse“ und erzeugen Sie hier die Aussagen. Sie können sie auch von Hand schreiben."
+		},
+		"generate": "Aussagen erzeugen",
+		"regenerate": "Erneut erzeugen",
+		"queued": "In der Warteschlange …",
+		"generateHint": "Beim erneuten Erzeugen werden Entwürfe ersetzt, die Sie nicht angefasst haben; geprüfte, bearbeitete und von Hand geschriebene Aussagen bleiben erhalten.",
+		"notConfigured": "Die KI-Analyse ist nicht eingerichtet – fügen Sie in den Einstellungen einen API-Schlüssel für die Analyse hinzu. Sie können Aussagen trotzdem von Hand schreiben.",
+		"noFindings": "Genehmigen Sie zuerst mindestens ein Ergebnis im Tab „Analyse“.",
+		"add": "Aussage hinzufügen",
+		"addPlaceholder": "Ein Gedanke, ein Satz, dem eine fremde Person zustimmen oder widersprechen kann",
+		"save": "Speichern",
+		"cancel": "Abbrechen",
+		"approve": "Genehmigen",
+		"reject": "Ablehnen",
+		"reopen": "Zurück zum Entwurf",
+		"delete": "Löschen",
+		"moveUp": "Nach oben",
+		"moveDown": "Nach unten",
+		"status": {
+			"DRAFT": "Entwurf",
+			"APPROVED": "Genehmigt",
+			"REJECTED": "Abgelehnt",
+			"EXPORTED": "Exportiert"
+		},
+		"origin": {
+			"ai": "KI",
+			"manual": "Von Hand"
+		},
+		"edited": "Bearbeitet",
+		"stale": "Das Ergebnis, aus dem diese Aussage stammt, wurde ersetzt – lesen Sie sie noch einmal durch",
+		"chars": "{count}/{max}",
+		"tooLong": "Halten Sie Aussagen unter {soft} Zeichen; das Limit von Polis liegt bei {max}.",
+		"summary": "{approved} genehmigt · {rejected} abgelehnt · {drafts} zu prüfen",
+		"exportCsv": "CSV herunterladen",
+		"exportJson": "JSON herunterladen",
+		"exportHint": "Der Export wird freigeschaltet, sobald jede Aussage genehmigt oder abgelehnt ist. Fügen Sie die Aussagen in das Seed-Feld von Polis ein oder importieren Sie die Datei.",
+		"failed": "Die Erzeugung der Aussagen ist fehlgeschlagen ({reason}). Starten Sie sie erneut, sobald die Ursache behoben ist.",
+		"confirmDelete": "Diese Aussage löschen?",
+		"confirmRegenerate": "Erneut erzeugen? Entwürfe, die Sie nicht angefasst haben, werden ersetzt.",
+		"toast": {
+			"queued": "Aussagen in der Warteschlange – sie erscheinen hier in ein bis zwei Minuten",
+			"saved": "Aussage gespeichert",
+			"deleted": "Aussage gelöscht",
+			"downloadFailed": "Die Datei konnte nicht heruntergeladen werden – prüfen Sie den Pop-up-Blocker",
+			"notReady": "Prüfen Sie jede Aussage, bevor Sie exportieren"
+		}
 	}
 }

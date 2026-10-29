@@ -250,5 +250,57 @@
 			"ANALYSIS_FAILED": "El análisis de IA no se completó. La transcripción está intacta, por lo que se puede volver a ejecutar.",
 			"UPLOAD_INCOMPLETE": "No toda la grabación llegó al servidor."
 		}
+	},
+	"seeds": {
+		"title": "Semillas de Polis",
+		"lead": "Afirmaciones breves escritas a partir de los resultados aprobados, para una conversación de Polis. Revisa cada una: solo las aprobadas se exportan.",
+		"empty": {
+			"title": "Todavía no hay afirmaciones",
+			"hint": "Aprueba resultados en la pestaña Análisis y genera aquí las afirmaciones. También puedes escribirlas a mano."
+		},
+		"generate": "Generar afirmaciones",
+		"regenerate": "Generar de nuevo",
+		"queued": "En cola…",
+		"generateHint": "Al generar de nuevo se reemplazan los borradores que no has tocado; las afirmaciones revisadas, editadas y escritas a mano se conservan.",
+		"notConfigured": "El análisis de IA no está configurado: añade una clave API de análisis en Ajustes. Aun así, puedes escribir las afirmaciones a mano.",
+		"noFindings": "Primero aprueba al menos un resultado en la pestaña Análisis.",
+		"add": "Añadir una afirmación",
+		"addPlaceholder": "Una idea, una frase, con la que un desconocido pueda estar de acuerdo o en desacuerdo",
+		"save": "Guardar",
+		"cancel": "Cancelar",
+		"approve": "Aprobar",
+		"reject": "Rechazar",
+		"reopen": "Volver a borrador",
+		"delete": "Eliminar",
+		"moveUp": "Subir",
+		"moveDown": "Bajar",
+		"status": {
+			"DRAFT": "Borrador",
+			"APPROVED": "Aprobada",
+			"REJECTED": "Rechazada",
+			"EXPORTED": "Exportada"
+		},
+		"origin": {
+			"ai": "IA",
+			"manual": "A mano"
+		},
+		"edited": "Editada",
+		"stale": "El resultado del que procede fue reemplazado: vuelve a leer esta afirmación",
+		"chars": "{count}/{max}",
+		"tooLong": "Mantén las afirmaciones por debajo de {soft} caracteres; el límite de Polis es {max}.",
+		"summary": "{approved} aprobadas · {rejected} rechazadas · {drafts} por revisar",
+		"exportCsv": "Descargar CSV",
+		"exportJson": "Descargar JSON",
+		"exportHint": "La exportación se abre cuando cada afirmación está aprobada o rechazada. Pega las afirmaciones en el cuadro de semillas de Polis o importa el archivo.",
+		"failed": "Falló la generación de afirmaciones ({reason}). Vuelve a ejecutarla cuando se haya corregido la causa.",
+		"confirmDelete": "¿Eliminar esta afirmación?",
+		"confirmRegenerate": "¿Generar de nuevo? Se reemplazan los borradores que no has tocado.",
+		"toast": {
+			"queued": "Afirmaciones en cola: aparecerán aquí en uno o dos minutos",
+			"saved": "Afirmación guardada",
+			"deleted": "Afirmación eliminada",
+			"downloadFailed": "No se pudo descargar el archivo: revisa el bloqueador de ventanas emergentes",
+			"notReady": "Revisa cada afirmación antes de exportar"
+		}
 	}
 }

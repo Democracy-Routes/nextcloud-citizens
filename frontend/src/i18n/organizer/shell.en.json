@@ -114,6 +114,7 @@
 			"monitor": "Live",
 			"analysis": "Analysis",
 			"report": "Report",
+			"seeds": "Polis seeds",
 			"files": "Files"
 		},
 		"rename": "Rename",

@@ -114,7 +114,8 @@
 			"monitor": "Direct",
 			"analysis": "Analyse",
 			"report": "Rapport",
-			"files": "Fichiers"
+			"files": "Fichiers",
+			"seeds": "Seeds Polis"
 		},
 		"rename": "Renommer",
 		"sessionEyebrow": "Session",

@@ -15,6 +15,7 @@ import {
 	mdiBrain,
 	mdiChartBoxOutline,
 	mdiClipboardTextOutline,
+	mdiCommentMultipleOutline,
 	mdiFileDocumentOutline,
 	mdiFolderMusicOutline,
 	mdiMonitorEye,
@@ -35,6 +36,7 @@ import FilesTab from './FilesTab.vue'
 import OverviewTab from './OverviewTab.vue'
 import ParticipantsTab from './ParticipantsTab.vue'
 import ReportTab from './ReportTab.vue'
+import SeedsTab from './SeedsTab.vue'
 import QrTab from './QrTab.vue'
 import RoundsTab from './RoundsTab.vue'
 import TablesTab from './TablesTab.vue'
@@ -54,13 +56,13 @@ const { t } = useI18n()
 
 type Tab =
 	| 'overview' | 'rounds' | 'participants' | 'tables' | 'qr' | 'monitor'
-	| 'analysis' | 'report' | 'files'
+	| 'analysis' | 'report' | 'seeds' | 'files'
 type Space = 'plan' | 'run' | 'results'
 
 const SPACE_TABS: Record<Space, Tab[]> = {
 	plan: ['overview', 'rounds', 'participants', 'tables', 'qr'],
 	run: ['monitor'],
-	results: ['analysis', 'report', 'files'],
+	results: ['analysis', 'report', 'seeds', 'files'],
 }
 
 function spaceOf(tab: Tab): Space {
@@ -101,6 +103,7 @@ const TAB_ICONS: Array<{ id: Tab; icon: string }> = [
 	{ id: 'monitor', icon: mdiMonitorEye },
 	{ id: 'analysis', icon: mdiBrain },
 	{ id: 'report', icon: mdiFileDocumentOutline },
+	{ id: 'seeds', icon: mdiCommentMultipleOutline },
 	{ id: 'files', icon: mdiFolderMusicOutline },
 ]
 const SPACE_ICONS: Record<Space, string> = {
@@ -269,6 +272,7 @@ async function deleteAssembly(): Promise<void> {
 			<MonitorTab v-else-if="tab === 'monitor'" :assembly="assembly" @changed="reload" />
 			<AnalysisTab v-else-if="tab === 'analysis'" :assembly="assembly" />
 			<ReportTab v-else-if="tab === 'report'" :assembly="assembly" @changed="reload" />
+			<SeedsTab v-else-if="tab === 'seeds'" :assembly="assembly" />
 			<FilesTab v-else :assembly="assembly" />
 			</div>
 		</template>
