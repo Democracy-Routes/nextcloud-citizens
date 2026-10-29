@@ -493,6 +493,24 @@ def handle_analyze_assembly(session: Session, payload: dict) -> None:
         snapshot_final_report(session, assembly)
 
 
+def handle_seed_statements(session: Session, payload: dict) -> None:
+    """Polis seeds from the approved findings (services/seeds.py)."""
+    from citizens.services import seeds as seeds_svc
+
+    assembly = session.get(Assembly, payload["assembly_id"])
+    if assembly is None:
+        raise PermanentJobError(f"Assembly {payload['assembly_id']} no longer exists")
+    session.commit()
+    store = provider_config.default_store()
+    try:
+        seeds_svc.generate(session, store, assembly)
+    except AnalysisError as exc:
+        log.error("seeds_failed", assembly_id=assembly.id, permanent=exc.permanent)
+        if exc.permanent:
+            raise PermanentJobError(str(exc)) from exc
+        raise
+
+
 HANDLERS = {
     # the built-in Vosk engine's model installs (services/vosk_models.py)
     "INSTALL_VOSK_MODEL": lambda session, payload: __import__(
@@ -508,4 +526,5 @@ HANDLERS = {
     "ANALYZE_TABLE": handle_analyze_table,
     "ANALYZE_ROUND": handle_analyze_round,
     "ANALYZE_ASSEMBLY": handle_analyze_assembly,
+    "SEED_STATEMENTS": handle_seed_statements,
 }

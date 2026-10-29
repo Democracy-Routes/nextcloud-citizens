@@ -23,6 +23,7 @@ from citizens.db.models.help import HelpRequest
 from citizens.db.models.jobs import AppJob
 from citizens.db.models.messages import SessionMessage
 from citizens.db.models.recording import AudioChunk, RecorderSession, Recording
+from citizens.db.models.seeds import StatementSeed
 from citizens.db.models.transcript import Transcript, TranscriptSegment, TranscriptWord
 from citizens.db.models.validation import SummaryValidation
 
@@ -32,6 +33,7 @@ __all__ = [
     "AppUser",
     "Finding",
     "FindingEvidence",
+    "StatementSeed",
     "Transcript",
     "TranscriptSegment",
     "TranscriptWord",

@@ -26,6 +26,7 @@ from citizens.api.public_recorder import router as public_recorder_router
 from citizens.api.recorder_page import router as recorder_page_router
 from citizens.api.recorders import router as recorders_router
 from citizens.api.reports import router as reports_router
+from citizens.api.seeds import router as seeds_router
 from citizens.api.sessions import router as sessions_router
 from citizens.api.system import router as system_router
 from citizens.api.transcripts import router as transcripts_router
@@ -219,6 +220,7 @@ def create_app(with_auth: bool = True) -> FastAPI:
     app.include_router(transcripts_router, prefix="/api/v1")
     app.include_router(findings_router, prefix="/api/v1")
     app.include_router(reports_router, prefix="/api/v1")
+    app.include_router(seeds_router, prefix="/api/v1")
     app.include_router(files_router, prefix="/api/v1")
     # /auth/config and /auth/me answer in both modes; the password routes
     # only in standalone (they 404 otherwise)

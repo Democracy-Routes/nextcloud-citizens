@@ -63,3 +63,17 @@ class FacilitatorAdvice(BaseModel):
 
     kind: Literal["time", "objective", "silence", "balance", "none"]
     text: str = Field(default="", max_length=240)
+
+
+class StatementSeedItem(BaseModel):
+    """One to three statements written from one approved finding."""
+
+    finding_id: str = Field(min_length=1, max_length=64)
+    statements: list[str] = Field(min_length=1, max_length=3)
+
+
+class StatementSeeds(BaseModel):
+    """Polis seeds: short, neutral statements participants can agree or
+    disagree with, one idea each, no names, no table numbers."""
+
+    seeds: list[StatementSeedItem] = Field(max_length=60)

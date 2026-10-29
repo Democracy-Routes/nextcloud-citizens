@@ -817,7 +817,11 @@ def _delete_existing(
         query = query.where(Finding.recording_id == recording_id)
     if round_id:
         query = query.where(Finding.round_id == round_id)
-    for finding in session.execute(query).scalars():
+    doomed = list(session.execute(query).scalars())
+    from citizens.services.seeds import mark_findings_replaced
+
+    mark_findings_replaced(session, [f.id for f in doomed])
+    for finding in doomed:
         session.delete(finding)
     session.flush()
 
