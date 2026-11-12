@@ -19,6 +19,7 @@ from citizens.api.assemblies import router as assemblies_router
 from citizens.api.auth import router as auth_router
 from citizens.api.files import router as files_router
 from citizens.api.findings import router as findings_router
+from citizens.api.imports import router as imports_router
 from citizens.api.limits import BodySizeLimitMiddleware
 from citizens.api.organizer_page import router as organizer_page_router
 from citizens.api.public_facilitator import router as public_facilitator_router
@@ -222,6 +223,7 @@ def create_app(with_auth: bool = True) -> FastAPI:
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(seeds_router, prefix="/api/v1")
     app.include_router(files_router, prefix="/api/v1")
+    app.include_router(imports_router, prefix="/api/v1")
     # /auth/config and /auth/me answer in both modes; the password routes
     # only in standalone (they 404 otherwise)
     app.include_router(auth_router, prefix="/api/v1")

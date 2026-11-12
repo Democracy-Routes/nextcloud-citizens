@@ -19,22 +19,27 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     # landing state (not AUDIO_INVALID: the audio is fine, the disk was full)
     # because it already unblocks the round and lets the table start over.
     "ASSEMBLING": {"AUDIO_READY", "AUDIO_INVALID", "WAITING_FOR_CHUNKS", "UPLOAD_INCOMPLETE"},
-    "AUDIO_READY": {"TRANSCRIBING"},
+    # → TRANSCRIBED: a transcript made elsewhere attached by the organizer
+    # (services/session_import.py); the same from every state below that
+    # names it
+    "AUDIO_READY": {"TRANSCRIBING", "TRANSCRIBED"},
     "TRANSCRIBING": {"TRANSCRIBED", "TRANSCRIPTION_FAILED"},
     # TRANSCRIBED → TRANSCRIBING supports organizer-requested re-transcription;
     # → AUDIO_READY when the organizer deletes the transcript but keeps the audio
     "TRANSCRIBED": {"ANALYZING", "TRANSCRIBING", "AUDIO_READY"},
     "ANALYZING": {"READY_FOR_REVIEW", "ANALYSIS_FAILED"},
     # READY_FOR_REVIEW → ANALYZING supports organizer-requested re-analysis
-    "READY_FOR_REVIEW": {"REVIEWED", "ANALYZING", "AUDIO_READY"},
+    "READY_FOR_REVIEW": {"REVIEWED", "ANALYZING", "AUDIO_READY", "TRANSCRIBED"},
     # a reviewed recording is otherwise terminal, but deleting its transcript
     # brings it back to plain audio that can be transcribed again
-    "REVIEWED": {"AUDIO_READY"},
+    "REVIEWED": {"AUDIO_READY", "TRANSCRIBED"},
     # error states are recoverable by retrying the step that failed
-    "UPLOAD_INCOMPLETE": {"WAITING_FOR_CHUNKS", "ASSEMBLING"},
-    "AUDIO_INVALID": {"ASSEMBLING"},
-    "TRANSCRIPTION_FAILED": {"TRANSCRIBING", "AUDIO_READY"},
-    "ANALYSIS_FAILED": {"ANALYZING", "AUDIO_READY"},
+    # → AUDIO_READY / TRANSCRIBED: the organizer attached a finished audio
+    # file or a transcript for a table whose own chunks could not be used
+    "UPLOAD_INCOMPLETE": {"WAITING_FOR_CHUNKS", "ASSEMBLING", "AUDIO_READY", "TRANSCRIBED"},
+    "AUDIO_INVALID": {"ASSEMBLING", "AUDIO_READY", "TRANSCRIBED"},
+    "TRANSCRIPTION_FAILED": {"TRANSCRIBING", "AUDIO_READY", "TRANSCRIBED"},
+    "ANALYSIS_FAILED": {"ANALYZING", "AUDIO_READY", "TRANSCRIBED"},
 }
 
 

@@ -459,6 +459,12 @@ def _facilitator_tick() -> None:
 LAST_SWEEP_AT = None
 
 
+def _stale_uploads_sweep() -> int:
+    from citizens.services import uploads
+
+    return uploads.sweep_stale()
+
+
 def run_sweeps() -> None:
     global LAST_SWEEP_AT
     from citizens.services import provider_config, public_url
@@ -480,6 +486,8 @@ def run_sweeps() -> None:
         ("zero_retention", _zero_retention_sweep),
         ("expired_sessions", sweep_expired_sessions),
         ("stale_exports", sweep_stale_exports),
+        # organizer uploads (session imports, attached files) nobody finished
+        ("stale_uploads", _stale_uploads_sweep),
         # the AI facilitator's minute: reads the snapshot, calls the model
         # with no transaction open, writes one short delivery
         ("ai_facilitator", _facilitator_tick),
