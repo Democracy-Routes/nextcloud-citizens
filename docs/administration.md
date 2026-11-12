@@ -389,6 +389,51 @@ built from live captions is marked `live` in the same list, so it is clear which
 tables are worth redoing. Quotes inside existing findings referred to the old
 text, so they are marked as removed rather than left pointing at nothing.
 
+**Import and attach (0.9).** Organizers can bring a session export archive
+(`export.zip`, format_version 1 or 2) in as a new assembly, and attach a
+finished audio file or transcript to a recording whose own pipeline failed;
+the organizer's steps are in [recovery-and-import.md](recovery-and-import.md).
+Routes, all through the proxy, signed in as the organizer:
+
+* `POST /api/v1/uploads` `{kind: session_export|transcript|audio, filename,
+  size_bytes}` opens an upload and returns `upload_id`, `part_bytes` (5 MB)
+  and the number of parts. Whole files go up in parts because the proxy caps a
+  request body at a few megabytes.
+* `POST /api/v1/uploads/{id}/parts/{n}` takes the raw bytes of part `n`.
+* `POST /api/v1/uploads/{id}/complete` `{sha256}` checks the hash of the whole
+  file.
+* `DELETE /api/v1/uploads/{id}` discards the upload.
+
+Uploads belong to the organizer who opened them. The parts live in the
+server's temp storage until the import completes; unfinished uploads are
+discarded by the housekeeping sweep after 24 hours.
+
+* `POST /api/v1/assemblies/import` `{upload_id, name?, merge_tables?:
+  [{from, into}]}` creates the archive's assembly here with a new id, closed,
+  with rounds, tables, participants, recordings, transcripts and any audio the
+  archive carries (each file verified against the SHA-256 in the manifest).
+  Findings, summaries and the report are not copied; the analysis runs again
+  with this server's provider. `merge_tables` folds the recordings of table
+  `from` into table `into`. A recording with neither transcript nor audio is
+  kept as a record of the failed table. The response says what was created,
+  whether analysis was queued, and lists what was skipped.
+* `POST /api/v1/recordings/{id}/transcript` `{upload_id}` makes the uploaded
+  JSON (the shape of `transcripts/<id>.json` in a session export, or of
+  `GET /recordings/{id}/transcript`: provider, model, language,
+  `segments[{speaker,start,end,text}]`) the recording's transcript, replacing
+  any existing one; findings whose evidence pointed at the old segments are
+  flagged. The recording goes to Transcribed and the table's analysis is
+  queued. Allowed from Audio unusable, Upload incomplete, Transcription
+  failed, Audio ready, Transcribed, Ready for review, Reviewed, Analysis
+  failed.
+* `POST /api/v1/recordings/{id}/audio` `{upload_id, mime_type}` checks the
+  uploaded audio with ffprobe, stores it as the recording's canonical audio
+  and queues transcription with the configured provider (with none
+  configured, the organizer transcribes later from the Files tab). Allowed
+  from Audio unusable, Upload incomplete, Transcription failed.
+
+Audit events: `session_imported`, `transcript_attached`, `audio_attached`.
+
 **Device report.** Each phone keeps an event log of its own session —
 browser, whether it held the wake lock, how many chunks it captured while
 hidden, any gap in capture. The Files tab shows it under "Phone report"

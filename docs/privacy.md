@@ -160,6 +160,20 @@ starts** — see "Consent" below.
 * **Not implemented:** there is no automatic deletion of transcripts or
   findings, and no data-subject-request tooling. Both are manual today.
 
+## Imported archives and attached files
+
+An organizer can import a session export from another server, or attach an
+audio file or transcript to a recording. An imported archive carries
+transcripts (conversation content) and participant data; once imported, they
+are this server's data under the same retention and deletion rules as a live
+session: audio retention, delete audio, delete transcripts, and purge all
+apply. Findings and the report in an archive are not copied. The upload parts
+stay in the server's temp storage until the import completes or the housekeeping
+sweep removes them after 24 hours. Attaching a transcript means the organizer
+had the conversation transcribed elsewhere; Citizens records provider and model
+as given in the file and cannot verify them. Imports and attachments are
+audit-logged (`session_imported`, `transcript_attached`, `audio_attached`).
+
 ## Consent
 
 Before a table can record, the recorder shows an information screen naming the

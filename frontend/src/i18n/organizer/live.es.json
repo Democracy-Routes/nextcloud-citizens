@@ -266,7 +266,18 @@
 			"retranscribeTitle": "Transcribir de nuevo a partir del audio guardado",
 			"retranscribe": "Volver a transcribir",
 			"deleteTranscriptTitle": "Eliminar transcripción",
-			"transcript": "Transcripción"
+			"transcript": "Transcripción",
+			"attachAudio": "Adjuntar audio…",
+			"attachAudioTitle": "Un archivo de audio terminado de esta mesa, cuando sus fragmentos no se pudieron ensamblar",
+			"attachTranscript": "Adjuntar transcripción…",
+			"attachTranscriptTitle": "Un archivo transcrito en otro lugar, en el formato JSON de transcripción de esta aplicación (transcripts/<id>.json en una exportación de sesión)",
+			"replaceTranscript": "Reemplazar transcripción…",
+			"replaceTranscriptBody": "La transcripción actual de la mesa {number} se reemplaza por el archivo elegido, y con ella los enlaces de evidencia de sus hallazgos. El análisis se vuelve a ejecutar.",
+			"uploading": "Subiendo… {percent} %",
+			"audioAttached": "Audio adjuntado",
+			"audioAttachedQueued": "Audio adjuntado; transcripción en cola",
+			"transcriptAttached": "Transcripción adjuntada",
+			"transcriptAttachedQueued": "Transcripción adjuntada; análisis en cola"
 		},
 		"confirmRetranscribe": {
 			"title": "¿Transcribir esta mesa de nuevo?",

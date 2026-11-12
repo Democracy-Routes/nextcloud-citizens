@@ -266,7 +266,18 @@
 			"retranscribeTitle": "Transcrire à nouveau à partir de l'audio stocké",
 			"retranscribe": "Retranscrire",
 			"deleteTranscriptTitle": "Supprimer la transcription",
-			"transcript": "Transcription"
+			"transcript": "Transcription",
+			"attachAudio": "Joindre l'audio…",
+			"attachAudioTitle": "Un fichier audio terminé de cette table, quand ses morceaux n'ont pas pu être assemblés",
+			"attachTranscript": "Joindre une transcription…",
+			"attachTranscriptTitle": "Un fichier transcrit ailleurs, au format JSON de transcription de cette application (transcripts/<id>.json dans un export de session)",
+			"replaceTranscript": "Remplacer la transcription…",
+			"replaceTranscriptBody": "La transcription actuelle de la table {number} est remplacée par le fichier choisi, ainsi que les liens de preuve de ses conclusions. L'analyse est relancée.",
+			"uploading": "Envoi… {percent} %",
+			"audioAttached": "Audio joint",
+			"audioAttachedQueued": "Audio joint ; transcription en file d'attente",
+			"transcriptAttached": "Transcription jointe",
+			"transcriptAttachedQueued": "Transcription jointe ; analyse en file d'attente"
 		},
 		"confirmRetranscribe": {
 			"title": "Transcrire à nouveau cette table ?",

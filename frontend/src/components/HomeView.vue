@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiAccountGroup, mdiMicrophone, mdiPlayCircleOutline } from '@mdi/js'
+import { mdiAccountGroup, mdiMicrophone, mdiPackageDown, mdiPlayCircleOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import CzButton from './ui/CzButton.vue'
 import SvgIcon from './ui/SvgIcon.vue'
@@ -19,7 +19,7 @@ defineProps<{
 	error: string
 }>()
 
-const emit = defineEmits<{ recordNow: []; startSession: []; createAssembly: [] }>()
+const emit = defineEmits<{ recordNow: []; startSession: []; createAssembly: []; importSession: [] }>()
 </script>
 
 <template>
@@ -54,6 +54,11 @@ const emit = defineEmits<{ recordNow: []; startSession: []; createAssembly: [] }
 				<SvgIcon :path="mdiAccountGroup" :size="28" />
 				<span class="cz-home__action-name">{{ t('organizer.shell.home.createAssembly') }}</span>
 				<span class="cz-home__action-hint">{{ t('organizer.shell.home.createAssemblyHint') }}</span>
+			</button>
+			<button class="cz-home__action" data-test="home-import" @click="emit('importSession')">
+				<SvgIcon :path="mdiPackageDown" :size="28" />
+				<span class="cz-home__action-name">{{ t('organizer.shell.home.importSession') }}</span>
+				<span class="cz-home__action-hint">{{ t('organizer.shell.home.importSessionHint') }}</span>
 			</button>
 		</div>
 

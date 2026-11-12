@@ -266,7 +266,18 @@
 			"retranscribeTitle": "Aus dem gespeicherten Audio erneut transkribieren",
 			"retranscribe": "Neu transkribieren",
 			"deleteTranscriptTitle": "Transkript löschen",
-			"transcript": "Transkript"
+			"transcript": "Transkript",
+			"attachAudio": "Audio anhängen…",
+			"attachAudioTitle": "Eine fertige Audiodatei dieses Tisches, wenn sich seine Teile nicht zusammensetzen ließen",
+			"attachTranscript": "Transkript anhängen…",
+			"attachTranscriptTitle": "Eine anderswo transkribierte Datei im Transkript-JSON-Format dieser App (transcripts/<id>.json in einem Sitzungsexport)",
+			"replaceTranscript": "Transkript ersetzen…",
+			"replaceTranscriptBody": "Das aktuelle Transkript von Tisch {number} wird durch die gewählte Datei ersetzt, ebenso die Belegverweise seiner Ergebnisse. Die Analyse läuft erneut.",
+			"uploading": "Wird hochgeladen… {percent} %",
+			"audioAttached": "Audio angehängt",
+			"audioAttachedQueued": "Audio angehängt; Transkription eingereiht",
+			"transcriptAttached": "Transkript angehängt",
+			"transcriptAttachedQueued": "Transkript angehängt; Analyse eingereiht"
 		},
 		"confirmRetranscribe": {
 			"title": "Diesen Tisch erneut transkribieren?",

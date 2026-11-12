@@ -46,13 +46,13 @@ afterEach(() => {
 })
 
 describe('the home screen', () => {
-	it('offers the three ways in, and does not open an assembly by itself', async () => {
+	it('offers the four ways in, and does not open an assembly by itself', async () => {
 		listAssemblies.mockResolvedValue([assembly])
 		const wrapper = mountWithI18n(App)
 		await flushPromises()
 
 		const names = wrapper.findAll('.cz-home__action-name').map((n) => n.text())
-		expect(names).toEqual(['Record now', 'Start a Session', 'Create an Assembly'])
+		expect(names).toEqual(['Record now', 'Start a Session', 'Create an Assembly', 'Import a session'])
 		// the first assembly used to be opened automatically on load
 		expect(wrapper.find('.cz-pagehead').exists()).toBe(false)
 	})

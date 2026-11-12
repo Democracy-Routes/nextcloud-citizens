@@ -39,7 +39,9 @@
 		"startSessionHint": "Une discussion à plusieurs tables, une seule fois. Une question, des codes QR ; c'est vous qui la démarrez et la terminez.",
 		"createAssembly": "Créer une Assemblée",
 		"createAssemblyHint": "Un événement : plusieurs sessions, les mêmes participant·e·s, un seul rapport pour l'ensemble.",
-		"openWizard": "Ouvrir l'assistant de création d'assemblée"
+		"openWizard": "Ouvrir l'assistant de création d'assemblée",
+		"importSession": "Importer une session",
+		"importSessionHint": "Reprendre une assemblée exportée depuis ce serveur ou un autre, avec ses transcriptions et son audio."
 	},
 	"assemblyWizard": {
 		"title": "Créer une assemblée",
@@ -193,5 +195,30 @@
 	"account": {
 		"language": "Langue",
 		"signOut": "Se déconnecter"
+	},
+	"importDialog": {
+		"title": "Importer une session",
+		"file": "Export de la session (.zip)",
+		"name": "Nom de l'assemblée ici",
+		"nameHint": "Laissez vide pour garder le nom de l'archive",
+		"merges": "Fusionner des tables",
+		"mergesHint": "Lorsque le second téléphone d'une table a rejoint sous un nouveau numéro, son enregistrement est fusionné dans la table d'origine.",
+		"mergeFrom": "table",
+		"mergeInto": "vers la table",
+		"mergeRemove": "Retirer",
+		"mergeAdd": "Ajouter une fusion",
+		"submit": "Importer",
+		"uploading": "Envoi… {percent} %",
+		"importing": "Importation…",
+		"close": "Fermer",
+		"openAssembly": "Ouvrir l'assemblée",
+		"rounds": "{count} tours | {count} tour | {count} tours",
+		"tables": "{count} tables | {count} table | {count} tables",
+		"recordings": "{count} enregistrements | {count} enregistrement | {count} enregistrements",
+		"transcripts": "{count} transcriptions | {count} transcription | {count} transcriptions",
+		"audioFiles": "{count} fichiers audio | {count} fichier audio | {count} fichiers audio",
+		"analysisQueued": "Analyse en file d'attente",
+		"analysisNotQueued": "Aucun fournisseur d'analyse n'est configuré : lancez l'analyse depuis les Paramètres une fois qu'il est défini",
+		"skipped": "Non repris de l'archive :"
 	}
 }

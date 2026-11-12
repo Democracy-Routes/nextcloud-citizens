@@ -266,7 +266,18 @@
 			"retranscribeTitle": "Trascrivi di nuovo dall'audio conservato",
 			"retranscribe": "Ritrascrivi",
 			"deleteTranscriptTitle": "Elimina la trascrizione",
-			"transcript": "Trascrizione"
+			"transcript": "Trascrizione",
+			"attachAudio": "Allega audio…",
+			"attachAudioTitle": "Un file audio completo di questo tavolo, quando i suoi frammenti non si sono potuti assemblare",
+			"attachTranscript": "Allega trascrizione…",
+			"attachTranscriptTitle": "Un file trascritto altrove, nel formato JSON di trascrizione di questa app (transcripts/<id>.json in un'esportazione di sessione)",
+			"replaceTranscript": "Sostituisci trascrizione…",
+			"replaceTranscriptBody": "La trascrizione attuale del tavolo {number} viene sostituita dal file scelto, e con essa i collegamenti alle prove dei suoi risultati. L'analisi viene rieseguita.",
+			"uploading": "Caricamento… {percent}%",
+			"audioAttached": "Audio allegato",
+			"audioAttachedQueued": "Audio allegato; trascrizione in coda",
+			"transcriptAttached": "Trascrizione allegata",
+			"transcriptAttachedQueued": "Trascrizione allegata; analisi in coda"
 		},
 		"confirmRetranscribe": {
 			"title": "Trascrivere di nuovo questo tavolo?",

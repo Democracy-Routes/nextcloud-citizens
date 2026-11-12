@@ -10,6 +10,7 @@ import {
 	mdiDownloadOutline,
 	mdiFolderZipOutline,
 	mdiMusicNoteOutline,
+	mdiPaperclip,
 	mdiPackageVariantClosed,
 	mdiRefresh,
 	mdiTextBoxRemoveOutline,
@@ -18,6 +19,7 @@ import {
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, BASE } from '../api'
+import { uploadFile } from '../upload'
 import { downloadFromApi } from '../download'
 import { describeError } from '../errors'
 import { bytes, clockTime, duration } from '../format'
@@ -49,6 +51,7 @@ const confirmTranscript = ref<FileEntry | null>(null)
 const confirmRetranscribe = ref<FileEntry | null>(null)
 const confirmAllTranscripts = ref(false)
 const confirmPurge = ref(false)
+const confirmReplace = ref<FileEntry | null>(null)
 const purgeCoverage = ref<{ devices: number; cleared: number; still_holding: number; unknown: number } | null>(null)
 
 /** What the phones report, whether or not anyone pressed the button.
@@ -152,6 +155,69 @@ async function retryAssembly(entry: FileEntry): Promise<void> {
 	} catch (err) {
 		error.value = describeError(err).message
 	} finally {
+		busy.value = false
+	}
+}
+
+/** Recovering a table by hand: a finished audio file, or a transcript made
+ * elsewhere, goes up in parts (upload.ts) and is then attached to the
+ * recording. One hidden file input serves every row. */
+// audio from outside only where the server has none of its own (session_import.AUDIO_ATTACHABLE)
+const AUDIO_ATTACH_STATES = new Set(['AUDIO_INVALID', 'UPLOAD_INCOMPLETE', 'TRANSCRIPTION_FAILED'])
+const TRANSCRIPT_ATTACH_STATES = new Set(['AUDIO_INVALID', 'UPLOAD_INCOMPLETE', 'TRANSCRIPTION_FAILED', 'AUDIO_READY', 'ANALYSIS_FAILED'])
+const attachInput = ref<HTMLInputElement | null>(null)
+const attachKind = ref<'audio' | 'transcript'>('audio')
+const attachTarget = ref<FileEntry | null>(null)
+const attachProgress = ref<{ id: string; percent: number } | null>(null)
+
+function pickFile(entry: FileEntry, kind: 'audio' | 'transcript'): void {
+	attachTarget.value = entry
+	attachKind.value = kind
+	if (attachInput.value) {
+		attachInput.value.value = ''
+		attachInput.value.click()
+	}
+}
+
+function replaceTranscript(): void {
+	const entry = confirmReplace.value
+	confirmReplace.value = null
+	if (entry) pickFile(entry, 'transcript')
+}
+
+async function onFileChosen(event: Event): Promise<void> {
+	const input = event.target as HTMLInputElement
+	const file = input.files?.[0]
+	const entry = attachTarget.value
+	const kind = attachKind.value
+	attachTarget.value = null
+	if (!file || !entry) return
+	busy.value = true
+	attachProgress.value = { id: entry.recording_id, percent: 0 }
+	try {
+		const uploaded = await uploadFile(file, kind, (fraction) => {
+			attachProgress.value = { id: entry.recording_id, percent: Math.round(fraction * 100) }
+		})
+		if (kind === 'audio') {
+			const result = await api.attachAudio(
+				entry.recording_id,
+				uploaded.upload_id,
+				file.type || entry.mime_type || 'audio/webm',
+			)
+			toast(t(result.transcription_queued
+				? 'organizer.live.files.actions.audioAttachedQueued'
+				: 'organizer.live.files.actions.audioAttached'))
+		} else {
+			const result = await api.attachTranscript(entry.recording_id, uploaded.upload_id)
+			toast(t(result.analysis_queued
+				? 'organizer.live.files.actions.transcriptAttachedQueued'
+				: 'organizer.live.files.actions.transcriptAttached'))
+		}
+		await reload()
+	} catch (err) {
+		error.value = describeError(err).message
+	} finally {
+		attachProgress.value = null
 		busy.value = false
 	}
 }
@@ -606,6 +672,46 @@ function eventClock(ts: number): string {
 											@click="confirmTranscript = entry">
 											{{ t('organizer.live.files.actions.transcript') }}
 										</CzButton>
+										<span
+											v-if="attachProgress?.id === entry.recording_id"
+											class="cz-muted"
+											style="font-size: 0.8125rem; white-space: nowrap"
+											data-test="attach-progress">
+											{{ t('organizer.live.files.actions.uploading', { percent: attachProgress.percent }) }}
+										</span>
+										<CzButton
+											v-if="AUDIO_ATTACH_STATES.has(entry.state)"
+											small
+											variant="tertiary"
+											:icon="mdiPaperclip"
+											:title="t('organizer.live.files.actions.attachAudioTitle')"
+											:disabled="busy"
+											data-test="attach-audio"
+											@click="pickFile(entry, 'audio')">
+											{{ t('organizer.live.files.actions.attachAudio') }}
+										</CzButton>
+										<CzButton
+											v-if="TRANSCRIPT_ATTACH_STATES.has(entry.state)"
+											small
+											variant="tertiary"
+											:icon="mdiPaperclip"
+											:title="t('organizer.live.files.actions.attachTranscriptTitle')"
+											:disabled="busy"
+											data-test="attach-transcript"
+											@click="pickFile(entry, 'transcript')">
+											{{ t('organizer.live.files.actions.attachTranscript') }}
+										</CzButton>
+										<CzButton
+											v-if="entry.has_transcript"
+											small
+											variant="tertiary"
+											:icon="mdiPaperclip"
+											:title="t('organizer.live.files.actions.attachTranscriptTitle')"
+											:disabled="busy"
+											data-test="replace-transcript"
+											@click="confirmReplace = entry">
+											{{ t('organizer.live.files.actions.replaceTranscript') }}
+										</CzButton>
 									</div>
 								</td>
 							</tr>
@@ -614,6 +720,23 @@ function eventClock(ts: number): string {
 				</div>
 			</div>
 		</template>
+
+		<input
+			ref="attachInput"
+			type="file"
+			hidden
+			data-test="attach-input"
+			:accept="attachKind === 'audio' ? 'audio/*,.webm,.m4a,.ogg,.mp3,.wav' : '.json'"
+			@change="onFileChosen" />
+
+		<CzConfirm
+			v-if="confirmReplace"
+			:title="t('organizer.live.files.actions.replaceTranscript')"
+			:message="t('organizer.live.files.actions.replaceTranscriptBody', { number: confirmReplace.table_number })"
+			:confirm-label="t('organizer.live.files.actions.replaceTranscript')"
+			tone="danger"
+			@confirm="replaceTranscript"
+			@cancel="confirmReplace = null" />
 
 		<CzConfirm
 			v-if="confirmRetranscribe"

@@ -23,9 +23,28 @@ All notable changes to Nextcloud Citizens.
   `<assembly>-statements.csv` (`position,statement`) or
   `<assembly>-statements.json` (schema `citizens.statement-seeds/1`). The
   files hold statement text only. Exported statements are marked EXPORTED.
+- Session import: Home -> Import a session loads an `export.zip` (format
+  version 1 or 2) from another server as a new, closed assembly with its
+  rounds, tables, participants, recordings, transcripts and audio. Findings
+  and the report are not copied; the analysis runs again here. Optional new
+  name and table merges for a replacement phone. See
+  `docs/recovery-and-import.md`.
+- Attach audio: a table that is Audio unusable, Upload incomplete or
+  Transcription failed can take a finished audio file from the Files tab;
+  it is checked, stored, and transcription is queued.
+- Attach transcript: a table can take a transcript file (JSON, the shape of
+  `transcripts/<id>.json`) and Replace transcript behind a confirmation;
+  findings that quoted the old text are flagged and the analysis is queued.
 
 ### Operations
 
+- Resumable uploads: `POST /api/v1/uploads`, `.../parts/{n}`, `.../complete`
+  (SHA-256 check) and `DELETE /api/v1/uploads/{id}`, in 5 MB parts; uploads
+  belong to the organizer who opened them. Used by import and by attaching
+  audio or a transcript. Routes: `POST /api/v1/assemblies/import`,
+  `POST /api/v1/recordings/{id}/transcript`, `.../audio`.
+- The housekeeping sweep discards unfinished uploads after 24 hours.
+- Audit events `session_imported`, `transcript_attached`, `audio_attached`.
 - `CITIZENS_MODE=standalone` switches the mode; a value that is neither
   `standalone` nor `nextcloud` stops startup with `mode_invalid`.
 - Settings are kept in an SQLite table in standalone mode.

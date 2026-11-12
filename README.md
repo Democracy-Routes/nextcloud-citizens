@@ -129,6 +129,7 @@ Full note: [docs/privacy.md](docs/privacy.md).
 * [Administration guide](docs/administration.md) — install, keys, data, upgrading, troubleshooting
 * [Privacy & data handling](docs/privacy.md)
 * [Polis seeds](docs/polis-seeds.md) — turn approved findings into statements for a Polis conversation
+* [Recovery and import](docs/recovery-and-import.md) — bring a session in from another server; attach audio or a transcript to a failed table
 * [Facilitator guide](docs/facilitator-guide.md) — for the person running a table
 * [Participant information notice and consent form](docs/consent-form.md)
 * [Running one assembly, rehearsed](docs/event-checklist.md) — the day-of runbook

@@ -39,7 +39,9 @@
 		"startSessionHint": "One discussion at several tables, once. A question, QR codes, you start and end it.",
 		"createAssembly": "Create an Assembly",
 		"createAssemblyHint": "An event: several sessions, the same participants, one report across them.",
-		"openWizard": "Open the assembly wizard"
+		"openWizard": "Open the assembly wizard",
+		"importSession": "Import a session",
+		"importSessionHint": "Bring an assembly exported from this or another server, with its transcripts and audio."
 	},
 	"assemblyWizard": {
 		"title": "Create assembly",
@@ -193,5 +195,30 @@
 	"account": {
 		"language": "Language",
 		"signOut": "Sign out"
+	},
+	"importDialog": {
+		"title": "Import a session",
+		"file": "Session export (.zip)",
+		"name": "Name for the assembly here",
+		"nameHint": "Leave empty to keep the name in the archive",
+		"merges": "Merge tables",
+		"mergesHint": "When a table's second phone joined under a new number, fold its recording into the original table.",
+		"mergeFrom": "table",
+		"mergeInto": "into table",
+		"mergeRemove": "Remove",
+		"mergeAdd": "Add a merge",
+		"submit": "Import",
+		"uploading": "Uploading… {percent}%",
+		"importing": "Importing…",
+		"close": "Close",
+		"openAssembly": "Open the assembly",
+		"rounds": "{count} rounds | {count} round | {count} rounds",
+		"tables": "{count} tables | {count} table | {count} tables",
+		"recordings": "{count} recordings | {count} recording | {count} recordings",
+		"transcripts": "{count} transcripts | {count} transcript | {count} transcripts",
+		"audioFiles": "{count} audio files | {count} audio file | {count} audio files",
+		"analysisQueued": "Analysis queued",
+		"analysisNotQueued": "No analysis provider is configured: run the analysis from Settings once one is set",
+		"skipped": "Not taken from the archive:"
 	}
 }

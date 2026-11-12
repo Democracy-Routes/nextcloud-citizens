@@ -11,6 +11,7 @@ import { isStandalone } from './auth'
 import AssemblyDetail from './components/AssemblyDetail.vue'
 import AssemblyWizard from './components/AssemblyWizard.vue'
 import HomeView from './components/HomeView.vue'
+import ImportSessionDialog from './components/ImportSessionDialog.vue'
 import SessionWizard from './components/SessionWizard.vue'
 import SettingsView from './components/SettingsView.vue'
 import CzButton from './components/ui/CzButton.vue'
@@ -220,6 +221,15 @@ async function onCreated(id: string, invites: InviteGenerated[]): Promise<void> 
 	await loadAssemblies()
 }
 
+const importOpen = ref(false)
+
+async function onImportedOpen(id: string): Promise<void> {
+	importOpen.value = false
+	freshInvites.value = null
+	view.value = { name: 'detail', id }
+	await loadAssemblies()
+}
+
 async function onDeleted(): Promise<void> {
 	await loadAssemblies()
 	view.value = { name: 'home' }
@@ -359,7 +369,8 @@ async function recordNow(): Promise<void> {
 			:error="recordNowError"
 			@record-now="recordNow"
 			@start-session="openCreateSession"
-			@create-assembly="openCreate" />
+			@create-assembly="openCreate"
+			@import-session="importOpen = true" />
 
 		<SessionWizard
 			v-else-if="view.name === 'create-session'"
@@ -382,6 +393,11 @@ async function recordNow(): Promise<void> {
 			@invites-consumed="freshInvites = null"
 			@deleted="onDeleted" />
 	</main>
+
+	<ImportSessionDialog
+		v-if="importOpen"
+		@close="importOpen = false; loadAssemblies()"
+		@open-assembly="onImportedOpen" />
 
 	<CzToasts />
 </template>

@@ -846,3 +846,50 @@ export interface SeedsListing {
 	job: JobInfo | null
 	seeds: StatementSeed[]
 }
+
+// ---- whole-file uploads and what consumes them (0.9)
+
+export type UploadKind = 'session_export' | 'transcript' | 'audio'
+
+export interface UploadOpened {
+	upload_id: string
+	/** the size of every part but the last */
+	part_bytes: number
+	parts: number
+}
+
+export interface UploadProgress {
+	upload_id: string
+	parts_received: number
+	bytes_received: number
+}
+
+export interface UploadComplete {
+	upload_id: string
+	size_bytes: number
+	sha256: string
+}
+
+export interface ImportResult {
+	assembly_id: string
+	name: string
+	rounds: number
+	tables: number
+	recordings: number
+	transcripts: number
+	audio_files: number
+	/** table analyses queued; false when no analysis provider is configured */
+	analysis_queued: boolean
+	/** what the archive carried that was not taken, in words */
+	skipped: string[]
+}
+
+export interface AttachResult {
+	recording_id: string
+	state: string
+	/** segments stored, for a transcript; null for audio */
+	segments: number | null
+	duration_seconds: number | null
+	transcription_queued: boolean
+	analysis_queued: boolean
+}

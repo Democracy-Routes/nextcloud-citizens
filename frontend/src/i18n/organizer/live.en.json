@@ -266,7 +266,18 @@
 			"retranscribeTitle": "Transcribe again from the stored audio",
 			"retranscribe": "Re-transcribe",
 			"deleteTranscriptTitle": "Delete transcript",
-			"transcript": "Transcript"
+			"transcript": "Transcript",
+			"attachAudio": "Attach audio…",
+			"attachAudioTitle": "A finished audio file of this table, when its chunks could not be assembled",
+			"attachTranscript": "Attach transcript…",
+			"attachTranscriptTitle": "A file transcribed elsewhere, in this app's transcript JSON shape (transcripts/<id>.json in a session export)",
+			"replaceTranscript": "Replace transcript…",
+			"replaceTranscriptBody": "The current transcript of table {number} is replaced by the file you choose, and the evidence links of its findings are replaced with it. The analysis runs again.",
+			"uploading": "Uploading… {percent}%",
+			"audioAttached": "Audio attached",
+			"audioAttachedQueued": "Audio attached; transcription queued",
+			"transcriptAttached": "Transcript attached",
+			"transcriptAttachedQueued": "Transcript attached; analysis queued"
 		},
 		"confirmRetranscribe": {
 			"title": "Transcribe this table again?",

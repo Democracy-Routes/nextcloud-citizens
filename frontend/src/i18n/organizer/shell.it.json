@@ -39,7 +39,9 @@
 		"startSessionHint": "Una discussione a più tavoli, una volta sola. Una domanda, i codici QR, la avvii e la concludi tu.",
 		"createAssembly": "Crea un'Assemblea",
 		"createAssemblyHint": "Un evento: più sessioni, gli stessi partecipanti, un unico report che le attraversa.",
-		"openWizard": "Apri la procedura guidata dell'assemblea"
+		"openWizard": "Apri la procedura guidata dell'assemblea",
+		"importSession": "Importa una sessione",
+		"importSessionHint": "Porta un'assemblea esportata da questo o da un altro server, con trascrizioni e audio."
 	},
 	"assemblyWizard": {
 		"title": "Crea assemblea",
@@ -193,5 +195,30 @@
 	"account": {
 		"language": "Lingua",
 		"signOut": "Esci"
+	},
+	"importDialog": {
+		"title": "Importa una sessione",
+		"file": "Esportazione della sessione (.zip)",
+		"name": "Nome dell'assemblea qui",
+		"nameHint": "Lascia vuoto per mantenere il nome presente nell'archivio",
+		"merges": "Unisci tavoli",
+		"mergesHint": "Quando il secondo telefono di un tavolo è entrato con un nuovo numero, la sua registrazione viene unita al tavolo originale.",
+		"mergeFrom": "tavolo",
+		"mergeInto": "nel tavolo",
+		"mergeRemove": "Rimuovi",
+		"mergeAdd": "Aggiungi un'unione",
+		"submit": "Importa",
+		"uploading": "Caricamento… {percent}%",
+		"importing": "Importazione in corso…",
+		"close": "Chiudi",
+		"openAssembly": "Apri l'assemblea",
+		"rounds": "{count} round | {count} round | {count} round",
+		"tables": "{count} tavoli | {count} tavolo | {count} tavoli",
+		"recordings": "{count} registrazioni | {count} registrazione | {count} registrazioni",
+		"transcripts": "{count} trascrizioni | {count} trascrizione | {count} trascrizioni",
+		"audioFiles": "{count} file audio | {count} file audio | {count} file audio",
+		"analysisQueued": "Analisi in coda",
+		"analysisNotQueued": "Nessun fornitore di analisi è configurato: avvia l'analisi dalle Impostazioni quando ne sarà impostato uno",
+		"skipped": "Non presi dall'archivio:"
 	}
 }

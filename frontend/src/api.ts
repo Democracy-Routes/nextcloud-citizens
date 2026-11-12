@@ -36,6 +36,12 @@ import type {
 	Table,
 	TableAdded,
 	TranscriptData,
+	AttachResult,
+	ImportResult,
+	UploadComplete,
+	UploadKind,
+	UploadOpened,
+	UploadProgress,
 } from './types'
 
 // Derive the ExApp base URL from our own <script src>, so the app works both
@@ -62,6 +68,8 @@ function detectBase(): string {
 }
 
 export const BASE = detectBase()
+
+export type { UploadKind } from './types'
 
 export class ApiError extends Error {
 	status: number
@@ -429,6 +437,58 @@ export const api = {
 			'GET',
 			`/api/v1/assemblies/${assemblyId}/tables/${tableNumber}/device-logs?tail=${tail}`,
 		),
+
+	// ---- files that arrive whole: session exports, transcripts, audio (0.9)
+	// Opened, sent in parts, closed with the hash — see upload.ts. The routes
+	// that consume an upload name it by id; a raw part is the one request
+	// that does not carry JSON.
+	beginUpload: (data: { kind: UploadKind; filename: string; size_bytes: number }) =>
+		request<UploadOpened>('POST', '/api/v1/uploads', data),
+	uploadPart: async (uploadId: string, index: number, part: Blob): Promise<UploadProgress> => {
+		const response = await fetch(`${BASE}/api/v1/uploads/${uploadId}/parts/${index}`, {
+			method: 'POST',
+			headers: { ...CLIENT_HEADERS, 'Content-Type': 'application/octet-stream' },
+			body: part,
+			credentials: 'same-origin',
+		})
+		if (!response.ok) {
+			let detail = `HTTP ${response.status}`
+			try {
+				const data = await response.json()
+				if (data && typeof data.detail === 'string') detail = data.detail
+			} catch {
+				/* not JSON */
+			}
+			throw new ApiError(response.status, detail)
+		}
+		return (await response.json()) as UploadProgress
+	},
+	completeUpload: (uploadId: string, sha256: string) =>
+		request<UploadComplete>('POST', `/api/v1/uploads/${uploadId}/complete`, { sha256 }),
+	discardUpload: (uploadId: string) => request<void>('DELETE', `/api/v1/uploads/${uploadId}`),
+	/** A session export (export.zip of this or another server) becomes a new
+	 * assembly here, with its rounds, tables, transcripts and audio; findings
+	 * are not copied, the analysis runs again. `merge_tables` folds the
+	 * recordings of one table number into another, for a table whose second
+	 * phone joined under a new number. */
+	importSession: (data: {
+		upload_id: string
+		name?: string
+		merge_tables?: Array<{ from: number; into: number }>
+	}) => request<ImportResult>('POST', '/api/v1/assemblies/import', data),
+	/** A transcript made elsewhere (the export's transcripts/<id>.json shape)
+	 * becomes this recording's transcript; the table is analysed again. */
+	attachTranscript: (recordingId: string, uploadId: string) =>
+		request<AttachResult>('POST', `/api/v1/recordings/${recordingId}/transcript`, {
+			upload_id: uploadId,
+		}),
+	/** A finished audio file becomes this recording's audio — for a table whose
+	 * chunks could not be assembled — and is transcribed as usual. */
+	attachAudio: (recordingId: string, uploadId: string, mimeType: string) =>
+		request<AttachResult>('POST', `/api/v1/recordings/${recordingId}/audio`, {
+			upload_id: uploadId,
+			mime_type: mimeType,
+		}),
 
 	uploadLogo: (base64: string) =>
 		request<void>('PUT', '/api/v1/admin/logo', { data: base64 }),

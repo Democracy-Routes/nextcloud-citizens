@@ -39,7 +39,9 @@
 		"startSessionHint": "Eine Diskussion an mehreren Tischen, einmalig. Eine Frage, QR-Codes, Sie starten und beenden sie.",
 		"createAssembly": "Versammlung erstellen",
 		"createAssemblyHint": "Eine Veranstaltung: mehrere Sitzungen, dieselben Teilnehmenden, ein gemeinsamer Bericht.",
-		"openWizard": "Assistenten für Versammlungen öffnen"
+		"openWizard": "Assistenten für Versammlungen öffnen",
+		"importSession": "Sitzung importieren",
+		"importSessionHint": "Eine von diesem oder einem anderen Server exportierte Versammlung samt Transkripten und Audio übernehmen."
 	},
 	"assemblyWizard": {
 		"title": "Versammlung erstellen",
@@ -193,5 +195,30 @@
 	"account": {
 		"language": "Sprache",
 		"signOut": "Abmelden"
+	},
+	"importDialog": {
+		"title": "Sitzung importieren",
+		"file": "Sitzungsexport (.zip)",
+		"name": "Name der Versammlung hier",
+		"nameHint": "Leer lassen, um den Namen aus dem Archiv zu behalten",
+		"merges": "Tische zusammenführen",
+		"mergesHint": "Wenn das zweite Telefon eines Tisches unter einer neuen Nummer beigetreten ist, wird seine Aufnahme in den ursprünglichen Tisch übernommen.",
+		"mergeFrom": "Tisch",
+		"mergeInto": "in Tisch",
+		"mergeRemove": "Entfernen",
+		"mergeAdd": "Zusammenführung hinzufügen",
+		"submit": "Importieren",
+		"uploading": "Hochladen… {percent} %",
+		"importing": "Import läuft…",
+		"close": "Schließen",
+		"openAssembly": "Versammlung öffnen",
+		"rounds": "{count} Runden | {count} Runde | {count} Runden",
+		"tables": "{count} Tische | {count} Tisch | {count} Tische",
+		"recordings": "{count} Aufnahmen | {count} Aufnahme | {count} Aufnahmen",
+		"transcripts": "{count} Transkripte | {count} Transkript | {count} Transkripte",
+		"audioFiles": "{count} Audiodateien | {count} Audiodatei | {count} Audiodateien",
+		"analysisQueued": "Analyse eingeplant",
+		"analysisNotQueued": "Es ist kein Analyseanbieter eingerichtet: Starten Sie die Analyse in den Einstellungen, sobald einer festgelegt ist",
+		"skipped": "Aus dem Archiv nicht übernommen:"
 	}
 }

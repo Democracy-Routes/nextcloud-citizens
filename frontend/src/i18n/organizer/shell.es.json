@@ -39,7 +39,9 @@
 		"startSessionHint": "Una discusión en varias mesas, una sola vez. Una pregunta, códigos QR; tú la inicias y la terminas.",
 		"createAssembly": "Crear una Asamblea",
 		"createAssemblyHint": "Un evento: varias sesiones, los mismos participantes, un solo informe para todas.",
-		"openWizard": "Abrir el asistente de asambleas"
+		"openWizard": "Abrir el asistente de asambleas",
+		"importSession": "Importar una sesión",
+		"importSessionHint": "Traer una asamblea exportada desde este u otro servidor, con sus transcripciones y audio."
 	},
 	"assemblyWizard": {
 		"title": "Crear asamblea",
@@ -193,5 +195,30 @@
 	"account": {
 		"language": "Idioma",
 		"signOut": "Cerrar sesión"
+	},
+	"importDialog": {
+		"title": "Importar una sesión",
+		"file": "Exportación de la sesión (.zip)",
+		"name": "Nombre de la asamblea aquí",
+		"nameHint": "Déjalo vacío para conservar el nombre del archivo",
+		"merges": "Fusionar mesas",
+		"mergesHint": "Cuando el segundo teléfono de una mesa se unió con un número nuevo, su grabación se incorpora a la mesa original.",
+		"mergeFrom": "mesa",
+		"mergeInto": "a la mesa",
+		"mergeRemove": "Quitar",
+		"mergeAdd": "Añadir una fusión",
+		"submit": "Importar",
+		"uploading": "Subiendo… {percent} %",
+		"importing": "Importando…",
+		"close": "Cerrar",
+		"openAssembly": "Abrir la asamblea",
+		"rounds": "{count} rondas | {count} ronda | {count} rondas",
+		"tables": "{count} mesas | {count} mesa | {count} mesas",
+		"recordings": "{count} grabaciones | {count} grabación | {count} grabaciones",
+		"transcripts": "{count} transcripciones | {count} transcripción | {count} transcripciones",
+		"audioFiles": "{count} archivos de audio | {count} archivo de audio | {count} archivos de audio",
+		"analysisQueued": "Análisis en cola",
+		"analysisNotQueued": "No hay ningún proveedor de análisis configurado: ejecuta el análisis desde Ajustes cuando haya uno",
+		"skipped": "No tomado del archivo:"
 	}
 }
