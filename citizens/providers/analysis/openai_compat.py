@@ -60,6 +60,24 @@ def _extract_json(content: str) -> dict:
     return json.loads(text[start : end + 1])
 
 
+def _message_text(content) -> str:
+    """The reply as one string. Since 2026-11 Mistral Large answers with a
+    list of parts (text, and thinking on the reasoning models) instead of a
+    plain string; only the text parts are the answer."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and part.get("type", "text") == "text":
+                parts.append(str(part.get("text") or ""))
+        if parts:
+            return "".join(parts)
+    raise ValueError("message content is neither a string nor text parts")
+
+
 def _chat(base_url: str, api_key: str, model: str, messages: list[dict]) -> str:
     body: dict = {"model": model, "messages": messages, "temperature": 0.2}
     if _wants_json_mode(base_url):
@@ -76,8 +94,8 @@ def _chat(base_url: str, api_key: str, model: str, messages: list[dict]) -> str:
     status = response.status_code
     if status == 200:
         try:
-            return response.json()["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, ValueError) as exc:
+            return _message_text(response.json()["choices"][0]["message"]["content"])
+        except (KeyError, IndexError, ValueError, TypeError) as exc:
             raise AnalysisError(
                 "Analysis endpoint returned an unexpected payload", permanent=True, status=status
             ) from exc

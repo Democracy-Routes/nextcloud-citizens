@@ -232,3 +232,25 @@ def test_the_runner_waits_as_long_as_the_provider_asked(database, monkeypatch):
         # the exponential guess would have been 30 s; the provider said 600
         assert job.next_attempt_at >= before + timedelta(seconds=599)
         assert job.next_attempt_at <= before + timedelta(seconds=runner.BACKOFF_MAX_SECONDS + 1)
+
+
+def test_a_reply_made_of_parts_is_read_as_its_text(monkeypatch):
+    # Mistral Large, since 2026-11: content is a list of parts; the thinking
+    # parts of a reasoning model are not the answer
+    _capture_post(monkeypatch, FakeResponse(200, {"choices": [{"message": {"content": [
+        {"type": "thinking", "thinking": [{"type": "text", "text": "let me see"}]},
+        {"type": "text", "text": '{"summary": '},
+        {"type": "text", "text": '"ok"}'},
+    ]}}]}))
+    assert openai_compat._chat("https://api.mistral.ai/v1", "k", "m", []) == '{"summary": "ok"}'
+
+    _capture_post(monkeypatch, FakeResponse(200, {"choices": [{"message": {"content": [
+        {"type": "thinking", "thinking": []},
+    ]}}]}))
+    with pytest.raises(openai_compat.AnalysisError) as raised:
+        openai_compat._chat("https://api.mistral.ai/v1", "k", "m", [])
+    assert raised.value.permanent is True
+
+    _capture_post(monkeypatch, FakeResponse(200, {"choices": [{"message": {"content": None}}]}))
+    with pytest.raises(openai_compat.AnalysisError):
+        openai_compat._chat("https://api.mistral.ai/v1", "k", "m", [])

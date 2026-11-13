@@ -45,6 +45,9 @@ All notable changes to Nextcloud Citizens.
   `POST /api/v1/recordings/{id}/transcript`, `.../audio`.
 - The housekeeping sweep discards unfinished uploads after 24 hours.
 - Audit events `session_imported`, `transcript_attached`, `audio_attached`.
+- Fix: the analysis adapter reads a chat reply whose content is a list of
+  parts (Mistral Large since 2026-11) instead of failing every table with
+  `'list' object has no attribute 'strip'`; thinking parts are ignored.
 - `CITIZENS_MODE=standalone` switches the mode; a value that is neither
   `standalone` nor `nextcloud` stops startup with `mode_invalid`.
 - Settings are kept in an SQLite table in standalone mode.
