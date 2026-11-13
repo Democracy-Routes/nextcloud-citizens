@@ -42,6 +42,11 @@ class OrderIn(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=500)
 
 
+class GenerateIn(BaseModel):
+    # how many statements in all; the listing's recommended_target when absent
+    target: int | None = Field(default=None, ge=seeds_svc.TARGET_MIN, le=seeds_svc.TARGET_MAX)
+
+
 def _seed(session: Session, assembly_id: str, seed_id: str) -> StatementSeed:
     seed = session.get(StatementSeed, seed_id)
     if seed is None or seed.assembly_id != assembly_id:
@@ -84,11 +89,21 @@ def _polis(session: Session, assembly, rows: list[StatementSeed]) -> dict:
 
 def _listing(session: Session, assembly) -> dict:
     rows = seeds_svc.list_seeds(session, assembly.id)
+    source_count = len(seeds_svc.source_findings(session, assembly))
     return {
         "assembly_id": assembly.id,
         "language": assembly.language,
         "analysis_configured": provider_config.analysis_ready_cached(),
         "findings_approved": seeds_svc.approved_count(session, assembly.id),
+        # the findings the statements are written from (cross-table ones when
+        # the session was clustered), and how many statements to ask for
+        "source_findings": source_count,
+        "recommended_target": seeds_svc.recommended_target(source_count),
+        "seeds_target": assembly.seeds_target,
+        "target_min": seeds_svc.TARGET_MIN,
+        "target_max": seeds_svc.TARGET_MAX,
+        "target_step": seeds_svc.TARGET_STEP,
+        "seconds_per_vote": seeds_svc.SECONDS_PER_VOTE,
         "ready_to_export": seeds_svc.ready_to_export(rows),
         "max_chars": SEED_MAX_CHARS,
         "soft_chars": SEED_SOFT_CHARS,
@@ -105,9 +120,10 @@ def list_seeds(assembly_id: str, user: CurrentUser, session: DB):
 
 
 @router.post("/generate", status_code=202)
-def generate_seeds(assembly_id: str, user: CurrentUser, session: DB):
+def generate_seeds(assembly_id: str, user: CurrentUser, session: DB, data: GenerateIn | None = None):
     """Queue the model run. Untouched drafts are replaced; reviewed, edited
-    and hand-written statements stay."""
+    and hand-written statements stay. `target` is how many statements in
+    all; the listing's recommendation when not given."""
     assembly = get_owned_assembly(session, assembly_id, user)
     if not provider_config.analysis_ready_cached():
         raise HTTPException(status_code=409, detail=NOT_CONFIGURED)
@@ -115,9 +131,13 @@ def generate_seeds(assembly_id: str, user: CurrentUser, session: DB):
         raise HTTPException(status_code=409, detail="Approve some findings first")
     if has_live_job(session, JOB_TYPE, "assembly_id", assembly.id):
         return {"queued": False}
-    enqueue_job(session, JOB_TYPE, {"assembly_id": assembly.id}, max_attempts=3)
-    record_audit_event(session, "seeds_generation_requested", "assembly", assembly.id, actor=user)
-    return {"queued": True}
+    target = data.target if data is not None else None
+    enqueue_job(session, JOB_TYPE, {"assembly_id": assembly.id, "target": target}, max_attempts=3)
+    record_audit_event(
+        session, "seeds_generation_requested", "assembly", assembly.id, actor=user,
+        data={"target": target},
+    )
+    return {"queued": True, "target": target}
 
 
 @router.post("/approve-all")
@@ -235,6 +255,44 @@ def push_seeds(assembly_id: str, user: CurrentUser, session: DB):
         data={"statements": len(seeds_svc.exportable(rows))},
     )
     return {"queued": True}
+
+
+@router.post("/poll/publish")
+def publish_poll(assembly_id: str, user: CurrentUser, session: DB):
+    """Put the Polis voting link on the table phones (and the participants'
+    own pages): the recorder shows it with a QR code, like the report."""
+    assembly = get_owned_assembly(session, assembly_id, user)
+    if not assembly.polis_url:
+        raise HTTPException(status_code=409, detail="Send the statements to Polis first")
+    assembly.polis_published_at = utcnow()
+    record_audit_event(session, "polis_poll_published", "assembly", assembly.id, actor=user)
+    return {"published_at": assembly.polis_published_at.isoformat()}
+
+
+@router.delete("/poll/publish", status_code=204)
+def unpublish_poll(assembly_id: str, user: CurrentUser, session: DB):
+    assembly = get_owned_assembly(session, assembly_id, user)
+    assembly.polis_published_at = None
+    record_audit_event(session, "polis_poll_unpublished", "assembly", assembly.id, actor=user)
+    return None
+
+
+@router.get("/poll-qr")
+def poll_qr(assembly_id: str, user: CurrentUser, session: DB):
+    """The voting link as a QR for the organizer's QR tab, once sent."""
+    from citizens.services import invites as invites_svc
+    from citizens.services import polis as polis_svc
+
+    assembly = get_owned_assembly(session, assembly_id, user)
+    if not assembly.polis_url:
+        return {"available": False, "published": False, "url": None, "qr_svg": None}
+    return {
+        "available": True,
+        "published": assembly.polis_published_at is not None,
+        "published_at": polis_svc.iso(assembly.polis_published_at),
+        "url": assembly.polis_url,
+        "qr_svg": invites_svc.qr_svg(assembly.polis_url),
+    }
 
 
 def _export(session: Session, assembly_id: str, user: str, ext: str) -> Response:

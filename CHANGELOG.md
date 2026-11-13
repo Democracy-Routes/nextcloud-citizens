@@ -30,6 +30,22 @@ All notable changes to Nextcloud Citizens.
   `POST /api/v1/assemblies/{id}/seeds/push` (job `PUSH_POLIS`), settings
   `polis_url` / `polis_api_key`, test target `polis`; migration 0041; audit
   `seeds_push_requested`. See `docs/polis-seeds.md`.
+- The Polis poll on the devices: once sent, **Publish the poll on the
+  devices** shows the voting link and a QR code on the table phones and the
+  participants' pages (recorder status `poll_url`, `GET
+  /api/v1/public/recorder/poll-qr`), in the organizer's QR tab and on the
+  printable table sheet; **Withdraw** takes it off. Routes `POST`/`DELETE
+  /api/v1/assemblies/{id}/seeds/poll/publish`, `GET .../seeds/poll-qr`;
+  audit `polis_poll_published`, `polis_poll_unpublished`.
+- Seeds generation takes a number: a slider from 10 to 60 with a recommended
+  value (about one per approved finding, in tens, at most 40) and an estimate
+  of the voting time; findings are offered to the model by how many tables
+  raised them, then proposals before concerns before questions, and the
+  budget is spent breadth first (two for a disagreement). The prompt now
+  demands an actor, an action and a concrete object, applies a dissent
+  test and bans empty verbs, whatever the topic. `POST .../seeds/generate
+  {target}`; listing fields `recommended_target`, `seeds_target`,
+  `source_findings`.
 - Seeds export, available once every statement is approved or rejected:
   `<assembly>-statements.csv` (`position,statement`) or
   `<assembly>-statements.json` (schema `citizens.statement-seeds/1`). The

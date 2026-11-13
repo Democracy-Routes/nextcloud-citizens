@@ -284,6 +284,13 @@
 			"unverified": "Le serveur n'a pas vérifié cet enregistrement complet. Conserve l'audio local.",
 			"uploadBlocked": "Le serveur a rejeté l'envoi. L'enregistrement continue en local. Préviens le facilitateur ; garde cette page ouverte. Un code QR actuel pourra être nécessaire après la fin de l'enregistrement."
 		},
+		"poll": {
+			"title": "Votez sur les affirmations",
+			"lead": "Scannez ce code avec votre propre téléphone, ou ouvrez le lien, pour voter sur les affirmations de cette assemblée.",
+			"open": "Ouvrir la page de vote",
+			"button": "Voter au sondage",
+			"back": "Retour"
+		},
 		"report": {
 			"mentionedAt": "Mentionné à {count} table | Mentionné à {count} table | Mentionné à {count} tables",
 			"title": "Rapport de l'assemblée",

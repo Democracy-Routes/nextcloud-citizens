@@ -36,6 +36,17 @@ const confirmRegenerate = ref(false)
 
 const activeCount = () => invites.value.filter((i) => i.active).length
 const loaded = ref(false)
+// the Polis poll, when the assembly has one; a failed call just hides the card
+const pollCard = ref<{ url: string; qr_svg: string; published: boolean } | null>(null)
+
+async function loadPoll(): Promise<void> {
+	try {
+		const r = await api.pollQr(props.assembly.id)
+		pollCard.value = r.available && r.url && r.qr_svg ? { url: r.url, qr_svg: r.qr_svg, published: !!r.published } : null
+	} catch {
+		pollCard.value = null
+	}
+}
 const loadError = ref<UiError | null>(null)
 
 async function reload(): Promise<void> {
@@ -63,6 +74,7 @@ async function reload(): Promise<void> {
 
 onMounted(() => {
 	void reload()
+	void loadPoll()
 	// local copy taken; the parent can clear its one-time handoff
 	if (props.initialGenerated?.length) emit('consumed')
 })
@@ -210,6 +222,20 @@ const hasActive = () => invites.value.some((i) => i.active)
 			<p v-if="invites.length && !generated.length" class="cz-muted" style="margin: 12px 0 0; font-size: 0.8125rem">
 				{{ t('organizer.shell.qr.staleCodes', { active: activeCount(), total: invites.length }) }}
 			</p>
+		</div>
+
+		<div v-if="pollCard" class="cz-card" data-test="qr-poll">
+			<div class="cz-qr-item" style="margin: 0 auto">
+				<h3>{{ t('organizer.shell.qr.pollTitle') }}</h3>
+				<CzQrImage :svg="pollCard.qr_svg" :label="t('organizer.shell.qr.pollAlt')" />
+				<div class="cz-qr-url" :title="pollCard.url">{{ pollCard.url }}</div>
+				<CzButton small :icon="mdiContentCopy" @click="copyUrl(pollCard.url)">
+					{{ t('organizer.shell.qr.copyLink') }}
+				</CzButton>
+				<p class="cz-muted" style="margin: 8px 0 0; font-size: 0.8125rem">
+					{{ pollCard.published ? t('organizer.shell.qr.pollPublished') : t('organizer.shell.qr.pollNotPublished') }}
+				</p>
+			</div>
 		</div>
 
 		<!-- until the first load resolves, "No QR codes yet" is a guess — and

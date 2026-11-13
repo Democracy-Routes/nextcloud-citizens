@@ -163,6 +163,14 @@ onBeforeUnmount(() => window.clearInterval(poll))
 				<p v-else class="rc-muted" style="margin: 0">{{ t('recorder.participant.reportPending') }}</p>
 			</div>
 
+			<div v-if="status.poll_url" class="rc-card rc-center" style="margin-top: 12px" data-test="participant-poll">
+				<p class="rc-eyebrow">{{ t('recorder.poll.title') }}</p>
+				<p style="margin: 0 0 10px">{{ t('recorder.poll.lead') }}</p>
+				<a class="rc-btn rc-primary" :href="status.poll_url" target="_blank" rel="noopener">
+					{{ t('recorder.poll.open') }}
+				</a>
+			</div>
+
 			<!-- the summary of the table this person sat at, per session, and
 			     their word on it -->
 			<div v-for="entry in toValidate" :key="entry.round.id" class="rc-card" style="margin-top: 12px; text-align: left" data-test="validate">

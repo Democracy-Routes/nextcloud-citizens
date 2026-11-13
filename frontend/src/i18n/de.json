@@ -284,6 +284,13 @@
 			"unverified": "Der Server hat diese vollständige Aufnahme noch nicht geprüft. Behaltet das lokale Audio.",
 			"uploadBlocked": "Der Server hat den Upload abgelehnt. Die Aufnahme läuft lokal weiter. Sagt der Moderation Bescheid; lasst diese Seite geöffnet. Nach dem Ende der Aufnahme kann ein aktueller QR-Code nötig sein."
 		},
+		"poll": {
+			"title": "Über die Aussagen abstimmen",
+			"lead": "Scanne diesen Code mit deinem eigenen Handy oder öffne den Link, um über die Aussagen dieser Versammlung abzustimmen.",
+			"open": "Abstimmungsseite öffnen",
+			"button": "An der Umfrage teilnehmen",
+			"back": "Zurück"
+		},
 		"report": {
 			"mentionedAt": "An {count} Tisch erwähnt | An {count} Tisch erwähnt | An {count} Tischen erwähnt",
 			"title": "Bericht der Versammlung",

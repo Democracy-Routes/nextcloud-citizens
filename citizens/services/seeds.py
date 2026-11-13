@@ -39,22 +39,42 @@ log = get_logger(__name__)
 EXPORT_SCHEMA = "citizens.statement-seeds/1"
 
 SEEDS_SYSTEM = """You are preparing seed statements for a Polis conversation
-from the findings of an in-person citizens' assembly.
+from the findings of an in-person citizens' assembly. Participants will vote
+agree / disagree / pass on each statement; a statement nobody could disagree
+with is useless to them.
 
 Rules:
 - Respond with ONLY a JSON object: {{"seeds": [{{"finding_id": "...",
   "statements": ["...", ...]}}]}}
-- For EVERY finding given, write one to three statements. Copy finding_id
-  EXACTLY from the input. Never invent ids and never skip a finding.
+- Copy finding_id EXACTLY from the input. Never invent ids.
 - A statement is ONE idea, one sentence, in a neutral declarative voice,
   that a stranger can agree or disagree with: "Evening buses should run
   until midnight", not "Participants wanted later buses".
+- Every statement names WHO should do WHAT, concretely: an actor (the city,
+  schools, the transport company, employers, citizens…), an action, and a
+  concrete object (a service, a place, a rule, a number, a condition). Take
+  the specifics from the finding's summary — the mechanism, the place, the
+  figure, the condition — rather than the general principle.
+- The dissent test: before writing a statement down, ask whether a
+  reasonable person could disagree with it. "Public services should include
+  everyone" fails; "The city should keep a staffed counter for every service
+  that goes online" passes. A statement that fails the test is rewritten
+  from the finding's specific detail, or left out.
+- No empty verbs ("promote", "value", "support", "strengthen", "foster")
+  without a concrete object; no abstract nouns standing alone.
+- A disagreement or a trade-off becomes TWO statements, one per side. A
+  question becomes the position it implies, or is left out when it implies
+  none. A concern becomes the condition or the limit it asks for.
 - Keep each statement under 140 characters.
 - Write for the public: no "we", no "the table", no table numbers, no
   speaker labels, no names, no quotations.
-- A disagreement becomes two statements, one per side. A question becomes
-  the position it implies, or is left out when it implies none.
-- Do not repeat the same idea in two statements.
+- Do not repeat the same idea in two statements, across findings either.
+- Respect the budget and the order given in the input: findings come in
+  priority order; write one statement for each (two for a disagreement),
+  then, only while the budget allows, a second statement for the findings
+  whose summary holds a second distinct, concrete idea.
+- Before answering, re-read your list and rewrite every statement that
+  fails the dissent test or names no actor.
 - Write everything in {language}."""
 
 
@@ -75,6 +95,68 @@ def source_findings(session: Session, assembly: Assembly) -> list[Finding]:
     rows.sort(key=lambda f: (round_order.get(f.round_id, 0), f.created_at))
     clustered = [f for f in rows if f.scope == "round"]
     return clustered or [f for f in rows if f.scope == "table"]
+
+
+#: the order the findings are offered to the model and the budget is spent
+#: in: what the room converged on first, open questions last
+TYPE_RANK = {
+    "proposal": 0, "agreement": 1, "disagreement": 2, "concern": 3,
+    "new_idea": 4, "minority_position": 5, "question": 6,
+}
+TARGET_MIN, TARGET_MAX, TARGET_STEP = 10, 60, 10
+RECOMMENDED_CAP = 40
+#: how long one vote takes on Polis, for the organizer's estimate
+SECONDS_PER_VOTE = 8
+
+
+def prioritised(findings: list[Finding]) -> list[Finding]:
+    """Most tables first, then proposals before concerns before questions;
+    ties keep the session order."""
+    return sorted(
+        findings,
+        key=lambda f: (-(f.mentioned_table_count or 0), TYPE_RANK.get(f.type, 9)),
+    )
+
+
+def recommended_target(finding_count: int) -> int:
+    """About one statement per approved finding, in tens, between 10 and 40:
+    attention on Polis drops after some thirty votes, and the organizer can
+    still ask for more by hand."""
+    if finding_count <= 0:
+        return TARGET_MIN
+    rounded = int(round(finding_count / TARGET_STEP)) * TARGET_STEP
+    return max(TARGET_MIN, min(RECOMMENDED_CAP, rounded))
+
+
+def statements_per_finding(finding_type: str) -> int:
+    return 2 if finding_type == "disagreement" else 1
+
+
+def within_budget(
+    answers: list[tuple[Finding, list[str]]], budget: int
+) -> list[tuple[str, str]]:
+    """(finding_id, text) pairs chosen from the model's answers, in priority
+    order, breadth first: every finding's first statement (a disagreement's
+    first two), then second statements while the budget lasts."""
+    chosen: list[tuple[str, str]] = []
+    if budget <= 0:
+        return chosen
+    taken = {f.id: 0 for f, _ in answers}
+    depth = 0
+    while len(chosen) < budget:
+        progressed = False
+        for finding, statements in answers:
+            allowance = statements_per_finding(finding.type) if depth == 0 else 1
+            for _ in range(allowance):
+                index = taken[finding.id]
+                if index < len(statements) and len(chosen) < budget:
+                    chosen.append((finding.id, statements[index]))
+                    taken[finding.id] = index + 1
+                    progressed = True
+        if not progressed:
+            break
+        depth += 1
+    return chosen
 
 
 def _normalise(text: str) -> str:
@@ -106,15 +188,26 @@ def clean_statements(raw: list[str], seen: set[str]) -> list[str]:
 
 # --- generation -----------------------------------------------------------
 
-def generate(session: Session, store: provider_config.ConfigStore, assembly: Assembly) -> int:
+def generate(
+    session: Session, store: provider_config.ConfigStore, assembly: Assembly, target: int | None = None
+) -> int:
     """Write seeds from the approved findings; returns how many were added.
+
+    `target` is how many statements the organizer wants in all (the
+    recommendation when None); statements a person touched count towards it
+    and are kept, the rest of the budget is filled from the model's answer
+    in priority order (within_budget).
 
     Commits before the model call so the writer slot is free while the
     network round-trip runs, like analysis.analyze_assembly."""
-    findings = source_findings(session, assembly)
+    findings = prioritised(source_findings(session, assembly))
     if not findings:
         log.info("seeds_no_findings", assembly_id=assembly.id)
         return 0
+    if target is None:
+        target = assembly.seeds_target or recommended_target(len(findings))
+    target = max(TARGET_MIN, min(TARGET_MAX, int(target)))
+    assembly.seeds_target = target
     hidden = pseudonyms.name_map(session, assembly)
     existing = list_seeds(session, assembly.id)
     kept = [s for s in existing if s.touched]
@@ -122,14 +215,20 @@ def generate(session: Session, store: provider_config.ConfigStore, assembly: Ass
         if not seed.touched:
             session.delete(seed)
     session.flush()
+    budget = max(0, target - len(kept))
     lines = []
     for finding in findings:
         summary = pseudonyms.redact(finding.summary, hidden)[:1200]
+        tables = f"\ntables: {finding.mentioned_table_count}" if finding.scope == "round" else ""
         lines.append(
-            f"finding_id: {finding.id}\ntype: {finding.type}\n"
+            f"finding_id: {finding.id}\ntype: {finding.type}{tables}\n"
             f"title: {pseudonyms.redact(finding.title, hidden)}\nsummary: {summary}"
         )
-    user_prompt = f"Assembly: {assembly.name}\n\n" + "\n\n".join(lines)
+    user_prompt = (
+        f"Assembly: {assembly.name}\n"
+        f"Budget: at most {budget} statements in total, for the {len(findings)} findings below, "
+        "which are in priority order.\n\n" + "\n\n".join(lines)
+    )
     language = LANGUAGE_NAMES.get(assembly.language, "English")
     assembly_id, assembly_language = assembly.id, assembly.language
     session.commit()
@@ -140,30 +239,35 @@ def generate(session: Session, store: provider_config.ConfigStore, assembly: Ass
     log.info("seeds_started", assembly_id=assembly_id, findings=len(findings))
     result = chat_json(base_url, key, model, system_prompt, user_prompt, StatementSeeds)
 
-    wanted = {f.id for f in findings}
+    by_finding = {f.id: f for f in findings}
     seen = {_key(s.text) for s in kept}
-    position = max((s.position for s in kept), default=0)
-    added = 0
+    answers: list[tuple[Finding, list[str]]] = []
     for item in result.seeds:
-        if item.finding_id not in wanted:
+        finding = by_finding.get(item.finding_id)
+        if finding is None:
             log.info("seed_unknown_finding", assembly_id=assembly_id)
             continue
-        for text in clean_statements(item.statements, seen):
-            position += 1
-            session.add(
-                StatementSeed(
-                    assembly_id=assembly_id,
-                    finding_id=item.finding_id,
-                    text=text,
-                    source_text=text,
-                    language=assembly_language,
-                    position=position,
-                    origin="ai",
-                )
+        answers.append((finding, clean_statements(item.statements, seen)))
+    # the model's answer back in priority order, whatever order it chose
+    answers.sort(key=lambda pair: findings.index(pair[0]))
+    position = max((s.position for s in kept), default=0)
+    added = 0
+    for finding_id, text in within_budget(answers, budget):
+        position += 1
+        session.add(
+            StatementSeed(
+                assembly_id=assembly_id,
+                finding_id=finding_id,
+                text=text,
+                source_text=text,
+                language=assembly_language,
+                position=position,
+                origin="ai",
             )
-            added += 1
+        )
+        added += 1
     session.commit()
-    log.info("seeds_completed", assembly_id=assembly_id, added=added, kept=len(kept))
+    log.info("seeds_completed", assembly_id=assembly_id, added=added, kept=len(kept), target=target)
     return added
 
 

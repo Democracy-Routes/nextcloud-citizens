@@ -326,7 +326,8 @@ def invite_sheet_pdf(assembly_id: str, user: CurrentUser, session: ReadDB):
 
     assembly = get_owned_assembly(session, assembly_id, user)
     cards = invite_svc.invite_links(session, assembly)
-    pdf = render_qr_sheet(assembly.name, cards, logo_path(), organization_name())
+    poll_url = assembly.polis_url if assembly.polis_published_at is not None else None
+    pdf = render_qr_sheet(assembly.name, cards, logo_path(), organization_name(), poll_url=poll_url)
     filename = f"{assembly.name[:40].replace(' ', '-')}-table-codes.pdf"
     return Response(pdf, media_type="application/pdf", headers=download_headers(filename))
 

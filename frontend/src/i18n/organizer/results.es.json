@@ -318,6 +318,16 @@
 			"linkModeration": "Moderación",
 			"linkReport": "Informe de Polis",
 			"pushedAt": "Enviado el {date}",
+			"publish": "Publicar la encuesta en los dispositivos",
+			"publishTitle": "¿Publicar la encuesta?",
+			"publishBody": "El enlace de votación y un código QR aparecen en cada teléfono de mesa y en las páginas propias de los participantes. Cualquiera con el enlace puede votar.",
+			"publishConfirm": "Publicar",
+			"published": "Encuesta publicada en los dispositivos",
+			"publishedAt": "Publicada en los dispositivos desde {date}",
+			"withdraw": "Retirar de los dispositivos",
+			"withdrawTitle": "¿Retirar la encuesta?",
+			"withdrawBody": "El enlace de votación y el código QR desaparecen de los teléfonos de mesa y de las páginas de los participantes. La conversación de Polis sigue abierta para quien ya tenga el enlace.",
+			"withdrawConfirm": "Retirar",
 			"refused": "Rechazada por Polis",
 			"failed": "El envío a Polis falló: {detail}"
 		}

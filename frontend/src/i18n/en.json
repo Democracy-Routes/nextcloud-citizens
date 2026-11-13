@@ -284,6 +284,13 @@
 			"unverified": "The server has not verified this complete recording. Keep the local audio.",
 			"uploadBlocked": "The server rejected the upload. Recording continues locally. Notify the facilitator; keep this page open. A current QR code may be needed after recording ends."
 		},
+		"poll": {
+			"title": "Vote on the statements",
+			"lead": "Scan this code with your own phone, or open the link, to vote on the statements of this assembly.",
+			"open": "Open the voting page",
+			"button": "Vote on the poll",
+			"back": "Back"
+		},
 		"report": {
 			"mentionedAt": "Mentioned at {count} table | Mentioned at {count} table | Mentioned at {count} tables",
 			"title": "Assembly report",

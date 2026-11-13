@@ -235,6 +235,18 @@ def invite_qr(recorder_session: ReadingSess, session: ReadDB):
     return {"available": True, "url": card.url, "qr_svg": card.qr_svg}
 
 
+@router.get("/recorder/poll-qr")
+def poll_qr(recorder_session: ReadingSess, session: ReadDB):
+    """The Polis voting link as a QR, for the people at the table to scan
+    with their own phones. Public link, so nothing to protect here; absent
+    until the organizer publishes the poll."""
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    url = _poll_url(assembly) if assembly is not None else None
+    if url is None:
+        return {"available": False}
+    return {"available": True, "url": url, "qr_svg": invites_svc.qr_svg(url)}
+
+
 class StartIn(BaseModel):
     round_id: str
     mime_type: str = Field(min_length=1, max_length=80)
@@ -859,7 +871,9 @@ def participant_status(participant_session: ParticipantSess, session: ReadDB):
     the report is out, whom to contact to withdraw."""
     assembly = session.get(Assembly, participant_session.assembly_id)
     available = assembly is not None and _report_available(session, assembly)
-    return consent_svc.participant_status(session, participant_session, available)
+    payload = consent_svc.participant_status(session, participant_session, available)
+    payload["poll_url"] = _poll_url(assembly) if assembly is not None else None
+    return payload
 
 
 class ValidateIn(BaseModel):
@@ -1077,6 +1091,8 @@ def _assembly_state(
         },
         # phones learn about report availability through the status poll
         "report_available": _report_available(session, assembly, analysis_enabled),
+        # the Polis voting link, once the organizer put the poll on the phones
+        "poll_url": _poll_url(assembly),
         # the assembly is over: the organizer closed it (possibly mid-round).
         # Without this the phone reads only the round rows, where a NOT_STARTED
         # round 2 is indistinguishable from "round 2 is coming", so it advanced
@@ -1205,6 +1221,13 @@ def _table_summary(session: Session, assembly_id: str, recorder_session: Recorde
         "live_source_slot": live_slot,
         "live_source_label": slot_label(live_slot) if live_slot else None,
     }
+
+
+def _poll_url(assembly: Assembly) -> str | None:
+    """The Polis voting link, only while the organizer has it published."""
+    if assembly.polis_published_at is None or not assembly.polis_url:
+        return None
+    return assembly.polis_url
 
 
 def _report_available(

@@ -34,6 +34,7 @@ const emit = defineEmits<{
 	start: [round: RoundInfo]
 	back: []
 	report: []
+	poll: []
 	participants: []
 	/** show the code a facilitator's own phone scans to follow this table */
 	facilitator: []
@@ -86,6 +87,7 @@ const offline = ref(false)
 const plenary = props.session.assembly.recording_mode === 'plenary'
 const showAddDevice = ref(false)
 const reportAvailable = ref(false)
+const pollUrl = ref<string | null>(null)
 // the organizer ended the assembly (perhaps mid-round): the phone must stop
 // advancing and offer the report rather than roll into the next round
 const assemblyClosed = ref(false)
@@ -171,6 +173,7 @@ async function poll(): Promise<void> {
 		if (status.consent) consent.value = status.consent
 		if (status.assembly?.language) setLocale(status.assembly.language)
 		reportAvailable.value = status.report_available ?? false
+		pollUrl.value = status.poll_url ?? null
 		assemblyClosed.value = status.assembly_closed ?? false
 		offline.value = false
 		const active = status.rounds.find((r) => r.status === 'ACTIVE' && !r.recorded_state)
@@ -305,6 +308,9 @@ onBeforeUnmount(() => {
 					<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 						{{ t('recorder.armed.viewReport') }}
 					</button>
+					<button v-if="pollUrl" class="rc-btn rc-primary" data-test="poll-button" @click="emit('poll')">
+						{{ t('recorder.poll.button') }}
+					</button>
 				</div>
 			</template>
 
@@ -331,6 +337,9 @@ onBeforeUnmount(() => {
 					<p class="rc-muted" style="margin: 0">{{ t('recorder.armed.allRecordedBody') }}</p>
 					<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 						{{ t('recorder.armed.viewReport') }}
+					</button>
+					<button v-if="pollUrl" class="rc-btn rc-primary" data-test="poll-button" @click="emit('poll')">
+						{{ t('recorder.poll.button') }}
 					</button>
 					<!-- a standalone Record now session, finished: offer a brand-new
 					     one rather than another round of this container -->
@@ -394,6 +403,9 @@ onBeforeUnmount(() => {
 			<!-- a finished table has no microphone test to go back to -->
 			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 				{{ t('recorder.armed.viewReport') }}
+			</button>
+			<button v-else-if="allRecorded && pollUrl" class="rc-btn rc-primary" data-test="poll-button" @click="emit('poll')">
+				{{ t('recorder.poll.button') }}
 			</button>
 			<button v-else-if="!allRecorded" class="rc-btn rc-subtle" @click="emit('back')">
 				{{ t('recorder.armed.backToTest') }}

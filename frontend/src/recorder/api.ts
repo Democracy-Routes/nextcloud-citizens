@@ -149,6 +149,8 @@ export interface ParticipantStatus {
 		confirmed_at: string
 	} | null
 	report_available: boolean
+	/** the Polis voting link once the organizer publishes it */
+	poll_url?: string | null
 	/** every session, with the table this person sat at (null: none) */
 	rounds?: Array<{ id: string; position: number; title: string; status: string; table_number: number | null }>
 	/** what this person already said about their table's summaries, by session id */
@@ -344,6 +346,8 @@ export interface RecorderStatus {
 	/** the AI facilitator at this table (absent before 0.7) */
 	ai_facilitator?: AiFacilitatorState
 	report_available?: boolean
+	/** the Polis voting link once the organizer publishes it */
+	poll_url?: string | null
 	/** the organizer closed the assembly (possibly mid-round): stop, don't advance */
 	assembly_closed?: boolean
 	data_handling?: DataHandling
@@ -713,6 +717,10 @@ export const recorderApi = {
 		request<PublishedReport>('GET', '/api/v1/public/recorder/report', { token }),
 
 	reportPdf: (token: string) => pdfOf('/api/v1/public/recorder/report.pdf', token),
+
+	/** The Polis poll link and QR, once published. */
+	pollQr: (token: string) =>
+		request<{ available: boolean; url?: string; qr_svg?: string }>('GET', '/api/v1/public/recorder/poll-qr', { token }),
 
 	/** The same report, through a participant's own bearer. */
 	participantReportPdf: (token: string) => pdfOf('/api/v1/public/participant/report.pdf', token),

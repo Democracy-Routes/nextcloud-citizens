@@ -284,6 +284,13 @@
 			"unverified": "Il server non ha verificato questa registrazione completa. Conservate l'audio locale.",
 			"uploadBlocked": "Il server ha rifiutato il caricamento. La registrazione continua in locale. Avvisate l'organizzatore e tenete aperta questa pagina. Al termine potrebbe servire un codice QR aggiornato."
 		},
+		"poll": {
+			"title": "Vota le affermazioni",
+			"lead": "Inquadra questo codice con il tuo telefono, o apri il link, per votare le affermazioni di questa assemblea.",
+			"open": "Apri la pagina del voto",
+			"button": "Vota il sondaggio",
+			"back": "Indietro"
+		},
 		"report": {
 			"mentionedAt": "Citato a {count} tavolo | Citato a {count} tavolo | Citato a {count} tavoli",
 			"title": "Report dell'assemblea",

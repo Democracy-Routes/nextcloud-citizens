@@ -284,6 +284,13 @@
 			"unverified": "El servidor no ha verificado esta grabación completa. Conserva el audio local.",
 			"uploadBlocked": "El servidor rechazó la subida. La grabación continúa en local. Avisa al facilitador y mantén esta página abierta. Puede hacer falta un código QR vigente cuando termine la grabación."
 		},
+		"poll": {
+			"title": "Vota las afirmaciones",
+			"lead": "Escanea este código con tu propio teléfono, o abre el enlace, para votar las afirmaciones de esta asamblea.",
+			"open": "Abrir la página de votación",
+			"button": "Votar en la encuesta",
+			"back": "Atrás"
+		},
 		"report": {
 			"mentionedAt": "Mencionado en {count} mesa | Mencionado en {count} mesa | Mencionado en {count} mesas",
 			"title": "Informe de la asamblea",

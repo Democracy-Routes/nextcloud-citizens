@@ -18,6 +18,7 @@ import { mountWithI18n } from './support/mount'
 const listInvites = vi.fn()
 const inviteLinks = vi.fn()
 const generateInvites = vi.fn()
+const pollQr = vi.fn()
 
 vi.mock('../../frontend/src/api', () => ({
 	api: {
@@ -25,6 +26,7 @@ vi.mock('../../frontend/src/api', () => ({
 		inviteLinks: (...a: unknown[]) => inviteLinks(...a),
 		generateInvites: (...a: unknown[]) => generateInvites(...a),
 		revokeInvites: vi.fn(),
+		pollQr: (...a: unknown[]) => pollQr(...a),
 	},
 	ApiError: class extends Error {},
 	BASE: '',
@@ -41,6 +43,7 @@ beforeEach(() => {
 	listInvites.mockReset().mockResolvedValue(ACTIVE_INVITES)
 	inviteLinks.mockReset().mockResolvedValue([])
 	generateInvites.mockReset().mockResolvedValue([])
+	pollQr.mockReset().mockResolvedValue({ available: false, published: false, url: null, qr_svg: null })
 })
 
 describe('regenerating the codes', () => {
@@ -85,5 +88,42 @@ describe('rendering a code', () => {
 		})
 
 		expect(wrapper.find('img').attributes('alt')).toBe('QR code for table 3')
+	})
+})
+
+describe('the Polis poll card', () => {
+	it('is hidden when there is no poll', async () => {
+		const wrapper = mountWithI18n(QrTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.find('[data-test="qr-poll"]').exists()).toBe(false)
+	})
+
+	it('is hidden when the call fails', async () => {
+		pollQr.mockRejectedValue(new Error('boom'))
+		const wrapper = mountWithI18n(QrTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.find('[data-test="qr-poll"]').exists()).toBe(false)
+	})
+
+	it('shows the code, the link and whether the phones show it', async () => {
+		pollQr.mockResolvedValue({
+			available: true, published: false, published_at: null, url: 'https://p.example/abc', qr_svg: '<svg/>',
+		})
+		const wrapper = mountWithI18n(QrTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const card = wrapper.find('[data-test="qr-poll"]')
+		expect(card.exists()).toBe(true)
+		expect(card.find('img').attributes('src')).toContain('data:image/svg+xml')
+		expect(card.text()).toContain('https://p.example/abc')
+		expect(card.text()).toContain('Not yet shown on the phones')
+	})
+
+	it('says so once published', async () => {
+		pollQr.mockResolvedValue({
+			available: true, published: true, published_at: 'x', url: 'https://p.example/abc', qr_svg: '<svg/>',
+		})
+		const wrapper = mountWithI18n(QrTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.find('[data-test="qr-poll"]').text()).toContain('Shown on the table phones')
 	})
 })

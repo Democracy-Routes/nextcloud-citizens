@@ -503,7 +503,7 @@ def handle_seed_statements(session: Session, payload: dict) -> None:
     session.commit()
     store = provider_config.default_store()
     try:
-        seeds_svc.generate(session, store, assembly)
+        seeds_svc.generate(session, store, assembly, target=payload.get("target"))
     except AnalysisError as exc:
         log.error("seeds_failed", assembly_id=assembly.id, permanent=exc.permanent)
         if exc.permanent:

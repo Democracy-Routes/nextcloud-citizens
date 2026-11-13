@@ -10,6 +10,8 @@ const updateSeed = vi.fn()
 const approveAllSeeds = vi.fn()
 const downloadFromApi = vi.fn()
 const pushSeeds = vi.fn()
+const publishPoll = vi.fn()
+const unpublishPoll = vi.fn()
 const toast = vi.fn()
 
 vi.mock('../../frontend/src/api', () => ({
@@ -18,6 +20,8 @@ vi.mock('../../frontend/src/api', () => ({
 		updateSeed: (...a: unknown[]) => updateSeed(...a),
 		approveAllSeeds: (...a: unknown[]) => approveAllSeeds(...a),
 		pushSeeds: (...a: unknown[]) => pushSeeds(...a),
+		publishPoll: (...a: unknown[]) => publishPoll(...a),
+		unpublishPoll: (...a: unknown[]) => unpublishPoll(...a),
 		generateSeeds: vi.fn(),
 		createSeed: vi.fn(),
 		reorderSeeds: vi.fn(),
@@ -63,6 +67,8 @@ beforeEach(() => {
 	approveAllSeeds.mockReset()
 	toast.mockReset()
 	pushSeeds.mockReset().mockResolvedValue({ queued: true })
+	publishPoll.mockReset().mockResolvedValue({ published_at: '2026-11-13T11:00:00Z' })
+	unpublishPoll.mockReset().mockResolvedValue(undefined)
 	downloadFromApi.mockReset().mockResolvedValue(undefined)
 })
 
@@ -202,6 +208,47 @@ describe('the Polis seeds tab', () => {
 		])
 		expect(links[0].attributes('rel')).toBe('noopener')
 		expect(wrapper.find('[data-test="seeds-polis-links"]').text()).toContain('Sent on')
+	})
+
+	it('offers to publish the poll once Polis has a conversation, behind a confirmation', async () => {
+		listSeeds.mockResolvedValue(listing({
+			polis: polisState({ configured: true, url: 'https://p.example/abc', pushed_at: '2026-11-13T10:00:00Z' }),
+			seeds: [seed({ status: 'EXPORTED' })],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.find('[data-test="seeds-poll-withdraw"]').exists()).toBe(false)
+		await wrapper.find('[data-test="seeds-poll-publish"]').trigger('click')
+		await flushPromises()
+		expect(publishPoll).not.toHaveBeenCalled()
+		const confirm = wrapper.findAll('button').filter((b) => b.text() === 'Publish')
+		expect(confirm).toHaveLength(1)
+		await confirm[0].trigger('click')
+		await flushPromises()
+		expect(publishPoll).toHaveBeenCalledWith('a1')
+		expect(listSeeds).toHaveBeenCalledTimes(2)
+		expect(String(toast.mock.calls[0][0])).toContain('Poll published')
+	})
+
+	it('shows the published state and withdraws after confirming', async () => {
+		listSeeds.mockResolvedValue(listing({
+			polis: polisState({
+				configured: true, url: 'https://p.example/abc', pushed_at: '2026-11-13T10:00:00Z',
+				published_at: '2026-11-13T11:00:00Z',
+			}),
+			seeds: [seed({ status: 'EXPORTED' })],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.find('[data-test="seeds-poll-publish"]').exists()).toBe(false)
+		expect(wrapper.find('[data-test="seeds-poll-published"]').text()).toContain('Published on the devices since')
+		await wrapper.find('[data-test="seeds-poll-withdraw"]').trigger('click')
+		await flushPromises()
+		const confirm = wrapper.findAll('button').filter((b) => b.text() === 'Withdraw')
+		expect(confirm).toHaveLength(1)
+		await confirm[0].trigger('click')
+		await flushPromises()
+		expect(unpublishPoll).toHaveBeenCalledWith('a1')
 	})
 
 	it('marks a statement Polis refused', async () => {

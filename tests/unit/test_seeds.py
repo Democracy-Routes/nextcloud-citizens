@@ -83,3 +83,35 @@ def test_the_prompt_asks_for_the_assembly_language():
 
     assert "Write everything in {language}." in seeds.SEEDS_SYSTEM
     assert seeds.SEEDS_SYSTEM.format(language=LANGUAGE_NAMES["de"]).endswith("German.")
+    # the rules that keep statements contestable, whatever the topic
+    for rule in ("dissent test", "WHO should do WHAT", "No empty verbs", "TWO statements", "budget"):
+        assert rule in seeds.SEEDS_SYSTEM, rule
+
+
+def test_the_recommendation_is_about_one_per_finding_in_tens_between_10_and_40():
+    assert [seeds.recommended_target(n) for n in (0, 3, 8, 14, 27, 44, 90)] == [10, 10, 10, 10, 30, 40, 40]
+
+
+class _F:
+    def __init__(self, id, type="proposal", tables=0, scope="round"):
+        self.id, self.type, self.mentioned_table_count, self.scope = id, type, tables, scope
+
+
+def test_findings_are_offered_most_tables_first_then_proposals_before_questions():
+    ordered = seeds.prioritised([_F("q", "question", 3), _F("p", "proposal", 1), _F("c", "concern", 3),
+                                 _F("d", "disagreement", 3)])
+    assert [f.id for f in ordered] == ["d", "c", "q", "p"]
+
+
+def test_the_budget_is_spent_breadth_first_with_two_for_a_disagreement():
+    answers = [
+        (_F("a"), ["a1", "a2", "a3"]),
+        (_F("d", "disagreement"), ["d-side1", "d-side2", "d3"]),
+        (_F("b"), ["b1", "b2"]),
+        (_F("empty"), []),
+    ]
+    first = [t for _, t in seeds.within_budget(answers, 10)]
+    assert first == ["a1", "d-side1", "d-side2", "b1", "a2", "d3", "b2", "a3"]
+    tight = [t for _, t in seeds.within_budget(answers, 3)]
+    assert tight == ["a1", "d-side1", "d-side2"]
+    assert seeds.within_budget(answers, 0) == []

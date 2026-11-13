@@ -318,6 +318,16 @@
 			"linkModeration": "Moderation",
 			"linkReport": "Polis-Bericht",
 			"pushedAt": "Gesendet am {date}",
+			"publish": "Umfrage auf den Geräten veröffentlichen",
+			"publishTitle": "Umfrage veröffentlichen?",
+			"publishBody": "Der Abstimmungslink und ein QR-Code erscheinen auf jedem Tischhandy und auf den eigenen Seiten der Teilnehmenden. Jede Person mit dem Link kann abstimmen.",
+			"publishConfirm": "Veröffentlichen",
+			"published": "Umfrage auf den Geräten veröffentlicht",
+			"publishedAt": "Auf den Geräten veröffentlicht seit {date}",
+			"withdraw": "Von den Geräten zurückziehen",
+			"withdrawTitle": "Umfrage zurückziehen?",
+			"withdrawBody": "Abstimmungslink und QR-Code verschwinden von den Tischhandys und den Seiten der Teilnehmenden. Die Polis-Konversation bleibt für alle offen, die den Link schon haben.",
+			"withdrawConfirm": "Zurückziehen",
 			"refused": "Von Polis abgelehnt",
 			"failed": "Senden an Polis fehlgeschlagen: {detail}"
 		}

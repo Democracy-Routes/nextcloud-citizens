@@ -28,6 +28,7 @@ import RegisterPage from './components/RegisterPage.vue'
 import RecordingScreen from './components/RecordingScreen.vue'
 import RecoverySync from './components/RecoverySync.vue'
 import ReportScreen from './components/ReportScreen.vue'
+import PollScreen from './components/PollScreen.vue'
 import { idb, type StoredRecording } from './idb'
 import { initLogger } from './logger'
 
@@ -69,6 +70,7 @@ type Screen =
 	| 'armed'
 	| 'recording'
 	| 'report'
+	| 'poll'
 	| 'register'
 	| 'participant'
 	| 'facilitate'
@@ -781,7 +783,8 @@ function sessionStorageClear(): void {
 			@start="startRound"
 			@participants="screen = 'consent'"
 			@facilitator="facilitatorSheet = true"
-			@report="screen = 'report'" />
+			@report="screen = 'report'"
+			@poll="screen = 'poll'" />
 
 		<ArmedScreen
 			v-else-if="screen === 'armed' && session"
@@ -791,7 +794,13 @@ function sessionStorageClear(): void {
 			@back="screen = 'preflight'"
 			@participants="screen = 'consent'"
 			@facilitator="facilitatorSheet = true"
-			@report="screen = 'report'" />
+			@report="screen = 'report'"
+			@poll="screen = 'poll'" />
+
+		<PollScreen
+			v-else-if="screen === 'poll' && session"
+			:token="session.session_token"
+			@back="screen = orchestrated ? 'armed' : 'preflight'" />
 
 		<ReportScreen
 			v-else-if="screen === 'report' && session"
@@ -832,7 +841,8 @@ function sessionStorageClear(): void {
 			@start-failed="startFailedRoundId = $event; capturing = false"
 			@settled="capturing = false"
 			@facilitator="facilitatorSheet = true"
-			@view-report="screen = 'report'" />
+			@view-report="screen = 'report'"
+			@poll="screen = 'poll'" />
 
 		<!-- "Add facilitator": the code a facilitator's own phone scans, over
 		     whichever table screen asked for it -->

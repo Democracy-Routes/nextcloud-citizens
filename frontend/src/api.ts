@@ -361,6 +361,18 @@ export const api = {
 		request<{ queued: boolean }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/generate`),
 	approveAllSeeds: (assemblyId: string) =>
 		request<SeedsListing & { approved: number }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/approve-all`),
+	publishPoll: (assemblyId: string) =>
+		request<{ published_at: string }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/poll/publish`),
+	unpublishPoll: (assemblyId: string) =>
+		request<void>('DELETE', `/api/v1/assemblies/${assemblyId}/seeds/poll/publish`),
+	pollQr: (assemblyId: string) =>
+		request<{
+			available: boolean
+			published: boolean
+			published_at?: string | null
+			url: string | null
+			qr_svg: string | null
+		}>('GET', `/api/v1/assemblies/${assemblyId}/seeds/poll-qr`),
 	pushSeeds: (assemblyId: string) =>
 		request<{ queued: boolean }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/push`),
 	createSeed: (assemblyId: string, text: string) =>

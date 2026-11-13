@@ -14,9 +14,14 @@ Nextcloud and in standalone mode.
 
 ## The workflow
 
-1. Open the assembly, go to **Results -> Polis seeds** and press **Generate**.
-   The model writes one to three statements per approved finding, in the
-   assembly's language. It takes a moment; the panel updates when it is done.
+1. Open the assembly, go to **Results -> Polis seeds**, choose how many
+   statements you want on the slider (10 to 60; the panel recommends a number
+   from the approved findings and shows about how long the vote will take at
+   eight seconds a statement) and press **Generate**. The model writes the
+   statements in the assembly's language, the findings most tables raised
+   first, one statement per finding and two for a disagreement, then second
+   statements while the budget lasts. It takes a moment; the panel updates
+   when it is done.
 2. Read every statement. You can **edit** it (a counter shows the length),
    **approve** it, **reject** it, **delete** it, or **add** your own by hand.
 3. Drag statements into the order you want them to appear. Hand-written ones
@@ -30,6 +35,14 @@ Nextcloud and in standalone mode.
 ## What makes a good statement
 
 * One idea only, declarative, neutral voice.
+* It names who should do what, concretely: an actor, an action and an object
+  taken from the finding (a service, a place, a figure, a condition).
+* The dissent test: a reasonable person could disagree with it. "Public
+  services should include everyone" fails; "The city should keep a staffed
+  counter for every service that goes online" passes. The model applies the
+  test to its own list before answering; you apply it again when reviewing.
+* No empty verbs ("promote", "value", "support") without a concrete object.
+* A disagreement or a trade-off is two statements, one per side.
 * No names, no table numbers, no quotations, no "our table".
 * Under 140 characters. The hard limit is 400, which is the size of the
   PolisOrbis seed box; Citizens will not save more.
@@ -43,8 +56,10 @@ Nextcloud and in standalone mode.
 ## Generating again
 
 **Generate** can be pressed again, for instance after approving more
-findings. It replaces only untouched drafts. Statements you edited, approved,
-rejected or wrote yourself stay as they are, and near duplicates are dropped.
+findings or with a different number on the slider. It replaces only untouched
+drafts. Statements you edited, approved, rejected or wrote yourself stay as
+they are and count towards the number you asked for; the rest of the budget
+is filled with new drafts, and near duplicates are dropped.
 
 If the analysis is re-run and a finding is replaced, the statements written
 from it keep their text but lose the link to the finding and show a **stale**
@@ -86,6 +101,18 @@ Without a configured instance the button is disabled and the export files
 remain the way: paste the statements into the **seed comments** box of the
 Polis admin page, one per line (the CSV's second column), or send the file to
 the person who runs the instance.
+
+## Putting the poll on the devices
+
+Once the statements are on Polis, **Publish the poll on the devices** on the
+seeds card shows the voting link, with a QR code, on every table phone and on
+the participants' own pages, the way the report is published. People at a
+table scan the code on the table phone with their own phone and vote; the
+Polis conversation is public, so anyone with the link can vote. The same QR
+is in the **QR codes** tab, and the printable table sheet gains a page of
+VOTE cards once the poll is published. **Withdraw from the devices** takes it
+off the phones again; the Polis conversation stays open until its moderator
+closes it.
 
 ## Privacy
 

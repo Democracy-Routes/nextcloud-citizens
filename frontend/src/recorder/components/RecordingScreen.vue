@@ -48,6 +48,7 @@ const emit = defineEmits<{
 	exit: []
 	nextRound: [round: RoundInfo]
 	viewReport: []
+	poll: []
 	/** show the code a facilitator's own phone scans to follow this table */
 	facilitator: []
 	/** recording could not be started for THIS round — armed must not
@@ -230,6 +231,7 @@ const nextRound = ref<RoundInfo | null>(null)
 // only way in, a finished recording is never restarted by itself.
 const currentRoundOpen = ref(false)
 const reportAvailable = ref(false)
+const pollUrl = ref<string | null>(null)
 // the organizer ended the assembly (possibly mid-round): stop advancing, and
 // offer the report rather than roll into a round that will never come
 const assemblyClosed = ref(false)
@@ -316,6 +318,7 @@ function watchForNextRound(): void {
 			help.value = status.help
 			if (status.assembly?.language) setLocale(status.assembly.language)
 			reportAvailable.value = status.report_available ?? false
+			pollUrl.value = status.poll_url ?? null
 			assemblyClosed.value = status.assembly_closed ?? false
 			currentRoundOpen.value =
 				!assemblyClosed.value &&
@@ -1225,6 +1228,9 @@ async function recordAnother(): Promise<void> {
 				</button>
 				<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('viewReport')">
 					{{ t('recorder.armed.viewReport') }}
+				</button>
+				<button v-if="pollUrl" class="rc-btn rc-primary" data-test="poll-button" @click="emit('poll')">
+					{{ t('recorder.poll.button') }}
 				</button>
 				<!-- a standalone Record now session, finished: the next discussion
 				     is a brand-new one, not another round of this container -->

@@ -113,7 +113,7 @@ def test_generation_needs_a_provider_and_approved_findings(client, monkeypatch):
 def test_seeds_are_written_from_approved_findings_in_the_assembly_language(client, monkeypatch):
     def answer(ids):
         return StatementSeeds(seeds=[
-            # ids come in prompt order: session 1's finding first
+            # ids come in prompt order: the proposal first
             StatementSeedItem(finding_id=ids[0], statements=["Le piste ciclabili vanno illuminate."]),
             StatementSeedItem(finding_id=ids[1], statements=[
                 "Gli autobus serali dovrebbero circolare fino a mezzanotte.",
@@ -133,7 +133,7 @@ def test_seeds_are_written_from_approved_findings_in_the_assembly_language(clien
         ])
     )
     url = f"/api/v1/assemblies/{assembly['id']}/seeds"
-    assert client.post(f"{url}/generate").json() == {"queued": True}
+    assert client.post(f"{url}/generate").json() == {"queued": True, "target": None}
     assert client.post(f"{url}/generate").json() == {"queued": False}  # one live job at a time
     listing = _wait(client, assembly["id"], _settled)
     assert listing["job"]["state"] == "SUCCEEDED", listing["job"]
@@ -142,13 +142,14 @@ def test_seeds_are_written_from_approved_findings_in_the_assembly_language(clien
         "Le piste ciclabili vanno illuminate.",
         "Gli autobus serali dovrebbero circolare fino a mezzanotte.",
     ]
-    assert [s["finding_id"] for s in listing["seeds"]] == [approved_2, approved]
+    # priority order: the proposal is offered (and answered) first, the concern after
+    assert [s["finding_id"] for s in listing["seeds"]] == [approved, approved_2]
     assert all(s["status"] == "DRAFT" and s["origin"] == "ai" for s in listing["seeds"])
     assert listing["findings_approved"] == 3 and listing["ready_to_export"] is False
     system_prompt, user_prompt = prompts[-1]
     assert "Write everything in Italian." in system_prompt
-    # session order, cross-table findings only, names masked
-    assert user_prompt.index("Piste ciclabili") < user_prompt.index("Autobus serali")
+    # priority order (proposals before concerns), cross-table findings only, names masked
+    assert user_prompt.index("Autobus serali") < user_prompt.index("Piste ciclabili")
     assert "Table level" not in user_prompt and "Rejected one" not in user_prompt
     assert "Anna" not in user_prompt
 
@@ -415,6 +416,42 @@ def test_migration_0041_downgrades_and_upgrades_cleanly(database):
         seed = session.query(StatementSeed).filter_by(text="Sent").one()
         assert seed.polis_tid == 4
         assert session.get(Assembly, seed.assembly_id).polis_conversation_id == "abc"
+
+
+def test_the_target_caps_the_statements_and_the_listing_recommends_one(client, monkeypatch):
+    prompts = _configure(monkeypatch, lambda ids: StatementSeeds(seeds=[
+        StatementSeedItem(finding_id=fid, statements=[f"{fid[:4]} one", f"{fid[:4]} two", f"{fid[:4]} three"])
+        for fid in ids
+    ]))
+    assembly = _assembly(client, name="TEST Target")
+    specs = [("round", "question", f"Q{n}", "APPROVED", 1) for n in range(12)]
+    specs += [("round", "proposal", "Big proposal", "APPROVED", 1)]
+    _findings(assembly["id"], specs)
+    url = f"/api/v1/assemblies/{assembly['id']}/seeds"
+    listing = client.get(url).json()
+    assert listing["source_findings"] == 13 and listing["recommended_target"] == 10
+    assert listing["seeds_target"] is None and listing["target_step"] == 10
+
+    assert client.post(f"{url}/generate", json={"target": 5}).status_code == 422
+    queued = client.post(f"{url}/generate", json={"target": 20})
+    assert queued.status_code == 202 and queued.json() == {"queued": True, "target": 20}
+    listing = _wait(client, assembly["id"], _settled)
+    assert listing["seeds_target"] == 20 and len(listing["seeds"]) == 20
+    # the proposal is offered first and gets the first statement
+    assert listing["seeds"][0]["text"].endswith(" one")
+    assert "Budget: at most 20 statements" in prompts[-1][1]
+    first_offered = prompts[-1][1].split("finding_id: ")[1].split("\n")[0]
+    assert listing["seeds"][0]["finding_id"] == first_offered
+    # breadth first: thirteen first statements, then second ones
+    assert sum(1 for s in listing["seeds"] if s["text"].endswith(" one")) == 13
+    assert sum(1 for s in listing["seeds"] if s["text"].endswith(" two")) == 7
+
+    # the default is the recommendation; touched statements count towards it
+    kept = listing["seeds"][0]
+    client.put(f"{url}/{kept['id']}", json={"status": "APPROVED"})
+    assert client.post(f"{url}/generate").status_code == 202
+    listing = _wait(client, assembly["id"], lambda li: _settled(li) and li["seeds_target"] == 20)
+    assert len(listing["seeds"]) == 20 and listing["seeds"][0]["id"] == kept["id"]
 
 
 def test_seeds_are_private_to_the_assembly_owner(client):

@@ -36,6 +36,8 @@ const confirmRegenerate = ref(false)
 const confirmApproveAll = ref(false)
 const queuedLocally = ref(false)
 const confirmPush = ref(false)
+const confirmPublish = ref(false)
+const confirmWithdraw = ref(false)
 const pushQueuedLocally = ref(false)
 
 const seeds = computed(() => listing.value?.seeds ?? [])
@@ -58,6 +60,12 @@ const canPush = computed(
 )
 const pushedAtText = computed(() => {
 	const at = polis.value?.pushed_at
+	if (!at) return ''
+	const d = new Date(at)
+	return Number.isNaN(d.getTime()) ? at : d.toLocaleString()
+})
+const publishedAtText = computed(() => {
+	const at = polis.value?.published_at
 	if (!at) return ''
 	const d = new Date(at)
 	return Number.isNaN(d.getTime()) ? at : d.toLocaleString()
@@ -162,6 +170,23 @@ async function generate(): Promise<void> {
 function onGenerate(): void {
 	if (seeds.value.length) confirmRegenerate.value = true
 	else void generate()
+}
+
+async function setPollPublished(publish: boolean): Promise<void> {
+	confirmPublish.value = false
+	confirmWithdraw.value = false
+	busy.value = true
+	try {
+		if (publish) await api.publishPoll(props.assembly.id)
+		else await api.unpublishPoll(props.assembly.id)
+		error.value = ''
+		await load()
+		if (publish) toast(t('organizer.results.seeds.polis.published'))
+	} catch (err) {
+		error.value = message(err)
+	} finally {
+		busy.value = false
+	}
 }
 
 async function pushToPolis(): Promise<void> {
@@ -511,6 +536,17 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 					<a v-if="polis.moderation_url" :href="polis.moderation_url" target="_blank" rel="noopener">{{ t('organizer.results.seeds.polis.linkModeration') }}</a>
 					<a v-if="polis.report_url" :href="polis.report_url" target="_blank" rel="noopener">{{ t('organizer.results.seeds.polis.linkReport') }}</a>
 					<span v-if="pushedAtText" class="cz-muted">{{ t('organizer.results.seeds.polis.pushedAt', { date: pushedAtText }) }}</span>
+					<template v-if="!polis.published_at">
+						<CzButton small variant="primary" :disabled="busy" data-test="seeds-poll-publish" @click="confirmPublish = true">
+							{{ t('organizer.results.seeds.polis.publish') }}
+						</CzButton>
+					</template>
+					<template v-else>
+						<span class="cz-muted" data-test="seeds-poll-published">{{ t('organizer.results.seeds.polis.publishedAt', { date: publishedAtText }) }}</span>
+						<CzButton small :disabled="busy" data-test="seeds-poll-withdraw" @click="confirmWithdraw = true">
+							{{ t('organizer.results.seeds.polis.withdraw') }}
+						</CzButton>
+					</template>
 				</div>
 				<p v-if="polisFailed" class="cz-seed-warn" role="alert" style="margin: 8px 0 0; font-size: 0.8125rem" data-test="seeds-polis-failed">
 					{{ t('organizer.results.seeds.polis.failed', { detail: polisFailed.failure_detail || polisFailed.failure_reason || '' }) }}
@@ -533,6 +569,20 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 			:confirm-label="t('organizer.results.seeds.polis.sendConfirm')"
 			@confirm="pushToPolis"
 			@cancel="confirmPush = false" />
+		<CzConfirm
+			v-if="confirmPublish"
+			:title="t('organizer.results.seeds.polis.publishTitle')"
+			:message="t('organizer.results.seeds.polis.publishBody')"
+			:confirm-label="t('organizer.results.seeds.polis.publishConfirm')"
+			@confirm="setPollPublished(true)"
+			@cancel="confirmPublish = false" />
+		<CzConfirm
+			v-if="confirmWithdraw"
+			:title="t('organizer.results.seeds.polis.withdrawTitle')"
+			:message="t('organizer.results.seeds.polis.withdrawBody')"
+			:confirm-label="t('organizer.results.seeds.polis.withdrawConfirm')"
+			@confirm="setPollPublished(false)"
+			@cancel="confirmWithdraw = false" />
 		<CzConfirm
 			v-if="confirmApproveAll"
 			:title="t('organizer.results.seeds.approveAllTitle')"

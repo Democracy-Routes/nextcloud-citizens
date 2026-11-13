@@ -34,6 +34,7 @@ const emit = defineEmits<{
 	ready: []
 	start: [round: RoundInfo]
 	report: []
+	poll: []
 	participants: []
 	/** show the code a facilitator's own phone scans to follow this table */
 	facilitator: []
@@ -74,6 +75,7 @@ watch(rounds, () => {
 	}
 })
 const reportAvailable = ref(false)
+const pollUrl = ref<string | null>(null)
 const tableSummaries = ref<Array<{ position: number; summary: string }>>([])
 
 let reportTimer = 0
@@ -90,6 +92,7 @@ async function pollReport(): Promise<void> {
 	try {
 		const status = await recorderApi.status(props.session.session_token)
 		reportAvailable.value = status.report_available ?? false
+		pollUrl.value = status.poll_url ?? null
 		help.value = status.help
 		if (status.consent) consent.value = status.consent
 		// Record now learns the room's language from its first transcript
@@ -310,6 +313,9 @@ const STATE_CLASS: Record<CheckState, string> = {
 			<button v-if="reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 				{{ t('recorder.armed.viewReport') }}
 			</button>
+			<button v-if="pollUrl" class="rc-btn rc-primary" data-test="poll-button" @click="emit('poll')">
+				{{ t('recorder.poll.button') }}
+			</button>
 		</div>
 
 		<div v-if="!allRecorded" class="rc-card">
@@ -413,6 +419,9 @@ const STATE_CLASS: Record<CheckState, string> = {
 		<TableBar :session="session" :round-id="selectedRound?.id ?? null">
 			<button v-if="allRecorded && reportAvailable" class="rc-btn rc-primary" @click="emit('report')">
 				{{ t('recorder.armed.viewReport') }}
+			</button>
+			<button v-else-if="allRecorded && pollUrl" class="rc-btn rc-primary" data-test="poll-button" @click="emit('poll')">
+				{{ t('recorder.poll.button') }}
 			</button>
 			<button v-else-if="orchestrated && !allRecorded" class="rc-btn rc-primary" :disabled="!canProceed()" @click="emit('ready')">
 				{{ t('recorder.preflight.ready') }}

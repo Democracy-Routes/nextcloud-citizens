@@ -318,6 +318,16 @@
 			"linkModeration": "Moderation",
 			"linkReport": "Polis report",
 			"pushedAt": "Sent on {date}",
+			"publish": "Publish the poll on the devices",
+			"publishTitle": "Publish the poll?",
+			"publishBody": "The voting link and a QR code appear on every table phone and on the participants' own pages. Anyone with the link can vote.",
+			"publishConfirm": "Publish",
+			"published": "Poll published on the devices",
+			"publishedAt": "Published on the devices since {date}",
+			"withdraw": "Withdraw from the devices",
+			"withdrawTitle": "Withdraw the poll?",
+			"withdrawBody": "The voting link and QR code disappear from the table phones and the participants' pages. The Polis conversation stays open for anyone who already has the link.",
+			"withdrawConfirm": "Withdraw",
 			"refused": "Refused by Polis",
 			"failed": "Sending to Polis failed: {detail}"
 		}

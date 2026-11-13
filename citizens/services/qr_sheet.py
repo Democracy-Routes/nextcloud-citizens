@@ -101,13 +101,44 @@ def _cell(pdf: _SheetPDF, x: float, y: float, w: float, h: float,
     pdf.multi_cell(w - 8, 2.8, url, align="C", new_x="LMARGIN", new_y="NEXT")
 
 
+def _poll_cell(pdf: _SheetPDF, x: float, y: float, w: float, h: float,
+               url: str, heading: str) -> None:
+    """The Polis voting link, for the wall or the tables: scanned with the
+    participants' own phones, not the recording phone."""
+    pdf.set_xy(x, y + 6)
+    pdf.set_font(pdf.family, "", 8.5)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(w, 4, heading[:60], align="C", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_xy(x, y + 11)
+    pdf.set_font(pdf.family, "B", 22)
+    pdf.set_text_color(20, 22, 26)
+    pdf.cell(w, 10, "VOTE", align="C", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.image(_qr_png(url), x=x + (w - QR_MM) / 2, y=y + 23, w=QR_MM, h=QR_MM)
+
+    pdf.set_xy(x, y + 23 + QR_MM + 3)
+    pdf.set_font(pdf.family, "", 9)
+    pdf.set_text_color(20, 22, 26)
+    pdf.cell(w, 4.5, "Scan with your own phone to vote on the statements", align="C",
+             new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_xy(x + 4, y + 23 + QR_MM + 8)
+    pdf.set_font(pdf.family, "", 6)
+    pdf.set_text_color(*MUTED)
+    pdf.multi_cell(w - 8, 2.8, url, align="C", new_x="LMARGIN", new_y="NEXT")
+
+
 def render_qr_sheet(
     assembly_name: str,
     cards: list,
     logo_path: Path | None = None,
     organization_name: str = "",
+    poll_url: str | None = None,
 ) -> bytes:
-    """`cards` are InviteGenerated (table_number + url), in table order."""
+    """`cards` are InviteGenerated (table_number + url), in table order.
+    `poll_url`, when the Polis poll is published, adds one VOTE card per
+    page of tables, so every table sheet carries the voting code."""
     heading = " · ".join(part for part in (organization_name, assembly_name) if part)
     pdf = _SheetPDF(footer_text=heading or assembly_name)
     cell_w = (pdf.w - pdf.l_margin - pdf.r_margin) / COLUMNS
@@ -129,9 +160,17 @@ def render_qr_sheet(
         y = pdf.t_margin + cell_h * (slot // COLUMNS)
         _cell(pdf, x, y, cell_w, cell_h, card.table_number, card.url, heading)
 
-    if not ordered:  # an assembly with no invites still returns a valid PDF
+    if not ordered and not poll_url:  # an assembly with no invites still returns a valid PDF
         pdf.add_page()
         pdf.set_font(pdf.family, "", 11)
         pdf.cell(0, 10, "No table codes have been generated yet.",
                  new_x="LMARGIN", new_y="NEXT")
+    if poll_url:
+        # its own page, so the vote cards can be cut and handed out as well
+        pdf.add_page()
+        _cut_lines(pdf, cell_w, cell_h)
+        for slot in range(PER_PAGE):
+            x = pdf.l_margin + cell_w * (slot % COLUMNS)
+            y = pdf.t_margin + cell_h * (slot // COLUMNS)
+            _poll_cell(pdf, x, y, cell_w, cell_h, poll_url, heading)
     return bytes(pdf.output())
