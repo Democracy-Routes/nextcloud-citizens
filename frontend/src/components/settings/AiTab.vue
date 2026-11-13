@@ -16,6 +16,7 @@ const settings = useSettingsForm()
 const { form, secrets, summary, testResults, errors, busyCard } = settings
 
 const ANALYSIS_BASE_URL_EXAMPLE = 'https://api.mistral.ai/v1'
+const POLIS_URL_EXAMPLE = 'https://polis.example.org'
 const showPrompts = ref(false)
 const facAdvanced = ref(false)
 
@@ -189,7 +190,7 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 			<div class="cz-fieldgrid">
 				<div class="cz-field" style="grid-column: span 2">
 					<label>{{ t('organizer.settings.polis.url') }}</label>
-					<input v-model="form.polis_url" type="text" placeholder="https://polis.example.org" data-test="polis-url" />
+					<input v-model="form.polis_url" type="text" :placeholder="POLIS_URL_EXAMPLE" data-test="polis-url" />
 				</div>
 				<div class="cz-field" style="grid-column: span 2">
 					<label>{{ t('organizer.settings.polis.apiKey') }}</label>
