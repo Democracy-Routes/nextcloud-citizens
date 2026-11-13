@@ -330,6 +330,12 @@
 			"withdrawConfirm": "Withdraw",
 			"refused": "Refused by Polis",
 			"failed": "Sending to Polis failed: {detail}"
+		},
+		"target": {
+			"label": "Statements to write",
+			"recommended": "Recommended: {count}",
+			"estimate": "about {minutes} min of voting · {count} approved findings",
+			"hint": "Polis works best with 20 to 40 statements; people stop voting after about thirty."
 		}
 	}
 }

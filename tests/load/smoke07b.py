@@ -118,6 +118,9 @@ def cluster_offsets(blob: bytes) -> list[int]:
     return offsets
 
 
+CAPTIONS_OFFSET_MINUTES = 5
+
+
 def phone_chunks(minutes: int, offset_minutes: int = 0) -> list[bytes]:
     """Ten-second-ish chunks cut at WebM Cluster boundaries from a real past
     recording — what a phone's MediaRecorder produces, so a decoder seeded
@@ -529,8 +532,12 @@ try:
         code, card = phone("POST", "/api/v1/public/recorder/capabilities", {"purpose": "ADD_RECORDER_TO_TABLE"}, token=pa["session_token"])
         code, pb = phone("POST", "/api/v1/public/join", {"token": tok(card["url"])})
         ok("two phones at the captions table", pb.get("joined", {}).get("slot") == 2, json.dumps(pb.get("joined")))
-        chunks_a = phone_chunks(3, offset_minutes=2)
-        chunks_b = phone_chunks(3, offset_minutes=2)
+        # from minute 5: the replayed recording is speech for its first half
+        # minute, silence from minute 1 to 5, speech again from there — fed
+        # from minute 2 the takeover step handed Vosk three minutes of silence
+        # and failed on 2026-11-13 for no fault of the server's
+        chunks_a = phone_chunks(3, offset_minutes=CAPTIONS_OFFSET_MINUTES)
+        chunks_b = phone_chunks(3, offset_minutes=CAPTIONS_OFFSET_MINUTES)
         code, ra = phone("POST", "/api/v1/public/recorder/start", {"round_id": crid, "mime_type": "audio/webm;codecs=opus"}, token=pa["session_token"])
         code, rb = phone("POST", "/api/v1/public/recorder/start", {"round_id": crid, "mime_type": "audio/webm;codecs=opus"}, token=pb["session_token"])
         code, lb0 = phone("GET", f"/api/v1/public/recorder/recordings/{rb['recording_id']}/live", token=pb["session_token"])

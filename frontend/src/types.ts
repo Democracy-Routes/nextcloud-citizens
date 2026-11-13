@@ -858,6 +858,15 @@ export interface SeedsListing {
 	ready_to_export: boolean
 	max_chars: number
 	soft_chars: number
+	/** approved findings the statements are written from */
+	source_findings?: number
+	recommended_target?: number
+	/** what the last generation used */
+	seeds_target?: number | null
+	target_min?: number
+	target_max?: number
+	target_step?: number
+	seconds_per_vote?: number
 	job: JobInfo | null
 	polis?: PolisState
 	seeds: StatementSeed[]

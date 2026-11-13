@@ -9,7 +9,7 @@ import {
 	mdiRefresh,
 	mdiSendOutline,
 } from '@mdi/js'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, ApiError, BASE } from '../api'
 import { downloadFromApi } from '../download'
@@ -41,6 +41,27 @@ const confirmWithdraw = ref(false)
 const pushQueuedLocally = ref(false)
 
 const seeds = computed(() => listing.value?.seeds ?? [])
+
+// the statement-count slider; re-initialised only when the server's last-used target changes
+const target = ref(30)
+const targetMin = computed(() => listing.value?.target_min ?? 10)
+const targetMax = computed(() => listing.value?.target_max ?? 60)
+const targetStep = computed(() => listing.value?.target_step ?? 10)
+const recommended = computed(() => listing.value?.recommended_target ?? 30)
+const targetTicks = computed(() => {
+	const out: number[] = []
+	for (let v = targetMin.value; v <= targetMax.value; v += targetStep.value) out.push(v)
+	return out
+})
+const targetMinutes = computed(() => Math.round((target.value * (listing.value?.seconds_per_vote ?? 8)) / 60))
+const sourceFindings = computed(() => listing.value?.source_findings ?? listing.value?.findings_approved ?? 0)
+watch(
+	() => (listing.value ? (listing.value.seeds_target ?? listing.value.recommended_target ?? null) : null),
+	(value) => {
+		if (value !== null) target.value = value
+	},
+	{ immediate: true },
+)
 const maxChars = computed(() => listing.value?.max_chars ?? 400)
 const softChars = computed(() => listing.value?.soft_chars ?? 140)
 const jobLive = computed(() => {
@@ -154,7 +175,7 @@ async function generate(): Promise<void> {
 	confirmRegenerate.value = false
 	busy.value = true
 	try {
-		await api.generateSeeds(props.assembly.id)
+		await api.generateSeeds(props.assembly.id, target.value)
 		queuedLocally.value = true
 		toast(t('organizer.results.seeds.toast.queued'))
 		await load()
@@ -340,6 +361,37 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 						: seeds.length ? t('organizer.results.seeds.regenerate') : t('organizer.results.seeds.generate') }}
 				</CzButton>
 			</div>
+			<div v-if="listing" class="cz-row" style="margin-top: 12px; gap: 14px; align-items: center" data-test="seeds-target-control">
+				<label for="seeds-target-input" class="cz-muted" style="font-size: 0.8125rem">{{ t('organizer.results.seeds.target.label') }}</label>
+				<input
+					id="seeds-target-input"
+					v-model.number="target"
+					type="range"
+					list="seeds-target-ticks"
+					:min="targetMin"
+					:max="targetMax"
+					:step="targetStep"
+					style="flex: 1; min-width: 160px"
+					data-test="seeds-target" />
+				<datalist id="seeds-target-ticks">
+					<option v-for="tick in targetTicks" :key="tick" :value="tick" />
+				</datalist>
+				<strong style="font-size: 1.75rem; line-height: 1" data-test="seeds-target-value">{{ target }}</strong>
+				<button
+					type="button"
+					class="cz-seed-badge"
+					style="background: none; cursor: pointer; color: inherit"
+					data-test="seeds-target-recommended"
+					@click="target = recommended">
+					{{ t('organizer.results.seeds.target.recommended', { count: recommended }) }}
+				</button>
+			</div>
+			<p v-if="listing" class="cz-muted" style="margin: 4px 0 0; font-size: 0.8125rem" data-test="seeds-target-estimate">
+				{{ t('organizer.results.seeds.target.estimate', { minutes: targetMinutes, count: sourceFindings }) }}
+			</p>
+			<p v-if="listing" class="cz-muted" style="margin: 4px 0 0; font-size: 0.8125rem">
+				{{ t('organizer.results.seeds.target.hint') }}
+			</p>
 			<p v-if="listing && !configured" class="cz-muted" style="margin: 8px 0 0; font-size: 0.8125rem" data-test="seeds-not-configured">
 				{{ t('organizer.results.seeds.notConfigured') }}
 			</p>

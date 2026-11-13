@@ -13,6 +13,7 @@ const pushSeeds = vi.fn()
 const publishPoll = vi.fn()
 const unpublishPoll = vi.fn()
 const toast = vi.fn()
+const generateSeeds = vi.fn()
 
 vi.mock('../../frontend/src/api', () => ({
 	api: {
@@ -22,7 +23,7 @@ vi.mock('../../frontend/src/api', () => ({
 		pushSeeds: (...a: unknown[]) => pushSeeds(...a),
 		publishPoll: (...a: unknown[]) => publishPoll(...a),
 		unpublishPoll: (...a: unknown[]) => unpublishPoll(...a),
-		generateSeeds: vi.fn(),
+		generateSeeds: (...a: unknown[]) => generateSeeds(...a),
 		createSeed: vi.fn(),
 		reorderSeeds: vi.fn(),
 		deleteSeed: vi.fn(),
@@ -57,7 +58,9 @@ function polisState(overrides: Record<string, unknown> = {}) {
 function listing(overrides: Record<string, unknown> = {}) {
 	return {
 		assembly_id: 'a1', language: 'en', analysis_configured: true, findings_approved: 2,
-		ready_to_export: false, max_chars: 400, soft_chars: 140, job: null, polis: polisState(), seeds: [], ...overrides,
+		ready_to_export: false, max_chars: 400, soft_chars: 140, job: null, polis: polisState(), seeds: [],
+		source_findings: 12, recommended_target: 30, seeds_target: null, target_min: 10, target_max: 60,
+		target_step: 10, seconds_per_vote: 8, ...overrides,
 	}
 }
 
@@ -66,6 +69,7 @@ beforeEach(() => {
 	updateSeed.mockReset().mockResolvedValue(seed({ status: 'APPROVED' }))
 	approveAllSeeds.mockReset()
 	toast.mockReset()
+	generateSeeds.mockReset().mockResolvedValue({ queued: true, target: 50 })
 	pushSeeds.mockReset().mockResolvedValue({ queued: true })
 	publishPoll.mockReset().mockResolvedValue({ published_at: '2026-11-13T11:00:00Z' })
 	unpublishPoll.mockReset().mockResolvedValue(undefined)
@@ -261,5 +265,28 @@ describe('the Polis seeds tab', () => {
 		const rows = wrapper.findAll('[data-test="seed-row"]')
 		expect(rows[0].find('[data-test="seed-refused"]').exists()).toBe(false)
 		expect(rows[1].find('[data-test="seed-refused"]').text()).toBe('Refused by Polis')
+	})
+
+	it('initialises the target slider to the recommendation and shows the estimate', async () => {
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const slider = wrapper.find('[data-test="seeds-target"]')
+		expect((slider.element as HTMLInputElement).value).toBe('30')
+		expect(wrapper.find('[data-test="seeds-target-recommended"]').text()).toBe('Recommended: 30')
+		expect(wrapper.find('[data-test="seeds-target-estimate"]').text()).toBe('about 4 min of voting · 12 approved findings')
+	})
+
+	it('generates with the chosen target and the chip resets to the recommendation', async () => {
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const slider = wrapper.find('[data-test="seeds-target"]')
+		await slider.setValue(50)
+		expect(wrapper.find('[data-test="seeds-target-estimate"]').text()).toContain('about 7 min')
+		await wrapper.find('[data-test="seeds-generate"]').trigger('click')
+		await flushPromises()
+		expect(generateSeeds).toHaveBeenCalledWith('a1', 50)
+		await slider.setValue(60)
+		await wrapper.find('[data-test="seeds-target-recommended"]').trigger('click')
+		expect((slider.element as HTMLInputElement).value).toBe('30')
 	})
 })

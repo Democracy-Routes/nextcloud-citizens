@@ -71,6 +71,10 @@ All notable changes to Nextcloud Citizens.
   audio or a transcript. Routes: `POST /api/v1/assemblies/import`,
   `POST /api/v1/recordings/{id}/transcript`, `.../audio`.
 - The housekeeping sweep discards unfinished uploads after 24 hours.
+- Smoke (`tests/load/smoke07b.py`): the two-phone captions takeover step
+  replays the sample from minute 5, where it has speech; from minute 2 it
+  fed Vosk three minutes of silence and failed on 2026-11-13 for no fault
+  of the server's.
 - Audit events `session_imported`, `transcript_attached`, `audio_attached`.
 - Fix: the analysis adapter reads a chat reply whose content is a list of
   parts (Mistral Large since 2026-11) instead of failing every table with

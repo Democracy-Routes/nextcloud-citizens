@@ -330,6 +330,12 @@
 			"withdrawConfirm": "Retirer",
 			"refused": "Refusée par Polis",
 			"failed": "L'envoi à Polis a échoué : {detail}"
+		},
+		"target": {
+			"label": "Énoncés à rédiger",
+			"recommended": "Recommandé : {count}",
+			"estimate": "environ {minutes} min de vote · {count} constats approuvés",
+			"hint": "Polis fonctionne mieux avec 20 à 40 énoncés ; les gens cessent de voter après une trentaine."
 		}
 	}
 }

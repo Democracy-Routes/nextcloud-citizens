@@ -330,6 +330,12 @@
 			"withdrawConfirm": "Zurückziehen",
 			"refused": "Von Polis abgelehnt",
 			"failed": "Senden an Polis fehlgeschlagen: {detail}"
+		},
+		"target": {
+			"label": "Zu schreibende Aussagen",
+			"recommended": "Empfohlen: {count}",
+			"estimate": "etwa {minutes} Min. Abstimmung · {count} freigegebene Erkenntnisse",
+			"hint": "Polis funktioniert am besten mit 20 bis 40 Aussagen; nach etwa dreißig hören die Leute auf abzustimmen."
 		}
 	}
 }

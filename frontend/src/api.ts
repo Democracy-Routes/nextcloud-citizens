@@ -357,8 +357,12 @@ export const api = {
 	// ---- Polis seeds
 	listSeeds: (assemblyId: string) =>
 		request<SeedsListing>('GET', `/api/v1/assemblies/${assemblyId}/seeds`),
-	generateSeeds: (assemblyId: string) =>
-		request<{ queued: boolean }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/generate`),
+	generateSeeds: (assemblyId: string, target?: number) =>
+		request<{ queued: boolean; target: number | null }>(
+			'POST',
+			`/api/v1/assemblies/${assemblyId}/seeds/generate`,
+			target === undefined ? undefined : { target },
+		),
 	approveAllSeeds: (assemblyId: string) =>
 		request<SeedsListing & { approved: number }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/approve-all`),
 	publishPoll: (assemblyId: string) =>

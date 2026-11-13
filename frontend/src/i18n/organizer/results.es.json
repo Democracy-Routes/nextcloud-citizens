@@ -330,6 +330,12 @@
 			"withdrawConfirm": "Retirar",
 			"refused": "Rechazada por Polis",
 			"failed": "El envío a Polis falló: {detail}"
+		},
+		"target": {
+			"label": "Afirmaciones a redactar",
+			"recommended": "Recomendado: {count}",
+			"estimate": "unos {minutes} min de votación · {count} hallazgos aprobados",
+			"hint": "Polis funciona mejor con 20 a 40 afirmaciones; la gente deja de votar después de unas treinta."
 		}
 	}
 }
