@@ -115,6 +115,41 @@ def test_the_report_states_the_engines_and_flags_live_captions(recorded):
     assert "Speech-to-text:" in report_svc.render_markdown(report)
 
 
+def _finding(recorded, model: str):
+    from citizens.db.models import Finding
+
+    with session_scope() as session:
+        round_ = session.execute(
+            select(Round).where(Round.assembly_id == recorded["assembly_id"])
+        ).scalar_one()
+        session.add(Finding(
+            assembly_id=recorded["assembly_id"], round_id=round_.id, scope="round",
+            type="proposal", title="Later buses", summary="Run buses later.", status="APPROVED",
+            ai_model=model,
+        ))
+
+
+def test_the_report_names_the_analysis_models(recorded):
+    """Each finding recorded the model that wrote it; the note lists them, so
+    a report analysed twice (a re-run on a newer model) names both."""
+    _finding(recorded, "mistral-large-latest")
+    _finding(recorded, "  mistral-medium-latest ")
+    _finding(recorded, "")
+    with session_scope() as session:
+        assembly = session.get(Assembly, recorded["assembly_id"])
+        report = report_svc.build_report(session, assembly)
+    assert "Analysis: mistral-large-latest, mistral-medium-latest." in report["methodology_note"]
+    markdown = report_svc.render_markdown(report)
+    assert "Analysis: mistral-large-latest, mistral-medium-latest." in markdown
+    assert markdown.rstrip().endswith("_Powered by democracyroutes.com_")
+
+
+def test_no_findings_means_no_analysis_line(recorded):
+    with session_scope() as session:
+        assembly = session.get(Assembly, recorded["assembly_id"])
+        assert "Analysis:" not in report_svc.build_report(session, assembly)["methodology_note"]
+
+
 def test_a_recording_without_a_transcript_says_so(recorded):
     files = recorded["client"].get(f"/api/v1/assemblies/{recorded['assembly_id']}/files").json()
     [entry] = files["rounds"][0]["tables"]

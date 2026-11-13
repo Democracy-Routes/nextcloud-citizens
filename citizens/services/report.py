@@ -18,6 +18,7 @@ from citizens.db.models import (
 from citizens.services import tables as tables_svc
 from citizens.services.recording import assembly_progress as progress
 from citizens.services.report_text import (
+    POWERED_BY,
     TYPE_ORDER,
     finding_type_label,
     text,
@@ -252,6 +253,9 @@ def _methodology_note(
     engines = _transcript_engines(session, assembly)
     if engines:
         parts.append(text(language, "transcript_engines", engines=engines))
+    models = _analysis_models(session, assembly)
+    if models:
+        parts.append(text(language, "analysis_models", models=models))
     if _has_live_transcript(session, assembly):
         parts.append(text(language, "live_transcript_note"))
     if _has_replaced_device(session, assembly):
@@ -280,6 +284,17 @@ def _methodology_note(
             )
         )
     return " ".join(parts)
+
+
+def _analysis_models(session: Session, assembly: Assembly) -> str:
+    """The language models that wrote this assembly's findings — as each
+    finding recorded its model at analysis time, so a report analysed twice
+    with two models names both. The provider is not stored, so this is the
+    model name as the provider calls it ("mistral-large-latest")."""
+    rows = session.execute(
+        select(Finding.ai_model).where(Finding.assembly_id == assembly.id).distinct()
+    ).scalars()
+    return ", ".join(sorted({model.strip() for model in rows if model and model.strip()}))
 
 
 def _transcript_engines(session: Session, assembly: Assembly) -> str:
@@ -692,7 +707,7 @@ def render_markdown(report: dict) -> str:
             )
         ):
             lines += [no_findings, ""]
-    lines += ["---", "", f"_{report['methodology_note']}_", ""]
+    lines += ["---", "", f"_{report['methodology_note']}_", "", f"_{POWERED_BY}_", ""]
     return "\n".join(lines)
 
 

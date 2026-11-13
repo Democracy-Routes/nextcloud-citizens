@@ -38,7 +38,8 @@ def _vertical_bars(page: str) -> list[float]:
     return heights
 
 
-def _report(quote: str, quotes_per_finding: int = 5, findings: int = 12) -> dict:
+def _report(quote: str, quotes_per_finding: int = 5, findings: int = 12, tables: int = 1,
+            cross_table: bool = True) -> dict:
     evidence = [
         {"speaker": f"SPEAKER_{i:02d}", "start": float(i * 7), "timestamp": f"0{i}:00",
          "text": quote}
@@ -55,10 +56,17 @@ def _report(quote: str, quotes_per_finding: int = 5, findings: int = 12) -> dict
             {
                 "position": 1, "title": "Round 1 - design", "question": "What can improve?",
                 "summary": "A summary of the round.",
-                "cross_table": [],
+                "cross_table": [
+                    {
+                        "type": "proposal", "title": "Across the tables: later buses",
+                        "summary": "Several tables asked for later buses.",
+                        "support": "", "is_draft": False, "mentioned_table_count": 3,
+                        "evidence_removed": False, "evidence": evidence[:1],
+                    }
+                ] if cross_table else [],
                 "tables": [
                     {
-                        "table_number": 1, "summary": "The table discussed cycle lanes.",
+                        "table_number": number, "summary": "The table discussed cycle lanes.",
                         "findings": [
                             {
                                 "type": "proposal", "title": f"Proposal number {n}",
@@ -69,6 +77,7 @@ def _report(quote: str, quotes_per_finding: int = 5, findings: int = 12) -> dict
                             for n in range(findings)
                         ],
                     }
+                    for number in range(1, tables + 1)
                 ],
             }
         ],
@@ -116,6 +125,107 @@ def test_the_methodology_note_does_not_widow_onto_its_own_page():
         assert "BT" in last, f"{findings} findings produced an empty final page"
 
 
+def _footer_markers(pdf_bytes_fn, monkeypatch) -> list[str]:
+    """The footer marker ("Table N" or nothing) of every page, in page order,
+    captured when each page's footer is drawn."""
+    from citizens.services import report_pdf as mod
+
+    markers: list[str] = []
+    original = mod._ReportPDF.footer
+
+    def wrapper(self):
+        markers.append(self.footer_marker)
+        return original(self)
+
+    monkeypatch.setattr(mod._ReportPDF, "footer", wrapper)
+    pdf_bytes_fn()
+    return markers
+
+
+def test_each_table_starts_on_a_page_of_its_own(monkeypatch):
+    """A ten-table report ran the tables together under 8-pt eyebrows. Now a
+    table opens a fresh page with a banner, and the footer names the table
+    on every page of it, so the sections are told apart at a glance."""
+    markers = _footer_markers(
+        lambda: render_pdf(_report("Short but real quote text here.", findings=2, tables=3)),
+        monkeypatch,
+    )
+    tabled = [m for m in markers if m]
+    assert tabled == ["Table 1", "Table 2", "Table 3"], markers
+    assert markers[0] == "", "the cover carries no table marker"
+    # the table pages come after the round's own page(s), never before
+    assert markers.index("Table 1") > 0
+
+    one = len(_pages(render_pdf(_report("Short but real quote text here.", findings=2, tables=1))))
+    three = len(_pages(render_pdf(_report("Short but real quote text here.", findings=2, tables=3))))
+    assert three == one + 2
+
+
+def test_a_table_running_over_several_pages_keeps_its_marker(monkeypatch):
+    markers = _footer_markers(
+        lambda: render_pdf(_report("A quote long enough to wrap onto several lines. " * 4,
+                                   findings=12, tables=2)),
+        monkeypatch,
+    )
+    tabled = [m for m in markers if m]
+    assert tabled.count("Table 1") > 1
+    assert tabled == sorted(tabled), "a table's pages are contiguous"
+
+
+def test_the_next_round_starts_a_clean_page_after_the_table_pages(monkeypatch):
+    report = _report("Short but real quote text here.", findings=2, tables=2)
+    second = dict(report["rounds"][0], position=2, title="Round 2 - decide")
+    report["rounds"].append(second)
+    markers = _footer_markers(lambda: render_pdf(report), monkeypatch)
+    first_t2 = markers.index("Table 2")
+    # after the last table page of round 1 comes round 2's own page, unmarked
+    assert markers[first_t2 + 1] == "", markers
+    assert markers[first_t2 + 2] == "Table 1", markers
+
+
+def test_a_round_with_nothing_of_its_own_keeps_its_first_table_on_its_page(monkeypatch):
+    """No cross-table findings and no comparison: a page holding only the
+    round banner and its question would be waste, so table 1 follows them."""
+    report = _report("Short but real quote text here.", findings=2, tables=2, cross_table=False)
+    markers = _footer_markers(lambda: render_pdf(report), monkeypatch)
+    assert markers == ["Table 1", "Table 2"], markers
+    with_cross = _footer_markers(
+        lambda: render_pdf(_report("Short but real quote text here.", findings=2, tables=2)),
+        monkeypatch,
+    )
+    assert with_cross == ["", "Table 1", "Table 2"], with_cross
+
+
+def test_every_page_says_powered_by_democracyroutes(monkeypatch):
+    from citizens.services import report_pdf as mod
+    from citizens.services.report_text import POWERED_BY
+
+    drawn: list[str] = []
+    original = mod._ReportPDF.cell
+
+    def wrapper(self, *a, **k):
+        txt = k.get("txt", k.get("text", a[2] if len(a) > 2 else ""))
+        if isinstance(txt, str):
+            drawn.append(txt)
+        return original(self, *a, **k)
+
+    monkeypatch.setattr(mod._ReportPDF, "cell", wrapper)
+    pdf = render_pdf(_report("Short but real quote text here.", findings=2, tables=2))
+    branded = [t for t in drawn if POWERED_BY in t]
+    assert len(branded) == len(_pages(pdf))
+    assert any(t.startswith("Bologna Mobility Assembly  ·  Table 2  ·  ") for t in branded), branded
+    assert branded[0] == f"Bologna Mobility Assembly  ·  {POWERED_BY}"
+
+
+def test_the_table_banner_is_drawn_once_per_table(monkeypatch):
+    seen = _captured_text(
+        lambda: render_pdf(_report("Short but real quote text here.", findings=2, tables=3)),
+        monkeypatch,
+    )
+    assert [t for t in seen if re.fullmatch(r"Table \d+", t)] == ["Table 1", "Table 2", "Table 3"]
+    assert seen.count("Table detail") == 1
+
+
 # Text is deliberately NOT asserted here. The report embeds DejaVu as a CID
 # font, so the content stream holds 2-byte glyph ids rather than characters —
 # a substring check against it silently passes for any string at all. The
@@ -132,7 +242,7 @@ def _captured_text(pdf_bytes_fn, monkeypatch) -> list[str]:
     from citizens.services import report_pdf as mod
 
     seen: list[str] = []
-    for name in ("text_block", "eyebrow", "group_heading", "section_banner", "badge"):
+    for name in ("text_block", "eyebrow", "group_heading", "banner", "badge"):
         original = getattr(mod._ReportPDF, name)
 
         def wrapper(self, text, *a, __orig=original, **k):

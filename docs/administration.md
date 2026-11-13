@@ -165,7 +165,10 @@ What you give up is accuracy and completeness. Captions are produced under time
 pressure: audio is dropped if the engine falls behind (logged when it happens),
 and a session that fails resumes after a cooldown, so speech in that window is
 never captioned. A report built from captions says so in its methodology note,
-in every format, so a reader knows which kind of record they hold.
+in every format, so a reader knows which kind of record they hold. The same
+note names the speech-to-text engines and the analysis models that produced
+the findings, and every report carries "Powered by democracyroutes.com" (the
+PDF in its page footer, the Markdown as its last line); neither is a setting.
 
 Nothing is stuck. The audio is kept, so **Re-transcribe** on any table's row in
 the Files tab transcribes it properly from the stored audio and re-runs the

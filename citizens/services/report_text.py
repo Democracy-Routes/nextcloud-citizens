@@ -91,6 +91,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         # only when at least one finding was approved (report._methodology_note)
         "methodology_reviewed": "Findings were reviewed by a human organizer.",
         "transcript_engines": "Speech-to-text: {engines}.",
+        "analysis_models": "Analysis: {models}.",
         "source_live": "live captions",
         "live_transcript_note": (
             "This assembly's transcripts come from the live captions produced while "
@@ -223,6 +224,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_reviewed": "I risultati sono stati revisionati da un organizzatore.",
         "transcript_engines": "Trascrizione automatica: {engines}.",
+        "analysis_models": "Analisi: {models}.",
         "source_live": "sottotitoli in tempo reale",
         "live_transcript_note": (
             "Le trascrizioni di questa assemblea provengono dai sottotitoli in tempo "
@@ -355,6 +357,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_reviewed": "Die Ergebnisse wurden von einer organisierenden Person geprüft.",
         "transcript_engines": "Spracherkennung: {engines}.",
+        "analysis_models": "Auswertung: {models}.",
         "source_live": "Live-Untertitel",
         "live_transcript_note": (
             "Die Transkripte dieser Versammlung stammen aus den Live-Untertiteln, die entstanden, "
@@ -485,6 +488,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_reviewed": "Les résultats ont été relus par une personne de l'organisation.",
         "transcript_engines": "Reconnaissance vocale : {engines}.",
+        "analysis_models": "Analyse : {models}.",
         "source_live": "sous-titres en direct",
         "live_transcript_note": (
             "Les transcriptions de cette assemblée proviennent des sous-titres en direct produits "
@@ -613,6 +617,7 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         "methodology_reviewed": "Los resultados fueron revisados por una persona de la organización.",
         "transcript_engines": "Reconocimiento de voz: {engines}.",
+        "analysis_models": "Análisis: {models}.",
         "source_live": "subtítulos en directo",
         "live_transcript_note": (
             "Las transcripciones de esta asamblea proceden de los subtítulos en directo "
@@ -705,6 +710,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
 }
 
 DEFAULT_LANGUAGE = "en"
+
+# Brand line on every report (PDF footer, last line of the Markdown). Not a
+# catalogue entry: it is the same in every language and never a setting.
+POWERED_BY = "Powered by democracyroutes.com"
 
 
 def normalize_language(language: str | None) -> str:

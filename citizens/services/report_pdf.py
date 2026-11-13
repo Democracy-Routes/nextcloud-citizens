@@ -27,7 +27,7 @@ from citizens.services.report import (
     round_heading,
     voice_name,
 )
-from citizens.services.report_text import finding_type_label, format_date, text
+from citizens.services.report_text import POWERED_BY, finding_type_label, format_date, text
 
 _FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 
@@ -36,6 +36,7 @@ MUTED = (107, 107, 107)
 ACCENT = (0, 103, 158)  # NC blue
 LIGHT = (238, 240, 243)
 AMBER = (163, 106, 0)  # points of divergence
+TABLE_BANNER = (58, 74, 92)  # slate: the table pages, distinct from the round banners
 
 BADGE_COLORS = {
     "proposal": ACCENT,
@@ -52,6 +53,9 @@ class _ReportPDF(FPDF):
     def __init__(self, footer_text: str) -> None:
         super().__init__(format="A4")
         self.footer_text = footer_text
+        # "Table N" while the table pages are being drawn, so a reader who
+        # opens the report in the middle knows which table they are in
+        self.footer_marker = ""
         self.set_margins(18, 16, 18)
         self.set_auto_page_break(auto=True, margin=20)
         self.family = "helvetica"
@@ -77,7 +81,8 @@ class _ReportPDF(FPDF):
         self.set_y(-11)
         self.set_font(self.family, "", 7.5)
         self.set_text_color(*MUTED)
-        self.cell(0, 5, self.footer_text, new_x="RIGHT", new_y="TOP")
+        parts = (self.footer_text, self.footer_marker, POWERED_BY)
+        self.cell(0, 5, "  ·  ".join(part for part in parts if part), new_x="RIGHT", new_y="TOP")
         self.set_y(-11)
         self.cell(0, 5, str(self.page_no()), align="R", new_x="LMARGIN", new_y="NEXT")
 
@@ -130,15 +135,36 @@ class _ReportPDF(FPDF):
 
     def section_banner(self, title: str) -> None:
         # a banner alone at the foot of a page is just a heading with nothing
-        # under it: reserve the banner plus a couple of lines of what follows
-        if self.will_page_break(10 + 3 + 16):
+        # under it: reserve the banner plus a couple of lines of what follows.
+        # After a run of table pages a new section always starts a page, so
+        # the last table page keeps its footer marker and this page has none.
+        if self.footer_marker or self.will_page_break(10 + 3 + 16):
             self.add_page()
+            self.footer_marker = ""
         self.ln(5)
-        self.set_fill_color(*ACCENT)
+        self.banner(title, ACCENT)
+
+    def banner(self, title: str, color: tuple) -> None:
+        self.set_fill_color(*color)
         self.set_font(self.family, "B", 13)
         self.set_text_color(255, 255, 255)
         self.cell(0, 10, f"  {title}", fill=True, new_x="LMARGIN", new_y="NEXT")
         self.ln(3)
+
+    def table_page(self, label: str, title: str, marker: str, fresh: bool = True) -> None:
+        """A page for one table, opened by a full-width banner so a reader
+        never has to guess where one table ends and the next begins. `label`
+        ("Table detail") is printed above the first banner only. A round with
+        nothing of its own before the tables keeps its first table on the
+        round's page (`fresh=False`) rather than leaving the banner alone."""
+        if fresh:
+            self.add_page()
+        else:
+            self.ln(4)
+        self.footer_marker = marker
+        if label:
+            self.eyebrow(label)
+        self.banner(title, TABLE_BANNER)
 
     def group_heading(self, title: str, accent: tuple = ACCENT) -> None:
         self.ln(2)
@@ -474,10 +500,18 @@ def render_pdf(report: dict, logo_path: Path | None = None,
             t for t in round_["tables"] if t["findings"] or t["summary"] or _balance_of(t)
         ]
         if tables_with_content:
-            pdf.group_heading(text(language, "table_detail"), MUTED)
-            for table in tables_with_content:
-                # per table: summary → speaking balance → findings
-                pdf.eyebrow(text(language, "table", number=table["table_number"]), ACCENT)
+            # the round's page carries its cross-table findings and comparison;
+            # when it has neither, the first table starts right there
+            round_has_own_content = bool(round_["cross_table"]) or len(
+                round_.get("speaking_comparison") or []
+            ) >= 2
+            for index, table in enumerate(tables_with_content):
+                # one page per table: banner → summary → speaking balance → findings
+                title = text(language, "table", number=table["table_number"])
+                pdf.table_page(
+                    text(language, "table_detail") if index == 0 else "", title, title,
+                    fresh=index > 0 or round_has_own_content,
+                )
                 if table.get("quotations_withheld"):
                     pdf.text_block(text(language, "quotations_withheld"), size=9, color=MUTED,
                                    height=4.6)

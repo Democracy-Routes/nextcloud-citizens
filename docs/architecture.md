@@ -280,7 +280,12 @@ and one that has not reported since will clear itself if it is opened again.
   same `store_transcript()` the provider adapters use — so analysis, evidence
   citations and reports need no special case. `transcripts.source`
   (`final`/`live`, migration 0014) records which happened, and drives a line in
-  the report's methodology note.
+  the report's methodology note. The note also lists the transcript engines
+  (`transcripts.provider`/`model`) and the analysis models
+  (`findings.ai_model`), so a report states its own provenance.
+- The PDF (`services/report_pdf.py`) gives each table of a round its own page
+  with a banner and a "Table N" footer marker; the brand line
+  (`report_text.POWERED_BY`) is on every page's footer and ends the Markdown.
 - A caption session keeps every line it produced, not the window it displays:
   `status()` returns the last `MAX_LINES` for the phone while `session.lines`
   holds the whole round. Persisting appends to any file already there, so a

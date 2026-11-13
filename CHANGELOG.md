@@ -46,6 +46,16 @@ All notable changes to Nextcloud Citizens.
   test and bans empty verbs, whatever the topic. `POST .../seeds/generate
   {target}`; listing fields `recommended_target`, `seeds_target`,
   `source_findings`.
+- The report says what made it: every page of the PDF ends with
+  "Powered by democracyroutes.com" (the Markdown too), and the methodology
+  note names the analysis model(s) next to the speech-to-text engines
+  ("Analysis: mistral-large-latest."), taken from the model each finding
+  recorded when it was written. A report of a closed assembly shows the new
+  line after **Refresh final report**; the layout needs nothing.
+- One page per table in the PDF: each table of the Table detail section
+  opens a fresh page with a slate banner, and the footer of its pages says
+  "Table N", so a reader who opens the report in the middle knows where
+  they are. Plenary reports are unchanged.
 - Seeds export, available once every statement is approved or rejected:
   `<assembly>-statements.csv` (`position,statement`) or
   `<assembly>-statements.json` (schema `citizens.statement-seeds/1`). The

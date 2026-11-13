@@ -338,6 +338,8 @@ _No findings for this round yet._
 ---
 
 _AI was used to assist transcription and analysis._
+
+_Powered by democracyroutes.com_
 """
 
 
