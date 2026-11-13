@@ -697,7 +697,7 @@ def _all_known_keys() -> list[str]:
     keys = set(DEFAULTS) | set(LEGACY_KEYS.values())
     keys |= {
         f"{name}_api_key"
-        for name in ("mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator")
+        for name in ("mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator", "polis")
     }
     return sorted(keys)
 
