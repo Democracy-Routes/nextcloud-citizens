@@ -511,6 +511,26 @@ def handle_seed_statements(session: Session, payload: dict) -> None:
         raise
 
 
+def handle_push_polis(session: Session, payload: dict) -> None:
+    """The approved statements to the configured Polis instance
+    (services/polis.py). Same discipline as the seeds: commit, then the
+    config read and the network call."""
+    from citizens.services import polis as polis_svc
+
+    assembly = session.get(Assembly, payload["assembly_id"])
+    if assembly is None:
+        raise PermanentJobError(f"Assembly {payload['assembly_id']} no longer exists")
+    session.commit()
+    store = provider_config.default_store()
+    try:
+        polis_svc.push(session, store, assembly)
+    except polis_svc.PolisError as exc:
+        log.error("polis_push_failed", assembly_id=assembly.id, permanent=exc.permanent, status=exc.status)
+        if exc.permanent:
+            raise PermanentJobError(str(exc)) from exc
+        raise
+
+
 HANDLERS = {
     # the built-in Vosk engine's model installs (services/vosk_models.py)
     "INSTALL_VOSK_MODEL": lambda session, payload: __import__(
@@ -527,4 +547,5 @@ HANDLERS = {
     "ANALYZE_ROUND": handle_analyze_round,
     "ANALYZE_ASSEMBLY": handle_analyze_assembly,
     "SEED_STATEMENTS": handle_seed_statements,
+    "PUSH_POLIS": handle_push_polis,
 }

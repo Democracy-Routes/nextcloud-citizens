@@ -225,6 +225,7 @@ def payload(seed: StatementSeed) -> dict:
         "stale": seed.stale,
         "reviewed_by": seed.reviewed_by,
         "exported_at": seed.exported_at.isoformat() if seed.exported_at else None,
+        "polis_tid": seed.polis_tid,
     }
 
 

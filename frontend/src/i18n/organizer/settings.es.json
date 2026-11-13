@@ -303,5 +303,12 @@
 		"add": "Añadir cuenta",
 		"invitationSent": "Invitación enviada a {name}.",
 		"noEmailResult": "Sin correo: define la contraseña de {name} desde el terminal."
+	},
+	"polis": {
+		"title": "Polis",
+		"lead": "Envía las afirmaciones aprobadas directamente a una conversación de Polis. Hacen falta la URL de la instancia y una clave API emitida por su operador; solo se envía el texto de las afirmaciones.",
+		"url": "URL de la instancia",
+		"apiKey": "Clave API",
+		"test": "Probar la conexión"
 	}
 }

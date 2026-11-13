@@ -306,6 +306,20 @@
 			"deleted": "Aussage gelöscht",
 			"downloadFailed": "Die Datei konnte nicht heruntergeladen werden – prüfen Sie den Pop-up-Blocker",
 			"notReady": "Prüfen Sie jede Aussage, bevor Sie exportieren"
+		},
+		"polis": {
+			"send": "An Polis senden",
+			"sendTitle": "Aussagen an Polis senden?",
+			"sendBody": "Die freigegebenen Aussagen werden an die in den Einstellungen eingetragene Polis-Instanz gesendet. Beim ersten Mal wird eine Konversation mit dem Namen dieser Versammlung angelegt; erneutes Senden fügt nur neue Aussagen hinzu. Citizens verlässt nur der Text der Aussagen.",
+			"sendConfirm": "Senden",
+			"queued": "Senden an Polis läuft — die Links erscheinen hier, sobald es fertig ist",
+			"notConfigured": "Trage zuerst die Polis-Instanz und den API-Schlüssel in den Einstellungen ein",
+			"linkPublic": "Abstimmungsseite",
+			"linkModeration": "Moderation",
+			"linkReport": "Polis-Bericht",
+			"pushedAt": "Gesendet am {date}",
+			"refused": "Von Polis abgelehnt",
+			"failed": "Senden an Polis fehlgeschlagen: {detail}"
 		}
 	}
 }

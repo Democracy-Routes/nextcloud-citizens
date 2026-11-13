@@ -62,13 +62,30 @@ Export downloads approved statements only, numbered from 1:
 
 Exported statements are marked **EXPORTED**. You can export again.
 
-## Putting them into Polis
+## Sending them to Polis
 
-For now this is by hand: open the Polis conversation, then paste the
-statements into the **seed comments** box in its admin page, one per line (they
-are in the CSV's second column). Or send the file to the person who runs the
-Polis instance, who can import it. A direct push from Citizens to Polis may
-come later.
+Once every statement is approved or rejected, **Send to Polis** sends the
+approved ones straight to the Polis instance an administrator configured in
+**Settings -> AI -> Polis** (the instance URL and an API key issued by the
+operator of that instance; **Test connection** says whose key it is). It needs
+the Citizens-Polis fork, which has the import endpoint.
+
+What happens: Citizens sends the same file the JSON export writes, plus the
+assembly name as the topic and its description. The first send creates a
+public conversation and its report page; the three links (voting page,
+moderation, Polis report) then appear on the seeds card. Sending again is
+safe: Polis finds the conversation by the assembly name and adds only the
+statements whose text is new. The statements sent are marked **EXPORTED**.
+
+If Polis refuses the send because a statement looks like personal data (an
+e-mail address, a phone number, a table reference, a verbatim quote in
+quotation marks), nothing is created, the refused statements get a
+**Refused by Polis** badge, and you edit them and send again.
+
+Without a configured instance the button is disabled and the export files
+remain the way: paste the statements into the **seed comments** box of the
+Polis admin page, one per line (the CSV's second column), or send the file to
+the person who runs the instance.
 
 ## Privacy
 

@@ -303,5 +303,12 @@
 		"add": "Ajouter le compte",
 		"invitationSent": "Invitation envoyée à {name}.",
 		"noEmailResult": "Pas d'e-mail : définissez le mot de passe de {name} depuis le terminal."
+	},
+	"polis": {
+		"title": "Polis",
+		"lead": "Envoie les affirmations approuvées directement dans une conversation Polis. Il faut l'URL de l'instance et une clé API délivrée par son opérateur ; seul le texte des affirmations est envoyé.",
+		"url": "URL de l'instance",
+		"apiKey": "Clé API",
+		"test": "Tester la connexion"
 	}
 }

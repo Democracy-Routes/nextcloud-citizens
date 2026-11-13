@@ -180,6 +180,9 @@ class ProvidersUpdate(BaseModel):
     org_dpo: str | None = Field(default=None, max_length=300)
     org_hosting: str | None = Field(default=None, max_length=300)
     org_authority: str | None = Field(default=None, max_length=300)
+    # the Polis instance the approved statements are sent to
+    polis_url: str | None = Field(default=None, max_length=300)
+    polis_api_key: str | None = Field(default=None, max_length=500)
 
 
 # provider endpoints are used for outbound requests from inside the Nextcloud
@@ -191,6 +194,7 @@ _URL_FIELDS = {
     "deepgram_live_url": ("ws", "wss"),
     "mistral_live_url": ("ws", "wss"),
     "vosk_url": ("ws", "wss"),
+    "polis_url": ("http", "https"),
 }
 
 
@@ -348,7 +352,7 @@ def vosk_model_remove(name: str, user: AdminUser, session: DB):
 
 
 class TestIn(BaseModel):
-    target: Literal["mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator"]
+    target: Literal["mistral", "deepgram", "whisper", "vosk", "analysis", "facilitator", "polis"]
     # lets the admin test what's typed in the form before saving it
     api_key: str | None = Field(default=None, max_length=500)
     base_url: str | None = Field(default=None, max_length=500)

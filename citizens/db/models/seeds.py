@@ -49,8 +49,10 @@ class StatementSeed(Base):
     reviewed_by: Mapped[str | None] = mapped_column(String(64))
     reviewed_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     exported_at: Mapped[datetime | None] = mapped_column(TZDateTime())
-    # reserved for the push to a Polis instance
+    # set by the push to Polis (services/polis.py): the conversation and the
+    # statement's id (tid) there
     polis_conversation_id: Mapped[str | None] = mapped_column(String(120))
+    polis_tid: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 

@@ -46,6 +46,17 @@ class Assembly(Base):
     analysis_instructions: Mapped[str] = mapped_column(Text, default="")
     # when set, table phones may view/download the (approved-findings) report
     report_published_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # the Polis conversation the approved statements were sent to
+    # (services/polis.py): ids and links as Polis returned them, when they
+    # were sent, and when the organizer put the poll on the table phones
+    polis_conversation_id: Mapped[str | None] = mapped_column(String(120))
+    polis_url: Mapped[str | None] = mapped_column(String(500))
+    polis_moderation_url: Mapped[str | None] = mapped_column(String(500))
+    polis_report_url: Mapped[str | None] = mapped_column(String(500))
+    polis_pushed_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    polis_published_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # how many statements the organizer asked the seeds generation for
+    seeds_target: Mapped[int | None] = mapped_column(Integer)
     # the organizer declared the assembly finished: no new recordings, and the
     # report becomes final (a snapshot is frozen so reopening cannot change
     # what participants already read)

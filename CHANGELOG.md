@@ -22,6 +22,14 @@ All notable changes to Nextcloud Citizens.
 - Polis seeds: **Approve all** approves every draft statement in one go
   (rejected ones stay rejected); `POST /api/v1/assemblies/{id}/seeds/approve-all`,
   audit event `seeds_approved_all`.
+- Send to Polis: Settings -> AI -> Polis takes the instance URL and an API
+  key (Citizens-Polis fork), with **Test connection**; Results -> Polis seeds
+  gets **Send to Polis**, which creates the conversation (or adds the new
+  statements to it) and shows the voting, moderation and report links. A
+  personal-data refusal marks the statements Polis refused. Routes:
+  `POST /api/v1/assemblies/{id}/seeds/push` (job `PUSH_POLIS`), settings
+  `polis_url` / `polis_api_key`, test target `polis`; migration 0041; audit
+  `seeds_push_requested`. See `docs/polis-seeds.md`.
 - Seeds export, available once every statement is approved or rejected:
   `<assembly>-statements.csv` (`position,statement`) or
   `<assembly>-statements.json` (schema `citizens.statement-seeds/1`). The

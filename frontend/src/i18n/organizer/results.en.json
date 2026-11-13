@@ -254,7 +254,10 @@
 	"seeds": {
 		"title": "Polis seeds",
 		"lead": "Short statements written from the approved findings, for a Polis conversation. Review each one; only approved statements are exported.",
-		"empty": { "title": "No statements yet", "hint": "Approve findings in the Analysis tab, then generate statements here. You can also write them by hand." },
+		"empty": {
+			"title": "No statements yet",
+			"hint": "Approve findings in the Analysis tab, then generate statements here. You can also write them by hand."
+		},
 		"generate": "Generate statements",
 		"regenerate": "Generate again",
 		"queued": "Queued…",
@@ -271,8 +274,16 @@
 		"delete": "Delete",
 		"moveUp": "Move up",
 		"moveDown": "Move down",
-		"status": { "DRAFT": "Draft", "APPROVED": "Approved", "REJECTED": "Rejected", "EXPORTED": "Exported" },
-		"origin": { "ai": "AI", "manual": "By hand" },
+		"status": {
+			"DRAFT": "Draft",
+			"APPROVED": "Approved",
+			"REJECTED": "Rejected",
+			"EXPORTED": "Exported"
+		},
+		"origin": {
+			"ai": "AI",
+			"manual": "By hand"
+		},
 		"edited": "Edited",
 		"stale": "The finding this came from was replaced — re-read this statement",
 		"chars": "{count}/{max}",
@@ -295,6 +306,20 @@
 			"deleted": "Statement deleted",
 			"downloadFailed": "The file could not be downloaded — check the pop-up blocker",
 			"notReady": "Review every statement before exporting"
+		},
+		"polis": {
+			"send": "Send to Polis",
+			"sendTitle": "Send the statements to Polis?",
+			"sendBody": "The approved statements are sent to the Polis instance configured in Settings. A conversation named after this assembly is created the first time; sending again adds only new statements. Statement text only leaves Citizens.",
+			"sendConfirm": "Send",
+			"queued": "Sending to Polis — the links appear here when it is done",
+			"notConfigured": "Add the Polis instance and API key in Settings first",
+			"linkPublic": "Voting page",
+			"linkModeration": "Moderation",
+			"linkReport": "Polis report",
+			"pushedAt": "Sent on {date}",
+			"refused": "Refused by Polis",
+			"failed": "Sending to Polis failed: {detail}"
 		}
 	}
 }

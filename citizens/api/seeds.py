@@ -25,6 +25,7 @@ router = APIRouter(prefix="/assemblies/{assembly_id}/seeds")
 DB = Annotated[Session, Depends(get_db, scope="function")]
 
 JOB_TYPE = "SEED_STATEMENTS"
+PUSH_JOB = "PUSH_POLIS"
 NOT_CONFIGURED = "AI analysis is not configured — add an analysis API key in Settings"
 
 
@@ -48,11 +49,37 @@ def _seed(session: Session, assembly_id: str, seed_id: str) -> StatementSeed:
     return seed
 
 
-def _job(session: Session, assembly_id: str) -> dict | None:
-    job: AppJob | None = job_failures.latest_jobs(session, JOB_TYPE, "assembly_id", {assembly_id}).get(
+def _job(session: Session, assembly_id: str, job_type: str = JOB_TYPE) -> dict | None:
+    job: AppJob | None = job_failures.latest_jobs(session, job_type, "assembly_id", {assembly_id}).get(
         assembly_id
     )
     return job_failures.describe(job) if job is not None else None
+
+
+def _polis(session: Session, assembly, rows: list[StatementSeed]) -> dict:
+    """The push's state for the listing: links once sent, the job while it
+    runs or after it failed, and which statements Polis refused."""
+    from citizens.services import polis as polis_svc
+
+    job = _job(session, assembly.id, PUSH_JOB)
+    refused: list[str] = []
+    if job and job["state"] == "FAILED":
+        positions = set(polis_svc.refused_positions(job.get("failure_detail")))
+        if positions:
+            # the export numbering: exportable statements in listing order
+            exportable = seeds_svc.exportable(rows)
+            refused = [s.id for number, s in enumerate(exportable, start=1) if number in positions]
+    return {
+        "configured": provider_config.polis_ready_cached(),
+        "conversation_id": assembly.polis_conversation_id,
+        "url": assembly.polis_url,
+        "moderation_url": assembly.polis_moderation_url,
+        "report_url": assembly.polis_report_url,
+        "pushed_at": polis_svc.iso(assembly.polis_pushed_at),
+        "published_at": polis_svc.iso(assembly.polis_published_at),
+        "job": job,
+        "refused_seed_ids": refused,
+    }
 
 
 def _listing(session: Session, assembly) -> dict:
@@ -66,6 +93,7 @@ def _listing(session: Session, assembly) -> dict:
         "max_chars": SEED_MAX_CHARS,
         "soft_chars": SEED_SOFT_CHARS,
         "job": _job(session, assembly.id),
+        "polis": _polis(session, assembly, rows),
         "seeds": [seeds_svc.payload(s) for s in rows],
     }
 
@@ -181,6 +209,32 @@ def delete_seed(assembly_id: str, seed_id: str, user: CurrentUser, session: DB):
     session.delete(seed)
     record_audit_event(session, "seed_deleted", "statement_seed", seed_id, actor=user)
     return None
+
+
+@router.post("/push", status_code=202)
+def push_seeds(assembly_id: str, user: CurrentUser, session: DB):
+    """Queue the send to the configured Polis instance; the job does the
+    network work. Same gate as the export: the review must be finished."""
+    assembly = get_owned_assembly(session, assembly_id, user)
+    if not provider_config.polis_ready_cached():
+        raise HTTPException(
+            status_code=409,
+            detail="Polis is not configured — add the instance URL and API key in Settings",
+        )
+    rows = seeds_svc.list_seeds(session, assembly.id)
+    if not seeds_svc.ready_to_export(rows):
+        raise HTTPException(
+            status_code=409,
+            detail="Review every statement — approve or reject each one — before sending",
+        )
+    if has_live_job(session, PUSH_JOB, "assembly_id", assembly.id):
+        return {"queued": False}
+    enqueue_job(session, PUSH_JOB, {"assembly_id": assembly.id}, max_attempts=3)
+    record_audit_event(
+        session, "seeds_push_requested", "assembly", assembly.id, actor=user,
+        data={"statements": len(seeds_svc.exportable(rows))},
+    )
+    return {"queued": True}
 
 
 def _export(session: Session, assembly_id: str, user: str, ext: str) -> Response:

@@ -88,6 +88,7 @@ function summary() {
 			model: '',
 			key_hint: '',
 		},
+		polis: { url: '', configured: false, key_hint: '' },
 		logo_set: false,
 	}
 }
@@ -221,5 +222,18 @@ describe('Settings cards', () => {
 		const dirty = new Event('beforeunload', { cancelable: true })
 		window.dispatchEvent(dirty)
 		expect(dirty.defaultPrevented).toBe(true)
+	})
+
+	it('the AI tab has a Polis card whose Test sends the typed key and URL', async () => {
+		testProvider.mockResolvedValue({ ok: true, message: 'Connected' })
+		const wrapper = await mountSettings()
+		await openTab(wrapper, catalogue.tabs.ai)
+		expect(wrapper.find('[data-test="card-polis"]').exists()).toBe(true)
+		await wrapper.get('[data-test="card-polis"] [data-test="polis-url"]').setValue('https://polis.example.org')
+		await wrapper.get('[data-test="card-polis"] input[type="password"]').setValue('pk-1')
+		await wrapper.get('[data-test="test-polis"]').trigger('click')
+		await flushPromises()
+		expect(testProvider).toHaveBeenCalledWith('polis', 'pk-1', 'https://polis.example.org', undefined)
+		expect(wrapper.get('[data-test="card-polis"]').text()).toContain('Connected')
 	})
 })

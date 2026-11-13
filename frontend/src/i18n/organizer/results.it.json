@@ -306,6 +306,20 @@
 			"deleted": "Affermazione eliminata",
 			"downloadFailed": "Impossibile scaricare il file: controlla il blocco dei pop-up",
 			"notReady": "Controlla ogni affermazione prima di esportare"
+		},
+		"polis": {
+			"send": "Invia a Polis",
+			"sendTitle": "Inviare le affermazioni a Polis?",
+			"sendBody": "Le affermazioni approvate vengono inviate all'istanza Polis configurata nelle Impostazioni. La prima volta viene creata una conversazione con il nome di questa assemblea; un nuovo invio aggiunge solo le affermazioni nuove. Da Citizens esce solo il testo delle affermazioni.",
+			"sendConfirm": "Invia",
+			"queued": "Invio a Polis in corso: i link compariranno qui al termine",
+			"notConfigured": "Aggiungi prima l'istanza Polis e la chiave API nelle Impostazioni",
+			"linkPublic": "Pagina di voto",
+			"linkModeration": "Moderazione",
+			"linkReport": "Rapporto Polis",
+			"pushedAt": "Inviato il {date}",
+			"refused": "Rifiutata da Polis",
+			"failed": "Invio a Polis non riuscito: {detail}"
 		}
 	}
 }

@@ -9,12 +9,15 @@ const listSeeds = vi.fn()
 const updateSeed = vi.fn()
 const approveAllSeeds = vi.fn()
 const downloadFromApi = vi.fn()
+const pushSeeds = vi.fn()
+const toast = vi.fn()
 
 vi.mock('../../frontend/src/api', () => ({
 	api: {
 		listSeeds: (...a: unknown[]) => listSeeds(...a),
 		updateSeed: (...a: unknown[]) => updateSeed(...a),
 		approveAllSeeds: (...a: unknown[]) => approveAllSeeds(...a),
+		pushSeeds: (...a: unknown[]) => pushSeeds(...a),
 		generateSeeds: vi.fn(),
 		createSeed: vi.fn(),
 		reorderSeeds: vi.fn(),
@@ -25,6 +28,7 @@ vi.mock('../../frontend/src/api', () => ({
 	},
 	BASE: '',
 }))
+vi.mock('../../frontend/src/components/ui/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }))
 vi.mock('../../frontend/src/download', () => ({
 	downloadFromApi: (...a: unknown[]) => downloadFromApi(...a),
 	downloadBlob: vi.fn(),
@@ -39,10 +43,17 @@ function seed(overrides: Record<string, unknown> = {}) {
 	}
 }
 
+function polisState(overrides: Record<string, unknown> = {}) {
+	return {
+		configured: false, conversation_id: null, url: null, moderation_url: null, report_url: null,
+		pushed_at: null, published_at: null, job: null, refused_seed_ids: [], ...overrides,
+	}
+}
+
 function listing(overrides: Record<string, unknown> = {}) {
 	return {
 		assembly_id: 'a1', language: 'en', analysis_configured: true, findings_approved: 2,
-		ready_to_export: false, max_chars: 400, soft_chars: 140, job: null, seeds: [], ...overrides,
+		ready_to_export: false, max_chars: 400, soft_chars: 140, job: null, polis: polisState(), seeds: [], ...overrides,
 	}
 }
 
@@ -50,6 +61,8 @@ beforeEach(() => {
 	listSeeds.mockReset().mockResolvedValue(listing())
 	updateSeed.mockReset().mockResolvedValue(seed({ status: 'APPROVED' }))
 	approveAllSeeds.mockReset()
+	toast.mockReset()
+	pushSeeds.mockReset().mockResolvedValue({ queued: true })
 	downloadFromApi.mockReset().mockResolvedValue(undefined)
 })
 
@@ -141,5 +154,65 @@ describe('the Polis seeds tab', () => {
 		expect(pills[1]).toContain('Approved')
 		expect(pills[2]).toContain('Rejected')
 		expect(wrapper.find('[data-test="seeds-approve-all"]').exists()).toBe(false)
+	})
+
+	it('disables Send to Polis and says why when Polis is not configured', async () => {
+		listSeeds.mockResolvedValue(listing({ ready_to_export: true, seeds: [seed({ status: 'APPROVED' })] }))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const push = wrapper.find('[data-test="seeds-push"]')
+		expect(push.attributes('disabled')).toBeDefined()
+		expect(push.attributes('title')).toContain('Add the Polis instance')
+	})
+
+	it('sends to Polis after confirming and toasts', async () => {
+		listSeeds.mockResolvedValue(listing({
+			ready_to_export: true, polis: polisState({ configured: true }), seeds: [seed({ status: 'APPROVED' })],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const push = wrapper.find('[data-test="seeds-push"]')
+		expect(push.attributes('disabled')).toBeUndefined()
+		await push.trigger('click')
+		await flushPromises()
+		expect(pushSeeds).not.toHaveBeenCalled()
+		const confirm = wrapper.findAll('button').filter((b) => b.text() === 'Send')
+		expect(confirm).toHaveLength(1)
+		await confirm[0].trigger('click')
+		await flushPromises()
+		expect(pushSeeds).toHaveBeenCalledTimes(1)
+		expect(pushSeeds).toHaveBeenCalledWith('a1')
+		expect(String(toast.mock.calls[0][0])).toContain('Sending to Polis')
+	})
+
+	it('shows the three Polis links once the conversation exists', async () => {
+		listSeeds.mockResolvedValue(listing({
+			ready_to_export: true,
+			polis: polisState({
+				configured: true, url: 'https://p.example/abc', moderation_url: 'https://p.example/m/abc',
+				report_url: 'https://p.example/r/abc', pushed_at: '2026-11-13T10:00:00Z',
+			}),
+			seeds: [seed({ status: 'EXPORTED' })],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const links = wrapper.findAll('[data-test="seeds-polis-links"] a')
+		expect(links.map((a) => a.attributes('href'))).toEqual([
+			'https://p.example/abc', 'https://p.example/m/abc', 'https://p.example/r/abc',
+		])
+		expect(links[0].attributes('rel')).toBe('noopener')
+		expect(wrapper.find('[data-test="seeds-polis-links"]').text()).toContain('Sent on')
+	})
+
+	it('marks a statement Polis refused', async () => {
+		listSeeds.mockResolvedValue(listing({
+			polis: polisState({ configured: true, refused_seed_ids: ['s2'] }),
+			seeds: [seed(), seed({ id: 's2', position: 2 })],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const rows = wrapper.findAll('[data-test="seed-row"]')
+		expect(rows[0].find('[data-test="seed-refused"]').exists()).toBe(false)
+		expect(rows[1].find('[data-test="seed-refused"]').text()).toBe('Refused by Polis')
 	})
 })

@@ -7,6 +7,7 @@ import {
 	mdiCommentMultipleOutline,
 	mdiDownloadOutline,
 	mdiRefresh,
+	mdiSendOutline,
 } from '@mdi/js'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -34,6 +35,8 @@ const confirmDeleteId = ref('')
 const confirmRegenerate = ref(false)
 const confirmApproveAll = ref(false)
 const queuedLocally = ref(false)
+const confirmPush = ref(false)
+const pushQueuedLocally = ref(false)
 
 const seeds = computed(() => listing.value?.seeds ?? [])
 const maxChars = computed(() => listing.value?.max_chars ?? 400)
@@ -41,6 +44,23 @@ const softChars = computed(() => listing.value?.soft_chars ?? 140)
 const jobLive = computed(() => {
 	const state = listing.value?.job?.state
 	return queuedLocally.value || state === 'QUEUED' || state === 'RUNNING' || state === 'RETRY'
+})
+const polis = computed(() => listing.value?.polis ?? null)
+const polisJobLive = computed(() => {
+	const state = polis.value?.job?.state
+	return pushQueuedLocally.value || state === 'QUEUED' || state === 'RUNNING' || state === 'RETRY'
+})
+const polisFailed = computed(() => (polis.value?.job?.state === 'FAILED' ? polis.value.job : null))
+const refusedIds = computed(() => new Set(polis.value?.refused_seed_ids ?? []))
+const polisConfigured = computed(() => polis.value?.configured ?? false)
+const canPush = computed(
+	() => polisConfigured.value && !!listing.value?.ready_to_export && !polisJobLive.value && !busy.value,
+)
+const pushedAtText = computed(() => {
+	const at = polis.value?.pushed_at
+	if (!at) return ''
+	const d = new Date(at)
+	return Number.isNaN(d.getTime()) ? at : d.toLocaleString()
 })
 const failed = computed(() => (listing.value?.job?.state === 'FAILED' ? listing.value.job : null))
 const configured = computed(() => listing.value?.analysis_configured ?? false)
@@ -96,10 +116,18 @@ async function load(): Promise<void> {
 		listing.value = await api.listSeeds(props.assembly.id)
 		error.value = ''
 		const state = listing.value.job?.state
+		const pushState = listing.value.polis?.job?.state
+		const pushLive = pushState === 'QUEUED' || pushState === 'RUNNING' || pushState === 'RETRY'
 		if (state === 'QUEUED' || state === 'RUNNING' || state === 'RETRY') {
 			schedulePoll()
 		} else {
 			queuedLocally.value = false
+		}
+		if (pushLive) {
+			schedulePoll()
+		} else if (pushQueuedLocally.value && listing.value.polis?.job) {
+			// the push job has settled (done or failed)
+			pushQueuedLocally.value = false
 		}
 	} catch (err) {
 		error.value = message(err)
@@ -134,6 +162,26 @@ async function generate(): Promise<void> {
 function onGenerate(): void {
 	if (seeds.value.length) confirmRegenerate.value = true
 	else void generate()
+}
+
+async function pushToPolis(): Promise<void> {
+	confirmPush.value = false
+	busy.value = true
+	try {
+		const result = await api.pushSeeds(props.assembly.id)
+		error.value = ''
+		if (result.queued) {
+			pushQueuedLocally.value = true
+			toast(t('organizer.results.seeds.polis.queued'))
+		}
+		await load()
+		if (pushQueuedLocally.value && !listing.value?.polis?.job) schedulePoll()
+	} catch (err) {
+		// a 409 carries the reason in its detail; ApiError's message is that detail
+		error.value = message(err)
+	} finally {
+		busy.value = false
+	}
 }
 
 async function approveAll(): Promise<void> {
@@ -298,6 +346,9 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 					<CzStatusPill :status="PILL_TONE[seed.status]" :label="t(`organizer.results.seeds.status.${seed.status}`)" />
 					<span class="cz-seed-badge">{{ t(`organizer.results.seeds.origin.${seed.origin}`) }}</span>
 					<span v-if="seed.edited" class="cz-seed-badge">{{ t('organizer.results.seeds.edited') }}</span>
+					<span v-if="refusedIds.has(seed.id)" class="cz-seed-badge cz-seed-warn" data-test="seed-refused">
+						{{ t('organizer.results.seeds.polis.refused') }}
+					</span>
 				</div>
 				<textarea
 					:value="drafts[seed.id] ?? seed.text"
@@ -426,6 +477,16 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 					<div class="cz-row">
 						<CzButton
 							small
+							variant="primary"
+							:icon="mdiSendOutline"
+							:disabled="!canPush"
+							:title="!polisConfigured ? t('organizer.results.seeds.polis.notConfigured') : undefined"
+							data-test="seeds-push"
+							@click="confirmPush = true">
+							{{ t('organizer.results.seeds.polis.send') }}
+						</CzButton>
+						<CzButton
+							small
 							:icon="mdiDownloadOutline"
 							:disabled="!listing.ready_to_export"
 							data-test="seeds-export-csv"
@@ -442,6 +503,18 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 						</CzButton>
 					</div>
 				</div>
+				<p v-if="!polisConfigured" class="cz-muted" style="margin: 8px 0 0; font-size: 0.8125rem" data-test="seeds-polis-hint">
+					{{ t('organizer.results.seeds.polis.notConfigured') }}
+				</p>
+				<div v-if="polis?.url" class="cz-row" style="margin-top: 10px; gap: 14px; font-size: 0.875rem" data-test="seeds-polis-links">
+					<a :href="polis.url" target="_blank" rel="noopener">{{ t('organizer.results.seeds.polis.linkPublic') }}</a>
+					<a v-if="polis.moderation_url" :href="polis.moderation_url" target="_blank" rel="noopener">{{ t('organizer.results.seeds.polis.linkModeration') }}</a>
+					<a v-if="polis.report_url" :href="polis.report_url" target="_blank" rel="noopener">{{ t('organizer.results.seeds.polis.linkReport') }}</a>
+					<span v-if="pushedAtText" class="cz-muted">{{ t('organizer.results.seeds.polis.pushedAt', { date: pushedAtText }) }}</span>
+				</div>
+				<p v-if="polisFailed" class="cz-seed-warn" role="alert" style="margin: 8px 0 0; font-size: 0.8125rem" data-test="seeds-polis-failed">
+					{{ t('organizer.results.seeds.polis.failed', { detail: polisFailed.failure_detail || polisFailed.failure_reason || '' }) }}
+				</p>
 			</div>
 		</template>
 
@@ -453,6 +526,13 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 			tone="danger"
 			@confirm="removeSeed"
 			@cancel="confirmDeleteId = ''" />
+		<CzConfirm
+			v-if="confirmPush"
+			:title="t('organizer.results.seeds.polis.sendTitle')"
+			:message="t('organizer.results.seeds.polis.sendBody')"
+			:confirm-label="t('organizer.results.seeds.polis.sendConfirm')"
+			@confirm="pushToPolis"
+			@cancel="confirmPush = false" />
 		<CzConfirm
 			v-if="confirmApproveAll"
 			:title="t('organizer.results.seeds.approveAllTitle')"

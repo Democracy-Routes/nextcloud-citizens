@@ -51,6 +51,8 @@ class ConfigSnapshot:
     # assume the stricter completion gate when unreachable
     analysis_enabled: bool = True
     analysis_ready: bool = False
+    # a Polis instance URL and key are set (services/polis.py)
+    polis_ready: bool = False
     live_stt: dict = field(default_factory=lambda: dict(EMPTY_LIVE_STT))
     organization_name: str = ""
     # who is the data controller on the consent notice, and how to reach them
@@ -215,6 +217,7 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 data_handling=_read_data_handling(store),
                 analysis_enabled=analysis_enabled,
                 analysis_ready=analysis_enabled and bool(store.get_value("analysis_api_key")),
+                polis_ready=polis_ready(store),
                 live_stt=_read_live_stt(store),
                 organization_name=get_setting(store, "organization_name"),
                 consent_controller=get_setting(store, "consent_controller"),
@@ -322,6 +325,11 @@ def analysis_ready_cached() -> bool:
     """Analysis is switched on and has a key — from the snapshot, for request
     handlers that hold a database transaction while they ask."""
     return config_snapshot().analysis_ready
+
+
+def polis_ready_cached() -> bool:
+    """A Polis instance is configured — from the snapshot, same reason."""
+    return config_snapshot().polis_ready
 
 
 # engines that send audio to somebody else's servers; the others are endpoints
@@ -513,13 +521,13 @@ def analysis_enabled_cached() -> bool:
 
 KEY_FIELDS = (
     "mistral_api_key", "deepgram_api_key", "whisper_api_key", "analysis_api_key",
-    "facilitator_api_key",
+    "facilitator_api_key", "polis_api_key",
 )
 
 # targets whose connection test sends a stored API key, so an admin-supplied
 # endpoint override must be accompanied by an admin-supplied key (see
 # test_connection). Vosk is absent because it authenticates with no key.
-KEYED_TEST_TARGETS = ("whisper", "analysis", "facilitator", "mistral", "deepgram")
+KEYED_TEST_TARGETS = ("whisper", "analysis", "facilitator", "mistral", "deepgram", "polis")
 
 # where each engine's live captions connect; Deepgram's is configurable so
 # servers speaking the same protocol (WhisperLiveKit) can be used instead
@@ -531,6 +539,8 @@ LIVE_ENDPOINT_KEYS = {
 }
 
 DEFAULTS = {
+    # the Polis instance the approved statements are sent to (services/polis.py)
+    "polis_url": "",
     "stt_provider": "mistral",
     "stt_live_enabled": "1",
     "stt_batch_enabled": "1",
@@ -842,7 +852,22 @@ def providers_summary(store: ConfigStore) -> dict:
             "model": get_setting(store, "facilitator_model"),
             "key_hint": key_hint(store, "facilitator_api_key"),
         },
+        "polis": {
+            "url": get_setting(store, "polis_url"),
+            "configured": polis_ready(store),
+            "key_hint": key_hint(store, "polis_api_key"),
+        },
     }
+
+
+def polis_config(store: ConfigStore) -> tuple[str, str]:
+    """(instance URL without a trailing slash, api key) — either may be empty."""
+    return get_setting(store, "polis_url").rstrip("/"), store.get_value("polis_api_key") or ""
+
+
+def polis_ready(store: ConfigStore) -> bool:
+    url, key = polis_config(store)
+    return bool(url and key)
 
 
 def test_connection(
@@ -952,6 +977,17 @@ def test_connection(
                 return {"ok": False,
                         "message": f"Model or endpoint not found (HTTP 404): {detail}"}
             return {"ok": False, "message": f"Provider returned HTTP {status}: {detail}"}
+        elif target == "polis":
+            from citizens.services import polis as polis_svc
+
+            url, saved_key = polis_config(store)
+            base = (override_base_url or url).rstrip("/")
+            key = override_key or saved_key
+            if not base:
+                return {"ok": False, "message": "No Polis instance URL — enter one first"}
+            if not key:
+                return {"ok": False, "message": "No Polis API key — paste one or save it first"}
+            return polis_svc.ping(base, key)
         else:
             return {"ok": False, "message": f"Unknown target {target}"}
     except httpx.HTTPError as exc:

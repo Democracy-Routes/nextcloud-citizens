@@ -303,5 +303,12 @@
 		"add": "Konto hinzufügen",
 		"invitationSent": "Einladung an {name} gesendet.",
 		"noEmailResult": "Keine E-Mail: Setzen Sie das Passwort für {name} über das Terminal."
+	},
+	"polis": {
+		"title": "Polis",
+		"lead": "Sendet die freigegebenen Aussagen direkt in eine Polis-Konversation. Nötig sind die URL der Instanz und ein API-Schlüssel ihres Betreibers; gesendet wird nur der Text der Aussagen.",
+		"url": "URL der Instanz",
+		"apiKey": "API-Schlüssel",
+		"test": "Verbindung testen"
 	}
 }

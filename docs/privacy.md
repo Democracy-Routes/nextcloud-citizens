@@ -41,6 +41,11 @@ performs no transcription and no analysis.
   infrastructure.
 * **Analysis.** Only the *transcript text* is sent, never audio. Any
   OpenAI-compatible endpoint works, so this can also run on your own hardware.
+* **Polis.** When an organizer presses **Send to Polis**, the approved
+  statements (text only), the assembly name and its description go to the
+  Polis instance an administrator configured. No evidence, no names, no table
+  numbers, no participant data; Polis refuses statements that look like
+  personal data. The conversation it creates is public.
 * **Live captions** use the same engine as transcription and are shown on the
   recording phone while it records. When a session ends, what it heard is
   written to `live_captions/` — this is speech stored as text, and it is kept

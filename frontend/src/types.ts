@@ -610,6 +610,8 @@ export interface ProvidersSummary {
 		model: string
 		key_hint: string
 	}
+	/** the Polis instance seeds are sent to (absent from a server before 0.9) */
+	polis?: { url: string; configured: boolean; key_hint: string }
 	logo_set: boolean
 }
 
@@ -833,6 +835,19 @@ export interface StatementSeed {
 	stale: boolean
 	reviewed_by: string | null
 	exported_at: string | null
+	polis_tid?: number | null
+}
+
+export interface PolisState {
+	configured: boolean
+	conversation_id: string | null
+	url: string | null
+	moderation_url: string | null
+	report_url: string | null
+	pushed_at: string | null
+	published_at: string | null
+	job: JobInfo | null
+	refused_seed_ids: string[]
 }
 
 export interface SeedsListing {
@@ -844,6 +859,7 @@ export interface SeedsListing {
 	max_chars: number
 	soft_chars: number
 	job: JobInfo | null
+	polis?: PolisState
 	seeds: StatementSeed[]
 }
 

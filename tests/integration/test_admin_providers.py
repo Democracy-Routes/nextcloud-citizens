@@ -377,3 +377,38 @@ def test_endpoints_must_be_real_urls(admin_client):
     assert client.put(
         "/api/v1/admin/providers", json={"vosk_url": "ws://vosk.internal:2700"}
     ).status_code == 200
+
+
+def test_polis_settings_store_the_key_sensitively_and_test_the_instance(admin_client, monkeypatch):
+    client, store = admin_client
+    response = client.put(
+        "/api/v1/admin/providers",
+        json={"polis_url": "https://polis.example.org", "polis_api_key": "pk-secret-key-5678"},
+    )
+    assert response.status_code == 200, response.text
+    assert "pk-secret-key" not in response.text
+    body = response.json()["polis"]
+    assert body == {"url": "https://polis.example.org", "configured": True, "key_hint": "…5678"}
+    assert "polis_api_key" in store.sensitive_keys
+    assert client.put("/api/v1/admin/providers", json={"polis_url": "ftp://x"}).status_code == 422
+
+    seen = {}
+
+    def fake_ping(base, key):
+        seen["base"], seen["key"] = base, key
+        return {"ok": True, "message": "Connected — key of ops@example.org"}
+
+    monkeypatch.setattr("citizens.services.polis.ping", fake_ping)
+    tested = client.post("/api/v1/admin/providers/test", json={"target": "polis"})
+    assert tested.status_code == 200 and tested.json()["ok"] is True
+    assert seen == {"base": "https://polis.example.org", "key": "pk-secret-key-5678"}
+    # a typed-in URL never receives the saved key
+    refused = client.post(
+        "/api/v1/admin/providers/test", json={"target": "polis", "base_url": "https://evil.example"}
+    ).json()
+    assert refused["ok"] is False and "saved key is never sent" in refused["message"]
+    typed = client.post(
+        "/api/v1/admin/providers/test",
+        json={"target": "polis", "base_url": "https://other.example/", "api_key": "pk-typed"},
+    ).json()
+    assert typed["ok"] is True and seen == {"base": "https://other.example", "key": "pk-typed"}

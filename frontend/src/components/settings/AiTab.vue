@@ -2,7 +2,7 @@
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 /** The AI tab: transcript analysis and the AI facilitator, one card each. */
-import { mdiAccountVoice, mdiBrain, mdiCheck, mdiClose } from '@mdi/js'
+import { mdiAccountVoice, mdiBrain, mdiCheck, mdiClose, mdiVote } from '@mdi/js'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import CzButton from '../ui/CzButton.vue'
@@ -173,6 +173,45 @@ function keyPlaceholder(configured: boolean, hint: string): string {
 				<div class="cz-field">
 					<label>{{ t('organizer.settings.facilitator.silence') }}</label>
 					<input v-model.number="form.facilitator_silence_seconds" type="number" min="20" max="600" />
+				</div>
+			</div>
+		</SettingsCard>
+
+		<SettingsCard
+			:icon="mdiVote"
+			:title="t('organizer.settings.polis.title')"
+			test-id="card-polis"
+			:lead="t('organizer.settings.polis.lead')"
+			:dirty="settings.isDirty('polis')"
+			:busy="busyCard === 'polis'"
+			:error="errors.polis"
+			@save="save('polis')">
+			<div class="cz-fieldgrid">
+				<div class="cz-field" style="grid-column: span 2">
+					<label>{{ t('organizer.settings.polis.url') }}</label>
+					<input v-model="form.polis_url" type="text" placeholder="https://polis.example.org" data-test="polis-url" />
+				</div>
+				<div class="cz-field" style="grid-column: span 2">
+					<label>{{ t('organizer.settings.polis.apiKey') }}</label>
+					<div class="cz-row" style="flex-wrap: nowrap">
+						<input
+							v-model="secrets.polis_api_key"
+							type="password"
+							autocomplete="off"
+							style="flex: 1"
+							:placeholder="keyPlaceholder(summary.polis?.configured ?? false, summary.polis?.key_hint ?? '')" />
+						<CzButton small :disabled="busyCard !== ''" data-test="test-polis" @click="settings.test('polis', 'polis')">
+							{{ t('organizer.settings.polis.test') }}
+						</CzButton>
+					</div>
+					<span
+						v-if="testResults.polis"
+						class="cz-pill"
+						:class="testResults.polis.ok ? 'cz-pill--green' : 'cz-pill--orange'"
+						style="text-transform: none; align-self: flex-start">
+						<SvgIcon :path="testResults.polis.ok ? mdiCheck : mdiClose" :size="14" />
+						{{ testResults.polis.message }}
+					</span>
 				</div>
 			</div>
 		</SettingsCard>

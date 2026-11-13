@@ -357,6 +357,15 @@ per organizer area) and a translator can edit them without touching code —
 the build fails on a key missing in one language or an English literal
 left in a template.
 
+### Polis
+
+**Settings -> AI -> Polis** holds the URL of a Polis instance and an API key
+issued by its operator (the Citizens-Polis fork: `deploy/prod/create-apikey.sh
+<email>` there). With both set, organizers get **Send to Polis** in Results ->
+Polis seeds; **Test connection** calls the instance and answers whose key it
+is. The key is stored like the other API keys and never shown again. Only
+statement text is sent; see `docs/polis-seeds.md`.
+
 ## 4. What leaves the server
 
 | Step | What is sent | Where | When |
@@ -364,6 +373,7 @@ left in a template.
 | Transcription | the assembled audio of one recording | Deepgram, Mistral, or the Whisper endpoint you configure (which can be your own server) | only after an admin configures an engine, and only with **Final transcription** enabled |
 | Live captions | ~10-second audio chunks during recording | whichever engine is configured — none if it is self-hosted | only if live captions are enabled |
 | Analysis | transcript text (never audio) | the configured endpoint — may be your own server | only after an admin configures it |
+| Polis | the approved statements (text only), the assembly name and description | the Polis instance you configure | only when an organizer presses **Send to Polis** |
 
 With live captions only, the assembled recording is never sent anywhere: the
 chunks streamed during the round are the sole egress, and with Vosk or a

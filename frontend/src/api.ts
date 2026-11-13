@@ -268,7 +268,7 @@ export const api = {
 		request<unknown>('POST', `/api/v1/admin/vosk/models/${encodeURIComponent(name)}/cancel`),
 	voskModelRemove: (name: string) =>
 		request<{ removed: boolean; name: string; freed_bytes: number }>('DELETE', `/api/v1/admin/vosk/models/${encodeURIComponent(name)}`),
-	testProvider: (target: SttProvider | 'analysis' | 'facilitator', apiKey?: string, baseUrl?: string, model?: string) =>
+	testProvider: (target: SttProvider | 'analysis' | 'facilitator' | 'polis', apiKey?: string, baseUrl?: string, model?: string) =>
 		request<{ ok: boolean; message: string }>('POST', '/api/v1/admin/providers/test', {
 			target,
 			api_key: apiKey,
@@ -361,6 +361,8 @@ export const api = {
 		request<{ queued: boolean }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/generate`),
 	approveAllSeeds: (assemblyId: string) =>
 		request<SeedsListing & { approved: number }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/approve-all`),
+	pushSeeds: (assemblyId: string) =>
+		request<{ queued: boolean }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/push`),
 	createSeed: (assemblyId: string, text: string) =>
 		request<StatementSeed>('POST', `/api/v1/assemblies/${assemblyId}/seeds`, { text }),
 	updateSeed: (

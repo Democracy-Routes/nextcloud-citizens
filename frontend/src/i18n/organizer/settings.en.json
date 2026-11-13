@@ -303,5 +303,12 @@
 		"add": "Add account",
 		"invitationSent": "Invitation sent to {name}.",
 		"noEmailResult": "No email: set the password for {name} from the terminal."
+	},
+	"polis": {
+		"title": "Polis",
+		"lead": "Send the approved statements straight to a Polis conversation. The instance URL and an API key issued by its operator; statement text only is sent.",
+		"url": "Instance URL",
+		"apiKey": "API key",
+		"test": "Test connection"
 	}
 }

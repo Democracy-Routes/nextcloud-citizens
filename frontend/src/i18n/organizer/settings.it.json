@@ -303,5 +303,12 @@
 		"add": "Aggiungi account",
 		"invitationSent": "Invito inviato a {name}.",
 		"noEmailResult": "Nessuna email: imposta la password di {name} dal terminale."
+	},
+	"polis": {
+		"title": "Polis",
+		"lead": "Invia le affermazioni approvate direttamente a una conversazione Polis. Servono l'URL dell'istanza e una chiave API rilasciata dal suo gestore; viene inviato solo il testo delle affermazioni.",
+		"url": "URL dell'istanza",
+		"apiKey": "Chiave API",
+		"test": "Prova la connessione"
 	}
 }

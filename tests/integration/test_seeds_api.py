@@ -288,6 +288,135 @@ def test_export_waits_for_the_review_then_writes_csv_and_json(client, monkeypatc
     assert listing["ready_to_export"] is True  # a second download carries the same statements
 
 
+def _polis_ready(monkeypatch, store, polis_post):
+    """A configured Polis instance whose import endpoint is `polis_post(body)`."""
+    store.values["polis_url"] = "https://polis.example.org/"
+    store.values["polis_api_key"] = "pk-test"
+    monkeypatch.setattr("citizens.services.provider_config.polis_ready_cached", lambda: True)
+    calls = []
+
+    class Response:
+        def __init__(self, status, body):
+            self.status_code, self._body, self.headers = status, body, {}
+            self.text = json.dumps(body)
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        assert url == "https://polis.example.org/api/v3/citizens/import"
+        assert headers["Authorization"] == "Bearer pk-test"
+        calls.append(json)
+        status, body = polis_post(json)
+        return Response(status, body)
+
+    monkeypatch.setattr("citizens.services.polis.httpx.post", fake_post)
+    return calls
+
+
+def _store_of(monkeypatch):
+    """The MemoryStore `_configure` installed."""
+    from citizens.services import provider_config
+
+    return provider_config.default_store()
+
+
+def test_push_sends_the_approved_statements_and_keeps_the_links(client, monkeypatch):
+    _configure(monkeypatch, lambda ids: StatementSeeds(seeds=[StatementSeedItem(
+        finding_id=ids[0], statements=["Statement A", "Statement B", "Statement C"],
+    )]))
+    assembly = _assembly(client, name="TEST Push", language="it")
+    _findings(assembly["id"], [("round", "proposal", "Buses", "APPROVED", 1)])
+    url = f"/api/v1/assemblies/{assembly['id']}/seeds"
+    client.post(f"{url}/generate")
+    a, b, c = _wait(client, assembly["id"], _settled)["seeds"]
+
+    # not configured, then configured but unreviewed
+    assert client.post(f"{url}/push").status_code == 409
+    assert "Settings" in client.post(f"{url}/push").json()["detail"]
+    store = _store_of(monkeypatch)
+    calls = _polis_ready(monkeypatch, store, lambda body: (200, {
+        "conversation_id": "3hjm3feewj",
+        "url": "https://polis.example.org/3hjm3feewj",
+        "moderation_url": "https://polis.example.org/m/3hjm3feewj",
+        "report_url": "https://polis.example.org/report/r1",
+        "created": True,
+        "statements": {"added": 2, "skipped_duplicate": 0, "failed": 0, "results": [
+            {"position": 1, "status": "success", "tid": 0},
+            {"position": 2, "status": "success", "tid": 1},
+        ]},
+    }))
+    assert client.get(url).json()["polis"]["configured"] is True
+    assert client.post(f"{url}/push").status_code == 409
+    client.put(f"{url}/{a['id']}", json={"status": "APPROVED"})
+    client.put(f"{url}/{b['id']}", json={"status": "REJECTED"})
+    client.put(f"{url}/{c['id']}", json={"status": "APPROVED"})
+
+    queued = client.post(f"{url}/push")
+    assert queued.status_code == 202 and queued.json() == {"queued": True}
+    listing = _wait(client, assembly["id"], lambda li: (li["polis"]["job"] or {}).get("state") == "SUCCEEDED")
+    assert listing["polis"]["conversation_id"] == "3hjm3feewj"
+    assert listing["polis"]["url"] == "https://polis.example.org/3hjm3feewj"
+    assert listing["polis"]["moderation_url"].endswith("/m/3hjm3feewj")
+    assert listing["polis"]["report_url"].endswith("/report/r1")
+    assert listing["polis"]["pushed_at"] and listing["polis"]["published_at"] is None
+    assert listing["polis"]["refused_seed_ids"] == []
+    by_id = {s["id"]: s for s in listing["seeds"]}
+    assert by_id[a["id"]]["status"] == "EXPORTED" and by_id[a["id"]]["polis_tid"] == 0
+    assert by_id[c["id"]]["status"] == "EXPORTED" and by_id[c["id"]]["polis_tid"] == 1
+    assert by_id[b["id"]]["status"] == "REJECTED" and by_id[b["id"]]["polis_tid"] is None
+    # what left: the export file unchanged plus topic and description
+    [body] = calls
+    assert body["schema"] == "citizens.statement-seeds/1"
+    assert body["assembly"] == {"name": "TEST Push", "language": "it"}
+    assert [s["statement"] for s in body["statements"]] == ["Statement A", "Statement C"]
+    assert body["topic"] == "TEST Push" and "description" in body
+    assert "Anna" not in json.dumps(body) and "evidence" not in json.dumps(body)
+    # sending again is allowed (Polis adds only what is new)
+    assert client.post(f"{url}/push").status_code == 202
+
+
+def test_a_personal_data_refusal_names_the_statements(client, monkeypatch):
+    _configure(monkeypatch, lambda ids: StatementSeeds(seeds=[StatementSeedItem(
+        finding_id=ids[0], statements=["Fine statement", "Call 0123456789 now"],
+    )]))
+    assembly = _assembly(client)
+    _findings(assembly["id"], [("round", "proposal", "Buses", "APPROVED", 1)])
+    url = f"/api/v1/assemblies/{assembly['id']}/seeds"
+    client.post(f"{url}/generate")
+    fine, phone = _wait(client, assembly["id"], _settled)["seeds"]
+    _polis_ready(monkeypatch, _store_of(monkeypatch), lambda body: (400, {
+        "error": "polis_err_citizens_import_personal_data",
+        "details": [{"position": 2, "reason": "phone number"}],
+    }))
+    client.post(f"{url}/approve-all")
+    assert client.post(f"{url}/push").status_code == 202
+    listing = _wait(client, assembly["id"], lambda li: (li["polis"]["job"] or {}).get("state") == "FAILED")
+    assert listing["polis"]["job"]["attempts"] == 1  # permanent: no retry
+    assert "personal data" in listing["polis"]["job"]["failure_detail"]
+    assert listing["polis"]["refused_seed_ids"] == [phone["id"]]
+    assert listing["polis"]["conversation_id"] is None
+    statuses = {s["id"]: s["status"] for s in listing["seeds"]}
+    assert statuses[fine["id"]] == "APPROVED" and statuses[phone["id"]] == "APPROVED"
+
+
+def test_migration_0041_downgrades_and_upgrades_cleanly(database):
+    cfg = Config()
+    cfg.set_main_option("script_location", str(Path("citizens/db/migrations").resolve()))
+    cfg.set_main_option("sqlalchemy.url", sqlite_url(database.app_persistent_storage / "citizens.db"))
+    command.downgrade(cfg, "0040")
+    command.upgrade(cfg, "head")
+    with session_scope() as session:
+        assembly = Assembly(name="After 41", language="en", created_by="anna", polis_conversation_id="abc")
+        session.add(assembly)
+        session.flush()
+        session.add(StatementSeed(assembly_id=assembly.id, text="Sent", source_text="Sent", polis_tid=4))
+    with session_scope() as session:
+        seed = session.query(StatementSeed).filter_by(text="Sent").one()
+        assert seed.polis_tid == 4
+        assert session.get(Assembly, seed.assembly_id).polis_conversation_id == "abc"
+
+
 def test_seeds_are_private_to_the_assembly_owner(client):
     assembly = _assembly(client)
     url = f"/api/v1/assemblies/{assembly['id']}/seeds"

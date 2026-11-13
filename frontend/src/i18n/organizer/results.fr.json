@@ -306,6 +306,20 @@
 			"deleted": "Affirmation supprimée",
 			"downloadFailed": "Le fichier n'a pas pu être téléchargé ; vérifiez le bloqueur de fenêtres contextuelles",
 			"notReady": "Relisez chaque affirmation avant d'exporter"
+		},
+		"polis": {
+			"send": "Envoyer à Polis",
+			"sendTitle": "Envoyer les affirmations à Polis ?",
+			"sendBody": "Les affirmations approuvées sont envoyées à l'instance Polis configurée dans les Paramètres. Une conversation portant le nom de cette assemblée est créée la première fois ; un nouvel envoi n'ajoute que les nouvelles affirmations. Seul le texte des affirmations quitte Citizens.",
+			"sendConfirm": "Envoyer",
+			"queued": "Envoi à Polis en cours — les liens apparaîtront ici à la fin",
+			"notConfigured": "Ajoutez d'abord l'instance Polis et la clé API dans les Paramètres",
+			"linkPublic": "Page de vote",
+			"linkModeration": "Modération",
+			"linkReport": "Rapport Polis",
+			"pushedAt": "Envoyé le {date}",
+			"refused": "Refusée par Polis",
+			"failed": "L'envoi à Polis a échoué : {detail}"
 		}
 	}
 }

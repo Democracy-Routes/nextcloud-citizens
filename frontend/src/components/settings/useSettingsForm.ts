@@ -62,6 +62,7 @@ export interface SettingsForm {
 	analysis_enabled: boolean
 	analysis_extra_instructions: string
 	facilitator_level: FacilitatorLevel
+	polis_url: string
 	facilitator_base_url: string
 	facilitator_model: string
 	facilitator_interval_minutes: number
@@ -83,6 +84,7 @@ export type SecretKey =
 	| 'whisper_api_key'
 	| 'analysis_api_key'
 	| 'facilitator_api_key'
+	| 'polis_api_key'
 
 export const SECRET_KEYS: readonly SecretKey[] = [
 	'mistral_api_key',
@@ -90,6 +92,7 @@ export const SECRET_KEYS: readonly SecretKey[] = [
 	'whisper_api_key',
 	'analysis_api_key',
 	'facilitator_api_key',
+	'polis_api_key',
 ]
 
 /** A payload key: one the server accepts in PUT /admin/providers. */
@@ -105,6 +108,7 @@ export type CardId =
 	| 'limits'
 	| 'analysis'
 	| 'facilitator'
+	| 'polis'
 	| 'org'
 	| 'retention'
 	| 'branding'
@@ -125,6 +129,7 @@ export const CARD_KEYS: Record<Exclude<CardId, 'limits'>, PayloadKey[]> = {
 		'analysis_extra_instructions',
 		'analysis_api_key',
 	],
+	polis: ['polis_url', 'polis_api_key'],
 	facilitator: [
 		'facilitator_level',
 		'facilitator_base_url',
@@ -179,6 +184,7 @@ function emptyForm(): SettingsForm {
 		analysis_enabled: true,
 		analysis_extra_instructions: '',
 		facilitator_level: 'off',
+		polis_url: '',
 		facilitator_base_url: '',
 		facilitator_model: '',
 		facilitator_interval_minutes: 4,
@@ -228,6 +234,7 @@ export function payloadOf(form: SettingsForm): Record<PayloadKey, unknown> {
 		analysis_enabled: form.analysis_enabled,
 		analysis_extra_instructions: form.analysis_extra_instructions.trim(),
 		facilitator_level: form.facilitator_level,
+		polis_url: form.polis_url.trim(),
 		facilitator_base_url: form.facilitator_base_url.trim(),
 		facilitator_model: form.facilitator_model.trim(),
 		facilitator_interval_minutes: Number(form.facilitator_interval_minutes) || 4,
@@ -251,7 +258,7 @@ export function payloadOf(form: SettingsForm): Record<PayloadKey, unknown> {
 	return payload
 }
 
-export type TestTarget = SttProvider | 'analysis' | 'facilitator'
+export type TestTarget = SttProvider | 'analysis' | 'facilitator' | 'polis'
 
 export function createSettingsForm() {
 	const summary = ref<ProvidersSummary | null>(null)
@@ -263,6 +270,7 @@ export function createSettingsForm() {
 		whisper_api_key: '',
 		analysis_api_key: '',
 		facilitator_api_key: '',
+		polis_api_key: '',
 	})
 	/** the payload as it stood at the last load or save, per key (JSON) */
 	const saved = ref<Record<PayloadKey, string>>({})
@@ -312,6 +320,7 @@ export function createSettingsForm() {
 		form.analysis_model = s.analysis.model ?? ''
 		form.analysis_enabled = s.analysis.enabled ?? true
 		form.analysis_extra_instructions = s.analysis.extra_instructions ?? ''
+		form.polis_url = s.polis?.url ?? ''
 		if (s.facilitator) {
 			form.facilitator_level = s.facilitator.level ?? 'off'
 			form.facilitator_base_url = s.facilitator.base_url ?? ''
@@ -398,10 +407,12 @@ export function createSettingsForm() {
 				whisper: secrets.whisper_api_key,
 				analysis: secrets.analysis_api_key,
 				facilitator: secrets.facilitator_api_key,
+				polis: secrets.polis_api_key,
 			}
 			const baseUrls: Partial<Record<TestTarget, string>> = {
 				analysis: form.analysis_base_url.trim(),
 				facilitator: form.facilitator_base_url.trim(),
+				polis: form.polis_url.trim(),
 				whisper: form.whisper_base_url.trim(),
 				vosk: form.vosk_url.trim(),
 			}
