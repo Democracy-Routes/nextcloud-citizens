@@ -216,6 +216,38 @@ def test_review_edit_order_and_regeneration_keep_what_a_person_touched(client, m
     assert client.get(url).json()["seeds"][0]["position"] == 2
 
 
+def test_approve_all_takes_the_drafts_and_leaves_the_rest(client, monkeypatch):
+    _configure(monkeypatch, lambda ids: StatementSeeds(seeds=[StatementSeedItem(
+        finding_id=ids[0], statements=["Statement A", "Statement B", "Statement C"],
+    )]))
+    assembly = _assembly(client)
+    _findings(assembly["id"], [("round", "proposal", "Buses", "APPROVED", 1)])
+    url = f"/api/v1/assemblies/{assembly['id']}/seeds"
+    client.post(f"{url}/generate")
+    a, b, c = _wait(client, assembly["id"], _settled)["seeds"]
+    assert client.put(f"{url}/{b['id']}", json={"status": "REJECTED"}).status_code == 200
+    assert client.get(url).json()["ready_to_export"] is False
+
+    done = client.post(f"{url}/approve-all")
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["approved"] == 2 and body["ready_to_export"] is True
+    by_id = {s["id"]: s for s in body["seeds"]}
+    assert by_id[a["id"]]["status"] == "APPROVED" and by_id[a["id"]]["reviewed_by"] == "tester"
+    assert by_id[c["id"]]["status"] == "APPROVED"
+    assert by_id[b["id"]]["status"] == "REJECTED"
+    # nothing left to approve: still fine, nothing changes
+    again = client.post(f"{url}/approve-all").json()
+    assert again["approved"] == 0 and again["ready_to_export"] is True
+    # exported statements keep their status
+    assert client.get(f"{url}/export.csv").status_code == 200
+    after_export = client.post(f"{url}/approve-all").json()["seeds"]
+    assert {s["status"] for s in after_export} == {"EXPORTED", "REJECTED"}
+    # another organizer sees nothing
+    other = {"X-Test-User": "someone-else"}
+    assert client.post(f"{url}/approve-all", headers=other).status_code == 404
+
+
 def test_export_waits_for_the_review_then_writes_csv_and_json(client, monkeypatch):
     assembly = _assembly(client, name="Comune di Prova, 2026")
     url = f"/api/v1/assemblies/{assembly['id']}/seeds"

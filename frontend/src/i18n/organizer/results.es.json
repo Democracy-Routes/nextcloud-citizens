@@ -295,6 +295,11 @@
 		"failed": "Falló la generación de afirmaciones ({reason}). Vuelve a ejecutarla cuando se haya corregido la causa.",
 		"confirmDelete": "¿Eliminar esta afirmación?",
 		"confirmRegenerate": "¿Generar de nuevo? Se reemplazan los borradores que no has tocado.",
+		"approveAll": "Aprobar todas",
+		"approveAllTitle": "¿Aprobar todos los borradores?",
+		"approveAllBody": "Cada afirmación en borrador pasa a aprobada y se abre la exportación. Las afirmaciones rechazadas siguen rechazadas. Después podrás seguir editando o rechazando cualquier afirmación.",
+		"approveAllConfirm": "Aprobar todas",
+		"approveAllDone": "{count} afirmación aprobada | {count} afirmaciones aprobadas",
 		"toast": {
 			"queued": "Afirmaciones en cola: aparecerán aquí en uno o dos minutos",
 			"saved": "Afirmación guardada",

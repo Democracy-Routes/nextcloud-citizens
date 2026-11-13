@@ -359,6 +359,8 @@ export const api = {
 		request<SeedsListing>('GET', `/api/v1/assemblies/${assemblyId}/seeds`),
 	generateSeeds: (assemblyId: string) =>
 		request<{ queued: boolean }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/generate`),
+	approveAllSeeds: (assemblyId: string) =>
+		request<SeedsListing & { approved: number }>('POST', `/api/v1/assemblies/${assemblyId}/seeds/approve-all`),
 	createSeed: (assemblyId: string, text: string) =>
 		request<StatementSeed>('POST', `/api/v1/assemblies/${assemblyId}/seeds`, { text }),
 	updateSeed: (

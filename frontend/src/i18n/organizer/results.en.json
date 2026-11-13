@@ -284,6 +284,11 @@
 		"failed": "The statement generation failed ({reason}). Run it again once the cause is fixed.",
 		"confirmDelete": "Delete this statement?",
 		"confirmRegenerate": "Generate again? Drafts you have not touched are replaced.",
+		"approveAll": "Approve all",
+		"approveAllTitle": "Approve every draft?",
+		"approveAllBody": "Every draft statement becomes approved and the export opens. Rejected statements stay rejected. You can still edit or reject any statement afterwards.",
+		"approveAllConfirm": "Approve all",
+		"approveAllDone": "{count} statement approved | {count} statements approved",
 		"toast": {
 			"queued": "Statements queued — they appear here in a minute or two",
 			"saved": "Statement saved",

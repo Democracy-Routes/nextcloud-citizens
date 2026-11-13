@@ -295,6 +295,11 @@
 		"failed": "La génération des affirmations a échoué ({reason}). Relancez-la une fois la cause corrigée.",
 		"confirmDelete": "Supprimer cette affirmation ?",
 		"confirmRegenerate": "Générer à nouveau ? Les brouillons que vous n'avez pas touchés sont remplacés.",
+		"approveAll": "Tout approuver",
+		"approveAllTitle": "Approuver tous les brouillons ?",
+		"approveAllBody": "Chaque affirmation en brouillon est approuvée et l'export s'ouvre. Les affirmations rejetées restent rejetées. Vous pourrez ensuite modifier ou rejeter n'importe quelle affirmation.",
+		"approveAllConfirm": "Tout approuver",
+		"approveAllDone": "{count} affirmation approuvée | {count} affirmations approuvées",
 		"toast": {
 			"queued": "Affirmations en file d'attente ; elles apparaîtront ici dans une minute ou deux",
 			"saved": "Affirmation enregistrée",

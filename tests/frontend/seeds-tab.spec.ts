@@ -7,12 +7,14 @@ import { mountWithI18n } from './support/mount'
 
 const listSeeds = vi.fn()
 const updateSeed = vi.fn()
+const approveAllSeeds = vi.fn()
 const downloadFromApi = vi.fn()
 
 vi.mock('../../frontend/src/api', () => ({
 	api: {
 		listSeeds: (...a: unknown[]) => listSeeds(...a),
 		updateSeed: (...a: unknown[]) => updateSeed(...a),
+		approveAllSeeds: (...a: unknown[]) => approveAllSeeds(...a),
 		generateSeeds: vi.fn(),
 		createSeed: vi.fn(),
 		reorderSeeds: vi.fn(),
@@ -47,6 +49,7 @@ function listing(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
 	listSeeds.mockReset().mockResolvedValue(listing())
 	updateSeed.mockReset().mockResolvedValue(seed({ status: 'APPROVED' }))
+	approveAllSeeds.mockReset()
 	downloadFromApi.mockReset().mockResolvedValue(undefined)
 })
 
@@ -103,5 +106,40 @@ describe('the Polis seeds tab', () => {
 		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
 		await flushPromises()
 		expect(wrapper.find('[data-test="seeds-failure"]').exists()).toBe(true)
+	})
+
+	it('approves every draft after confirming, and hides the button when none is left', async () => {
+		listSeeds.mockResolvedValue(listing({
+			seeds: [seed(), seed({ id: 's2', position: 2 }), seed({ id: 's3', position: 3, status: 'REJECTED' })],
+		}))
+		approveAllSeeds.mockResolvedValue(listing({
+			approved: 2,
+			ready_to_export: true,
+			seeds: [
+				seed({ status: 'APPROVED' }),
+				seed({ id: 's2', position: 2, status: 'APPROVED' }),
+				seed({ id: 's3', position: 3, status: 'REJECTED' }),
+			],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		const button = wrapper.find('[data-test="seeds-approve-all"]')
+		expect(button.exists()).toBe(true)
+
+		await button.trigger('click')
+		await flushPromises()
+		expect(approveAllSeeds).not.toHaveBeenCalled()
+		const confirm = wrapper.findAll('button').filter((b) => b.text() === 'Approve all' && b.element !== button.element)
+		expect(confirm).toHaveLength(1)
+		await confirm[0].trigger('click')
+		await flushPromises()
+
+		expect(approveAllSeeds).toHaveBeenCalledTimes(1)
+		expect(approveAllSeeds).toHaveBeenCalledWith('a1')
+		const pills = wrapper.findAll('[data-test="seed-row"]').map((r) => r.text())
+		expect(pills[0]).toContain('Approved')
+		expect(pills[1]).toContain('Approved')
+		expect(pills[2]).toContain('Rejected')
+		expect(wrapper.find('[data-test="seeds-approve-all"]').exists()).toBe(false)
 	})
 })

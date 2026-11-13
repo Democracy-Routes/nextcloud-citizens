@@ -32,6 +32,7 @@ const newText = ref('')
 const adding = ref(false)
 const confirmDeleteId = ref('')
 const confirmRegenerate = ref(false)
+const confirmApproveAll = ref(false)
 const queuedLocally = ref(false)
 
 const seeds = computed(() => listing.value?.seeds ?? [])
@@ -135,6 +136,21 @@ function onGenerate(): void {
 	else void generate()
 }
 
+async function approveAll(): Promise<void> {
+	confirmApproveAll.value = false
+	busy.value = true
+	try {
+		const result = await api.approveAllSeeds(props.assembly.id)
+		listing.value = result
+		error.value = ''
+		toast(t('organizer.results.seeds.approveAllDone', { count: result.approved }, result.approved))
+	} catch (err) {
+		error.value = message(err)
+	} finally {
+		busy.value = false
+	}
+}
+
 async function run(action: () => Promise<unknown>, done?: string): Promise<void> {
 	busy.value = true
 	try {
@@ -231,6 +247,14 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 					<h3>{{ t('organizer.results.seeds.title') }}</h3>
 					<p class="cz-muted" style="margin: 4px 0 0; font-size: 0.845rem">{{ t('organizer.results.seeds.lead') }}</p>
 				</div>
+				<CzButton
+					v-if="counts.drafts > 0"
+					small
+					:disabled="jobLive || busy"
+					data-test="seeds-approve-all"
+					@click="confirmApproveAll = true">
+					{{ t('organizer.results.seeds.approveAll') }}
+				</CzButton>
 				<CzButton
 					small
 					variant="primary"
@@ -429,6 +453,13 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 			tone="danger"
 			@confirm="removeSeed"
 			@cancel="confirmDeleteId = ''" />
+		<CzConfirm
+			v-if="confirmApproveAll"
+			:title="t('organizer.results.seeds.approveAllTitle')"
+			:message="t('organizer.results.seeds.approveAllBody')"
+			:confirm-label="t('organizer.results.seeds.approveAllConfirm')"
+			@confirm="approveAll"
+			@cancel="confirmApproveAll = false" />
 		<CzConfirm
 			v-if="confirmRegenerate"
 			:title="t('organizer.results.seeds.regenerate')"

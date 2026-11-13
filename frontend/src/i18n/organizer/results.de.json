@@ -295,6 +295,11 @@
 		"failed": "Die Erzeugung der Aussagen ist fehlgeschlagen ({reason}). Starten Sie sie erneut, sobald die Ursache behoben ist.",
 		"confirmDelete": "Diese Aussage löschen?",
 		"confirmRegenerate": "Erneut erzeugen? Entwürfe, die Sie nicht angefasst haben, werden ersetzt.",
+		"approveAll": "Alle freigeben",
+		"approveAllTitle": "Alle Entwürfe freigeben?",
+		"approveAllBody": "Jede Aussage im Entwurf wird freigegeben und der Export wird geöffnet. Abgelehnte Aussagen bleiben abgelehnt. Danach können Sie jede Aussage weiterhin bearbeiten oder ablehnen.",
+		"approveAllConfirm": "Alle freigeben",
+		"approveAllDone": "{count} Aussage freigegeben | {count} Aussagen freigegeben",
 		"toast": {
 			"queued": "Aussagen in der Warteschlange – sie erscheinen hier in ein bis zwei Minuten",
 			"saved": "Aussage gespeichert",

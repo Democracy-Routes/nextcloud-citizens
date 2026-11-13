@@ -295,6 +295,11 @@
 		"failed": "La generazione delle affermazioni non è riuscita ({reason}). Riavviala dopo aver risolto la causa.",
 		"confirmDelete": "Eliminare questa affermazione?",
 		"confirmRegenerate": "Generare di nuovo? Le bozze che non hai toccato vengono sostituite.",
+		"approveAll": "Approva tutte",
+		"approveAllTitle": "Approvare tutte le bozze?",
+		"approveAllBody": "Ogni affermazione in bozza viene approvata e l'esportazione si apre. Le affermazioni scartate restano scartate. Dopo potrai comunque modificare o scartare qualsiasi affermazione.",
+		"approveAllConfirm": "Approva tutte",
+		"approveAllDone": "{count} affermazione approvata | {count} affermazioni approvate",
 		"toast": {
 			"queued": "Affermazioni in coda: compaiono qui tra uno o due minuti",
 			"saved": "Affermazione salvata",

@@ -92,6 +92,31 @@ def generate_seeds(assembly_id: str, user: CurrentUser, session: DB):
     return {"queued": True}
 
 
+@router.post("/approve-all")
+def approve_all_seeds(assembly_id: str, user: CurrentUser, session: DB):
+    """Every draft becomes approved in one go — the plenary case, where the
+    statements must reach Polis minutes after the last table ends. Rejected
+    and exported statements are left as they are."""
+    assembly = get_owned_assembly(session, assembly_id, user)
+    if has_live_job(session, JOB_TYPE, "assembly_id", assembly.id):
+        raise HTTPException(status_code=409, detail="Statements are still being generated")
+    rows = seeds_svc.list_seeds(session, assembly.id)
+    drafts = [s for s in rows if s.status == "DRAFT"]
+    now = utcnow()
+    for seed in drafts:
+        seed.status = "APPROVED"
+        seed.reviewed_by = user
+        seed.reviewed_at = now
+    if drafts:
+        record_audit_event(
+            session, "seeds_approved_all", "assembly", assembly.id, actor=user,
+            data={"approved": len(drafts)},
+        )
+    listing = _listing(session, assembly)
+    listing["approved"] = len(drafts)
+    return listing
+
+
 @router.post("", status_code=201)
 def create_seed(assembly_id: str, data: SeedIn, user: CurrentUser, session: DB):
     assembly = get_owned_assembly(session, assembly_id, user)

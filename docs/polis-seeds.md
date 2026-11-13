@@ -22,6 +22,10 @@ Nextcloud and in standalone mode.
 3. Drag statements into the order you want them to appear. Hand-written ones
    count as reviewed.
 4. When every statement is approved or rejected, **Export** becomes available.
+   In a hurry, for example when the statements must reach the room minutes
+   after the last table ended, **Approve all** approves every draft in one
+   go; rejected statements stay rejected, and you can still edit or reject
+   any statement afterwards.
 
 ## What makes a good statement
 

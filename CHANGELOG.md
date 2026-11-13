@@ -19,6 +19,9 @@ All notable changes to Nextcloud Citizens.
   untouched drafts. When the analysis is re-run, statements written from a
   replaced finding keep their text and are flagged as stale. Works in both
   modes; see `docs/polis-seeds.md`.
+- Polis seeds: **Approve all** approves every draft statement in one go
+  (rejected ones stay rejected); `POST /api/v1/assemblies/{id}/seeds/approve-all`,
+  audit event `seeds_approved_all`.
 - Seeds export, available once every statement is approved or rejected:
   `<assembly>-statements.csv` (`position,statement`) or
   `<assembly>-statements.json` (schema `citizens.statement-seeds/1`). The
