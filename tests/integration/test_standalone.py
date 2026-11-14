@@ -91,6 +91,10 @@ def test_config_and_unauthenticated_requests(app):
     assert page.status_code == 200
     assert '<html lang="it">' in page.text
     assert "citizens-main.bundle.js?v=0.0.0-test" in page.text
+    # the real stylesheet, not the one-comment stub the Nextcloud loader
+    # replaces: the first standalone deploy (2026-11-14) shipped unstyled
+    assert 'href="/css/citizens-main.bundle.css?v=0.0.0-test"' in page.text
+    assert "/css/citizens-main.css?" not in page.text
     assert page.headers["cache-control"] == "no-store"
     assert "script-src 'self'" in page.headers["content-security-policy"]
 

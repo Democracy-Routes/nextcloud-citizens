@@ -27,7 +27,7 @@ ORGANIZER_HTML = """<!doctype html>
 <meta name="referrer" content="same-origin">
 <title>Citizens</title>
 <link rel="icon" href="/img/app.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/css/citizens-main.css?v=__APP_VERSION__">
+<link rel="stylesheet" href="/css/citizens-main.bundle.css?v=__APP_VERSION__">
 <style>
   html, body { margin: 0; min-height: 100%; background: #f5f6f8; color: #222;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
