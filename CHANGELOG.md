@@ -6,6 +6,12 @@ All notable changes to Nextcloud Citizens.
 
 ### For the organizer
 
+- Polis statements are written faster and more reliably: the calls of each
+  pass (ground, draft, critique) run side by side, four at a time, so a run
+  over 27 findings takes the time of about five model calls instead of
+  fifteen; a call the provider fails transiently (a timeout, a 5xx, a rate
+  limit) is tried once more instead of failing the whole run and starting
+  it over from the first pass.
 - Polis seeds are written in three passes (ground in the transcript excerpts,
   draft, critique with four scores) and each statement keeps its trail
   (migration 0042). A "Why" button on the row opens it: the finding, the
@@ -90,6 +96,11 @@ All notable changes to Nextcloud Citizens.
 
 ### Operations
 
+- Fixed: the job runner could hand a job to a second thread while the first
+  was still working on it. The lease that reclaims a job left RUNNING by a
+  crash (30 minutes) also caught a job that was merely long, and the pool
+  started a second attempt beside the first; seen with a 40-minute Polis
+  statements run. A job executing in this process is never reclaimed now.
 - Resumable uploads: `POST /api/v1/uploads`, `.../parts/{n}`, `.../complete`
   (SHA-256 check) and `DELETE /api/v1/uploads/{id}`, in 5 MB parts; uploads
   belong to the organizer who opened them. Used by import and by attaching

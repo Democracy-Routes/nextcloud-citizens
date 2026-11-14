@@ -17,6 +17,7 @@ across those starves every API request into 500s after busy_timeout.
 
 import asyncio
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -42,10 +43,28 @@ BACKOFF_MAX_SECONDS = 3600
 CAPACITY_RETRY_SECONDS = 60
 # How long a RUNNING job may hold its lease before another pass reclaims it.
 # Generous, because a long transcription legitimately takes many minutes.
-# Safe because one run_forever loop (one container) does all the claiming,
-# each claim in its own write transaction; reclaiming would double-run jobs
-# only if a second process ever ran the loop against the same database.
+# The reclaim is for jobs whose thread is gone (a crash, a restart, a failed
+# bookkeeping commit). A job still executing in THIS process is never
+# reclaimed, however long it runs: the pool would otherwise start a second
+# attempt beside the first one (seen 2026-11-14 with a 40-minute seeds run on
+# 27 findings, every model call taking minutes). _ACTIVE_JOBS holds those ids.
 RUNNING_LEASE_SECONDS = 1800
+
+_ACTIVE_JOBS: set[str] = set()
+_ACTIVE_LOCK = threading.Lock()
+
+
+def _active_job_ids() -> list[str]:
+    with _ACTIVE_LOCK:
+        return sorted(_ACTIVE_JOBS)
+
+
+def _mark_active(job_id: str, active: bool) -> None:
+    with _ACTIVE_LOCK:
+        if active:
+            _ACTIVE_JOBS.add(job_id)
+        else:
+            _ACTIVE_JOBS.discard(job_id)
 
 
 def recover_stale_jobs() -> int:
@@ -66,6 +85,7 @@ def _claim_next_job() -> str | None:
     with session_scope() as session:
         now = utcnow()
         lease_expiry = now - timedelta(seconds=RUNNING_LEASE_SECONDS)
+        active = _active_job_ids()
         job = session.execute(
             select(AppJob)
             .where(
@@ -82,6 +102,8 @@ def _claim_next_job() -> str | None:
                         AppJob.state == "RUNNING",
                         AppJob.locked_at.is_not(None),
                         AppJob.locked_at < lease_expiry,
+                        # ...but never one whose thread is still running here
+                        AppJob.id.not_in(active),
                     ),
                 )
             )
@@ -101,6 +123,7 @@ def _claim_next_job() -> str | None:
 
 
 def _run_job(job_id: str) -> None:
+    _mark_active(job_id, True)
     try:
         _run_job_inner(job_id)
     except Exception:
@@ -111,6 +134,8 @@ def _run_job(job_id: str) -> None:
         # the job would never run again until a restart.
         log.error("job_bookkeeping_failed", job_id=job_id, exc_info=True)
         _release_job_after_failure(job_id)
+    finally:
+        _mark_active(job_id, False)
 
 
 def _release_job_after_failure(job_id: str) -> None:

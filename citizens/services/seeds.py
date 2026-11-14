@@ -195,6 +195,9 @@ def generate(
 
     Commits before the model call so the writer slot is free while the
     network round-trip runs, like analysis.analyze_assembly."""
+    # the provider config is read before the session is touched: reading it
+    # may be an OCS round-trip, which must not hold the writer slot
+    config = _analysis_config(store)
     findings = prioritised(source_findings(session, assembly))
     if not findings:
         log.info("seeds_no_findings", assembly_id=assembly.id)
@@ -212,7 +215,6 @@ def generate(
     budget = max(0, target - len(kept))
     language = LANGUAGE_NAMES.get(assembly.language, "English")
     assembly_id, assembly_language = assembly.id, assembly.language
-    config = _analysis_config(store)
     log.info("seeds_started", assembly_id=assembly_id, findings=len(findings), budget=budget)
     # run() reads the excerpts, commits, then talks to the model with the
     # session idle, as analysis.analyze_assembly does

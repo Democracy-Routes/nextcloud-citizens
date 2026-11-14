@@ -4,7 +4,10 @@
 drops and keeps, how a skipped finding still gets a statement, how the
 duplicates and the ordering fall out. No database, no network."""
 
+import threading
 from types import SimpleNamespace
+
+import pytest
 
 from citizens.domain.analysis_schemas import (
     SeedClaim,
@@ -15,6 +18,7 @@ from citizens.domain.analysis_schemas import (
     SeedReview,
     SeedReviews,
 )
+from citizens.providers.analysis.openai_compat import AnalysisError
 from citizens.services import seed_pipeline as sp
 
 
@@ -165,3 +169,69 @@ class TestSelection:
         cands = [sp.Candidate(f, f"S{n}", "c", None, None) for n in range(4)]
         [(_, items)] = sp.by_finding(cands, [f])
         assert [c.text for c in items] == ["S0", "S1", "S2", "S3"]
+
+
+class TestBatches:
+    """A pass over many findings is several calls; they run side by side, a
+    transient failure is tried once more, and the answers are put back in
+    batch order."""
+
+    def _findings(self, n):
+        return [_finding(f"f{i}", title=f"Finding {i}") for i in range(n)]
+
+    def _claims_for(self, batch_findings):
+        return SeedClaims(findings=[
+            SeedClaimsForFinding(finding_id=f.id, claims=[SeedClaim(text=f"Claim of {f.title}")])
+            for f in batch_findings
+        ])
+
+    def test_the_batches_of_a_pass_run_at_the_same_time_and_keep_their_order(self):
+        findings = self._findings(13)  # three batches of six, six, one
+        by_id = {f.id: f for f in findings}
+        gate = threading.Barrier(3, timeout=5)  # trips unless all three run together
+
+        def call(system, user, schema):
+            gate.wait()
+            ids = [line.split("finding_id: ")[1] for line in user.splitlines() if "finding_id:" in line]
+            return self._claims_for([by_id[i] for i in ids])
+
+        claims = sp.ground(call, "A", "English", 30, findings, {}, {}, sp.Trace())
+        assert [c.ref for c in claims] == [f"F{n}.1" for n in range(1, 14)]
+        assert [c.text for c in claims] == [f"Claim of Finding {i}" for i in range(13)]
+
+    def test_a_transient_failure_of_one_batch_is_tried_once_more(self, monkeypatch):
+        monkeypatch.setattr(sp.time, "sleep", lambda seconds: None)
+        findings = self._findings(2)
+        attempts = []
+
+        def call(system, user, schema):
+            attempts.append(user)
+            if len(attempts) == 1:
+                raise AnalysisError("Analysis request failed: ReadTimeout", retry_after=1)
+            return self._claims_for(findings)
+
+        trace = sp.Trace()
+        claims = sp.ground(call, "A", "English", 10, findings, {}, {}, trace)
+        assert len(attempts) == 2 and attempts[0] == attempts[1]
+        assert [c.text for c in claims] == ["Claim of Finding 0", "Claim of Finding 1"]
+        assert len(trace.prompts) == 1, "a retry is not a new prompt"
+
+    def test_a_second_failure_or_a_permanent_one_ends_the_run(self, monkeypatch):
+        monkeypatch.setattr(sp.time, "sleep", lambda seconds: None)
+        findings = self._findings(1)
+
+        def always(system, user, schema):
+            raise AnalysisError("Analysis endpoint returned HTTP 502", status=502)
+
+        with pytest.raises(AnalysisError):
+            sp.ground(always, "A", "English", 10, findings, {}, {}, sp.Trace())
+
+        calls = []
+
+        def refused(system, user, schema):
+            calls.append(1)
+            raise AnalysisError("Model output failed validation after retries", permanent=True)
+
+        with pytest.raises(AnalysisError):
+            sp.draft(refused, "style", [sp.Claim("F1.1", findings[0], "x", None)], sp.Trace())
+        assert len(calls) == 1, "a permanent refusal is not retried"

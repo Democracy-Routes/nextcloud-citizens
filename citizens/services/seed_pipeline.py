@@ -23,6 +23,8 @@ read by the model and shown to the organizer; it never reaches Polis.
 """
 
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
@@ -32,7 +34,7 @@ from citizens.db.models import Finding, FindingEvidence, TranscriptSegment
 from citizens.db.models.seeds import SEED_MAX_CHARS
 from citizens.domain.analysis_schemas import SeedClaims, SeedDrafts, SeedReviews
 from citizens.logging_setup import get_logger
-from citizens.providers.analysis.openai_compat import chat_json
+from citizens.providers.analysis.openai_compat import AnalysisError, chat_json
 from citizens.services import pseudonyms
 from citizens.services.analysis import build_system_prompt
 
@@ -46,6 +48,10 @@ QUOTES_PER_FINDING = 6
 QUOTE_MAX_CHARS = 400
 #: word overlap above which two statements are the same idea
 DUPLICATE_JACCARD = 0.8
+# calls of one pass in flight at once, and the pause before a transient
+# provider failure is tried again (the provider's Retry-After wins when given)
+PARALLEL_CALLS = 4
+RETRY_PAUSE_SECONDS = 5
 
 GROUND_SYSTEM = """You are preparing a Polis consultation from the findings of an
 in-person citizens' assembly. Your job in this step is NOT to write the
@@ -189,26 +195,56 @@ def _finding_block(label: str, finding: Finding, hidden: dict[str, str], quotes:
     return "\n".join(lines)
 
 
+def _run_batches(call, system: str, label: str, prompts: list[str], schema, trace: Trace) -> list:
+    """The calls of one pass, side by side: up to PARALLEL_CALLS at a time, so a
+    pass over 27 findings takes the time of one or two calls instead of five.
+    A call the provider fails transiently (a timeout, a 5xx, a rate limit) is
+    tried once more before the whole run gives up; a permanent refusal is not.
+    Results come back in batch order whatever order the answers arrived in."""
+    for prompt in prompts:
+        trace.prompts.append((label, prompt))
+
+    def one(prompt: str):
+        try:
+            return call(system, prompt, schema)
+        except AnalysisError as exc:
+            if exc.permanent:
+                raise
+            log.warning("seed_batch_retried", pass_=label, error=str(exc)[:200])
+            time.sleep(min(exc.retry_after or RETRY_PAUSE_SECONDS, 60))
+            return call(system, prompt, schema)
+
+    if len(prompts) <= 1:
+        return [one(prompt) for prompt in prompts]
+    workers = min(PARALLEL_CALLS, len(prompts))
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="seeds") as pool:
+        return list(pool.map(one, prompts))
+
+
 def ground(
     call, assembly_name: str, language: str, budget: int, findings: list[Finding],
     quotes: dict[str, list[Quote]], hidden: dict[str, str], trace: Trace,
 ) -> list[Claim]:
     """Pass 1 over batches of findings: the claims, labelled F<n>.<k>."""
-    claims: list[Claim] = []
-    for start in range(0, len(findings), BATCH):
-        batch = findings[start:start + BATCH]
+    batches = [findings[start:start + BATCH] for start in range(0, len(findings), BATCH)]
+    prompts = []
+    for number, batch in enumerate(batches):
+        start = number * BATCH
         blocks = [
             _finding_block(f"F{start + i + 1}", f, hidden, quotes.get(f.id, []))
             for i, f in enumerate(batch)
         ]
-        user_prompt = (
+        prompts.append(
             f"Assembly: {assembly_name}\n"
             f"Budget: at most {budget} statements in total, for the {len(findings)} findings "
             f"of this assembly, which are in priority order; these are findings "
             f"{start + 1} to {start + len(batch)}.\n\n" + "\n\n".join(blocks)
         )
-        trace.prompts.append(("ground", user_prompt))
-        result = call(GROUND_SYSTEM, user_prompt, SeedClaims)
+    results = _run_batches(call, GROUND_SYSTEM, "ground", prompts, SeedClaims, trace)
+
+    claims: list[Claim] = []
+    for number, (batch, result) in enumerate(zip(batches, results, strict=True)):
+        start = number * BATCH
         by_id = {f.id: (start + i + 1, f) for i, f in enumerate(batch)}
         answered = set()
         for item in result.findings:
@@ -240,21 +276,23 @@ def ground(
 
 def draft(call, draft_system: str, claims: list[Claim], trace: Trace) -> dict[str, str]:
     """Pass 2: one statement per claim, keyed by the claim's ref."""
-    drafts: dict[str, str] = {}
-    for start in range(0, len(claims), BATCH * 3):
-        batch = claims[start:start + BATCH * 3]
+    batches = [claims[start:start + BATCH * 3] for start in range(0, len(claims), BATCH * 3)]
+    prompts = []
+    for batch in batches:
         lines = []
         for claim in batch:
             lines.append(f"{claim.ref}: {claim.text}")
             if claim.quote is not None:
                 lines.append(f"  excerpt: “{claim.quote.text}”")
-        user_prompt = (
+        prompts.append(
             "Write ONE statement for each claim below, keeping its ref. "
             "Respond with ONLY a JSON object: {\"statements\": [{\"ref\": \"F1.1\", \"text\": \"...\"}]}\n\n"
             + "\n".join(lines)
         )
-        trace.prompts.append(("draft", user_prompt))
-        result = call(draft_system, user_prompt, SeedDrafts)
+    results = _run_batches(call, draft_system, "draft", prompts, SeedDrafts, trace)
+
+    drafts: dict[str, str] = {}
+    for batch, result in zip(batches, results, strict=True):
         wanted = {c.ref for c in batch}
         for item in result.statements:
             text = " ".join(item.text.split())
@@ -268,9 +306,9 @@ def critique(call, claims: list[Claim], drafts: dict[str, str], trace: Trace) ->
     """Pass 3: scores, rewrites and drops; a draft the critic forgot is kept
     unscored rather than lost."""
     drafted = [c for c in claims if c.ref in drafts]
-    candidates: list[Candidate] = []
-    for start in range(0, len(drafted), BATCH * 3):
-        batch = drafted[start:start + BATCH * 3]
+    batches = [drafted[start:start + BATCH * 3] for start in range(0, len(drafted), BATCH * 3)]
+    prompts = []
+    for batch in batches:
         lines = []
         for claim in batch:
             lines.append(f"{claim.ref}")
@@ -278,9 +316,11 @@ def critique(call, claims: list[Claim], drafts: dict[str, str], trace: Trace) ->
             lines.append(f"  claim: {claim.text}")
             if claim.quote is not None:
                 lines.append(f"  excerpt: “{claim.quote.text}”")
-        user_prompt = "Review every draft below.\n\n" + "\n".join(lines)
-        trace.prompts.append(("critique", user_prompt))
-        result = call(CRITIC_SYSTEM, user_prompt, SeedReviews)
+        prompts.append("Review every draft below.\n\n" + "\n".join(lines))
+    results = _run_batches(call, CRITIC_SYSTEM, "critique", prompts, SeedReviews, trace)
+
+    candidates: list[Candidate] = []
+    for batch, result in zip(batches, results, strict=True):
         reviews = {}
         for review in result.reviews:
             reviews.setdefault(review.ref, review)
@@ -370,10 +410,16 @@ def run(
 
     base_url, key, model = config
     trace = Trace()
+    # built once here, not inside the calls: the passes run their batches in
+    # threads, and the system prompt reads the organizer's instructions from
+    # the config store, which stays on this thread
+    systems = {
+        template: build_system_prompt(template, language, store, instructions)
+        for template in (GROUND_SYSTEM, draft_system, CRITIC_SYSTEM)
+    }
 
     def call(system_template: str, user_prompt: str, schema):
-        system_prompt = build_system_prompt(system_template, language, store, instructions)
-        return chat_json(base_url, key, model, system_prompt, user_prompt, schema)
+        return chat_json(base_url, key, model, systems[system_template], user_prompt, schema)
 
     claims = ground(call, assembly_name, language, budget, findings, quotes, hidden, trace)
     drafts = draft(call, draft_system, claims, trace)

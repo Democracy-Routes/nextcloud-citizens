@@ -479,9 +479,11 @@ def test_the_target_caps_the_statements_and_the_listing_recommends_one(client, m
     assert listing["seeds_target"] == 20 and len(listing["seeds"]) == 20
     # the proposal is offered first and gets the first statement
     assert listing["seeds"][0]["text"].endswith(" one")
-    # the findings are offered in batches; the first batch starts with the proposal
-    assert "Budget: at most 20 statements" in prompts[0][1]
-    first_offered = prompts[0][1].split("finding_id: ")[1].split("\n")[0]
+    # the findings are offered in batches, side by side, so the first batch is
+    # not necessarily the first prompt recorded; it starts with the proposal
+    first_batch = next(user for _system, user in prompts if "these are findings 1 to" in user)
+    assert "Budget: at most 20 statements" in first_batch
+    first_offered = first_batch.split("finding_id: ")[1].split("\n")[0]
     assert listing["seeds"][0]["finding_id"] == first_offered
     # breadth first: thirteen first statements, then second ones
     assert sum(1 for s in listing["seeds"] if s["text"].endswith(" one")) == 13

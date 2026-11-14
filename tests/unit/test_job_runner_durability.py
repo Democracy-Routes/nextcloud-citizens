@@ -108,6 +108,40 @@ def test_a_reclaimed_job_counts_another_attempt(database):
     assert _reload(job_id)["attempts"] == 3
 
 
+def test_a_running_job_still_executing_here_is_not_reclaimed(database):
+    """The pool runs jobs in threads of this very process. A job slower than
+    the lease (a seeds run of forty minutes) must not be handed to a second
+    thread while the first is still working: that doubled the model calls
+    and let two attempts write the same statements."""
+    job_id = _job(
+        state="RUNNING",
+        locked_at=utcnow() - timedelta(seconds=runner.RUNNING_LEASE_SECONDS + 60),
+    )
+    runner._mark_active(job_id, True)
+    try:
+        assert runner._claim_next_job() is None
+    finally:
+        runner._mark_active(job_id, False)
+    assert runner._claim_next_job() == job_id, "once the thread is gone the lease backstop applies"
+
+
+def test_run_job_marks_the_job_active_only_while_it_runs(database, monkeypatch):
+    job_id = _job()
+    seen = {}
+
+    def fake_inner(jid):
+        seen["active_during"] = jid in runner._active_job_ids()
+        raise RuntimeError("bookkeeping failed")
+
+    monkeypatch.setattr(runner, "_run_job_inner", fake_inner)
+    monkeypatch.setattr(runner, "_release_job_after_failure", lambda jid: None)
+
+    runner._run_job(job_id)
+
+    assert seen["active_during"] is True
+    assert job_id not in runner._active_job_ids()
+
+
 def test_a_normal_queued_job_is_still_claimed(database):
     job_id = _job()
     assert runner._claim_next_job() == job_id
