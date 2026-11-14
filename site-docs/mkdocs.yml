@@ -1,6 +1,6 @@
-site_name: Citizens documentation
+site_name: Democracy Routes documentation
 site_url: https://docs.democracyroutes.com
-site_description: Technical documentation for Citizens, the deliberative-assembly recording and analysis app.
+site_description: Technical documentation for the Democracy Routes platform - Citizens, the assembly recording and analysis app; Polis, the public voting and opinion-mapping tool; and the bridge that connects them.
 repo_url: https://github.com/Democracy-Routes/nextcloud-citizens
 copyright: Democracy Routes &middot; AGPL-3.0
 docs_dir: docs
@@ -104,6 +104,22 @@ nav:
       - Seeds export formats: reference/seeds-formats.md
       - Polis bridge contract: reference/polis-contract.md
       - Changelog: reference/changelog.md
+  - Polis:
+      - polis/index.md
+      - Concepts: polis/concepts.md
+      - Running a conversation: polis/organizers.md
+      - Deployment (self-hosting kit): polis/deployment.md
+      - Configuration variables: polis/configuration.md
+      - Privacy: polis/privacy.md
+      - API reference: polis/api.md
+      - Architecture: polis/architecture.md
+      - Changelog: polis/changelog.md
+  - Citizens + Polis:
+      - bridge/index.md
+      - Connecting an installation: bridge/setup.md
+      - Contract: bridge/contract.md
+      - Privacy across the bridge: bridge/privacy.md
+      - Roadmap and open questions: bridge/roadmap.md
   - Contributing:
       - contributing/index.md
       - Development environment: contributing/development-environment.md

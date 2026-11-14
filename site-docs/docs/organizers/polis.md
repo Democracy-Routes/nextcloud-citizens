@@ -1,5 +1,9 @@
 # Polis consultation
 
+This page covers the Citizens side. For the whole path see [Citizens + Polis](../bridge/index.md); for the Polis organizer pages
+(moderating, the report, closing the conversation) see [Running a conversation](../polis/organizers.md); to connect an
+installation see [Connecting an installation](../bridge/setup.md).
+
 An assembly produces findings. A [Polis](https://pol.is) conversation needs short statements
 that strangers can agree or disagree with. **Polis seeds** are those statements, written by the
 analysis model from your *approved* findings and reviewed by you before anything leaves Citizens.
@@ -13,7 +17,7 @@ It works the same in Nextcloud and in standalone mode.
 * To send straight to Polis: an administrator has set the instance URL and API key in
   Settings, AI, Polis (see [Settings reference](../admin/settings.md#polis)). The target is the
   Citizens-Polis fork, which has the import endpoint described in the
-  [Polis bridge contract](../reference/polis-contract.md).
+  [bridge contract](../bridge/contract.md).
 
 ## The workflow
 

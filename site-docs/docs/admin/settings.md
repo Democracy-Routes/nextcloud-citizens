@@ -169,7 +169,7 @@ called without a key; a failing model is logged and skipped.
 Citizens-Polis fork; `deploy/prod/create-apikey.sh <email>` there). With both set, organizers get
 **Send to Polis** in Results, Polis seeds. **Test connection** calls the instance and answers whose key
 it is. The key is stored like the other API keys and never shown again. Only statement text is sent. See
-[Polis consultation](../organizers/polis.md) and the [bridge contract](../reference/polis-contract.md).
+[Polis consultation](../organizers/polis.md), [Connecting an installation](../bridge/setup.md) (key, test, rotation, troubleshooting) and the [bridge contract](../bridge/contract.md).
 
 ## Organisation
 

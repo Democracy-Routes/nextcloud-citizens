@@ -29,7 +29,7 @@ password-reset links are stored hashed and expire. Deleting an account removes t
 Nothing, until an administrator configures a provider. Hosted engines (Deepgram, Mistral) receive the
 assembled audio of each recording once; Whisper against your own endpoint and Vosk keep audio on your
 infrastructure; analysis receives transcript text only, never audio; Polis receives approved statement text
-only when an organizer presses Send to Polis; live captions use the same engine as transcription and, when a
+only when an organizer presses Send to Polis (what crosses, and what Polis then stores, is in [Privacy across the bridge](../bridge/privacy.md)); live captions use the same engine as transcription and, when a
 session ends, what it heard is written to `live_captions/`. The full table is in
 [Providers and egress](../admin/providers-egress.md). The recorder tells each table which of these applies
 before recording starts; see [Consent and the notice](consent.md).

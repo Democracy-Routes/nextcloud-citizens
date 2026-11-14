@@ -54,7 +54,10 @@ All notable changes to Nextcloud Citizens.
 - Documentation site: `site-docs/` (MkDocs Material, strict build, no
   external assets) published at https://docs.democracyroutes.com by
   `scripts/docs-build.sh`, with a generated API reference from the OpenAPI
-  document.
+  document. The site documents the whole platform: Citizens, the Polis fork
+  (Citizen-polis-orbis: concepts, organizer pages, self-hosting kit,
+  configuration, privacy, API, architecture, changelog) and the bridge between
+  the two (flow, connecting an installation, contract, privacy, roadmap).
 - Standalone sign-in page: the icon, one line, the login card and a link
   back to democracyroutes.com, where the project is described; the app
   shell's fixed height no longer clips the sign-in and set-password pages.

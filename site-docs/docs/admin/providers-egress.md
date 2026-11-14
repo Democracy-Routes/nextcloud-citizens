@@ -10,7 +10,7 @@ transcription and no analysis.
 | Transcription | the assembled audio of one recording | Deepgram, Mistral, or the Whisper endpoint you configure (which can be your own server) | only after an admin configures an engine, and only with **Final transcription** enabled |
 | Live captions | about 10-second audio chunks during recording | whichever engine is configured; none if it is self-hosted | only if live captions are enabled |
 | Analysis | transcript text (never audio) | the configured endpoint, which may be your own server | only after an admin configures it |
-| Polis | the approved statements (text only), the assembly name and description | the Polis instance you configure | only when an organizer presses **Send to Polis** |
+| Polis | the approved statements (text only), the assembly name and description | the Polis instance you configure | only when an organizer presses **Send to Polis** ([details](../bridge/privacy.md)) |
 | Vosk model download | a model file request to `alphacephei.com`; no audio | the model host | only when an administrator presses **Install** for a built-in Vosk model |
 
 With live captions only, the assembled recording is never sent anywhere: the chunks streamed during the

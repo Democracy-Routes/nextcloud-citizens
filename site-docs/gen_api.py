@@ -188,7 +188,7 @@ def main() -> int:
         "the AppAPI proxy at `/index.php/apps/app_api/proxy/citizens/api/v1/...` with a "
         "Nextcloud session; in standalone mode they are served at `/api/v1/...` with the "
         "sign-in cookie. There is no API token for external services; see "
-        "[Polis bridge contract](../polis-contract.md) for how the one external integration works.", "",
+        "[Polis bridge contract](../../bridge/contract.md) for how the one external integration works.", "",
         '!!! note "Verbs"',
         "    The AppAPI proxy forwards only GET, POST, PUT and DELETE. Partial updates therefore "
         "use PUT; the application has no PATCH routes.", "",
