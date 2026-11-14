@@ -224,5 +224,50 @@
 		"analysisQueued": "Analysis queued",
 		"analysisNotQueued": "No analysis provider is configured: run the analysis from Settings once one is set",
 		"skipped": "Not taken from the archive:"
+	},
+	"landing": {
+		"hero": {
+			"title": "Citizens",
+			"claim": "Deliberative assemblies, from the table to the report",
+			"lead": "Citizens runs in-person citizens' assemblies and deliberative workshops: one ordinary phone per discussion table records the conversation, and the app turns the recordings into transcripts, per-table summaries and cross-table findings that a human organizer reviews before anything is published. It is open source software (AGPL-3.0)."
+		},
+		"how": {
+			"title": "How it works",
+			"record": {
+				"title": "Record",
+				"text": "One phone per table, offline-first: audio is stored on the phone before it is uploaded. Each person's consent is recorded at the table."
+			},
+			"analyse": {
+				"title": "Transcribe and analyse",
+				"text": "Speech-to-text with speaker diarization, then a per-table analysis and a cross-table synthesis."
+			},
+			"review": {
+				"title": "Review and publish",
+				"text": "The organizer approves, edits or rejects every finding, then publishes the report (PDF or Markdown) to the participants."
+			},
+			"polis": {
+				"title": "Continue online with Polis",
+				"text": "Approved findings become short statements that citizens vote on in a Polis conversation; the poll link and QR code go to the table phones."
+			}
+		},
+		"routes": {
+			"title": "Part of Democracy Routes",
+			"text": "Democracy Routes is the project these tools belong to: two tools that talk to each other.",
+			"citizens": {
+				"title": "Citizens",
+				"text": "The software for the in-person assembly: record the tables, analyse, review and publish."
+			},
+			"polis": {
+				"title": "Polis",
+				"text": "The online consultation, where anyone with the link votes on the statements."
+			}
+		},
+		"links": {
+			"site": "Democracy Routes website",
+			"citizensRepo": "Citizens source code on GitHub",
+			"polisRepo": "Polis source code on GitHub",
+			"license": "Licence AGPL-3.0"
+		},
+		"open": "Open"
 	}
 }

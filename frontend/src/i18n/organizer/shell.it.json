@@ -224,5 +224,50 @@
 		"analysisQueued": "Analisi in coda",
 		"analysisNotQueued": "Nessun fornitore di analisi è configurato: avvia l'analisi dalle Impostazioni quando ne sarà impostato uno",
 		"skipped": "Non presi dall'archivio:"
+	},
+	"landing": {
+		"hero": {
+			"title": "Citizens",
+			"claim": "Assemblee deliberative, dal tavolo al rapporto",
+			"lead": "Citizens gestisce assemblee di cittadini e workshop deliberativi in presenza: un normale telefono per ogni tavolo di discussione registra la conversazione, e l'app trasforma le registrazioni in trascrizioni, sintesi per tavolo e risultati trasversali che un organizzatore umano rivede prima che venga pubblicato qualsiasi cosa. È software open source (AGPL-3.0)."
+		},
+		"how": {
+			"title": "Come funziona",
+			"record": {
+				"title": "Registra",
+				"text": "Un telefono per tavolo, prima di tutto offline: l'audio viene salvato sul telefono prima di essere caricato. Il consenso di ogni persona è registrato al tavolo."
+			},
+			"analyse": {
+				"title": "Trascrivi e analizza",
+				"text": "Trascrizione del parlato con riconoscimento dei parlanti, poi analisi per tavolo e sintesi tra i tavoli."
+			},
+			"review": {
+				"title": "Rivedi e pubblica",
+				"text": "L'organizzatore approva, modifica o rifiuta ogni risultato, poi pubblica il rapporto (PDF o Markdown) ai partecipanti."
+			},
+			"polis": {
+				"title": "Continua online con Polis",
+				"text": "I risultati approvati diventano brevi affermazioni su cui i cittadini votano in una conversazione Polis; il link del sondaggio e il codice QR arrivano ai telefoni dei tavoli."
+			}
+		},
+		"routes": {
+			"title": "Parte di Democracy Routes",
+			"text": "Democracy Routes è il progetto a cui appartengono questi strumenti: due strumenti che dialogano tra loro.",
+			"citizens": {
+				"title": "Citizens",
+				"text": "Il software per l'assemblea in presenza: registra i tavoli, analizza, rivedi e pubblica."
+			},
+			"polis": {
+				"title": "Polis",
+				"text": "La consultazione online, in cui chiunque abbia il link vota le affermazioni."
+			}
+		},
+		"links": {
+			"site": "Sito di Democracy Routes",
+			"citizensRepo": "Codice sorgente di Citizens su GitHub",
+			"polisRepo": "Codice sorgente di Polis su GitHub",
+			"license": "Licenza AGPL-3.0"
+		},
+		"open": "Apri"
 	}
 }

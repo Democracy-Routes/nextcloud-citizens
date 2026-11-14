@@ -1372,3 +1372,19 @@
 	flex-wrap: wrap;
 	gap: 4px;
 }
+
+/* ---- standalone gate screens (landing, set-password, unreachable) ----
+   The shell above is a fixed-height clipped box sized for Nextcloud's page
+   chrome. Before sign-in there is no chrome and the page must scroll, so
+   AuthGate adds this class while a gate screen shows. */
+#citizens-app.cz-app--gate {
+	height: auto;
+	min-height: 100vh;
+	min-height: 100dvh;
+	margin: 0;
+	border-radius: 0;
+	box-shadow: none;
+	overflow: visible;
+	background: #f5f7fa;
+}
+

@@ -8,7 +8,7 @@
  * nobody is signed in, the app otherwise. A 401 from any later request (an
  * expired session) brings the login view back instead of an error banner.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, ApiError, setUnauthorizedHandler } from '../../api'
 import { auth } from '../../auth'
@@ -16,7 +16,7 @@ import { setLocale } from '../../i18n'
 import type { Account } from '../../types'
 import App from '../../App.vue'
 import CzButton from '../ui/CzButton.vue'
-import LoginView from './LoginView.vue'
+import LandingView from './LandingView.vue'
 import SetPasswordView from './SetPasswordView.vue'
 
 type Stage = 'loading' | 'set-password' | 'login' | 'app' | 'failed'
@@ -91,6 +91,12 @@ async function start(readToken = true): Promise<void> {
 }
 
 onMounted(() => void start())
+// The app root is a fixed-height, clipped shell sized for Nextcloud's page.
+// The landing and set-password screens are ordinary scrolling pages: lift
+// the shell's constraints while they show (style.css, .cz-app--gate).
+watchEffect(() => {
+	document.getElementById('citizens-app')?.classList.toggle('cz-app--gate', stage.value !== 'app')
+})
 onBeforeUnmount(() => setUnauthorizedHandler(null))
 </script>
 
@@ -103,7 +109,7 @@ onBeforeUnmount(() => setUnauthorizedHandler(null))
 		:token="token"
 		@signed-in="onSignedIn"
 		@to-login="toLogin" />
-	<LoginView v-else-if="stage === 'login' && auth.config" :config="auth.config" @signed-in="onSignedIn" />
+	<LandingView v-else-if="stage === 'login' && auth.config" :config="auth.config" @signed-in="onSignedIn" />
 	<main v-else-if="stage === 'failed'" class="cz-card" style="max-width: 400px; margin: 10vh auto; padding: 24px">
 		<p class="cz-error">{{ t('organizer.shell.auth.unreachable') }}</p>
 		<CzButton @click="start()">{{ t('organizer.shell.auth.retry') }}</CzButton>

@@ -224,5 +224,50 @@
 		"analysisQueued": "Analyse eingeplant",
 		"analysisNotQueued": "Es ist kein Analyseanbieter eingerichtet: Starten Sie die Analyse in den Einstellungen, sobald einer festgelegt ist",
 		"skipped": "Aus dem Archiv nicht übernommen:"
+	},
+	"landing": {
+		"hero": {
+			"title": "Citizens",
+			"claim": "Deliberative Versammlungen, vom Tisch bis zum Bericht",
+			"lead": "Citizens unterstützt Bürgerversammlungen und deliberative Workshops vor Ort: Ein gewöhnliches Smartphone pro Diskussionstisch nimmt das Gespräch auf, und die App macht aus den Aufnahmen Transkripte, Zusammenfassungen je Tisch und tischübergreifende Ergebnisse, die ein Mensch aus dem Organisationsteam prüft, bevor etwas veröffentlicht wird. Die Software ist Open Source (AGPL-3.0)."
+		},
+		"how": {
+			"title": "So funktioniert es",
+			"record": {
+				"title": "Aufnehmen",
+				"text": "Ein Smartphone pro Tisch, offline zuerst: Das Audio wird auf dem Gerät gespeichert, bevor es hochgeladen wird. Die Einwilligung jeder Person wird am Tisch festgehalten."
+			},
+			"analyse": {
+				"title": "Transkribieren und analysieren",
+				"text": "Spracherkennung mit Sprechertrennung, danach eine Analyse je Tisch und eine tischübergreifende Synthese."
+			},
+			"review": {
+				"title": "Prüfen und veröffentlichen",
+				"text": "Die Organisatorin oder der Organisator bestätigt, bearbeitet oder verwirft jedes Ergebnis und veröffentlicht dann den Bericht (PDF oder Markdown) an die Teilnehmenden."
+			},
+			"polis": {
+				"title": "Online weiter mit Polis",
+				"text": "Bestätigte Ergebnisse werden zu kurzen Aussagen, über die die Bürgerinnen und Bürger in einer Polis-Konversation abstimmen; Umfragelink und QR-Code gehen an die Tisch-Smartphones."
+			}
+		},
+		"routes": {
+			"title": "Teil von Democracy Routes",
+			"text": "Democracy Routes ist das Projekt, zu dem diese Werkzeuge gehören: zwei Werkzeuge, die miteinander arbeiten.",
+			"citizens": {
+				"title": "Citizens",
+				"text": "Die Software für die Versammlung vor Ort: Tische aufnehmen, analysieren, prüfen und veröffentlichen."
+			},
+			"polis": {
+				"title": "Polis",
+				"text": "Die Online-Konsultation, in der alle mit dem Link über die Aussagen abstimmen."
+			}
+		},
+		"links": {
+			"site": "Website von Democracy Routes",
+			"citizensRepo": "Citizens-Quellcode auf GitHub",
+			"polisRepo": "Polis-Quellcode auf GitHub",
+			"license": "Lizenz AGPL-3.0"
+		},
+		"open": "Öffnen"
 	}
 }
