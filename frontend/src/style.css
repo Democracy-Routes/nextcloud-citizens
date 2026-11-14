@@ -1378,6 +1378,7 @@
    chrome. Before sign-in there is no chrome and the page must scroll, so
    AuthGate adds this class while a gate screen shows. */
 #citizens-app.cz-app--gate {
+	display: block; /* the shell is a flex row (sidebar + content); a gate screen is one centred column */
 	height: auto;
 	min-height: 100vh;
 	min-height: 100dvh;
