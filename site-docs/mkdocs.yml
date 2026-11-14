@@ -1,0 +1,116 @@
+site_name: Citizens documentation
+site_url: https://docs.democracyroutes.com
+site_description: Technical documentation for Citizens, the deliberative-assembly recording and analysis app.
+repo_url: https://github.com/Democracy-Routes/nextcloud-citizens
+copyright: Democracy Routes &middot; AGPL-3.0
+docs_dir: docs
+strict: true
+
+theme:
+  name: material
+  font: false
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Requirements: getting-started/requirements.md
+      - Install as a Nextcloud ExApp: getting-started/install-nextcloud.md
+      - Run standalone: getting-started/standalone.md
+      - First assembly in 15 minutes: getting-started/first-assembly.md
+  - Running an assembly:
+      - organizers/index.md
+      - Concepts: organizers/concepts.md
+      - Before the day: organizers/before-the-day.md
+      - On the day: organizers/on-the-day.md
+      - After the assembly: organizers/after.md
+      - Facilitator guide: organizers/facilitator.md
+      - Polis consultation: organizers/polis.md
+      - Recovery and import: organizers/recovery-import.md
+  - Administration:
+      - admin/index.md
+      - Settings reference: admin/settings.md
+      - Providers and egress: admin/providers-egress.md
+      - Backups and restore: admin/backups.md
+      - Updates and releases: admin/updates.md
+      - Monitoring and logs: admin/monitoring.md
+      - Troubleshooting: admin/troubleshooting.md
+  - Privacy and security:
+      - privacy/index.md
+      - Consent and the notice: privacy/consent.md
+      - Pseudonyms and names: privacy/pseudonyms.md
+  - Architecture:
+      - architecture/index.md
+      - Recording pipeline and reliability: architecture/recording-pipeline.md
+      - Transcription and analysis: architecture/transcription-analysis.md
+      - Jobs and background work: architecture/jobs.md
+      - Database and migrations: architecture/database.md
+      - Frontend: architecture/frontend.md
+      - Testing: architecture/testing.md
+  - Reference:
+      - reference/index.md
+      - API:
+          - reference/api/index.md
+          - Assemblies: reference/api/assemblies.md
+          - Rounds (sessions): reference/api/rounds.md
+          - Recordings: reference/api/recordings.md
+          - Sessions: reference/api/sessions.md
+          - Uploads: reference/api/uploads.md
+          - Administration: reference/api/admin.md
+          - Recorder and participant: reference/api/recorder.md
+          - Accounts: reference/api/auth.md
+          - Other: reference/api/other.md
+      - Configuration variables: reference/configuration.md
+      - Report formats: reference/reports.md
+      - Seeds export formats: reference/seeds-formats.md
+      - Polis bridge contract: reference/polis-contract.md
+      - Changelog: reference/changelog.md
+  - Contributing:
+      - contributing/index.md
+      - Development environment: contributing/development-environment.md
+      - Conventions and the gate: contributing/conventions.md
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn

@@ -53,6 +53,12 @@ class StatementSeed(Base):
     # statement's id (tid) there
     polis_conversation_id: Mapped[str | None] = mapped_column(String(120))
     polis_tid: Mapped[int | None] = mapped_column(Integer)
+    # the pipeline's trail (0.9): the excerpt the statement rests on, the
+    # segment it came from, and the critic's scores as JSON — shown to the
+    # organizer, never exported
+    evidence_text: Mapped[str | None] = mapped_column(Text)
+    evidence_segment_id: Mapped[str | None] = mapped_column(String(36))
+    quality_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 

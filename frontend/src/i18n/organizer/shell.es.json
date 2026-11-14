@@ -226,48 +226,10 @@
 		"skipped": "No tomado del archivo:"
 	},
 	"landing": {
-		"hero": {
-			"title": "Citizens",
-			"claim": "Asambleas deliberativas, de la mesa al informe",
-			"lead": "Citizens permite realizar asambleas ciudadanas y talleres deliberativos presenciales: un teléfono corriente por mesa de debate graba la conversación, y la aplicación convierte las grabaciones en transcripciones, resúmenes por mesa y conclusiones entre mesas que una persona organizadora revisa antes de publicar nada. Es software de código abierto (AGPL-3.0)."
-		},
-		"how": {
-			"title": "Cómo funciona",
-			"record": {
-				"title": "Grabar",
-				"text": "Un teléfono por mesa, primero sin conexión: el audio se guarda en el teléfono antes de subirse. El consentimiento de cada persona se registra en la mesa."
-			},
-			"analyse": {
-				"title": "Transcribir y analizar",
-				"text": "Reconocimiento de voz con separación de hablantes, después un análisis por mesa y una síntesis entre mesas."
-			},
-			"review": {
-				"title": "Revisar y publicar",
-				"text": "La persona organizadora aprueba, edita o rechaza cada conclusión y después publica el informe (PDF o Markdown) a los participantes."
-			},
-			"polis": {
-				"title": "Continuar en línea con Polis",
-				"text": "Las conclusiones aprobadas se convierten en frases breves que la ciudadanía vota en una conversación de Polis; el enlace de la encuesta y el código QR llegan a los teléfonos de las mesas."
-			}
-		},
-		"routes": {
-			"title": "Parte de Democracy Routes",
-			"text": "Democracy Routes es el proyecto al que pertenecen estas herramientas: dos herramientas que se comunican entre sí.",
-			"citizens": {
-				"title": "Citizens",
-				"text": "El software para la asamblea presencial: grabar las mesas, analizar, revisar y publicar."
-			},
-			"polis": {
-				"title": "Polis",
-				"text": "La consulta en línea, donde cualquiera con el enlace vota las frases."
-			}
-		},
-		"links": {
-			"site": "Sitio web de Democracy Routes",
-			"citizensRepo": "Código fuente de Citizens en GitHub",
-			"polisRepo": "Código fuente de Polis en GitHub",
-			"license": "Licencia AGPL-3.0"
-		},
-		"open": "Abrir"
+		"title": "Citizens",
+		"claim": "Asambleas deliberativas, de la mesa al informe.",
+		"lead": "El espacio de trabajo de quienes organizan con Democracy Routes. Inicia sesión para dirigir una asamblea, revisar sus resultados y publicar el informe.",
+		"back": "Volver a democracyroutes.com",
+		"about": "¿Qué es Democracy Routes?"
 	}
 }

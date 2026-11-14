@@ -126,6 +126,9 @@ Full note: [docs/privacy.md](docs/privacy.md).
 
 ## Documentation
 
+The full documentation site is at **https://docs.democracyroutes.com** (built from
+`site-docs/` with `scripts/docs-build.sh`). The source pages:
+
 * [Administration guide](docs/administration.md) — install, keys, data, upgrading, troubleshooting
 * [Privacy & data handling](docs/privacy.md)
 * [Polis seeds](docs/polis-seeds.md) — turn approved findings into statements for a Polis conversation

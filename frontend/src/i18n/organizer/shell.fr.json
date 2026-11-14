@@ -226,48 +226,10 @@
 		"skipped": "Non repris de l'archive :"
 	},
 	"landing": {
-		"hero": {
-			"title": "Citizens",
-			"claim": "Des assemblées délibératives, de la table au rapport",
-			"lead": "Citizens sert à mener des assemblées citoyennes et des ateliers délibératifs en présentiel : un téléphone ordinaire par table de discussion enregistre la conversation, et l'application transforme les enregistrements en transcriptions, synthèses par table et conclusions transversales qu'un organisateur humain relit avant toute publication. C'est un logiciel libre (AGPL-3.0)."
-		},
-		"how": {
-			"title": "Comment ça marche",
-			"record": {
-				"title": "Enregistrer",
-				"text": "Un téléphone par table, d'abord hors ligne : l'audio est stocké sur le téléphone avant d'être envoyé. Le consentement de chaque personne est recueilli à la table."
-			},
-			"analyse": {
-				"title": "Transcrire et analyser",
-				"text": "Reconnaissance vocale avec identification des locuteurs, puis analyse par table et synthèse entre les tables."
-			},
-			"review": {
-				"title": "Relire et publier",
-				"text": "L'organisateur approuve, modifie ou rejette chaque conclusion, puis publie le rapport (PDF ou Markdown) aux participants."
-			},
-			"polis": {
-				"title": "Poursuivre en ligne avec Polis",
-				"text": "Les conclusions approuvées deviennent de courtes affirmations soumises au vote des citoyens dans une conversation Polis ; le lien du sondage et le code QR sont envoyés aux téléphones des tables."
-			}
-		},
-		"routes": {
-			"title": "Un projet de Democracy Routes",
-			"text": "Democracy Routes est le projet auquel ces outils appartiennent : deux outils qui dialoguent entre eux.",
-			"citizens": {
-				"title": "Citizens",
-				"text": "Le logiciel pour l'assemblée en présentiel : enregistrer les tables, analyser, relire et publier."
-			},
-			"polis": {
-				"title": "Polis",
-				"text": "La consultation en ligne, où toute personne disposant du lien vote sur les affirmations."
-			}
-		},
-		"links": {
-			"site": "Site de Democracy Routes",
-			"citizensRepo": "Code source de Citizens sur GitHub",
-			"polisRepo": "Code source de Polis sur GitHub",
-			"license": "Licence AGPL-3.0"
-		},
-		"open": "Ouvrir"
+		"title": "Citizens",
+		"claim": "Assemblées délibératives, de la table au rapport.",
+		"lead": "L'espace de travail des organisateurs de Democracy Routes. Connectez-vous pour conduire une assemblée, relire ses résultats et publier le rapport.",
+		"back": "Retour à democracyroutes.com",
+		"about": "Qu'est-ce que Democracy Routes ?"
 	}
 }

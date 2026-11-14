@@ -336,6 +336,20 @@
 			"recommended": "Consigliato: {count}",
 			"estimate": "circa {minutes} min di voto · {count} risultati approvati",
 			"hint": "Polis funziona meglio con 20-40 affermazioni; le persone smettono di votare dopo circa trenta."
+		},
+		"why": {
+			"button": "Perché",
+			"weak": "Punteggio basso",
+			"weakTitle": "Il critico ha dato un punteggio basso: controllala",
+			"finding": "Dal risultato: {title}",
+			"claim": "Tesi: {claim}",
+			"excerptNote": "estratto dalla trascrizione, nomi oscurati",
+			"scoresLabel": "Punteggi del critico",
+			"grounded": "Fondata",
+			"contestable": "Discutibile",
+			"singleIdea": "Un'idea",
+			"clear": "Chiara",
+			"score": "{label} {value}/2"
 		}
 	}
 }

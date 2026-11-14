@@ -336,6 +336,20 @@
 			"recommended": "Empfohlen: {count}",
 			"estimate": "etwa {minutes} Min. Abstimmung · {count} freigegebene Erkenntnisse",
 			"hint": "Polis funktioniert am besten mit 20 bis 40 Aussagen; nach etwa dreißig hören die Leute auf abzustimmen."
+		},
+		"why": {
+			"button": "Warum",
+			"weak": "Niedrige Wertung",
+			"weakTitle": "Der Kritiker hat dies niedrig bewertet – bitte prüfen",
+			"finding": "Aus dem Ergebnis: {title}",
+			"claim": "Aussage: {claim}",
+			"excerptNote": "Auszug aus dem Transkript, Namen unkenntlich gemacht",
+			"scoresLabel": "Bewertungen des Kritikers",
+			"grounded": "Belegt",
+			"contestable": "Strittig",
+			"singleIdea": "Ein Gedanke",
+			"clear": "Klar",
+			"score": "{label} {value}/2"
 		}
 	}
 }

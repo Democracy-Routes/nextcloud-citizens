@@ -336,6 +336,20 @@
 			"recommended": "Recommended: {count}",
 			"estimate": "about {minutes} min of voting · {count} approved findings",
 			"hint": "Polis works best with 20 to 40 statements; people stop voting after about thirty."
+		},
+		"why": {
+			"button": "Why",
+			"weak": "Low score",
+			"weakTitle": "The critic scored this low — check it",
+			"finding": "From the finding: {title}",
+			"claim": "Claim: {claim}",
+			"excerptNote": "excerpt from the transcript, names masked",
+			"scoresLabel": "Critic's scores",
+			"grounded": "Grounded",
+			"contestable": "Contestable",
+			"singleIdea": "One idea",
+			"clear": "Clear",
+			"score": "{label} {value}/2"
 		}
 	}
 }

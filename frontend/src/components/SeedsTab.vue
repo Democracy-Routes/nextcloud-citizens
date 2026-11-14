@@ -119,6 +119,29 @@ const failureText = computed(() => {
 })
 
 /** The pill borrows the tones the status pill already has. */
+const SCORE_KEYS = [
+	['grounded', 'grounded'],
+	['contestable', 'contestable'],
+	['single_idea', 'singleIdea'],
+	['clear', 'clear'],
+] as const
+const whyOpen = ref<Set<string>>(new Set())
+
+function hasTrail(seed: StatementSeed): boolean {
+	return !!(seed.finding_title || seed.evidence_text || seed.quality)
+}
+
+function isWeak(seed: StatementSeed): boolean {
+	const sc = seed.quality?.scores
+	return !!sc && Object.values(sc).some((v) => v === 0)
+}
+
+function toggleWhy(id: string) {
+	const next = new Set(whyOpen.value)
+	if (!next.delete(id)) next.add(id)
+	whyOpen.value = next
+}
+
 const PILL_TONE: Record<StatementSeed['status'], string> = {
 	DRAFT: 'DRAFT', APPROVED: 'COMPLETE', EXPORTED: 'COMPLETE', REJECTED: 'STALE',
 }
@@ -423,6 +446,13 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 					<CzStatusPill :status="PILL_TONE[seed.status]" :label="t(`organizer.results.seeds.status.${seed.status}`)" />
 					<span class="cz-seed-badge">{{ t(`organizer.results.seeds.origin.${seed.origin}`) }}</span>
 					<span v-if="seed.edited" class="cz-seed-badge">{{ t('organizer.results.seeds.edited') }}</span>
+					<span
+						v-if="isWeak(seed)"
+						class="cz-seed-badge cz-seed-warn"
+						:title="t('organizer.results.seeds.why.weakTitle')"
+						data-test="seed-weak">
+						{{ t('organizer.results.seeds.why.weak') }}
+					</span>
 					<span v-if="refusedIds.has(seed.id)" class="cz-seed-badge cz-seed-warn" data-test="seed-refused">
 						{{ t('organizer.results.seeds.polis.refused') }}
 					</span>
@@ -445,6 +475,49 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 						style="font-size: 0.8125rem">
 						{{ t('organizer.results.seeds.tooLong', { soft: softChars, max: maxChars }) }}
 					</span>
+				</div>
+				<div v-if="hasTrail(seed)" style="margin-top: 6px">
+					<button
+						type="button"
+						class="cz-seed-badge"
+						style="background: none; cursor: pointer; color: inherit"
+						:aria-expanded="whyOpen.has(seed.id)"
+						data-test="seed-why"
+						@click="toggleWhy(seed.id)">
+						{{ t('organizer.results.seeds.why.button') }}
+					</button>
+					<div
+						v-if="whyOpen.has(seed.id)"
+						class="cz-muted"
+						style="margin-top: 6px; font-size: 0.8125rem"
+						data-test="seed-why-panel">
+						<p v-if="seed.finding_title" style="margin: 0 0 4px">
+							{{ t('organizer.results.seeds.why.finding', { title: seed.finding_title }) }}
+						</p>
+						<p v-if="seed.quality?.claim" style="margin: 0 0 4px">
+							{{ t('organizer.results.seeds.why.claim', { claim: seed.quality.claim }) }}
+						</p>
+						<blockquote
+							v-if="seed.evidence_text"
+							style="margin: 0 0 4px; padding-left: 8px; border-left: 3px solid currentColor"
+							data-test="seed-evidence">
+							{{ seed.evidence_text }}
+							<footer style="font-size: 0.75rem">{{ t('organizer.results.seeds.why.excerptNote') }}</footer>
+						</blockquote>
+						<div v-if="seed.quality?.scores" class="cz-row" style="gap: 6px; flex-wrap: wrap" :aria-label="t('organizer.results.seeds.why.scoresLabel')">
+							<span
+								v-for="[key, label] in SCORE_KEYS"
+								:key="key"
+								class="cz-seed-badge"
+								:class="{
+									'cz-seed-warn': seed.quality.scores[key] === 1,
+									'cz-seed-bad': seed.quality.scores[key] === 0,
+								}"
+								data-test="seed-score">
+								{{ t('organizer.results.seeds.why.score', { label: t(`organizer.results.seeds.why.${label}`), value: seed.quality.scores[key] }) }}
+							</span>
+						</div>
+					</div>
 				</div>
 				<p v-if="seed.stale" class="cz-seed-warn" style="margin: 6px 0 0; font-size: 0.8125rem">
 					{{ t('organizer.results.seeds.stale') }}
@@ -659,6 +732,9 @@ async function download(extension: 'csv' | 'json'): Promise<void> {
 	border-radius: 999px;
 	border: 1px solid currentColor;
 	opacity: 0.75;
+}
+.cz-seed-bad {
+	color: var(--cz-red, #b91c1c);
 }
 .cz-seed-warn {
 	color: var(--cz-amber, #b45309);

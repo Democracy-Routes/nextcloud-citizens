@@ -17,10 +17,8 @@ Nextcloud and in standalone mode.
 1. Open the assembly, go to **Results -> Polis seeds**, choose how many
    statements you want on the slider (10 to 60; the panel recommends a number
    from the approved findings and shows about how long the vote will take at
-   eight seconds a statement) and press **Generate**. The model writes the
-   statements in the assembly's language, the findings most tables raised
-   first, one statement per finding and two for a disagreement, then second
-   statements while the budget lasts. It takes a moment; the panel updates
+   eight seconds a statement) and press **Generate**. The statements are written in the
+   assembly's language by the three passes described below. It takes a moment; the panel updates
    when it is done.
 2. Read every statement. You can **edit** it (a counter shows the length),
    **approve** it, **reject** it, **delete** it, or **add** your own by hand.
@@ -31,6 +29,29 @@ Nextcloud and in standalone mode.
    after the last table ended, **Approve all** approves every draft in one
    go; rejected statements stay rejected, and you can still edit or reject
    any statement afterwards.
+
+## How the statements are written
+
+Three passes, so that each statement rests on something people actually said:
+
+1. **Ground.** For each approved finding the model reads the finding and the
+   transcript excerpts it cites, and lists the concrete claims people made.
+2. **Draft.** One statement per claim, written to a style card (one idea,
+   declarative, neutral, concrete actor and object).
+3. **Critique.** A second pass scores every draft on four points (grounded,
+   contestable, one idea, clear; 0 to 2 each), rewrites the ones that can be
+   mended and drops the ones that cannot.
+
+The statements are then selected breadth-first across findings: the findings
+most tables raised first, one statement each, then second statements while
+the budget lasts.
+
+Each statement has a **Why** button. It opens the trail: the finding it was
+written from, the claim, the transcript excerpt it rests on (names masked)
+and the four scores. Nothing in it is editable. A statement the critic scored
+0 on any point carries a "Low score" badge in the list so you can check it
+first. Statements you wrote by hand, or that older runs produced, have no
+trail. The excerpt is for you only and never goes to Polis.
 
 ## What makes a good statement
 

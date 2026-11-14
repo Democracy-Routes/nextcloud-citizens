@@ -90,6 +90,7 @@ def _polis(session: Session, assembly, rows: list[StatementSeed]) -> dict:
 def _listing(session: Session, assembly) -> dict:
     rows = seeds_svc.list_seeds(session, assembly.id)
     source_count = len(seeds_svc.source_findings(session, assembly))
+    titles = seeds_svc.finding_titles(session, rows)
     return {
         "assembly_id": assembly.id,
         "language": assembly.language,
@@ -109,7 +110,7 @@ def _listing(session: Session, assembly) -> dict:
         "soft_chars": SEED_SOFT_CHARS,
         "job": _job(session, assembly.id),
         "polis": _polis(session, assembly, rows),
-        "seeds": [seeds_svc.payload(s) for s in rows],
+        "seeds": [seeds_svc.payload(s, titles.get(s.finding_id or "")) for s in rows],
     }
 
 

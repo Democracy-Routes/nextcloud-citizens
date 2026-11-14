@@ -336,6 +336,20 @@
 			"recommended": "Recommandé : {count}",
 			"estimate": "environ {minutes} min de vote · {count} constats approuvés",
 			"hint": "Polis fonctionne mieux avec 20 à 40 énoncés ; les gens cessent de voter après une trentaine."
+		},
+		"why": {
+			"button": "Pourquoi",
+			"weak": "Note basse",
+			"weakTitle": "Le critique a mal noté cet énoncé : à vérifier",
+			"finding": "Issu du constat : {title}",
+			"claim": "Affirmation : {claim}",
+			"excerptNote": "extrait de la transcription, noms masqués",
+			"scoresLabel": "Notes du critique",
+			"grounded": "Fondé",
+			"contestable": "Discutable",
+			"singleIdea": "Une seule idée",
+			"clear": "Clair",
+			"score": "{label} {value}/2"
 		}
 	}
 }

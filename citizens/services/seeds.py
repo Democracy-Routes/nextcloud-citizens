@@ -4,9 +4,11 @@
 
 The assembly's findings are long and carry evidence; a Polis conversation
 needs short statements a stranger can agree or disagree with, and nothing
-else. The analysis model writes one to three per approved finding; the
-organizer reviews every one; approved seeds go out as CSV or JSON. Nothing
-here reads a transcript, and no name or table number reaches the file.
+else. The statements are written in three passes (seed_pipeline.py: ground
+in the cited excerpts, draft, critique), the organizer reviews every one;
+approved seeds go out as CSV, JSON or straight to Polis. The model reads
+the excerpts a finding cites and the organizer sees the one a statement
+rests on; no excerpt, name or table number reaches the file or Polis.
 
 Regeneration keeps what a person touched (approved, rejected, edited or
 added by hand) and replaces only untouched drafts, so a second run never
@@ -25,56 +27,50 @@ from citizens.db.models import Assembly, Finding, StatementSeed
 from citizens.db.models.base import utcnow
 from citizens.db.models.seeds import EXPORTABLE_STATUSES, SEED_MAX_CHARS
 from citizens.logging_setup import get_logger
-from citizens.providers.analysis.openai_compat import chat_json
-from citizens.services import provider_config, pseudonyms
-from citizens.services.analysis import (
-    APPROVED_STATUSES,
-    LANGUAGE_NAMES,
-    _analysis_config,
-    build_system_prompt,
-)
+from citizens.services import provider_config, seed_pipeline
+from citizens.services.analysis import APPROVED_STATUSES, LANGUAGE_NAMES, _analysis_config
 
 log = get_logger(__name__)
 
 EXPORT_SCHEMA = "citizens.statement-seeds/1"
 
-SEEDS_SYSTEM = """You are preparing seed statements for a Polis conversation
-from the findings of an in-person citizens' assembly. Participants will vote
-agree / disagree / pass on each statement; a statement nobody could disagree
-with is useless to them.
+SEEDS_SYSTEM = """You are writing seed statements for a Polis conversation
+from claims people made at an in-person citizens' assembly. Participants
+will vote agree / disagree / pass on each statement without any context; a
+statement nobody could disagree with is useless to them.
+
+You receive claims, each with a ref ("F3.2") and, when there is one, the
+excerpt it rests on. Write ONE statement per claim and keep its ref.
 
 Rules:
-- Respond with ONLY a JSON object: {{"seeds": [{{"finding_id": "...",
-  "statements": ["...", ...]}}]}}
-- Copy finding_id EXACTLY from the input. Never invent ids.
+- Respond with ONLY a JSON object: {{"statements": [{{"ref": "F1.1",
+  "text": "..."}}]}}
+- Copy each ref EXACTLY from the input. Never invent refs.
 - A statement is ONE idea, one sentence, in a neutral declarative voice,
   that a stranger can agree or disagree with: "Evening buses should run
   until midnight", not "Participants wanted later buses".
-- Every statement names WHO should do WHAT, concretely: an actor (the city,
-  schools, the transport company, employers, citizens…), an action, and a
-  concrete object (a service, a place, a rule, a number, a condition). Take
-  the specifics from the finding's summary — the mechanism, the place, the
-  figure, the condition — rather than the general principle.
+- Say WHO should do WHAT, concretely, when the claim says so: an actor, an
+  action and a concrete object (a service, a place, a rule, a number, a
+  condition). Take the specifics from the claim and its excerpt — never add
+  an actor or a measure the people did not mention.
 - The dissent test: before writing a statement down, ask whether a
   reasonable person could disagree with it. "Public services should include
   everyone" fails; "The city should keep a staffed counter for every service
-  that goes online" passes. A statement that fails the test is rewritten
-  from the finding's specific detail, or left out.
+  that goes online" passes. A claim that fails the test is written as the
+  specific position behind it, or marked by leaving its text empty.
 - No empty verbs ("promote", "value", "support", "strengthen", "foster")
   without a concrete object; no abstract nouns standing alone.
-- A disagreement or a trade-off becomes TWO statements, one per side. A
-  question becomes the position it implies, or is left out when it implies
-  none. A concern becomes the condition or the limit it asks for.
-- Keep each statement under 140 characters.
+- A disagreement comes as TWO statements, one per claim; keep each side
+  plain and fair.
+- Everyday words a stranger understands at first reading; no jargon, no
+  abbreviations, no quotation marks; keep each statement under 140
+  characters.
 - Write for the public: no "we", no "the table", no table numbers, no
-  speaker labels, no names, no quotations.
-- Do not repeat the same idea in two statements, across findings either.
-- Respect the budget and the order given in the input: findings come in
-  priority order; write one statement for each (two for a disagreement),
-  then, only while the budget allows, a second statement for the findings
-  whose summary holds a second distinct, concrete idea.
-- Before answering, re-read your list and rewrite every statement that
-  fails the dissent test or names no actor.
+  speaker labels, no names.
+- Do not repeat the same idea in two statements; when two claims say the
+  same thing, write it once and leave the other text empty.
+- The budget of the consultation is small: say the one thing the claim says,
+  and nothing more.
 - Write everything in {language}."""
 
 
@@ -132,13 +128,12 @@ def statements_per_finding(finding_type: str) -> int:
     return 2 if finding_type == "disagreement" else 1
 
 
-def within_budget(
-    answers: list[tuple[Finding, list[str]]], budget: int
-) -> list[tuple[str, str]]:
-    """(finding_id, text) pairs chosen from the model's answers, in priority
-    order, breadth first: every finding's first statement (a disagreement's
-    first two), then second statements while the budget lasts."""
-    chosen: list[tuple[str, str]] = []
+def within_budget(answers: list[tuple[Finding, list]], budget: int) -> list[tuple[str, object]]:
+    """(finding_id, item) pairs chosen from the per-finding lists, in
+    priority order, breadth first: every finding's first statement (a
+    disagreement's first two), then second statements while the budget
+    lasts. Items are strings or pipeline Candidates; this only orders them."""
+    chosen: list[tuple[str, object]] = []
     if budget <= 0:
         return chosen
     taken = {f.id: 0 for f, _ in answers}
@@ -208,7 +203,6 @@ def generate(
         target = assembly.seeds_target or recommended_target(len(findings))
     target = max(TARGET_MIN, min(TARGET_MAX, int(target)))
     assembly.seeds_target = target
-    hidden = pseudonyms.name_map(session, assembly)
     existing = list_seeds(session, assembly.id)
     kept = [s for s in existing if s.touched]
     for seed in existing:
@@ -216,53 +210,32 @@ def generate(
             session.delete(seed)
     session.flush()
     budget = max(0, target - len(kept))
-    lines = []
-    for finding in findings:
-        summary = pseudonyms.redact(finding.summary, hidden)[:1200]
-        tables = f"\ntables: {finding.mentioned_table_count}" if finding.scope == "round" else ""
-        lines.append(
-            f"finding_id: {finding.id}\ntype: {finding.type}{tables}\n"
-            f"title: {pseudonyms.redact(finding.title, hidden)}\nsummary: {summary}"
-        )
-    user_prompt = (
-        f"Assembly: {assembly.name}\n"
-        f"Budget: at most {budget} statements in total, for the {len(findings)} findings below, "
-        "which are in priority order.\n\n" + "\n\n".join(lines)
-    )
     language = LANGUAGE_NAMES.get(assembly.language, "English")
     assembly_id, assembly_language = assembly.id, assembly.language
-    session.commit()
-    base_url, key, model = _analysis_config(store)
-    system_prompt = build_system_prompt(SEEDS_SYSTEM, language, store, assembly.analysis_instructions)
-    from citizens.domain.analysis_schemas import StatementSeeds
-
-    log.info("seeds_started", assembly_id=assembly_id, findings=len(findings))
-    result = chat_json(base_url, key, model, system_prompt, user_prompt, StatementSeeds)
-
-    by_finding = {f.id: f for f in findings}
-    seen = {_key(s.text) for s in kept}
-    answers: list[tuple[Finding, list[str]]] = []
-    for item in result.seeds:
-        finding = by_finding.get(item.finding_id)
-        if finding is None:
-            log.info("seed_unknown_finding", assembly_id=assembly_id)
-            continue
-        answers.append((finding, clean_statements(item.statements, seen)))
-    # the model's answer back in priority order, whatever order it chose
-    answers.sort(key=lambda pair: findings.index(pair[0]))
+    config = _analysis_config(store)
+    log.info("seeds_started", assembly_id=assembly_id, findings=len(findings), budget=budget)
+    # run() reads the excerpts, commits, then talks to the model with the
+    # session idle, as analysis.analyze_assembly does
+    grouped, _trace = seed_pipeline.run(
+        session, store, assembly, findings, budget, [s.text for s in kept],
+        language, SEEDS_SYSTEM, config,
+    )
     position = max((s.position for s in kept), default=0)
     added = 0
-    for finding_id, text in within_budget(answers, budget):
+    for finding_id, candidate in within_budget(grouped, budget):
         position += 1
         session.add(
             StatementSeed(
                 assembly_id=assembly_id,
                 finding_id=finding_id,
-                text=text,
-                source_text=text,
+                text=candidate.text,
+                source_text=candidate.text,
                 language=assembly_language,
                 position=position,
                 origin="ai",
+                evidence_text=candidate.quote.text if candidate.quote else None,
+                evidence_segment_id=candidate.quote.segment_id if candidate.quote else None,
+                quality_json=candidate.quality_json(),
             )
         )
         added += 1
@@ -295,6 +268,16 @@ def list_seeds(session: Session, assembly_id: str) -> list[StatementSeed]:
     )
 
 
+def finding_titles(session: Session, seeds: list[StatementSeed]) -> dict[str, str]:
+    """The title of each finding the seeds point at, for the organizer's
+    "why" line; one query, nothing for seeds whose finding was replaced."""
+    ids = {s.finding_id for s in seeds if s.finding_id}
+    if not ids:
+        return {}
+    rows = session.execute(select(Finding.id, Finding.title).where(Finding.id.in_(ids))).all()
+    return {finding_id: title for finding_id, title in rows}
+
+
 def next_position(session: Session, assembly_id: str) -> int:
     top = session.scalar(
         select(func.max(StatementSeed.position)).where(StatementSeed.assembly_id == assembly_id)
@@ -317,10 +300,22 @@ def ready_to_export(seeds: list[StatementSeed]) -> bool:
     )
 
 
-def payload(seed: StatementSeed) -> dict:
+def quality(seed: StatementSeed) -> dict | None:
+    if not seed.quality_json:
+        return None
+    try:
+        return json.loads(seed.quality_json)
+    except ValueError:
+        return None
+
+
+def payload(seed: StatementSeed, finding_title: str | None = None) -> dict:
     return {
         "id": seed.id,
         "text": seed.text,
+        "finding_title": finding_title,
+        "evidence_text": seed.evidence_text,
+        "quality": quality(seed),
         "status": seed.status,
         "position": seed.position,
         "origin": seed.origin,

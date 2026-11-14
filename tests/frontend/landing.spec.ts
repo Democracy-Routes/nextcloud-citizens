@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 // SPDX-License-Identifier: AGPL-3.0-or-later
-/** The standalone landing page: description, links, and the embedded login card. */
+/** The standalone sign-in page: the login card, and the way back to the project site. */
 import { describe, expect, it, vi } from 'vitest'
 import LandingView from '../../frontend/src/components/auth/LandingView.vue'
 import { LANDING_LINKS } from '../../frontend/src/landing-links'
@@ -24,24 +24,21 @@ const CONFIG = {
 describe('LandingView', () => {
 	const wrapper = mountWithI18n(LandingView, { props: { config: CONFIG } })
 
-	it('shows the hero title and the login card', () => {
+	it('shows the title, the claim and the login card', () => {
 		expect(wrapper.find('[data-test="landing-title"]').text()).toBe('Citizens')
+		expect(wrapper.text()).toContain('from the table to the report')
 		expect(wrapper.find('[data-test="login-view"]').exists()).toBe(true)
 	})
 
-	it('describes four steps and two tools', () => {
-		expect(wrapper.findAll('[data-test="landing-step"]')).toHaveLength(4)
-		expect(wrapper.find('[data-test="landing-tool-citizens"]').exists()).toBe(true)
-		expect(wrapper.find('[data-test="landing-tool-polis"]').exists()).toBe(true)
+	it('links back to the project site and carries the brand line', () => {
+		const back = wrapper.find('[data-test="landing-back"]')
+		expect(back.attributes('href')).toBe(LANDING_LINKS.DEMOCRACY_ROUTES_URL)
+		expect(back.text()).toContain('Return to democracyroutes.com')
+		expect(wrapper.text()).toContain(LANDING_LINKS.POWERED_BY)
 	})
 
-	it('links to the real addresses, in a new tab', () => {
-		const anchors = wrapper.findAll('a[target="_blank"]')
-		const hrefs = anchors.map((a) => a.attributes('href'))
-		for (const key of ['DEMOCRACY_ROUTES_URL', 'CITIZENS_REPO_URL', 'POLIS_REPO_URL', 'POLIS_INSTANCE_URL', 'LICENSE_URL'] as const) {
-			expect(hrefs).toContain(LANDING_LINKS[key])
-		}
-		for (const a of anchors) expect(a.attributes('rel')).toContain('noopener')
-		expect(wrapper.text()).toContain(LANDING_LINKS.POWERED_BY)
+	it('describes nothing else: the project description lives on democracyroutes.com', () => {
+		expect(wrapper.findAll('section').length).toBe(0)
+		expect(wrapper.text()).not.toContain('GitHub')
 	})
 })

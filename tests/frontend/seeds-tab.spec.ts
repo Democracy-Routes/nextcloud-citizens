@@ -119,6 +119,44 @@ describe('the Polis seeds tab', () => {
 		expect(String(downloadFromApi.mock.calls[0][0])).toMatch(/\/seeds\/export\.csv$/)
 	})
 
+	it('offers the Why trail only on seeds that carry one, and opens it', async () => {
+		const scores = { grounded: 2, contestable: 1, single_idea: 2, clear: 2 }
+		listSeeds.mockResolvedValue(listing({
+			seeds: [
+				seed({
+					finding_title: 'Traffic downtown', evidence_text: 'We lose an hour a day in jams',
+					quality: { claim: 'Jams cost people time', scores },
+				}),
+				seed({ id: 's2', position: 2, finding_title: null, evidence_text: null, quality: null, origin: 'manual' }),
+			],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.findAll('[data-test="seed-why"]')).toHaveLength(1)
+		expect(wrapper.find('[data-test="seed-why-panel"]').exists()).toBe(false)
+		expect(wrapper.find('[data-test="seed-weak"]').exists()).toBe(false)
+
+		await wrapper.find('[data-test="seed-why"]').trigger('click')
+		const panel = wrapper.find('[data-test="seed-why-panel"]')
+		expect(panel.text()).toContain('From the finding: Traffic downtown')
+		expect(panel.text()).toContain('Claim: Jams cost people time')
+		expect(wrapper.find('[data-test="seed-evidence"]').text()).toContain('We lose an hour a day in jams')
+		expect(wrapper.findAll('[data-test="seed-score"]')).toHaveLength(4)
+		expect(wrapper.findAll('[data-test="seed-score"]')[1].text()).toBe('Contestable 1/2')
+	})
+
+	it('marks a seed the critic scored 0 in the list', async () => {
+		listSeeds.mockResolvedValue(listing({
+			seeds: [seed({
+				finding_title: 'Traffic', evidence_text: null,
+				quality: { claim: 'c', scores: { grounded: 0, contestable: 2, single_idea: 2, clear: 2 } },
+			})],
+		}))
+		const wrapper = mountWithI18n(SeedsTab, { props: { assembly: ASSEMBLY } })
+		await flushPromises()
+		expect(wrapper.find('[data-test="seed-weak"]').exists()).toBe(true)
+	})
+
 	it('shows a failed generation job', async () => {
 		listSeeds.mockResolvedValue(listing({
 			job: {

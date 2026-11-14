@@ -836,6 +836,16 @@ export interface StatementSeed {
 	reviewed_by: string | null
 	exported_at: string | null
 	polis_tid?: number | null
+	/** the finding the statement was written from (null when it was replaced) */
+	finding_title?: string | null
+	/** transcript excerpt it rests on, names masked */
+	evidence_text?: string | null
+	quality?: SeedQuality | null
+}
+
+export interface SeedQuality {
+	claim: string
+	scores: { grounded: 0 | 1 | 2; contestable: 0 | 1 | 2; single_idea: 0 | 1 | 2; clear: 0 | 1 | 2 } | null
 }
 
 export interface PolisState {

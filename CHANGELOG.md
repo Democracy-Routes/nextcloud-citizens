@@ -6,6 +6,11 @@ All notable changes to Nextcloud Citizens.
 
 ### For the organizer
 
+- Polis seeds are written in three passes (ground in the transcript excerpts,
+  draft, critique with four scores) and each statement keeps its trail
+  (migration 0042). A "Why" button on the row opens it: the finding, the
+  claim, the excerpt with names masked and the scores; statements the critic
+  scored 0 on any point are marked in the list.
 - Standalone mode: Citizens runs without Nextcloud. Organizers sign in with
   an account; an administrator invites them from Settings -> Organisation ->
   Users, by mail or with a link copied from the log. The organizer page is
@@ -46,6 +51,13 @@ All notable changes to Nextcloud Citizens.
   test and bans empty verbs, whatever the topic. `POST .../seeds/generate
   {target}`; listing fields `recommended_target`, `seeds_target`,
   `source_findings`.
+- Documentation site: `site-docs/` (MkDocs Material, strict build, no
+  external assets) published at https://docs.democracyroutes.com by
+  `scripts/docs-build.sh`, with a generated API reference from the OpenAPI
+  document.
+- Standalone sign-in page: the icon, one line, the login card and a link
+  back to democracyroutes.com, where the project is described; the app
+  shell's fixed height no longer clips the sign-in and set-password pages.
 - The report says what made it: every page of the PDF ends with
   "Powered by democracyroutes.com" (the Markdown too), and the methodology
   note names the analysis model(s) next to the speech-to-text engines

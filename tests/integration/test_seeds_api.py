@@ -7,6 +7,7 @@ routes, the review rules and the files are real."""
 import csv
 import io
 import json
+import re
 import time
 from pathlib import Path
 
@@ -15,7 +16,17 @@ from alembic.config import Config
 
 from citizens.db.models import Assembly, Finding, Participant, StatementSeed
 from citizens.db.session import session_scope, sqlite_url
-from citizens.domain.analysis_schemas import StatementSeedItem, StatementSeeds
+from citizens.domain.analysis_schemas import (
+    SeedClaim,
+    SeedClaims,
+    SeedClaimsForFinding,
+    SeedDraft,
+    SeedDrafts,
+    SeedReview,
+    SeedReviews,
+    StatementSeedItem,
+    StatementSeeds,
+)
 from citizens.services import analysis as analysis_svc
 
 
@@ -71,13 +82,42 @@ def _configure(monkeypatch, answer):
     monkeypatch.setattr("citizens.services.provider_config.analysis_ready_cached", lambda: True)
     prompts: list[tuple[str, str]] = []
 
+    # The tests describe the model's answer as a StatementSeeds (statements
+    # per finding); the fake plays the three passes of the pipeline from it:
+    # one claim per statement, drafted verbatim, kept by the critic with full
+    # marks. `prompts` records the ground pass, where the findings are offered.
     def fake_chat_json(base_url, key, model, system_prompt, user_prompt, schema):
-        assert schema is StatementSeeds and key == "ak-test"
-        prompts.append((system_prompt, user_prompt))
-        ids = [line.split(": ", 1)[1] for line in user_prompt.splitlines() if line.startswith("finding_id: ")]
-        return answer(ids)
+        assert key == "ak-test"
+        if schema is SeedClaims:
+            prompts.append((system_prompt, user_prompt))
+            ids = [
+                line.split("finding_id: ", 1)[1]
+                for line in user_prompt.splitlines() if "finding_id: " in line
+            ]
+            given = answer(ids)
+            return SeedClaims(findings=[
+                SeedClaimsForFinding(
+                    finding_id=item.finding_id,
+                    claims=[SeedClaim(text=text, quote=None) for text in item.statements],
+                )
+                for item in given.seeds
+            ])
+        if schema is SeedDrafts:
+            return SeedDrafts(statements=[
+                SeedDraft(ref=line.split(": ", 1)[0], text=line.split(": ", 1)[1])
+                for line in user_prompt.splitlines()
+                if re.match(r"^F\d+\.\d+: ", line)
+            ])
+        if schema is SeedReviews:
+            return SeedReviews(reviews=[
+                SeedReview(ref=line.strip(), grounded=2, contestable=2, single_idea=2, clear=2,
+                           verdict="keep", text="")
+                for line in user_prompt.splitlines()
+                if re.match(r"^F\d+\.\d+$", line.strip())
+            ])
+        raise AssertionError(f"unexpected schema {schema}")
 
-    monkeypatch.setattr("citizens.services.seeds.chat_json", fake_chat_json)
+    monkeypatch.setattr("citizens.services.seed_pipeline.chat_json", fake_chat_json)
     return prompts
 
 
@@ -439,8 +479,9 @@ def test_the_target_caps_the_statements_and_the_listing_recommends_one(client, m
     assert listing["seeds_target"] == 20 and len(listing["seeds"]) == 20
     # the proposal is offered first and gets the first statement
     assert listing["seeds"][0]["text"].endswith(" one")
-    assert "Budget: at most 20 statements" in prompts[-1][1]
-    first_offered = prompts[-1][1].split("finding_id: ")[1].split("\n")[0]
+    # the findings are offered in batches; the first batch starts with the proposal
+    assert "Budget: at most 20 statements" in prompts[0][1]
+    first_offered = prompts[0][1].split("finding_id: ")[1].split("\n")[0]
     assert listing["seeds"][0]["finding_id"] == first_offered
     # breadth first: thirteen first statements, then second ones
     assert sum(1 for s in listing["seeds"] if s["text"].endswith(" one")) == 13
