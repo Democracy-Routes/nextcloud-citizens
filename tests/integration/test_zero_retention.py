@@ -86,3 +86,35 @@ def test_the_flag_can_be_set_until_the_assembly_closes(client, tmp_path, monkeyp
     assert changed.status_code == 200 and changed.json()["zero_retention"] is True
     assert client.post(f"/api/v1/assemblies/{assembly['id']}/close").status_code == 200
     assert _wait_applied(assembly["id"])
+
+
+def test_late_audio_after_zero_retention_is_refused(client, tmp_path, monkeypatch, settings_env):
+    import hashlib
+
+    from sqlalchemy import func
+
+    seen: list[str] = []
+    assembly, round_id, recording_id, headers = _recorded_assembly(
+        client, tmp_path, monkeypatch, seen, zero_retention=True, audio_retention_days=30
+    )
+    assert client.post(f"/api/v1/assemblies/{assembly['id']}/close").status_code == 200
+    assert _wait_applied(assembly["id"]), "zero retention never ran"
+    with session_scope() as session:
+        done_at = session.get(Assembly, assembly["id"]).zero_retention_done_at
+
+    blob = b"late audio that must not be kept"
+    late = client.post(
+        f"/api/v1/public/recorder/recordings/{recording_id}/chunks/9",
+        content=blob,
+        headers={**headers, "Content-Type": "application/octet-stream",
+                 "X-Chunk-SHA256": hashlib.sha256(blob).hexdigest()},
+    )
+    assert late.status_code == 409, late.text
+    with session_scope() as session:
+        assert session.get(Assembly, assembly["id"]).zero_retention_done_at == done_at
+        open_rows = session.execute(
+            select(func.count()).select_from(Recording).where(
+                Recording.assembly_id == assembly["id"], Recording.state == "RECORDING"
+            )
+        ).scalar_one()
+        assert open_rows == 0

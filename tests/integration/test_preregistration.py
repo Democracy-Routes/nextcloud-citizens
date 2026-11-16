@@ -102,3 +102,27 @@ def test_people_register_at_home_and_are_seated_at_the_door_by_name(client):
     ivo = client.get("/api/v1/public/recorder/participants/search?q=bianchi", headers=table2).json()[0]
     assert client.post(f"/api/v1/public/recorder/participants/{ivo['id']}/seat",
                        headers=stranger).status_code == 404
+
+
+def test_the_door_search_is_empty_once_the_assembly_is_closed(client):
+    assembly = _assembly(client, name="TEST Search Closed")
+    url = client.post(f"/api/v1/assemblies/{assembly['id']}/registration-link").json()["url"]
+    token = re.search(r"#/register/(.+)$", url).group(1)
+    _register_at_home(client, token, "Ines Rossi", "10.13.5.1")
+    table = _phone(client, assembly, 0, "10.13.5.2")
+    found = client.get("/api/v1/public/recorder/participants/search?q=ros", headers=table).json()
+    assert [p["name"] for p in found] == ["Ines Rossi"]
+    assert client.post(f"/api/v1/assemblies/{assembly['id']}/close").status_code == 200
+    closed = client.get("/api/v1/public/recorder/participants/search?q=ros", headers=table)
+    assert closed.status_code == 200 and closed.json() == []
+
+
+def test_the_door_search_is_rate_limited(client):
+    assembly = _assembly(client, name="TEST Search Limit")
+    table = _phone(client, assembly, 0, "10.13.6.1")
+    codes = [
+        client.get("/api/v1/public/recorder/participants/search?q=ab", headers=table).status_code
+        for _ in range(21)
+    ]
+    assert codes[:20] == [200] * 20
+    assert codes[20] == 429

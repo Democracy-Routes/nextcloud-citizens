@@ -141,6 +141,8 @@ def record_another(session: Session, container: Assembly, round_: Round) -> sche
     like the one it just finished — same owner, language, question — with no
     planned time. Only from a Session that is not part of an assembly and
     that nobody orchestrates (Record now, or a Session started as independent)."""
+    if container.closed_at is not None:
+        raise HTTPException(status_code=409, detail="This assembly has been closed by the organizer")
     if container.kind != SESSION_KIND or container.recording_mode != "independent":
         raise HTTPException(
             status_code=409, detail="Only a session recorded on its own can be followed this way"

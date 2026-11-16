@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import RecorderSession, Recording, Round, Table
+from citizens.db.models import Assembly, RecorderSession, Recording, Round, Table
 from citizens.db.models.base import utcnow
 from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
@@ -33,6 +33,45 @@ SESSION_LIFETIME_HOURS = 16
 # how stale the device's "last contact" may be before we spend a write on it
 LAST_SEEN_RESOLUTION = 15.0
 MAX_CHUNK_BYTES = 5 * 1024 * 1024
+# generous ceilings, far above a real round; a 413 tells the phone to keep its
+# local copy rather than keep sending
+MAX_RECORDING_BYTES = 2 * 1024**3
+MAX_ASSEMBLY_AUDIO_BYTES = 24 * 1024**3
+
+
+def audio_bytes_for_recording(session: Session, recording_id: str) -> int:
+    chunks = session.execute(
+        select(func.coalesce(func.sum(AudioChunk.size_bytes), 0)).where(
+            AudioChunk.recording_id == recording_id
+        )
+    ).scalar_one()
+    parts = session.execute(
+        select(func.coalesce(func.sum(AudioPart.size_bytes), 0)).where(
+            AudioPart.recording_id == recording_id
+        )
+    ).scalar_one()
+    return int(chunks) + int(parts)
+
+
+def audio_bytes_for_assembly(session: Session, assembly_id: str) -> int:
+    return int(session.execute(
+        select(func.coalesce(func.sum(AudioChunk.size_bytes), 0))
+        .join(Recording, Recording.id == AudioChunk.recording_id)
+        .where(Recording.assembly_id == assembly_id)
+    ).scalar_one())
+
+
+def check_audio_allowance(session: Session, recording: Recording, incoming_bytes: int) -> None:
+    """413 once this recording or its assembly would pass its storage ceiling."""
+    if (
+        audio_bytes_for_recording(session, recording.id) + incoming_bytes > MAX_RECORDING_BYTES
+        or audio_bytes_for_assembly(session, recording.assembly_id) + incoming_bytes
+        > MAX_ASSEMBLY_AUDIO_BYTES
+    ):
+        raise HTTPException(
+            status_code=413,
+            detail="This recording has reached the storage allowance; keep the local copy",
+        )
 
 
 def create_session_from_invite(session: Session, token: str) -> tuple[RecorderSession, str]:
@@ -480,6 +519,7 @@ def receive_chunk(
         raise HTTPException(status_code=409, detail="Sequence already stored with different content")
 
     root = get_settings().app_persistent_storage
+    check_audio_allowance(session, recording, len(data))
     require_room(root, len(data), context="chunk_upload")
     directory = recording_dir(
         root, recording.assembly_id, recording.round_id, recording.table_id, recording.id
@@ -728,6 +768,10 @@ def late_audio_target(
             sequence_number += following.late_seq_shift or 0
             recording = following
             continue
+        assembly = session.get(Assembly, recording.assembly_id)
+        closed = assembly is not None and assembly.closed_at is not None
+        if closed or recording.audio_deleted_at is not None:
+            raise HTTPException(status_code=409, detail="This assembly has been closed by the organizer")
         return _open_continuation(session, recording, sequence_number, segment_number)
     raise HTTPException(status_code=409, detail=f"Recording is {recording.state}")
 
@@ -762,6 +806,7 @@ def _open_continuation(
             continuation.table_id, continuation.id,
         )
         target = chunk_path(directory, 0)
+        require_room(root, len(header), context="late_audio_header")
         write_audio(target, header)
         session.add(
             AudioChunk(

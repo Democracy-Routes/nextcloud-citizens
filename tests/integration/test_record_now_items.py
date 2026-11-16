@@ -234,3 +234,13 @@ def test_the_table_clock_is_the_first_recorders_start(client):
     first = status_a["rounds"][0]["table_started_at"]
     assert first
     assert phone_b["rounds"][0]["table_started_at"] == first, "the second phone reads the first one's start"
+
+
+def test_a_closed_assembly_cannot_be_followed_from_a_phone(client):
+    made = client.post("/api/v1/sessions/record-now", json={"language": "it"}).json()
+    headers = _auth(_join(client, made["recorder_url"]).json())
+    assert client.post(f"/api/v1/assemblies/{made['container_id']}/close").status_code == 200
+    refused = client.post("/api/v1/public/recorder/sessions",
+                          json={"round_id": made["session_id"]}, headers=headers)
+    assert refused.status_code == 409
+    assert "closed" in refused.json()["detail"].lower()

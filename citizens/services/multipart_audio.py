@@ -15,6 +15,7 @@ from citizens.db.models import Recording
 from citizens.db.models.base import utcnow
 from citizens.db.models.recording import AudioChunk, AudioPart
 from citizens.logging_setup import get_logger
+from citizens.services.recording import check_audio_allowance
 from citizens.services.recording_states import transition
 from citizens.storage.durable import sync_directory, write_audio
 from citizens.storage.paths import chunk_path, recording_dir
@@ -101,6 +102,7 @@ def receive_part(session, recording, sequence, number, total_bytes, chunk_hash, 
         raise HTTPException(409, "Part already stored with different content")
     root = get_settings().app_persistent_storage
     target = _directory(recording) / "parts" / str(sequence) / f"{number}.bin"
+    check_audio_allowance(session, recording, len(data))
     require_room(root, len(data), context="audio_part")
     # A duplicate repairs a file lost after its database receipt was committed.
     write_audio(target, data)

@@ -374,3 +374,44 @@ def test_closing_mid_assembly_stops_phones_and_refuses_more_rounds(client):
     # reopening lifts the guard, so a genuine resume still works
     client.delete(f"/api/v1/assemblies/{assembly['id']}/close")
     assert client.post(f"/api/v1/rounds/{r2}/start").status_code == 200
+
+
+def test_late_audio_after_the_assembly_is_closed_opens_nothing(client, tmp_path, settings_env):
+    from sqlalchemy import func, select
+
+    from citizens.db.models import Recording
+    from citizens.db.session import session_scope
+    from citizens.jobs import sweep
+    from tests.integration.test_silence_close import _age
+
+    assembly = _assembly(client, "TEST Late After Close", tables=1)
+    headers, joined = _join(client, assembly, 0, "10.8.8.7")
+    audio = _audio(tmp_path)
+    recording_id = client.post(
+        "/api/v1/public/recorder/start",
+        json={"round_id": joined["rounds"][0]["id"], "mime_type": "audio/webm"},
+        headers=headers,
+    ).json()["recording_id"]
+    chunk_headers = {**headers, "Content-Type": "application/octet-stream",
+                     "X-Chunk-SHA256": hashlib.sha256(audio).hexdigest()}
+    url = f"/api/v1/public/recorder/recordings/{recording_id}/chunks"
+    assert client.post(f"{url}/0", content=audio, headers=chunk_headers).status_code == 200
+    _age(recording_id, minutes=10)
+    assert sweep.sweep_server_closes() == 1
+    _wait_assembled(client, headers, recording_id)
+
+    assert client.post(f"/api/v1/assemblies/{assembly['id']}/close").status_code == 200
+
+    def counts():
+        with session_scope() as session:
+            rows = session.execute(
+                select(func.count()).select_from(Recording).where(Recording.assembly_id == assembly["id"])
+            ).scalar_one()
+        files = sum(1 for p in settings_env.app_persistent_storage.rglob("*") if p.is_file())
+        return rows, files
+
+    before = counts()
+    late = client.post(f"{url}/1", content=audio, headers=chunk_headers)
+    assert late.status_code == 409, late.text
+    assert "closed" in late.json()["detail"].lower()
+    assert counts() == before

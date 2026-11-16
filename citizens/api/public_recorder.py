@@ -926,6 +926,10 @@ def search_participants(q: str, recorder_session: ReadingSess, session: ReadDB):
     table yet. Two characters at least; names only."""
     if len(q.strip()) < 2:
         return []
+    PARTICIPANT_LIMITER.check(recorder_session.id)
+    assembly = session.get(Assembly, recorder_session.assembly_id)
+    if assembly is None or assembly.closed_at is not None:
+        return []
     return consent_svc.search_unseated(session, recorder_session.assembly_id, q)
 
 
