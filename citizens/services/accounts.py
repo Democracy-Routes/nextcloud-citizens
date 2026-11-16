@@ -109,11 +109,17 @@ def authenticate(session: Session, username: str, password: str) -> AppUser | No
 _DUMMY_HASH = hash_password("not-a-real-password-just-constant-time")
 
 
+def bump_sessions(user: AppUser) -> None:
+    """Invalidate every cookie issued so far for this account."""
+    user.session_generation = (user.session_generation or 0) + 1
+
+
 def set_password(session: Session, user: AppUser, password: str) -> None:
     problem = password_problem(password)
     if problem:
         raise AccountError(problem)
     user.password_hash = hash_password(password)
+    bump_sessions(user)
     session.flush()
 
 

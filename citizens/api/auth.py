@@ -96,7 +96,7 @@ def me(request: Request, user: CurrentUser, session: DB):
 
 
 @router.put("/me")
-def update_me(data: MeUpdate, user: CurrentUser, session: DB):
+def update_me(data: MeUpdate, response: Response, user: CurrentUser, session: DB):
     _standalone_only()
     account = session.get(AppUser, user)
     if account is None:
@@ -113,6 +113,7 @@ def update_me(data: MeUpdate, user: CurrentUser, session: DB):
         except accounts.AccountError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
         record_audit_event(session, "password_changed", "user", account.id, actor=user)
+        sessions.set_cookie(response, account.id, account.session_generation or 0)
     return {**accounts.public_user(account), "mode": "standalone"}
 
 
@@ -125,17 +126,24 @@ def login(data: LoginIn, request: Request, response: Response, session: DB):
     if account is None:
         log.info("login_refused", ip=client_ip(request))
         raise HTTPException(status_code=401, detail="Wrong username or password")
-    sessions.set_cookie(response, account.id)
+    sessions.set_cookie(response, account.id, account.session_generation or 0)
     record_audit_event(session, "login", "user", account.id, actor=account.id)
     return {**accounts.public_user(account), "mode": "standalone"}
 
 
 @router.post("/logout", status_code=204)
-def logout(request: Request, response: Response):
+def logout(request: Request, response: Response, session: DB):
     _standalone_only()
     # no account needed: a stale cookie may be cleared too
     if request.method not in ("GET", "HEAD", "OPTIONS") and not sessions.has_client_header(request):
         raise HTTPException(status_code=403, detail="Request refused: missing client header")
+    # "sign out everywhere": a valid cookie's account gets a new generation,
+    # so every other cookie issued for it stops working
+    cookie = sessions.session_from(request)
+    if cookie is not None:
+        account = session.get(AppUser, cookie[0])
+        if account is not None and (account.session_generation or 0) == cookie[1]:
+            accounts.bump_sessions(account)
     # the injected response carries the cookie header; returning a new one
     # would drop it
     sessions.clear_cookie(response)
@@ -169,6 +177,6 @@ def set_password(data: SetPasswordIn, request: Request, response: Response, sess
     except accounts.AccountError as exc:
         # the link is spent: say so clearly rather than letting them retry it
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    sessions.set_cookie(response, account.id)
+    sessions.set_cookie(response, account.id, account.session_generation or 0)
     record_audit_event(session, "password_set", "user", account.id, actor=account.id)
     return {**accounts.public_user(account), "mode": "standalone"}

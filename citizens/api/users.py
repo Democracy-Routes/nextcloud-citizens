@@ -110,10 +110,14 @@ def update_user(user_id: str, data: UserUpdate, user: AdminUser, session: DB):
             account.email = email
             account.email_verified_at = None
     if data.role is not None:
+        if data.role != account.role:
+            accounts.bump_sessions(account)
         account.role = data.role
     if data.language is not None:
         account.language = data.language
     if data.disabled is not None:
+        if data.disabled != account.disabled:
+            accounts.bump_sessions(account)
         account.disabled = data.disabled
     record_audit_event(session, "account_updated", "user", account.id, actor=user)
     return accounts.public_user(account)

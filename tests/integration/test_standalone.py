@@ -251,7 +251,10 @@ def test_accounts_invitation_reset_and_last_admin(app, caplog):
     assert _status(app, "delete", root_url) == 409
     assert _status(app, "put", carla_url, json={"role": "admin"}) == 200
     assert _status(app, "put", root_url, json={"role": "organizer"}) == 200
-    assert _status(app, "delete", carla_url) == 403  # root is no admin now
+    # the role change ended root's own session; signed in again, root is no admin
+    assert _status(app, "delete", carla_url) == 401
+    _login(app, "root")
+    assert _status(app, "delete", carla_url) == 403
 
 
 def test_every_organizer_route_requires_a_sign_in(app):
@@ -298,3 +301,50 @@ def test_nextcloud_mode_is_untouched(settings_env):
         assert client.get("/api/v1/admin/users").status_code == 404
         assert client.get("/").status_code == 404
     assert not mail.configured()
+
+
+def _cookie(client: TestClient) -> str:
+    return client.cookies.get(COOKIE_NAME)
+
+
+def test_a_password_change_ends_the_old_cookie(app):
+    _create("anna", "organizer")
+    _login(app, "anna")
+    old = _cookie(app)
+    assert app.get("/api/v1/auth/me", cookies={COOKIE_NAME: old}).status_code == 200
+    changed = app.put(
+        "/api/v1/auth/me",
+        json={"password": "another-good-password", "current_password": "a-good-password"},
+        headers=CLIENT,
+    )
+    assert changed.status_code == 200, changed.text
+    new = changed.cookies.get(COOKIE_NAME)
+    assert new and new != old
+    app.cookies.clear()
+    assert app.get("/api/v1/auth/me", cookies={COOKIE_NAME: old}).status_code == 401
+    app.cookies.clear()
+    assert app.get("/api/v1/auth/me", cookies={COOKIE_NAME: new}).status_code == 200
+
+
+def test_logout_signs_out_everywhere(app):
+    _create("anna", "organizer")
+    _login(app, "anna")
+    old = _cookie(app)
+    assert app.post("/api/v1/auth/logout", headers=CLIENT).status_code == 204
+    app.cookies.clear()
+    assert app.get("/api/v1/auth/me", cookies={COOKIE_NAME: old}).status_code == 401
+
+
+def test_a_role_change_ends_that_users_cookie(app):
+    _create("boss", "admin")
+    bruno_id = _create("bruno", "organizer")
+    _login(app, "bruno")
+    bruno_cookie = _cookie(app)
+    app.cookies.clear()
+    assert app.get("/api/v1/auth/me", cookies={COOKIE_NAME: bruno_cookie}).status_code == 200
+    app.cookies.clear()
+    _login(app, "boss")
+    changed = app.put(f"/api/v1/admin/users/{bruno_id}", json={"role": "admin"}, headers=CLIENT)
+    assert changed.status_code == 200, changed.text
+    app.cookies.clear()
+    assert app.get("/api/v1/auth/me", cookies={COOKIE_NAME: bruno_cookie}).status_code == 401

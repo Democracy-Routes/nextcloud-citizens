@@ -646,7 +646,11 @@ def participant_by_bearer(session: Session, bearer: str) -> ParticipantSession:
     participant_session = session.execute(
         select(ParticipantSession).where(ParticipantSession.token_hash == hash_token(bearer))
     ).scalar_one_or_none()
-    if participant_session is None or participant_session.expires_at < utcnow():
+    if (
+        participant_session is None
+        or participant_session.expires_at < utcnow()
+        or participant_session.revoked_at is not None
+    ):
         raise HTTPException(status_code=401, detail="Participant session invalid or expired")
     return participant_session
 
@@ -790,11 +794,13 @@ def consent_register_csv(session: Session, assembly: Assembly) -> str:
     import csv
     import io
 
+    from citizens.services.csv_safe import neutralize
+
     out = io.StringIO()
     writer = csv.DictWriter(out, fieldnames=REGISTER_COLUMNS)
     writer.writeheader()
     for row in consent_register_rows(session, assembly):
-        writer.writerow(row)
+        writer.writerow({k: neutralize(v) for k, v in row.items()})
     return out.getvalue()
 
 

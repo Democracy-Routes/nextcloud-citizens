@@ -128,3 +128,51 @@ def test_the_person_keeps_a_page_that_shows_the_report_when_published(client):
     assert client.get(
         "/api/v1/public/participant/status", headers={"Authorization": "Bearer nope"}
     ).status_code == 401
+
+
+def test_revoking_all_invites_cuts_a_participant_page(client):
+    assembly = _assembly(client, consent="optional")
+    table1 = _phone(client, assembly, 0, "10.10.2.1")
+    token = re.search(r"#/register/(.+)$", _code(client, table1)["url"]).group(1)
+    body = client.post("/api/v1/public/register/notice", json={"token": token},
+                       headers={"X-Forwarded-For": "10.10.2.2"}).json()
+    registered = _register(client, token, "Kira", body["hash"], "10.10.2.3").json()
+    headers = {"Authorization": f"Bearer {registered['participant_token']}"}
+    assert client.get("/api/v1/public/participant/status", headers=headers).status_code == 200
+
+    assert client.post(f"/api/v1/assemblies/{assembly['id']}/invites/revoke").status_code == 204
+    assert client.get("/api/v1/public/participant/status", headers=headers).status_code == 401
+
+
+def test_migration_0043_downgrades_and_upgrades_cleanly(database):
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    from citizens.db.models import Assembly, Participant, ParticipantSession
+    from citizens.db.models.accounts import AppUser
+    from citizens.db.session import session_scope, sqlite_url
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(Path("citizens/db/migrations").resolve()))
+    cfg.set_main_option("sqlalchemy.url", sqlite_url(database.app_persistent_storage / "citizens.db"))
+    command.downgrade(cfg, "0042")
+    command.upgrade(cfg, "head")
+    stamp = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
+    with session_scope() as session:
+        assembly = Assembly(name="After 43", language="en", created_by="anna")
+        session.add(assembly)
+        session.flush()
+        participant = Participant(assembly_id=assembly.id, label="P1", name="Lena")
+        session.add(participant)
+        session.flush()
+        session.add(ParticipantSession(
+            participant_id=participant.id, assembly_id=assembly.id, token_hash="h" * 64,
+            expires_at=stamp, revoked_at=stamp,
+        ))
+        session.add(AppUser(username="after43", session_generation=3))
+    with session_scope() as session:
+        assert session.query(ParticipantSession).one().revoked_at is not None
+        assert session.query(AppUser).filter_by(username="after43").one().session_generation == 3

@@ -30,12 +30,15 @@ class Account:
     id: str
     role: str
     disabled: bool
+    session_generation: int | None = None
 
 
 def _load(user_id: str) -> Account | None:
     with read_only_scope() as session:
         row = session.execute(
-            select(AppUser.id, AppUser.role, AppUser.disabled).where(AppUser.id == user_id)
+            select(AppUser.id, AppUser.role, AppUser.disabled, AppUser.session_generation).where(
+                AppUser.id == user_id
+            )
         ).first()
     return Account(*row) if row else None
 
@@ -43,14 +46,15 @@ def _load(user_id: str) -> Account | None:
 def current_account(request: Request) -> Account:
     """The signed-in account, or 401. 403 for an unsafe request without the
     client header, which is how a cross-site form would arrive."""
-    user_id = sessions.user_id_from(request)
-    if user_id is None:
+    cookie = sessions.session_from(request)
+    if cookie is None:
         raise HTTPException(status_code=401, detail="Sign in to continue")
     if request.method not in SAFE_METHODS and not sessions.has_client_header(request):
         log.warning("client_header_missing", path=request.url.path)
         raise HTTPException(status_code=403, detail="Request refused: missing client header")
+    user_id, generation = cookie
     account = _load(user_id)
-    if account is None or account.disabled:
+    if account is None or account.disabled or (account.session_generation or 0) != generation:
         raise HTTPException(status_code=401, detail="Sign in to continue")
     return account
 

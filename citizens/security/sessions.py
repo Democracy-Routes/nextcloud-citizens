@@ -29,7 +29,7 @@ from citizens.config import get_settings
 COOKIE_NAME = "citizens_session"
 CLIENT_HEADER = "x-citizens-client"
 CLIENT_HEADER_VALUE = "organizer"
-_VERSION = 1
+_VERSION = 2
 
 
 def _key() -> bytes:
@@ -47,17 +47,22 @@ def _unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-def issue(user_id: str, *, now: float | None = None) -> str:
+def issue(user_id: str, generation: int, *, now: float | None = None) -> str:
     payload = json.dumps(
-        {"v": _VERSION, "u": user_id, "t": int(now if now is not None else time.time())},
+        {
+            "v": _VERSION,
+            "u": user_id,
+            "g": int(generation),
+            "t": int(now if now is not None else time.time()),
+        },
         separators=(",", ":"),
     ).encode("utf-8")
     signature = hmac.new(_key(), payload, hashlib.sha256).digest()
     return f"{_b64(payload)}.{_b64(signature)}"
 
 
-def read(value: str | None, *, now: float | None = None) -> str | None:
-    """The account id a cookie names, or None when missing, forged, or
+def read(value: str | None, *, now: float | None = None) -> tuple[str, int] | None:
+    """The (account id, session generation) a cookie names, or None when missing, forged, or
     older than the session lifetime."""
     if not value or "." not in value:
         return None
@@ -72,23 +77,26 @@ def read(value: str | None, *, now: float | None = None) -> str | None:
         return None
     if data.get("v") != _VERSION or not isinstance(data.get("u"), str):
         return None
+    generation = data.get("g")
+    if not isinstance(generation, int) or isinstance(generation, bool):
+        return None
     issued = data.get("t")
     if not isinstance(issued, int):
         return None
     age = (now if now is not None else time.time()) - issued
     if age < 0 or age > get_settings().citizens_session_days * 86400:
         return None
-    return data["u"]
+    return data["u"], generation
 
 
 def _secure() -> bool:
     return urlparse(get_settings().citizens_public_url).scheme == "https"
 
 
-def set_cookie(response: Response, user_id: str) -> None:
+def set_cookie(response: Response, user_id: str, generation: int) -> None:
     response.set_cookie(
         COOKIE_NAME,
-        issue(user_id),
+        issue(user_id, generation),
         max_age=get_settings().citizens_session_days * 86400,
         httponly=True,
         secure=_secure(),
@@ -101,7 +109,7 @@ def clear_cookie(response: Response) -> None:
     response.delete_cookie(COOKIE_NAME, path="/", httponly=True, secure=_secure(), samesite="lax")
 
 
-def user_id_from(request: Request) -> str | None:
+def session_from(request: Request) -> tuple[str, int] | None:
     return read(request.cookies.get(COOKIE_NAME))
 
 

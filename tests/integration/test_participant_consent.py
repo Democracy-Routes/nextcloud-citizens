@@ -431,3 +431,19 @@ def test_the_seat_of_the_session_decides_which_table_a_refusal_blocks(client):
     assert by_number[2]["consent"]["refusing"] == 1 and by_number[1]["consent"]["refusing"] == 0
     monitor1 = client.get(f"/api/v1/rounds/{round1}/monitor").json()
     assert next(t for t in monitor1["tables"] if t["number"] == 1)["consent"]["refusing"] == 1
+
+
+def test_the_consent_register_csv_neutralises_formulas(client):
+    import csv
+
+    assembly = _assembly(client, consent="optional")
+    table1 = _phone(client, assembly, 0, "10.9.6.1")
+    notice = _notice(client, table1)
+    response = _register(client, table1, '=HYPERLINK("http://example.invalid/","x")', notice["hash"],
+                         email="@SUM(1+1)")
+    assert response.status_code == 201, response.text
+    body = client.get(f"/api/v1/assemblies/{assembly['id']}/consent-register.csv").text
+    rows = list(csv.DictReader(io.StringIO(body)))
+    assert len(rows) == 1
+    assert rows[0]["name"].startswith("'=")
+    assert rows[0]["email"].startswith("'@")

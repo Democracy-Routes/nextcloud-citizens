@@ -81,3 +81,4 @@ class ParticipantSession(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime())
     last_seen_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    revoked_at: Mapped[datetime | None] = mapped_column(TZDateTime())

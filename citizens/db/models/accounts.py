@@ -11,7 +11,7 @@ through OpenID Connect.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from citizens.db.models.base import Base, TZDateTime, new_uuid, utcnow
@@ -51,6 +51,8 @@ class AppUser(Base):
     oidc_subject: Mapped[str | None] = mapped_column(String(300), nullable=True)
     notify_opt_out: Mapped[bool] = mapped_column(Boolean, default=False)
     disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: bumped on password change, sign-out, role change; a cookie carries it
+    session_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(TZDateTime(), nullable=True)

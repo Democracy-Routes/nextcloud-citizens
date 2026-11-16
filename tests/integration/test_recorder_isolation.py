@@ -204,3 +204,27 @@ def test_a_fabricated_bearer_is_refused(client):
             "/api/v1/public/recorder/status", headers={"Authorization": f"Bearer {bearer}"}
         )
         assert response.status_code == 401, f"accepted bearer {bearer!r}"
+
+
+def test_revoking_all_invites_cuts_a_facilitator_session(two_tables):
+    client = two_tables["client"]
+    assembly = two_tables["assembly"]
+    headers_b, _ = two_tables["b"]
+    card = client.post(
+        "/api/v1/public/recorder/capabilities", json={"purpose": "FACILITATE_TABLE"}, headers=headers_b
+    )
+    assert card.status_code == 201, card.text
+    token = re.search(r"#/facilitate/(.+)$", card.json()["url"]).group(1)
+    joined = client.post(
+        "/api/v1/public/facilitate", json={"token": token}, headers={"X-Forwarded-For": "10.30.0.9"}
+    )
+    assert joined.status_code == 200, joined.text
+    facilitator = {"Authorization": f"Bearer {joined.json()['facilitator_token']}"}
+    assert client.get("/api/v1/public/facilitator/status", headers=facilitator).status_code == 200
+
+    assert client.post(f"/api/v1/assemblies/{assembly['id']}/invites/revoke").status_code == 204
+    assert client.get("/api/v1/public/facilitator/status", headers=facilitator).status_code == 401
+    assert client.post(
+        "/api/v1/public/facilitator/codes", json={"purpose": "ADD_RECORDER_TO_TABLE"},
+        headers=facilitator,
+    ).status_code == 401

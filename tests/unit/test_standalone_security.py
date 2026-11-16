@@ -37,8 +37,8 @@ def test_password_rules_are_about_length_only():
 
 
 def test_session_cookie_round_trip_and_forgery(standalone_env):
-    value = sessions.issue("user-1", now=1_000_000)
-    assert sessions.read(value, now=1_000_100) == "user-1"
+    value = sessions.issue("user-1", 0, now=1_000_000)
+    assert sessions.read(value, now=1_000_100) == ("user-1", 0)
     # expired after the configured days
     assert sessions.read(value, now=1_000_000 + 15 * 86400) is None
     # a flipped byte in the signature
@@ -46,14 +46,14 @@ def test_session_cookie_round_trip_and_forgery(standalone_env):
     tampered = payload + "." + ("A" if signature[0] != "A" else "B") + signature[1:]
     assert sessions.read(tampered, now=1_000_100) is None
     # a payload naming another user with the old signature
-    other = sessions.issue("user-2", now=1_000_000).split(".")[0] + "." + signature
+    other = sessions.issue("user-2", 0, now=1_000_000).split(".")[0] + "." + signature
     assert sessions.read(other, now=1_000_100) is None
     assert sessions.read(None) is None
     assert sessions.read("no-dot") is None
 
 
 def test_session_signature_changes_with_the_secret(standalone_env, monkeypatch):
-    value = sessions.issue("user-1")
+    value = sessions.issue("user-1", 0)
     monkeypatch.setenv("APP_SECRET", "another")
     get_settings.cache_clear()
     assert sessions.read(value) is None
@@ -110,3 +110,23 @@ def test_mode_is_never_inferred(monkeypatch):
     assert not get_settings().is_standalone()
     assert get_settings().mode_problem()
     get_settings.cache_clear()
+
+
+def test_session_generation_round_trips(standalone_env):
+    value = sessions.issue("user-1", 7, now=1_000_000)
+    assert sessions.read(value, now=1_000_100) == ("user-1", 7)
+
+
+def test_a_version_1_cookie_is_refused(standalone_env):
+    import hashlib
+    import hmac
+    import json
+
+    payload = json.dumps({"v": 1, "u": "user-1", "t": 1_000_000}, separators=(",", ":")).encode()
+    signature = hmac.new(sessions._key(), payload, hashlib.sha256).digest()
+    old = f"{sessions._b64(payload)}.{sessions._b64(signature)}"
+    assert sessions.read(old, now=1_000_100) is None
+    # a version-2 payload without a generation is refused too
+    payload = json.dumps({"v": 2, "u": "user-1", "t": 1_000_000}, separators=(",", ":")).encode()
+    signature = hmac.new(sessions._key(), payload, hashlib.sha256).digest()
+    assert sessions.read(f"{sessions._b64(payload)}.{sessions._b64(signature)}", now=1_000_100) is None

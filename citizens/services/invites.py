@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 
 from citizens.db.models import Assembly, RecorderInvite, RecorderSession
 from citizens.db.models.base import utcnow
+from citizens.db.models.consent import ParticipantSession
+from citizens.db.models.facilitator import FacilitatorSession
 from citizens.domain import schemas
 from citizens.logging_setup import get_logger
 from citizens.security.invite_vault import decrypt_token, encrypt_token
@@ -272,9 +274,21 @@ def revoke_invites(session: Session, assembly_id: str) -> int:
     for recorder_session in live:
         recorder_session.revoked_at = now
         disconnected += 1
+    facilitators = 0
+    participants = 0
+    for model in (FacilitatorSession, ParticipantSession):
+        for row in session.execute(
+            select(model).where(model.assembly_id == assembly_id, model.revoked_at.is_(None))
+        ).scalars():
+            row.revoked_at = now
+            if model is FacilitatorSession:
+                facilitators += 1
+            else:
+                participants += 1
     log.info(
         "invites_revoked",
-        assembly_id=assembly_id, invites=len(active), devices_disconnected=disconnected,
+        assembly_id=assembly_id, invites=len(active),
+        sessions={"recorder": disconnected, "facilitator": facilitators, "participant": participants},
     )
     session.flush()
     return len(active)
