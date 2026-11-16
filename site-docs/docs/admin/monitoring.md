@@ -1,5 +1,8 @@
 # Monitoring and logs
 
+This page shows where to check that the app is healthy, how to read its logs and how much disk and
+memory to plan for.
+
 ## Health
 
 `GET /api/v1/health` (through the proxy in Nextcloud mode) reports the database, storage, free disk and
@@ -16,16 +19,16 @@ docker inspect nc_app_citizens --format '{{.State.Health.Status}}'
 Settings, About shows the running version, the database schema revision, the transcription engine's
 state, disk space, the job queue and the time of the last housekeeping pass. It is backed by
 `GET /api/v1/admin/about` (version, schema revision, engine state, disk, job counts, newest failure, last
-sweep). Quote it in a support request.
+sweep). Include it in a support request.
 
 ## During an event: `event-status.sh`
 
-The job runner has no page of its own. `sh scripts/event-status.sh` is the one screen of truth for an
-operator: read-only, it inspects the container, the host, the SQLite database (opened read-only) and the
-log, and shows what is queued, retrying (and why) or failed, memory, disk, and whether the frozen
-container is still the one running. Recordings that need a human decision are listed under "needs a
-decision". Run it every half hour during an assembly. It finds the AppAPI-created or hand-run volume by
-itself; override with `CONTAINER` and `VOLUME_DIR`.
+The job runner has no page of its own. `sh scripts/event-status.sh` gives the operator one screen
+with the state of the system. It is read-only: it inspects the container, the host, the SQLite
+database (opened read-only) and the log. It shows what is queued, retrying (and why) or failed,
+memory, disk, and whether the frozen container is still the one running. Recordings that need a human
+decision are listed under "needs a decision". Run it every half hour during an assembly. It finds the
+AppAPI-created or hand-run volume by itself; override this with `CONTAINER` and `VOLUME_DIR`.
 
 ## Logs
 
@@ -62,9 +65,10 @@ bytes freed, never content.
 
 ## Capacity
 
-Plan for about 10 MB per table per hour of recording plus the assembled copy; a 40-minute round of ten
+Plan for about 10 MB per table per hour of recording plus the assembled copy. A 40-minute round of ten
 tables is roughly 400 MB. A table stuck in ASSEMBLING is almost always a full disk. Unfinished upload
 parts have no automatic expiry and use disk until verified assembly or explicit audio deletion.
-Measured on a full ten-device, half-hour run, peak container memory was 368 MiB while recording and 465 MiB
-while transcribing, so 512 MB is not enough for ten tables; keep the live container at 1 GB or more
-(the event scripts use 2 GiB).
+
+On a full ten-device, half-hour run, peak container memory was 368 MiB while recording and 465 MiB
+while transcribing. A 512 MB container is therefore not enough for ten tables; keep the live container
+at 1 GB or more. The event scripts use 2 GiB.

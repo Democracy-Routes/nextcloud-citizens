@@ -1,18 +1,20 @@
 # Polis consultation
 
-This page covers the Citizens side. For the whole path see [Citizens + Polis](../bridge/index.md); for the Polis organizer pages
-(moderating, the report, closing the conversation) see [Running a conversation](../polis/organizers.md); to connect an
-installation see [Connecting an installation](../bridge/setup.md).
+This page shows how to turn an assembly's approved findings into statements for a
+[Polis](https://pol.is) conversation, review them, and send or export them. It works the same in
+Nextcloud and in standalone mode. For the whole path see [Citizens + Polis](../bridge/index.md);
+for moderating, the report and closing the conversation see
+[Running a conversation](../polis/organizers.md); to connect an installation see
+[Connecting an installation](../bridge/setup.md).
 
-An assembly produces findings. A [Polis](https://pol.is) conversation needs short statements
-that strangers can agree or disagree with. **Polis seeds** are those statements, written by the
-analysis model from your *approved* findings and reviewed by you before anything leaves Citizens.
-It works the same in Nextcloud and in standalone mode.
+An assembly produces findings, while a Polis conversation needs short statements that strangers
+can agree or disagree with. Polis seeds are those statements. The analysis model writes them from
+your approved findings, and you review them before anything leaves Citizens.
 
 ## Before you start
 
 * AI analysis is configured (an analysis key in Settings).
-* The assembly's findings have been reviewed, and the ones you stand behind are **approved** in
+* The assembly's findings have been reviewed, and the ones you stand behind are approved in
   the Analysis tab. Only approved findings are used.
 * To send straight to Polis: an administrator has set the instance URL and API key in
   Settings, AI, Polis (see [Settings reference](../admin/settings.md#polis)). The target is the
@@ -29,7 +31,7 @@ It works the same in Nextcloud and in standalone mode.
    **reject** it, **delete** it, or **add** your own by hand.
 3. Drag statements into the order you want them to appear. Hand-written ones count as reviewed.
 4. When every statement is approved or rejected, **Export** and **Send to Polis** become
-   available. In a hurry, **Approve all** approves every draft in one go; rejected statements stay
+   available. **Approve all** approves every draft at once; rejected statements stay
    rejected, and you can still edit or reject any statement afterwards.
 
 ## How the statements are written
@@ -53,8 +55,8 @@ Each statement has a **Why** button. It opens the trail: the finding it was writ
 it is editable. A statement the critic scored 0 on any point carries a "Low score" badge in the list
 so you can check it first. Statements you wrote by hand, or that older runs produced, have no trail.
 
-!!! warning "The excerpt is for you only"
-    The excerpt in the Why panel never goes to Polis and is not part of any export.
+The excerpt in the Why panel is for you only. It never goes to Polis and is not part of any
+export.
 
 ## What makes a good statement
 
@@ -77,7 +79,7 @@ so you can check it first. Statements you wrote by hand, or that older runs prod
 
 **Generate** can be pressed again, for instance after approving more findings or with a different
 number on the slider. It replaces only untouched drafts. Statements you edited, approved, rejected or
-wrote yourself stay as they are and count towards the number you asked for; the rest of the budget is
+wrote yourself stay as they are and count toward the number you asked for; the rest of the budget is
 filled with new drafts, and near duplicates are dropped.
 
 If the analysis is re-run and a finding is replaced, the statements written from it keep their text
@@ -107,7 +109,7 @@ If Polis refuses the send because a statement looks like personal data (an email
 number, a table reference, a verbatim quote in quotation marks), nothing is created, the refused
 statements get a **Refused by Polis** badge, and you edit them and send again.
 
-Without a configured instance the button is disabled and the export files remain the way: paste the
+Without a configured instance the button is disabled, and you use the export files: paste the
 statements into the **seed comments** box of the Polis admin page, one per line (the CSV's second
 column), or send the file to the person who runs the instance.
 

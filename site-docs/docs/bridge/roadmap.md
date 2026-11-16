@@ -1,48 +1,38 @@
 # Roadmap and open questions
 
-Nothing on this page is built. It collects what the sources of both repositories mark as planned or undecided, so that no one
-assumes otherwise.
+This page lists what the bridge does not do yet, so that you do not plan around it. Nothing on this page is built.
 
-## Results back into Citizens (not built)
+## Results back into Citizens
 
-Today the bridge is one way. Polis results do not reach Citizens: an organizer reads the Polis report in the browser.
+The bridge is one way. Polis results do not reach Citizens: an organizer reads the Polis report in the browser. The plan is a route
+on the Polis side, `GET /api/v3/citizens/results/{conversation_id}`, that returns the results of an assembly's conversation in a
+documented JSON, and a `PULL_POLIS` job on the Citizens side that fetches it. The Polis results would then go into the Citizens PDF
+as one unified report. There will be no Polis-side PDF.
 
-Planned, per the Citizens plan:
+The results should contain the consensus statements, the group-informed statements and the participation counts. The format and
+timing are open, and so is the result-import format Citizens will accept. The route name is a plan, not a contract.
 
-* On the Polis side, `GET /api/v3/citizens/results/{conversation_id}`, returning the results of an assembly's conversation in a
-  documented JSON.
-* On the Citizens side, a `PULL_POLIS` job that fetches it.
-* **One unified report:** the Polis results go into the Citizens PDF in a later step. There will be no Polis-side PDF.
+Polis holds no table information and votes are never linked to a table, so a per-table breakdown of Polis results is not possible.
 
-The sources name what the results should contain: the consensus statements, the group-informed statements and the participation
-counts. The **format and timing are open** (`docs/decisions.md`: "Results back into Citizens: format and timing, once Citizens
-tranche 3 exists"), and so is the result-import format Citizens will accept. Until then, `docs/citizens-integration.md` lists the
-requirement as "later". The planned route name is a plan, not a contract.
+## Participant codes
 
-Because Polis holds no table information and votes are never linked to a table, any per-table breakdown of Polis results is not
-possible and is not planned.
+Voting is open to anyone with the link. The upstream API accepts an `xid` on a comment, but no feature of this fork uses it, and
+participant codes (the `xid` whitelist) are not supported.
 
-## Participant codes (deferred)
+## Open questions
 
-Decided on 2026-11-13: participant codes, the `xid` whitelist, are deferred. Today voting is open to anyone with the link. The upstream API accepts an `xid` on a comment; no feature of this
-fork uses it.
-
-## Open questions from the Polis repository
-
-From `docs/decisions.md` and `docs/citizens-integration.md`:
-
-* **Database backups** for polis.democracyroutes.com: a nightly `pg_dump` into the `backups` volume plus a copy off the host;
+* Database backups for polis.democracyroutes.com: a nightly `pg_dump` into the `backups` volume plus a copy off the host, with
   retention to decide. See [Deployment](../polis/deployment.md#backups).
-* **Citizens `description` and `strict_moderation`**: whether Citizens should let the organizer choose `strict_moderation`. Citizens
-  currently sends a description and no `strict_moderation`.
-* **Polis as a Nextcloud ExApp**, later. Two candidates are noted: a thin ExApp that uses the Democracy Routes Polis by default (one
-  click, data on our servers), or an all-in-one Polis ExApp (one click, data in the organisation's Nextcloud; needs the clients
-  patched for the AppAPI path prefix, a one-container build and a check that the participant cookie survives the proxy). Also open:
-  whether it is a separate ExApp or a section of the Citizens ExApp.
-* **Privacy coverage**: the runbook asks to confirm that the notice covers voting, since votes can reveal political opinions.
-* The owner-to-fill operator fields of the Polis legal pages (address, hosting country, authority, retention, governing law).
+* Whether Citizens should let the organizer choose `strict_moderation`. Citizens sends a description and no `strict_moderation`.
+* Polis as a Nextcloud ExApp. Two candidates are noted: a thin ExApp that uses the Democracy Routes Polis by default (one click,
+  data on our servers), or an all-in-one Polis ExApp (one click, data in the organization's Nextcloud). The all-in-one version
+  needs the clients patched for the AppAPI path prefix, a one-container build and a check that the participant cookie survives the
+  proxy. It is also open whether this is a separate ExApp or a section of the Citizens ExApp.
+* Whether the Polis notice covers voting, since votes can reveal political opinions.
+* The operator fields of the Polis legal pages that the operator fills in: address, hosting country, authority, retention and
+  governing law.
 
-## Already settled
+## Settled
 
-* The Polis statement length limit: 140 characters as a target, 400 as the hard limit.
-* Whether Citizens pushes directly: yes, with the import call.
+The Polis statement length limit is 140 characters as a target and 400 as the hard limit. Citizens pushes directly, with the import
+call.

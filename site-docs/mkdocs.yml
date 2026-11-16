@@ -54,8 +54,8 @@ nav:
   - Getting started:
       - getting-started/index.md
       - Requirements: getting-started/requirements.md
+      - Install with Docker Compose: getting-started/standalone.md
       - Install as a Nextcloud ExApp: getting-started/install-nextcloud.md
-      - Run standalone: getting-started/standalone.md
       - First assembly in 15 minutes: getting-started/first-assembly.md
   - Running an assembly:
       - organizers/index.md

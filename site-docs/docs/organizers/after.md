@@ -1,12 +1,13 @@
 # After the assembly
 
-Do these in order. The first step is review; the last, clearing the phones, is the only one that
+This page walks through closing an assembly, reviewing and publishing the report, exporting the
+data and clearing the phones. Do the steps in order; only the last one, clearing the phones,
 deletes anything on devices.
 
 ## 1. Close and wait for processing
 
 Press **Close ... & create the final report**. Closing freezes the version participants read.
-Downloads become available once the assembly or session is closed. Reopening is possible later,
+Downloads become available once the assembly or session is closed. You can reopen it later,
 except after zero retention has run. Wait for processing: transcription and analysis run as
 background jobs (see [Jobs and background work](../architecture/jobs.md)).
 
@@ -18,10 +19,10 @@ for review status and finding type help, and **Approve N draft(s)** approves eve
 waiting in the round (rejected findings are left alone, and anything approved can still be
 edited or rejected later). Each finding shows its evidence: speaker, timestamp and exact words.
 
-!!! warning "Re-running the analysis replaces reviewed findings"
-    A run replaces the whole generation of findings it supersedes, approved and edited ones
-    included. The dialog says so before you confirm. A re-run that returns no findings for a
-    table that had some is refused and the previous findings are kept.
+Re-running the analysis replaces reviewed findings. A run replaces the whole generation of
+findings it supersedes, approved and edited ones included, and the dialog says so before you
+confirm. A re-run that returns no findings for a table that had some is refused, and the
+previous findings are kept.
 
 Cross-table findings are regenerated every time another table finishes its analysis, so review
 those only after the last table is in. A failed synthesis or cross-table analysis is shown in
@@ -36,7 +37,7 @@ referred to the old text are marked as removed.
 ## 3. Reports
 
 The Report tab builds the final report from the approved findings and the AI summaries, which
-are labelled as AI-generated. Formats and what each contains are in
+are labeled as AI-generated. Formats and what each contains are in
 [Report formats](../reference/reports.md): a branded PDF (executive summary, points of consensus
 and divergence, participation coverage, one page per table in the table detail), Markdown and
 JSON. If anyone seated at a table declined the quotations box, the report prints no verbatim
@@ -56,8 +57,8 @@ push the current content.
 
 ## 5. Export before you delete anything
 
-Each assembly has a **Files** tab listing every table's audio with size and duration. You can
-download one table's audio or all of it, and export the **whole session** as a portable archive
+Each assembly has a Files tab listing every table's audio with size and duration. You can
+download one table's audio or all of it, and export the whole session as a portable archive
 (metadata, audio, transcripts and report). That archive can be imported on another server; see
 [Recovery and import](recovery-import.md). Open what you downloaded: a download starting is not
 proof that a file saved or plays.
@@ -73,13 +74,13 @@ the server has already confirmed, so the request cannot destroy a last copy.
 
 ## Retention
 
-Settings, Organisation, *Retention* sets how many days after an assembly is **closed** its audio
+Settings, Organisation, *Retention* sets how many days after an assembly is closed its audio
 is deleted; `0` keeps it indefinitely, and each assembly can override the instance default.
-Deletion runs from a periodic sweep and is audit-logged. It removes **audio only**:
+Deletion runs from a periodic sweep and is audit-logged. It removes audio only:
 transcripts, findings and reports are the record of the assembly. Deleting those is manual, from
 the Files tab.
 
-**Zero retention** is a third choice on the same control and in the creation wizard: *Zero
+Zero retention is a third choice on the same control and in the creation wizard: *Zero
 retention - keep only the report*. Once the assembly is closed and every transcription and
 analysis has finished, the audio, every transcript and the live-caption files are deleted
 outright, and a PDF of the frozen report is kept; from then on `report.pdf` serves that file.
@@ -88,17 +89,17 @@ outright, and a PDF of the frozen report is kept; from then on `report.pdf` serv
     The assembly can never be reopened (it answers `ZERO_RETENTION_APPLIED`), and its language
     can no longer be changed because there is no audio left to transcribe again. Choose it only
     when the report really is the only thing worth keeping, such as a throwaway rehearsal or an
-    organisation that does not want to hold recorded speech any longer than it has to.
+    organization that does not want to hold recorded speech any longer than it has to.
 
 See [Privacy and security](../privacy/index.md) for the full retention rules.
 
 ## Changing things afterwards
 
-* **Rename:** click the pencil beside the name in its header; Enter saves, Escape cancels. The
+* Rename: click the pencil beside the name in its header; Enter saves, Escape cancels. The
   name inside a frozen report changes only after **Update the published version**.
-* **Change the language:** the Overview tab's language select stays open. Once a table has
+* Change the language: the Overview tab's language select stays open. Once a table has
   recorded you are asked to confirm, because every recording with audio is transcribed again and
   the findings and report follow. It is refused while a session is being recorded and, after zero
   retention, for good.
-* **Delete:** deleting an assembly removes its recordings, transcripts, live captions, findings,
+* Delete: deleting an assembly removes its recordings, transcripts, live captions, findings,
   reports, exports and the phones' diagnostic logs, and purges its storage directory.

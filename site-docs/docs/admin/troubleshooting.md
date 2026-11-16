@@ -1,7 +1,6 @@
 # Troubleshooting
 
-Collected from the administration guide and the standalone guide. Entries marked (0.7) describe behaviour
-added in that release.
+Find the symptom below, then follow the fix. Entries are grouped by where the problem shows up.
 
 ## Installation and startup
 
@@ -44,27 +43,33 @@ session refuses new recordings.
 **A table's phone died and they want to use another one.** On the Live tab press **Hand over table**. The
 recording so far is finished and transcribed, and the table carries on by scanning the same QR code on any
 other phone. Otherwise a replacement is let in automatically after two minutes of silence, leaving the first
-recording open until the five-minute silent close (0.7).
+recording open until the five-minute silent close.
 
-**A table's phone died and nobody replaced it.** In 0.7 this resolves in five minutes (see the next entry).
-The narrower older path is for a recording that has left RECORDING and then stalls mid-upload: after twenty
-minutes it shows UPLOAD_INCOMPLETE with "upload timed out", and thirty minutes later it is assembled and
-transcribed by itself. To not wait, press **Retry** on that table (Live tab, or Files tab): it assembles the
-contiguous part that arrived. `scripts/event-status.sh` lists such recordings under "needs a decision".
+**A table's phone died and nobody replaced it.** The recording closes by itself after five minutes
+(see the next entry). A separate case is a recording that has left RECORDING and then stalls
+mid-upload: after twenty minutes it shows UPLOAD_INCOMPLETE with "upload timed out", and thirty
+minutes later it is assembled and transcribed by itself. To not wait, press **Retry** on that table
+(Live tab, or Files tab): it assembles the contiguous part that arrived. `scripts/event-status.sh`
+lists such recordings under "needs a decision".
 
-**A table went quiet and its recording finished by itself (0.7).** Two things end a recording without the
-phone's own Finish: five minutes with no chunk from that phone, or **Finish recording** on the Live tab (which
-asks the phone first and finishes server-side after ninety seconds of no answer). Either way the audio already
-received becomes a transcript now. If the phone keeps recording, nothing it sends is lost: the next chunk opens a
-new recording of the same table and slot, transcribed and folded back into the table's analysis.
+**A table went quiet and its recording finished by itself.** Two things end a recording without the
+phone's own Finish: five minutes with no chunk from that phone, or **Finish recording** on the Live
+tab (which asks the phone first and finishes server-side after ninety seconds of no answer). Either
+way the audio already received becomes a transcript now. If the phone keeps recording, nothing it
+sends is lost: the next chunk opens a new recording of the same table and slot, transcribed and
+folded back into the table's analysis.
 
-**A phone lost the microphone mid-round.** Nothing to do. Within about forty seconds of being back on screen it
-shows "interrupted", asks for the microphone every five seconds and carries on in the same recording. After ten
-minutes without a microphone it finishes the recording with what it has. A phone showing "screen may lock" on the
+**A phone lost the microphone mid-round.** You need not do anything. Within about forty seconds of
+being back on screen it
+shows "interrupted", asks for the microphone every five seconds and carries on in the same
+recording. After ten
+minutes without a microphone it finishes the recording with what it has. A phone showing "screen may
+lock" on the
 Live tab cannot hold its screen awake: set its auto-lock to Never.
 
 **A table reloaded the page and the round was still going.** The phone uploads what it captured, then offers
-"Record the rest of round N". Tapping it starts a second recording for the same round; the first is kept as part 1.
+"Record the rest of round N". Tapping it starts a second recording for the same round; the first is
+kept as part 1.
 This is never automatic. Once you end the round the offer disappears.
 
 **A table shows "low battery" or "low storage".** Only Chromium reports these, so a table showing nothing is
@@ -75,60 +80,71 @@ synchronized audio.
 **Tables are ending at different times.** The Elapsed column on the Live tab highlights any table that started
 more than a minute after the earliest one, usually one that armed late or whose phone was replaced.
 
-**A round ran past its time.** The Live tab counts up and offers to end the round after a minute, with Extend 5
+**A round ran past its time.** The Live tab counts up and offers to end the round after a minute,
+with Extend 5
 min and Keep going. This runs in the Live tab, so with that tab closed nothing ends by itself.
 
-**Nothing on the Live tab updates.** Look at the timestamp above the table grid. If it says "Reconnecting", the
+**Nothing on the Live tab updates.** Look at the timestamp above the table grid. If it says
+"Reconnecting", the
 numbers are from that time and the server is unreachable.
 
 ## Transcription and analysis
 
-**Transcription never happens.** Check Settings for a configured key and use *Test*; the recording's state in the
+**Transcription never happens.** Check Settings for a configured key and use *Test*; the recording's
+state in the
 Files tab shows where it stopped. If both transcription checkboxes are off, nothing is transcribed at all.
 
 **TRANSCRIPTION_FAILED with live captions only.** The caption engine never connected, or heard nothing it was
 confident about. The audio is unaffected: fix the engine and use **Re-transcribe** on that table.
 
-**A table is stuck in ASSEMBLING.** Almost always a full disk: the chunks are safe and the job backs off rather
-than discarding them. The Files tab says so and offers **Retry**; free some space, then use it. If the recording
+**A table is stuck in ASSEMBLING.** Almost always a full disk: the chunks are safe and the job backs
+off rather
+than discarding them. The Files tab says so and offers **Retry**; free some space, then use it. If
+the recording
 is abandoned instead, the round's analysis proceeds without it.
 
-**A Record-now session came out in the wrong language (0.7).** Record-now detects the language from the first
+**A Record-now session came out in the wrong language.** Record-now detects the language from the first
 final transcript; when the engine names none (seen with Mistral), the analysis model reads the first 1,500
 characters of that transcript instead. Detection runs once, before the assembly has any transcript. Choosing a
 language by hand turns detection off.
 
-**The language is wrong even though recording has begun (0.7).** The Overview tab's language select stays open.
+**The language is wrong even though recording has begun.** The Overview tab's language select stays open.
 Changing it asks you to confirm because every recording with audio is transcribed again. It is refused while a
 session is being recorded and, after zero retention, for good.
 
-**Reviewing findings one at a time is slow.** Use the Analysis tab filters and **Approve N draft(s)**. There is
-deliberately no way to skip review.
+**Reviewing findings one at a time is slow.** Use the Analysis tab filters and **Approve N
+draft(s)**. Review cannot be skipped.
 
-**I re-ran the analysis and my reviews are gone.** A run replaces the whole generation of findings it supersedes,
+**I re-ran the analysis and my reviews are gone.** A run replaces the whole generation of findings
+it supersedes,
 approved and edited ones included. Cross-table findings are regenerated every time another table finishes, so
-review those after the last table is in. A re-run that returns no findings for a table that had some is refused.
+review those after the last table is in. A re-run that returns no findings for a table that had some
+is refused.
 
 **A synthesis or a session's cross-table analysis failed.** The Report tab shows the reason in red, and
 `GET /api/v1/assemblies/{id}/progress` carries the same `failures` block. Re-run it once the cause is fixed.
 
 ## Reports and publishing
 
-**I approved more findings after closing, and the phones still show the old report.** Closing freezes the version
+**I approved more findings after closing, and the phones still show the old report.** Closing
+freezes the version
 participants read. Press **Update the published version** on the Report tab. The same applies after renaming.
 
 **The assembly or session name is wrong.** Click the pencil beside the name in its header; Enter saves, Escape
 cancels.
 
 **Participants used their own phones.** Closing the session asks the phones to clear their copy (default on,
-switchable per assembly). You can also press **Clear audio from the table phones** on the Files tab. It is
-coverage, not a guarantee, and a phone only deletes audio the server already confirmed.
+switchable per assembly). You can also press **Clear audio from the table phones** on the Files tab.
+It clears most copies but guarantees none, and a phone only deletes audio the server already
+confirmed.
 
 ## Vosk (built-in engine)
 
-* *"Engine not running"* in Settings: the `vosk` package is missing from the image (the page shows the reason),
+* *"Engine not running"* in Settings: the `vosk` package is missing from the image (the page shows
+the reason),
   or port 2700 inside the container is taken. Use an image that includes it, or switch to a Vosk server.
-* *"needs about N MB"* when a recording starts: the model does not fit the container's free memory. Install the
+* *"needs about N MB"* when a recording starts: the model does not fit the container's free memory.
+Install the
   small model, raise the memory, or remove another loaded language first.
 * A model marked **not usable**: its `am/` or `conf/` directory is missing, usually a hand-copied or partly
   removed directory. Remove it and install again.
@@ -136,6 +152,7 @@ coverage, not a guarantee, and a phone only deletes audio the server already con
 
 ## Polis
 
-* **"AI analysis is not configured" (409), "Approve some findings first" (409), Export disabled, a stale badge,
+* **"AI analysis is not configured" (409), "Approve some findings first" (409), Export disabled, a
+stale badge,
   nothing happens after Generate.** See [Polis consultation](../organizers/polis.md#troubleshooting).
 * **Refused by Polis.** A statement looked like personal data; edit it and send again.

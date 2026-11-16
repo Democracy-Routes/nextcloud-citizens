@@ -4,12 +4,13 @@ Open **Citizens, Settings** (Nextcloud administrators only; in standalone mode, 
 accounts). Settings has four tabs: **Transcription**, **AI**, **Organisation** and **About**, each a
 column of cards, one concern per card.
 
-**Every card has its own Save button**, enabled only when something in that card changed, and it
-saves only that card: changing the retention never commits a half-typed API key on another tab. The
-Vosk model table and the logo apply immediately and have no Save. API keys are never shown again
-after saving; the interface sees only that a key is configured and its last four characters. Use the
-*Test* buttons before saving: they check what you typed. A key you saved cannot be sent to an
-arbitrary host, because testing an endpoint you typed requires a key you typed.
+Every card has its own **Save** button. It is enabled only when something in that card changed, and
+it saves only that card, so changing the retention never commits a half-typed API key on another tab.
+The Vosk model table and the logo apply immediately and have no Save button.
+
+API keys are never shown again after saving; the interface sees only that a key is configured and its
+last four characters. Use the *Test* buttons before saving: they check what you typed. Testing an
+endpoint you typed requires a key you typed, so a saved key cannot be sent to an arbitrary host.
 
 In Nextcloud mode the values are kept in Nextcloud's app configuration (API keys marked *sensitive*);
 in standalone mode they are kept in an app database table.
@@ -35,7 +36,7 @@ finding.
 
 ### Live captions and the final transcript { #live-captions-and-the-final-transcript }
 
-Two checkboxes decide what is produced, and they work independently.
+Two checkboxes decide what is produced. They work independently.
 
 | Live | Final | What happens |
 |---|---|---|
@@ -44,29 +45,28 @@ Two checkboxes decide what is produced, and they work independently.
 | on | off | **The captions are the record.** Nothing is transcribed a second time. |
 | off | off | Nothing is transcribed at all: audio is stored and there is no transcript, no analysis and an empty report. Settings warns about this. |
 
-!!! tip "Live-only is a deliberate choice"
-    Transcribing the finished audio a second time costs roughly ten minutes of processing per
-    half-hour table, for text a self-hosted engine already worked out while listening. Skipping it
-    matters most on a small server running Vosk for ten tables at once.
+Live-only saves time. Transcribing the finished audio a second time costs roughly ten minutes of
+processing per half-hour table, for text a self-hosted engine already worked out while listening. This
+matters most on a small server running Vosk for ten tables at once.
 
-What you give up is accuracy and completeness. Captions are produced under time pressure: audio is
-dropped if the engine falls behind (logged when it happens), and a session that fails resumes after a
+The price is accuracy and completeness. Captions are produced under time pressure: audio is dropped
+if the engine falls behind (the app logs when this happens), and a session that fails resumes after a
 cooldown, so speech in that window is never captioned. A report built from captions says so in its
-methodology note in every format. Nothing is stuck: **Re-transcribe** on any table's row in the Files
-tab transcribes the stored audio properly and re-runs the analysis, even with Final transcription
-switched off.
+methodology note in every format. You can still recover: **Re-transcribe** on any table's row in the
+Files tab transcribes the stored audio properly and re-runs the analysis, even with Final
+transcription switched off.
 
 ### Vosk: two ways to run it
 
-Vosk needs **a separate model per language**, but one engine can hold several: each recording names the
-model it wants, and the language you set on an assembly chooses it. Settings, Transcription, *Vosk
+Vosk needs a separate model for each language, but one engine can hold several: each recording names
+the model it wants, and the language you set on an assembly chooses it. Settings, Transcription, *Vosk
 engine* has an **Engine** choice.
 
 === "Built-in engine"
 
     The engine runs inside the app container, on a loopback socket nobody else can reach, and loads
-    models that you install from Settings into `models/` under the data volume. Nothing to deploy,
-    nothing leaves the server.
+    models that you install from Settings into `models/` under the data volume. There is nothing to
+    deploy, and nothing leaves the server.
 
     The card shows whether the engine is running, how much memory is free for models in this
     container, and a table of models per language, each **small** or **large**:
@@ -96,7 +96,8 @@ engine* has an **Engine** choice.
 
 === "Vosk server at a URL"
 
-    A Vosk server you run elsewhere, or on this host with `scripts/vosk-up.sh`, which downloads nothing:
+    Use a Vosk server you run elsewhere, or on this host with `scripts/vosk-up.sh`, which downloads
+    nothing:
 
     ```sh
     scripts/vosk-model.sh --list                       # what is installed
@@ -143,7 +144,7 @@ rest is noted as cut, and the log says how much was left out).
 
 ### AI facilitator { #ai-facilitator }
 
-Off unless somebody turns it on. Settings, AI, *AI facilitator* sets:
+The AI facilitator is off unless somebody turns it on. Settings, AI, *AI facilitator* sets:
 
 * the instance default level (Off, Light, Normal, Active; at most 2, 4 or 8 nudges per table per
   session);
@@ -153,48 +154,51 @@ Off unless somebody turns it on. Settings, AI, *AI facilitator* sets:
   counts as one voice dominating, and the seconds of silence before an open question.
 
 *Test* makes one real completion with the facilitator's settings. Each assembly chooses its own level on
-the Overview tab ("Default from Settings" follows this page), each table can switch it off from its
-phone's tech sheet, and the Live tab can *Pause AI* per table. Once a minute, for every table of a
-running session whose level is not Off, the server reads the table's live captions (names replaced by
-pseudonyms), the time left and, when the engine labels speakers, the anonymous speaking balance, and
-only when a trigger fires asks the model for one short sentence or nothing. The advice reaches the
-facilitator's phone first and the table's phones directly only when no facilitator phone is connected.
-Every nudge, its delivery and the thumbs counts are in the Live tab's *AI facilitator* log and in the
-audit trail. `POST /api/v1/admin/facilitator/tick` runs the minute by hand for a rehearsal. Nothing is
-called without a key; a failing model is logged and skipped.
+the Overview tab ("Default from Settings" follows this page). Each table can switch it off from its
+phone's tech sheet, and the Live tab can *Pause AI* per table.
+
+Once a minute, for every table of a running session whose level is not Off, the server reads the
+table's live captions (names replaced by pseudonyms), the time left and, when the engine labels
+speakers, the anonymous speaking balance. Only when a trigger fires does it ask the model for one short
+sentence or nothing. The advice reaches the facilitator's phone first, and the table's phones directly
+only when no facilitator phone is connected. Every nudge, its delivery and the thumbs counts are in the
+Live tab's *AI facilitator* log and in the audit trail. `POST /api/v1/admin/facilitator/tick` runs the
+minute by hand for a rehearsal. Nothing is called without a key, and a failing model is logged and
+skipped.
 
 ### Polis { #polis }
 
 **Settings, AI, Polis** holds the URL of a Polis instance and an API key issued by its operator (the
 Citizens-Polis fork; `deploy/prod/create-apikey.sh <email>` there). With both set, organizers get
-**Send to Polis** in Results, Polis seeds. **Test connection** calls the instance and answers whose key
-it is. The key is stored like the other API keys and never shown again. Only statement text is sent. See
-[Polis consultation](../organizers/polis.md), [Connecting an installation](../bridge/setup.md) (key, test, rotation, troubleshooting) and the [bridge contract](../bridge/contract.md).
+**Send to Polis** in Results, Polis seeds. **Test connection** calls the instance and reports whose key
+it is. The key is stored like the other API keys and never shown again. Only statement text is sent.
+
+See [Polis consultation](../organizers/polis.md), [Connecting an installation](../bridge/setup.md)
+(key, test, rotation, troubleshooting) and the [bridge contract](../bridge/contract.md).
 
 ## Organisation
 
 * **Organisation name and logo** appear on the PDF reports. The logo applies immediately.
 * **Data controller and contact** for the consent notice: controller (empty falls back to the
-  organisation name), contact, postal address, data-protection contact, hosting, supervisory authority
+  organization name), contact, postal address, data-protection contact, hosting, supervisory authority
   (empty: a default by language). Blank fields are left out of the notice, never shown as placeholders.
   See [Consent and the notice](../privacy/consent.md).
 * **Retention** sets how many days after an assembly is closed its audio is deleted; `0` keeps it
-  indefinitely. Each assembly can override it, and *Zero retention* is a per-assembly choice. See
+  indefinitely. Each assembly can override it, and *Zero retention* is a per-assembly choice; see
   [After the assembly](../organizers/after.md#retention).
 * **Users** (standalone mode only): invite organizers by mail or with a link copied from the log,
   resend links, change roles, disable and delete accounts. See
-  [Run standalone](../getting-started/standalone.md).
+  [Install with Docker Compose](../getting-started/standalone.md).
 
 ## About
 
-Shows the running version, the database schema revision, the transcription engine's state, disk space,
-the job queue and the time of the last housekeeping pass. These are the first things to read into a
-support request.
+This tab shows the running version, the database schema revision, the transcription engine's state,
+disk space, the job queue and the time of the last housekeeping pass. Include these in a support
+request.
 
 ## Settings keys
 
-The keys behind the cards, with their defaults. The defaults are the ones in
-`citizens/services/provider_config.py`.
+These are the keys behind the cards, with the defaults set in `citizens/services/provider_config.py`.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -223,7 +227,7 @@ The keys behind the cards, with their defaults. The defaults are the ones in
 | `facilitator_dominance_percent` | `60` | Speaking share that counts as one voice dominating |
 | `facilitator_silence_seconds` | `90` | Silence before an open question |
 | `polis_url` | empty | Polis instance |
-| `organization_name`, `consent_controller`, `consent_contact`, `org_address`, `org_dpo`, `org_hosting`, `org_authority` | empty | Organisation and consent-notice data |
+| `organization_name`, `consent_controller`, `consent_contact`, `org_address`, `org_dpo`, `org_hosting`, `org_authority` | empty | Organization and consent-notice data |
 | `audio_retention_days` | `0` | Days after closing before audio is deleted; `0` keeps it |
 
 Secret keys, stored as sensitive and never returned by any API: `mistral_api_key`, `deepgram_api_key`,
@@ -234,8 +238,7 @@ Over-cap phones keep recording and their captions wait for a slot.
 
 ## Languages
 
-Both halves of the app follow a language: the table phones and participant pages follow the assembly's
-language (or the language detected on a Record-now session), and the organizer interface follows the
-user's own language setting. Translation catalogues live in `frontend/src/i18n/` and
-`frontend/src/i18n/organizer/`; a translator can edit them without touching code, and the build fails on
-a key missing in one language. See [Frontend](../architecture/frontend.md).
+The table phones and participant pages follow the assembly's language (or the language detected on a
+Record-now session). The organizer interface follows the user's own language setting. Translation
+catalogs live in `frontend/src/i18n/` and `frontend/src/i18n/organizer/`. A translator can edit them
+without touching code, and the build fails on a key missing in one language. See [Frontend](../architecture/frontend.md).

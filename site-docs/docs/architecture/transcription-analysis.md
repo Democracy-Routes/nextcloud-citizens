@@ -9,7 +9,7 @@ concurrency caps per provider and kind stop an uncapped plenary room from satura
 provider's rate limit: over-cap phones keep recording and their captions wait for a slot. A final transcription that is
 merely waiting for a slot is retried every 60 seconds without costing an attempt.
 
-An analysis reply whose content is a list of parts (Mistral Large since 2026-11) is read part by part, and thinking parts
+An analysis reply whose content is a list of parts (as Mistral Large returns) is read part by part, and thinking parts
 are ignored.
 
 ## Live captions and final transcripts
@@ -40,9 +40,9 @@ The analysis runs per table, then per round across tables:
 
 A **finding** has a type (`proposal`, `agreement`, `disagreement`, `concern`, `question`, `minority_position`, `new_idea`), a
 title (3 to 300 characters), a summary, an optional support level (`strong`, `mixed`, `weak`, `unclear`) and between 1 and 20
-evidence segment ids. Every analysed table also stores a mandatory neutral summary of two to four sentences in the assembly's
+evidence segment ids. Every analyzed table also stores a mandatory neutral summary of two to four sentences in the assembly's
 language, even when there are no substantive findings, and rounds store a cross-table summary. Summaries render in the Analysis
-tab and in reports labelled as AI-generated.
+tab and in reports labeled as AI-generated.
 
 ### Evidence
 

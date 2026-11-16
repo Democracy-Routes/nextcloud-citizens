@@ -1,6 +1,6 @@
 # Conventions and the gate
 
-These conventions are the ones visible in the repository's configuration, tests and documents.
+These are the code conventions, the checks to run before you push, and the release steps.
 
 ## Python
 
@@ -11,7 +11,7 @@ These conventions are the ones visible in the repository's configuration, tests 
 * **No Nextcloud reads from a request.** Read provider configuration from the background-refreshed snapshot, never inside a transaction or a request.
 * **Commit before long work.** Job handlers `commit()` before ffmpeg, speech-to-text or model calls. Do not hold SQLite's write lock across slow calls.
 * **No unbounded body reads** on public routes, and **no blocking calls on the event loop**; both have guard tests.
-* **Secrets never in logs or responses.** The logging redaction processor is defence in depth, not permission.
+* **Secrets never in logs or responses.** The logging redaction processor is defense in depth, not permission.
 * **Comments say why, not what.**
 
 ## Database
@@ -48,8 +48,8 @@ check and the `info.xml` validation. A reliability feature lands together with a
 
 ## Documentation
 
-Write in plain, precise English; keep claims traceable to code or to a repository document, and leave out what the source does not say. This site is built from `site-docs/` with `sh scripts/docs-build.sh`.
+Write in plain, precise English and keep claims traceable to the code. This site is built from `site-docs/` with `sh scripts/docs-build.sh`.
 
-## Licence
+## License
 
 AGPL-3.0-or-later.

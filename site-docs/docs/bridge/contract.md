@@ -1,14 +1,12 @@
 # Contract
 
-The technical contract between Citizens and a Polis instance. The Polis side is the Citizens-Polis fork of PolisOrbis 1.5.0
-(`docs/citizens-integration.md` and `server/src/routes/citizensImport.ts` in its repository); the Citizens side is
-`citizens/services/polis.py`. This page was written against both. For the other routes of the fork see the
-[Polis API reference](../polis/api.md).
+This page is the technical contract between Citizens and a Polis instance: the calls, bodies, limits and what each side stores. The
+Polis side is the Citizens-Polis fork of PolisOrbis 1.5.0 (`server/src/routes/citizensImport.ts` in its repository); the Citizens
+side is `citizens/services/polis.py`. For the other routes of the fork see the [Polis API reference](../polis/api.md).
 
-!!! info "Citizens does not expose an API to Polis"
-    Every Citizens organizer route needs an authenticated organizer, and there is no API token an external service can use. The
-    bridge receives statements that Citizens sends; it does not call Citizens. Polis does not know the assembly beyond its name and
-    cannot report back by id.
+Citizens does not expose an API to Polis. Every Citizens organizer route needs an authenticated organizer, and there is no API
+token an external service can use. Polis receives the statements that Citizens sends and does not call Citizens. It does not know
+the assembly beyond its name and cannot report back by id.
 
 ## Authentication
 
@@ -20,7 +18,7 @@ Bearer header; Citizens sends none.
 
 ## The import call
 
-`POST <instance>/api/v3/citizens/import`, `application/json`. The body is the `statements.json` export **unchanged** (see
+`POST <instance>/api/v3/citizens/import`, `application/json`. The body is the `statements.json` export unchanged (see
 [Seeds export formats](../reference/seeds-formats.md)) with optional extra fields:
 
 ```json
@@ -40,9 +38,9 @@ Bearer header; Citizens sends none.
 |---|---|
 | `schema` | Must be `citizens.statement-seeds/1` |
 | `assembly.name` | Required, 1 to 1000 characters after trimming. Becomes the topic and the idempotency key |
-| `assembly.language` | One of `en`, `it`, `de`, `fr`, `es`; anything else is ignored. Accepted and recorded, but Polis has **no per-conversation language setting**: the voting page shows itself in the participant's browser language |
-| `statements` | A non-empty array of at most **200** |
-| `statements[].statement` | Required, **1 to 400 characters** after trimming |
+| `assembly.language` | One of `en`, `it`, `de`, `fr`, `es`; anything else is ignored. Accepted and recorded, but Polis has no per-conversation language setting: the voting page shows itself in the participant's browser language |
+| `statements` | A non-empty array of at most 200 |
+| `statements[].statement` | Required, 1 to 400 characters after trimming |
 | `statements[].position` | Optional number; statements are ordered by it (file order breaks ties); a missing position is the row's index plus one |
 | `topic` | Optional, 1 to 1000 characters; default the assembly name |
 | `description` | Optional, up to 50000 characters; default empty |
@@ -73,16 +71,16 @@ Citizens sends the file the JSON export writes plus `topic` (the assembly name) 
 
 ### Rules
 
-* The conversation is created **active and public**, with the assembly name as topic, **owned by the account the key belongs to**. A
+* The conversation is created active and public, with the assembly name as topic, owned by the account the key belongs to. A
   report (analysis page) is created with it.
-* **Idempotent per assembly name and account.** The conversation is found by owner plus a context of `citizens:` followed by the
+* Idempotent per assembly name and account. The conversation is found by owner plus a context of `citizens:` followed by the
   assembly name (whitespace collapsed, trimmed, cut at 990 characters). A second call with the same name finds the existing
   conversation (`created: false`) and adds only statements whose text is new (`skipped_duplicate` counts the rest). Retrying after a
   network error is safe. `reuse: false` forces a new conversation. Two different accounts sending the same name get two
   conversations.
-* **Limits:** 1 to 200 statements, each 1 to 400 characters after trimming. Anything out of range refuses the whole call with 400
+* Limits: 1 to 200 statements, each 1 to 400 characters after trimming. Anything out of range refuses the whole call with 400
   `polis_err_citizens_import_invalid` and a `details` list of `field` and `reason`.
-* **No personal data.** A statement that matches any of these rules refuses the **whole** call with 400
+* No personal data. A statement that matches any of these rules refuses the whole call with 400
   `polis_err_citizens_import_personal_data` and the offending `position`s (each with a `reason`):
 
     | Rule | What matches |
@@ -92,19 +90,19 @@ Citizens sends the file the JSON export writes plus `topic` (the assembly name) 
     | Table reference | The word `table`, `tavolo`, `tisch` or `mesa` followed by a number, optionally with `n`, `n°`, `no.` or `#` between (`tavolo 3`, `table 12`) |
     | Verbatim quote | The whole statement wrapped in quotation marks (`"`, `“…”`, `«…»`, `‘…’`, `'…'`) |
 
-    The guard is deliberately simple and errs on the side of refusing; it is the second line after Citizens' own rule that the
-    statements carry no names, table numbers or quotations. The documents of both repositories list the table words alone ("Tisch",
+    The guard is simple and errs on the side of refusing. It is the second line after Citizens' own rule that statements carry no
+    names, table numbers or quotations. The documents of both repositories list the table words alone ("Tisch",
     "mesa"), but the code requires a number after them.
-* **Rate limit:** 20 imports per hour per account, in memory (a restart resets it), checked after validation. 429
+* Rate limit: 20 imports per hour per account, in memory (a restart resets it), checked after validation. 429
   `polis_err_citizens_import_rate_limited`.
-* **Errors:** 401 without a key, 403 with a wrong one, 400 as above, 429, 500 `polis_err_citizens_import`.
+* Errors: 401 without a key, 403 with a wrong one, 400 as above, 429, 500 `polis_err_citizens_import`.
 
 ### What Citizens stores
 
 Per assembly (migration 0041): `conversation_id`, `url`, `moderation_url`, `report_url`, the time of the push (`pushed_at`) and, when
-the poll is put on the devices, `published_at`. Per statement: the Polis `tid` and the conversation id, **only for statements Polis
-reported as `success`**: a statement skipped as a duplicate on a re-send keeps the `tid` it got the first time. Citizens shows the
-three links on the seeds card. The statements sent are marked **EXPORTED**.
+the poll is put on the devices, `published_at`. Per statement: the Polis `tid` and the conversation id, only for statements Polis
+reported as `success`: a statement skipped as a duplicate on a re-send keeps the `tid` it got the first time. Citizens shows the
+three links on the seeds card. The statements sent are marked EXPORTED.
 
 ## The ping
 
@@ -122,15 +120,15 @@ stored address of the key's account.
 * The push is the `PUSH_POLIS` job, queued by `POST /api/v1/assemblies/{id}/seeds/push` on the Citizens side. The network call has a
   120 second timeout and never runs inside a request or a database transaction.
 * A key problem, refused content or a missing endpoint is a permanent failure; a 429 or a network failure is not permanent. For
-  a personal-data refusal Citizens marks the named positions **Refused by Polis**.
+  a personal-data refusal Citizens marks the named positions Refused by Polis.
 * Publishing the voting link on the table phones is separate: `POST` and `DELETE /api/v1/assemblies/{id}/seeds/poll/publish`
   (publishing needs a successful send first, otherwise 409), with `GET .../seeds/poll-qr` for the QR code. Withdrawing from the
   devices does not touch the Polis conversation.
 * The instance URL and key are the Settings keys `polis_url` and `polis_api_key`.
 
-## Verified PolisOrbis 1.5.0 behaviour
+## PolisOrbis 1.5.0 behavior { #verified-polisorbis-150-behavior }
 
-Checked 2026-10-28 against a local install: authentication is a session cookie; API keys exist (`Authorization: Bearer` on the fork)
+In PolisOrbis 1.5.0, authentication is a session cookie; API keys exist (`Authorization: Bearer` on the fork)
 but PolisOrbis cannot issue one itself; `POST /api/v3/conversations` creates a conversation; `POST /api/v3/comments` with
 `is_seed: true` adds a seed and returns its `tid`; the server accepts up to 997 characters per comment while the hard limit used
 here is 400, the size of the seed box. The report page of the stock image loaded d3 and Font Awesome from third-party CDNs, which
@@ -138,5 +136,5 @@ the fork removed; the admin and participation pages load nothing external.
 
 ## Not built
 
-Pulling Polis results back into Citizens, a documented JSON of an assembly's Polis results that Citizens could import into its
-report. See [Roadmap](roadmap.md).
+Pulling Polis results back into Citizens, meaning a documented JSON of an assembly's Polis results that Citizens could import into
+its report, is not built. See [Roadmap](roadmap.md).

@@ -1,35 +1,35 @@
 # Connecting an installation
 
-A Citizens installation (Nextcloud ExApp or standalone) is connected to one Polis instance by a URL and an API key. The Polis
-instance must be the **Citizens-Polis fork**, because only it has the import and ping endpoints; a stock PolisOrbis or Polis answers
+This page shows how to connect a Citizens installation (Nextcloud ExApp or standalone) to one Polis instance with a URL and an API
+key. The Polis instance must be the Citizens-Polis fork, because only it has the import and ping endpoints; a stock PolisOrbis or Polis answers
 404.
 
 ## Steps
 
-1. **The Polis operator issues a key** for a team account on the Polis host:
+1. The Polis operator issues a key for a team account on the Polis host:
 
     ```sh
     ./deploy/prod/create-apikey.sh <email>
     ```
 
     The e-mail is that of an existing team account (create one with `create-account.sh` first if needed). The key (`pkey_` plus 17
-    characters) is **printed once**. Hand it to the Citizens administrator through a secure channel, never through git or chat.
+    characters) is printed once. Hand it to the Citizens administrator through a secure channel, never through git or chat.
     The conversations the key creates belong to its account and show up in that account's list like any other.
 
-2. **The Citizens administrator enters both values** in Settings, AI, Polis: the instance URL (`http` or `https`, for example
+2. The Citizens administrator enters both values in Settings, AI, Polis: the instance URL (`http` or `https`, for example
    `https://polis.democracyroutes.com`) and the key. The key is stored like the other API keys, is never returned by any API and is
    never shown again; the interface shows only that it is configured. See the [Settings reference](../admin/settings.md#polis).
 
-3. **Press Test connection.** Citizens calls `GET <instance>/api/v3/citizens/ping` with the key and shows "Connected" and whose key
+3. Press **Test connection**. Citizens calls `GET <instance>/api/v3/citizens/ping` with the key and shows "Connected" and whose key
    it is (the account's stored e-mail, which for script-made accounts is the hashed `...@dummy.net` form). It does not create
    anything.
 
-4. With both set, organizers get **Send to Polis** in Results, Polis seeds. Without them the button is disabled and the export
+4. With both set, organizers get the **Send to Polis** button in Results, Polis seeds. Without them the button is disabled and the export
    files remain the manual route.
 
 ## One key per installation
 
-Issue **one key per Citizens installation**, ideally on its own team account if you want to tell them apart. The import rate limit
+Issue one key per Citizens installation, ideally on its own team account if you want to tell them apart. The import rate limit
 (20 per hour) is counted per account, so installations sharing an account share that budget.
 
 ## Rotating or deleting a key
@@ -39,7 +39,7 @@ Issue **one key per Citizens installation**, ideally on its own team account if 
 ./deploy/prod/create-apikey.sh <email>     # then issue a new one
 ```
 
-`delete-apikey.sh` removes **all** keys of the account, so every installation using that account stops working until it is given a
+`delete-apikey.sh` removes all keys of the account, so every installation using that account stops working until it is given a
 new key. After the new key is pasted into Settings, press Test connection. Use `POLIS_ENV=local` for the local stack.
 
 ## Network and egress

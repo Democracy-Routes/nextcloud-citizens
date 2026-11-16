@@ -1,7 +1,8 @@
 # Providers and what leaves the server
 
-**Nothing leaves the server until an administrator configures a provider.** A fresh install performs no
-transcription and no analysis.
+Nothing leaves the server until an administrator configures a provider. A fresh install performs no
+transcription and no analysis. This page lists what each provider receives, so that you can choose
+providers and write your privacy information accurately.
 
 ## Egress table
 
@@ -13,7 +14,7 @@ transcription and no analysis.
 | Polis | the approved statements (text only), the assembly name and description | the Polis instance you configure | only when an organizer presses **Send to Polis** ([details](../bridge/privacy.md)) |
 | Vosk model download | a model file request to `alphacephei.com`; no audio | the model host | only when an administrator presses **Install** for a built-in Vosk model |
 
-With live captions only, the assembled recording is never sent anywhere: the chunks streamed during the
+With live captions only, the assembled recording is never sent anywhere. The chunks streamed during the
 round are the sole egress, and with Vosk or a self-hosted Whisper server there is none at all.
 
 Everything else (audio, transcripts, findings, reports) stays in the app's own storage on your server,
@@ -40,11 +41,11 @@ carries names as spoken, so use a self-hosted engine if that matters.
 ## What participants are told
 
 The recorder shows an information screen before recording starts. It names the transcription engine,
-whether that engine is an outside service, how long audio is kept, and how speakers are labelled. The
-text is generated from the server's live configuration, so it cannot drift from what the app does. The
-analysis provider is named from the configured endpoint: a known hosted service by name (Mistral AI,
-OpenAI, Anthropic, Google, Groq, OpenRouter), a local endpoint as the organisation's own server, any
-other by its hostname. See [Consent and the notice](../privacy/consent.md).
+says whether that engine is an outside service, and states how long audio is kept and how speakers are
+labeled. The server generates the text from its live configuration, so it matches what the app does.
+The analysis provider is named from the configured endpoint: a known hosted service by name (Mistral
+AI, OpenAI, Anthropic, Google, Groq, OpenRouter), a local endpoint as the organization's own server,
+any other by its hostname. See [Consent and the notice](../privacy/consent.md).
 
 ## Trust boundary
 
@@ -53,13 +54,15 @@ participants were told about. This is an administrative trust boundary, not a te
 
 ## API keys
 
-Provider API keys are stored as sensitive configuration, never returned by any API, never written to a QR
-code and never logged; the interface sees only `configured: true` and the last four characters. A
-redaction processor scrubs anything matching `secret|token|passw|api_key|authorization|bearer|credential|cookie`
-from every log event on every sink as defence in depth. In standalone mode the keys are encrypted with
-`APP_SECRET`, so a lost secret means entering them again.
+Provider API keys are stored as sensitive configuration. No API returns them, no QR code carries them
+and no log contains them; the interface sees only `configured: true` and the last four characters. As
+a second defense, a redaction processor scrubs anything matching
+`secret|token|passw|api_key|authorization|bearer|credential|cookie` from every log event on every
+sink. In standalone mode the keys are encrypted with `APP_SECRET`, so a lost secret means entering
+them again.
 
-!!! warning "Costs"
-    Hosted providers bill by use. A full load test replays real speech at wall-clock speed and bills
-    live captions plus batch transcription plus analysis for every minute. Run the smoke test first.
-    See [Testing](../architecture/testing.md).
+## Costs
+
+Hosted providers bill by use. A full load test replays real speech at wall-clock speed and bills
+live captions, batch transcription and analysis for every minute. Run the smoke test first; see
+[Testing](../architecture/testing.md).

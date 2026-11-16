@@ -1,8 +1,8 @@
 # Recording pipeline and reliability
 
-Audio is the primary record. Captions, transcription and analysis are not a substitute for it. The pipeline
-reduces recoverable failure modes; it cannot guarantee capture through a dead battery, a killed browser, a lost
-microphone, failing hardware or erased browser storage.
+Audio is the primary record; captions, transcription and analysis do not replace it. The pipeline
+removes the recoverable failure modes. It cannot guarantee capture through a dead battery, a killed
+browser, a lost microphone, failing hardware or erased browser storage.
 
 ## From microphone to AUDIO_READY
 
@@ -22,7 +22,7 @@ client log ring (IndexedDB)            -->  logs/devices/<session>.jsonl
 ```
 
 The phone first commits each original MediaRecorder chunk to IndexedDB. Upload acknowledgements do not delete it.
-Normal chunks use the chunk route; oversized chunks, or uploads rejected with HTTP 413, use 1 MiB parts. The server
+Normal chunks use the chunk route. Oversized chunks, and uploads rejected with HTTP 413, use 1 MiB parts. The server
 stores immutable part metadata and checksums, flushes the bytes and directory entries, and commits its receipt before
 acknowledging them. A retry asks which parts are present and resumes. SQLite runs with `synchronous=FULL` for durable
 receipts, and transactions run `BEGIN IMMEDIATE` so writers queue on `busy_timeout` instead of failing on lock upgrades.
@@ -42,7 +42,7 @@ After assembly the server stores a fingerprint of the ordered original chunks: S
 inventory, and requires validated, available server audio. Only then does it mark the recording verified and eligible for
 normal local cleanup. A salvaged prefix, a gap, an unavailable file or an old unverified completion flag is insufficient.
 
-## Recovery behaviour
+## Recovery behavior
 
 * Network errors, rate limits and server failures back off and retry. Microphone capture continues locally while an
   upload is unavailable or rejected.
@@ -50,7 +50,7 @@ normal local cleanup. A salvaged prefix, a gap, an unavailable file or an old un
   microphone.
 * Expired or revoked sessions do not hide local audio. The recovery screen offers a download, keeping the copy, or
   explicitly confirming its deletion. A fresh QR for the same assembly and table resumes the original recording. A
-  session's lifetime (16 hours) runs from the phone's last contact.
+  session lasts 16 hours from the phone's last contact.
 * A finished recording does not end the table's round: while the round is open the phone offers "Record the rest of round
   N", never automatically, and the server keeps the first recording as part 1. The analysis waits for both parts.
 * A microphone lost mid-round is bridged, not finished: no chunk for thirty seconds while the page is on screen makes the
@@ -72,8 +72,8 @@ normal local cleanup. A salvaged prefix, a gap, an unavailable file or an old un
 
 ## Losing a phone mid-round
 
-The server cannot distinguish a dead battery from dead Wi-Fi: both simply stop sending chunks. So there are two release
-paths:
+The server cannot tell a dead battery from dead Wi-Fi, because both stop sending chunks. There are two
+release paths:
 
 * **`POST /recordings/{id}/replace-device`** (Hand over table): a person looked at the phone and it is finished. The recording
   moves to `UPLOAD_INCOMPLETE` with `error_code=DEVICE_REPLACED`, stamped `superseded_at`, and, if any chunk arrived, is
@@ -82,10 +82,10 @@ paths:
   original recording is left open so a phone that was merely offline can still upload everything.
 
 `superseded_at` marks "this belonged to a device that has gone" independently of state; every guard asking "has this table
-recorded this round?" ignores rows carrying it. Both halves are analysed as one table (`table_recordings()`), with a
+recorded this round?" ignores rows carrying it. Both halves are analyzed as one table (`table_recordings()`), with a
 methodology note that the device changed.
 
-Since 0.7 a recorder with no chunk for 300 seconds (`AUTO_CLOSE_SILENT_SECONDS`) is finished by the server, and
+A recorder with no chunk for 300 seconds (`AUTO_CLOSE_SILENT_SECONDS`) is finished by the server, and
 **Finish recording** on the Live tab does the same after a 90-second grace (`FINISH_REQUEST_GRACE_SECONDS`). A recording closed
 this way still accepts what the phone sends afterwards: the next chunk opens a new recording of the same table and slot
 (`continued_from_id`), transcribed and folded back into the analysis.
@@ -142,5 +142,5 @@ scan claims `consumed_at` with a conditional UPDATE under the writer lock, the s
 4. Keep the recorder page open and the phone powered. Use an independent backup recorder for an irreplaceable assembly.
 5. Before clearing devices, verify the server recording and preserve a backed-up export.
 
-Automated tests use temporary storage and fake microphones. They do not certify physical power-loss durability, Safari
-background behaviour, microphone quality or the production reverse-proxy configuration.
+Automated tests use temporary storage and fake microphones. They do not cover physical power-loss durability, Safari
+background behavior, microphone quality or the production reverse-proxy configuration.

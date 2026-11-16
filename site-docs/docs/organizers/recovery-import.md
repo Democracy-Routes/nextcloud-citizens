@@ -1,7 +1,7 @@
 # Recovery and import
 
-How to bring a session in from another server, and how to rescue a table whose audio or transcript
-failed. For organizers. The routes behind these buttons are listed in the
+This page shows how to bring a session in from another server and how to rescue a table whose
+audio or transcript failed. The routes behind these buttons are listed in the
 [API reference](../reference/api/uploads.md).
 
 ## Bring a session in from another server
@@ -18,11 +18,11 @@ Citizens server, format version 1 or 2) and want the assembly on this server.
 5. Press import. When it finishes you get a short result: what was created, whether the analysis was
    queued, and what was skipped. Press **Open the assembly**.
 
-**What you get:** a new, closed assembly with a new id, with its rounds, tables, participants (labels,
+The import creates a new, closed assembly with a new id, with its rounds, tables, participants (labels,
 names, emails, notes, registered table), recordings, transcripts and any audio files the archive
 carries. A recording with neither transcript nor audio is kept as a record of the table that failed.
 
-**What you do not get:** findings, summaries and the report are not copied. The analysis runs again
+Findings, summaries and the report are not copied. The analysis runs again
 here, with this server's provider and the assembly's own instructions, and you review the findings as
 you would after a live session. If no analysis provider is configured, the result says the analysis was
 not queued; add a key in Settings and use the analysis controls on the assembly.

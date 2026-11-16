@@ -1,7 +1,7 @@
 # Development environment
 
 Citizens is a Nextcloud ExApp: a container that Nextcloud talks to through the AppAPI proxy. For development you run that container yourself and register it with a
-`manual-install` daemon, so you can edit code and reload instantly. (To develop against standalone mode, see [Run standalone](../getting-started/standalone.md).)
+`manual-install` daemon, so you can edit code and reload instantly. (To develop against standalone mode, see [Install with Docker Compose](../getting-started/standalone.md).)
 
 ## Requirements
 
@@ -11,7 +11,7 @@ Citizens is a Nextcloud ExApp: a container that Nextcloud talks to through the A
 
 ## One-time setup
 
-1. Copy the settings you need into `scripts/dev-env.sh`: the Nextcloud container name, the Docker network it is on, and the public URL of the instance. Everything else has sane defaults.
+1. Copy the settings you need into `scripts/dev-env.sh`: the Nextcloud container name, the Docker network it is on, and the public URL of the instance. Everything else has defaults.
 2. Start the app container and register it:
 
     ```sh
@@ -46,7 +46,7 @@ The AppAPI shared secret is generated once into `.app_secret` (gitignored).
 `sh scripts/browser-test-env.sh start` launches a throwaway instance on `127.0.0.1:23100` with authentication disabled (only honoured against a local Nextcloud) and a seeded assembly, which the
 Playwright specs in `tests/browser/` drive with a fake microphone. Stop it with `sh scripts/browser-test-env.sh stop`. See [Testing](../architecture/testing.md).
 
-## Notes that save time
+## Proxy and AppAPI notes
 
 * Route regexes in `appinfo/info.xml` are matched **without** a leading slash on AppAPI 33 and earlier and **with** one on 34 and later; the escaped form (`^api\/v1\/.*`) works on both. Order matters: narrow routes
   before catch-alls.

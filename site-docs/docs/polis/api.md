@@ -1,18 +1,18 @@
 # API reference
 
-The routes the fork adds, and the upstream routes that the Citizens bridge and the organizer pages rely on. Everything is under
-`/api/v3/`. Request and response bodies are JSON. Error codes begin `polis_err_`. The route table is in `server/app.ts`; the handlers are in `server/src/routes/`.
+This page lists the routes the fork adds and the upstream routes that the Citizens bridge and the organizer pages rely on.
+Everything is under `/api/v3/`. Request and response bodies are JSON. Error codes begin `polis_err_`. The route table is in `server/app.ts`; the handlers are in `server/src/routes/`.
 
-The bridge's own contract, with examples and the Citizens side, is in [Citizens + Polis: Contract](../bridge/contract.md).
+The bridge contract, with examples and the Citizens side, is in [Citizens + Polis: Contract](../bridge/contract.md).
 
 ## Authentication
 
 Routes that need a login accept, checked in this order:
 
 1. an API key in the `x-sandstorm-app-polis-apikey` header or a `polisApiKey` body field (upstream);
-2. the **session cookie** set by sign-in (`token2`), the way the organizer pages authenticate;
-3. **`Authorization: Bearer <api key>`** (added by this fork, used by Citizens);
-4. **HTTP Basic** with the API key as the user name and any password (upstream).
+2. the session cookie set by sign-in (`token2`), the way the organizer pages authenticate;
+3. `Authorization: Bearer <api key>` (added by this fork, used by Citizens);
+4. HTTP Basic with the API key as the user name and any password (upstream).
 
 A cookie therefore wins over a Bearer header if both are sent. API keys have the shape `pkey_` plus 17 characters, are tied to one
 team account, and are issued and revoked by script only (see [Deployment](deployment.md#team-accounts-and-api-keys)); PolisOrbis has
@@ -32,7 +32,7 @@ no way to issue one itself. Sign-in is `POST /api/v3/auth/login` (`email`, `pass
 
 ## Rate limits
 
-Kept in memory per **user (account)**, in a sliding window; **a server restart resets them**.
+Limits are kept in memory per user account, in a sliding window. A server restart resets them.
 
 | Route | Limit | Error |
 |---|---|---|
@@ -103,7 +103,7 @@ When off: `{"enabled": false, "provider": null, "region": null, "privacyUrl": nu
 
 ## POST /api/v3/ai/draft-statements
 
-Moderators only. Asks the configured provider for statements; **nothing is stored**.
+Moderators only. Asks the configured provider for statements; nothing is stored.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -133,17 +133,17 @@ login, which upstream allowed, is refused.
 
 ## Upstream routes the bridge relies on
 
-Verified against PolisOrbis 1.5.0 on 2026-10-28. The import call replaces the need to use them for Citizens, but they document what
-it builds on.
+These routes are as in PolisOrbis 1.5.0. Citizens does not need to call them, because the import call replaces them, but the import
+builds on them.
 
 | Route | Use |
 |---|---|
 | `POST /api/v3/auth/login` | Sign in (`email`, `password`) |
-| `POST /api/v3/auth/new` | Create an owner account (`hname`, `email`, `password`, `gatekeeperTosPrivacy: true`). **Blocked at the public proxy** |
+| `POST /api/v3/auth/new` | Create an owner account (`hname`, `email`, `password`, `gatekeeperTosPrivacy: true`). Blocked at the public proxy |
 | `POST /api/v3/conversations` | Create a conversation (`topic`, `description`, `is_active`, `is_draft`); returns `url` and `conversation_id` |
 | `POST /api/v3/comments` | Add a statement (`conversation_id`, `txt` up to 997 characters, `is_seed: true`, `vote: 0`); returns the `tid` |
 | `GET /api/v3/comments?conversation_id=<id>` | List statements with `tid`, `txt`, `is_seed`; needs no login for a public conversation |
-| `POST /api/v3/prune` | The sandbox purge. **Only registered when `PRUNE_ENABLED=true`; blocked at the proxy** |
+| `POST /api/v3/prune` | The sandbox purge. Only registered when `PRUNE_ENABLED=true`; blocked at the proxy |
 
-Pulling results out of Polis for Citizens (`GET /api/v3/citizens/results/{conversation_id}`) is **not built**; see the
+Pulling results out of Polis for Citizens (`GET /api/v3/citizens/results/{conversation_id}`) is not built; see the
 [roadmap](../bridge/roadmap.md).

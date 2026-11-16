@@ -1,11 +1,14 @@
 # Updates and releases
 
+This page covers upgrading an instance, rolling back, freezing an image for an event and releasing
+to the Nextcloud App Store.
+
 ## How upgrades work
 
-Migrations run automatically, forward only, at every startup (`citizens/db/migrate.py`, called from
-`main.py` on every boot): the container upgrades its database to `head` before it answers requests. There
-is no automatic downgrade; rolling back the schema is a deliberate, by-hand step (below). Migrations are
-additive; see [Database and migrations](../architecture/database.md).
+Migrations run automatically and only forward, at every startup (`citizens/db/migrate.py`, called from
+`main.py`). The container upgrades its database to `head` before it answers requests. There is no
+automatic downgrade; rolling back the schema is a deliberate step you take by hand (see below).
+Migrations are additive; see [Database and migrations](../architecture/database.md).
 
 ## Updating an instance
 
@@ -39,8 +42,7 @@ command.downgrade(cfg, '0036')"
 ```
 
 Then start the old image. Going forward again later just means starting the new image once more; its own
-startup runs `upgrade head`. Use the revision that precedes the first migration you want to undo; the
-administration guide's `0036` example is for the 0.7 Block 2 pair.
+startup runs `upgrade head`. Use the revision that precedes the first migration you want to undo.
 
 To rehearse the round-trip, run the downgrade and then `command.upgrade(cfg, 'head')` against a restored
 copy and compare row counts before and after.
@@ -69,7 +71,7 @@ day. An AppAPI-installed container already runs the tagged image with no bind mo
 ## Releasing to the Nextcloud App Store
 
 Citizens is an ExApp: the App Store hosts only metadata, and the code ships as the Docker image named in
-`appinfo/info.xml` under `<docker-install>`. A release has two artefacts: a published image and a signed
+`appinfo/info.xml` under `<docker-install>`. A release has two artifacts: a published image and a signed
 metadata archive.
 
 ### One-time setup
@@ -86,8 +88,8 @@ metadata archive.
    `APPSTORE_TOKEN`. The image is pushed to GHCR with the workflow's own `GITHUB_TOKEN`; make the package
    public after the first push, because AppAPI pulls anonymously.
 
-!!! danger "Re-issuing a certificate deletes every existing release"
-    All previous signatures become invalid. Keep the key safe and backed up.
+Re-issuing the certificate deletes every existing release, because all previous signatures become
+invalid. Keep the key safe and backed up.
 
 ### Every release
 
@@ -112,8 +114,8 @@ publishes it. A version containing `-beta` or `-alpha` is flagged as a pre-relea
 passes, on a fresh named volume at `/nc_app_citizens_data`, the container goes healthy, `/heartbeat` and
 `/api/v1/health` answer, the app runs as uid 10001 and owns the volume, and a volume left owned by root is
 repaired at start. In HaRP mode (`HP_SHARED_KEY` set) the app listens on `/tmp/exapp.sock` and `frpc` runs as
-uid 10001 with a 0600 configuration. The smoke test cannot replace a real HaRP daemon: before relying on a
-HaRP install, register the image on a scratch instance with one.
+uid 10001 with a 0600 configuration. The smoke test cannot replace a real HaRP daemon, so before relying on a
+HaRP install, register the image on a scratch instance that has one.
 
 ### Release checklist
 

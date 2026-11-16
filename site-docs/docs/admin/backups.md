@@ -1,7 +1,7 @@
 # Backups and restore
 
-The app keeps everything in its persistent volume: the SQLite database, audio, transcripts, live
-captions and logs.
+This page shows how to back up the app's data, restore it and rehearse the restore. The app keeps
+everything in one persistent volume: the SQLite database, audio, transcripts, live captions and logs.
 
 | Install | Volume | Mount |
 |---|---|---|
@@ -9,7 +9,7 @@ captions and logs.
 | Hand-run container | `citizens_data` | `/data` |
 | Standalone | `citizens_standalone_data` (Compose prefixes the project name) | `/data` |
 
-Back that volume up together with Nextcloud itself. The scripts pick whichever exists.
+Back that volume up together with Nextcloud itself. The backup scripts use whichever volume exists.
 
 ## Taking a backup
 
@@ -28,11 +28,11 @@ install -m 755 scripts/backup-citizens-data.sh /usr/local/sbin/citizens-backup
 ( crontab -l 2>/dev/null; echo '30 2 * * * /usr/local/sbin/citizens-backup >> /var/log/citizens-backup.log 2>&1' ) | crontab -
 ```
 
-A snapshot taken while a recording is uploading may miss its most recent chunks; the phone still holds
-them and re-sends on reconnect.
+A snapshot taken while a recording is uploading may miss its most recent chunks. The phone still
+holds them and re-sends on reconnect.
 
-!!! danger "Standalone: keep `.env.standalone`"
-    Without `APP_SECRET` the stored API keys cannot be read. Back the file up with the volume.
+In standalone mode, back up `.env.standalone` together with the volume. Without `APP_SECRET` the
+stored API keys cannot be read.
 
 ## Restore
 
@@ -53,12 +53,11 @@ user (uid 10001) if a restore left it owned by root.
 
 ## Rehearse the schema round-trip too
 
-A backup and a migration path nobody has exercised together are each only half rehearsed. After
-restoring into `citizens_restore`, check that a downgrade and a re-upgrade leave the data alone. See
-[Updates and releases](updates.md#rolling-back) for the commands, then compare the row counts: they must
-be identical.
+After restoring into `citizens_restore`, check that a downgrade and a re-upgrade leave the data
+alone. The commands are in [Updates and releases](updates.md#rolling-back). Compare the row counts
+before and after; they must be identical.
 
 ## Before an event
 
-Take a snapshot, restore it into a throwaway volume and count the assemblies. See
+Take a snapshot, restore it into a throwaway volume and count the assemblies, as described in
 [Before the day](../organizers/before-the-day.md).

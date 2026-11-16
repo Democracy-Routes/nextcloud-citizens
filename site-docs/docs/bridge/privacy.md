@@ -1,6 +1,6 @@
 # Privacy across the bridge
 
-What crosses from Citizens to Polis, what stays, and who is responsible. Each tool's own page covers the rest:
+This page shows what crosses from Citizens to Polis, what stays, and who is responsible. Each tool's own page covers the rest:
 [Citizens privacy](../privacy/index.md) and [Polis privacy](../polis/privacy.md).
 
 ## What crosses
@@ -13,20 +13,20 @@ What crosses from Citizens to Polis, what stays, and who is responsible. Each to
 | Assembly description | Yes | Cut to 2000 characters; shown under the title |
 | Assembly language | Yes | Recorded, not used by Polis |
 | Export time | Yes | Part of the file |
-| Findings, evidence, transcript excerpts, the Why trail | **No** | The Why panel's excerpt is for the organizer only |
-| Audio, speaker labels, participant data, table numbers, Citizens ids | **No** | The file carries no such field |
+| Findings, evidence, transcript excerpts, the Why trail | No | The Why panel's excerpt is for the organizer only |
+| Audio, speaker labels, participant data, table numbers, Citizens ids | No | The file carries no such field |
 
 Nothing is sent back from Polis except the conversation id, the three links and the per-statement result. No vote, participant or
 cookie crosses in either direction.
 
 ## Two lines of defence
 
-1. **Citizens** writes statements to a style card: no names, no table numbers, no quotations, no "our table". The organizer reads
+1. Citizens writes statements to a style card: no names, no table numbers, no quotations, no "our table". The organizer reads
    and approves every statement before anything leaves.
-2. **Polis** refuses the whole call if a statement contains an e-mail address, a phone number, a table reference or is wrapped in
+2. Polis refuses the whole call if a statement contains an e-mail address, a phone number, a table reference or is wrapped in
    quotation marks; see [Contract](contract.md#rules). The refused statements are marked in Citizens.
 
-Neither rule can recognise a name written into a sentence. The organizer's review is the control for that.
+Neither rule can recognize a name written into a sentence. The organizer's review is the control for that.
 
 !!! warning "The organizer is responsible for what is published"
     Statements and the assembly name and description become public on Polis, in a conversation anyone with the link can read and vote
@@ -35,12 +35,12 @@ Neither rule can recognise a name written into a sentence. The organizer's revie
 ## Anonymous, open voting
 
 Polis voting is open to anyone with the link. Participants have no account and no name; a random cookie identifies a browser so that
-votes count once. **Votes are never linked to a table or to a person in the assembly**: Citizens sends no table or participant
+votes count once. Votes are never linked to a table or to a person in the assembly: Citizens sends no table or participant
 information, and Polis has nowhere to store it. The people in the room vote the same way as anyone else, by scanning a QR code.
-Participant codes (an external id per participant) are deferred; see [Roadmap](roadmap.md).
+Participant codes (an external id per participant) are not supported; see [Roadmap](roadmap.md).
 
-Votes on statements about public issues can reveal political opinions (GDPR Art. 9). The Polis privacy notice is the place where
-participants are told what is recorded, and states consent by voting after reading it.
+Votes on statements about public issues can reveal political opinions (GDPR Art. 9). The Polis privacy notice tells
+participants what is recorded and states consent by voting after reading it.
 
 ## Consent context for assemblies
 
@@ -58,5 +58,5 @@ information to participants: the statements derived from their discussion will b
 | API key (Citizens side) | Citizens Settings, stored as sensitive configuration, never returned by any API or logged |
 | Conversation, statements, votes, participant cookies | Polis database, kept until the conversation is deleted by hand (the purge is off) |
 
-Deleting an assembly in Citizens deletes its seeds and the stored links; it does **not** delete the Polis conversation. Withdrawing
+Deleting an assembly in Citizens deletes its seeds and the stored links; it does not delete the Polis conversation. Withdrawing
 the poll from the devices does not close it either. Close or delete it on Polis.

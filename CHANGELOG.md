@@ -58,7 +58,7 @@ All notable changes to Nextcloud Citizens.
   {target}`; listing fields `recommended_target`, `seeds_target`,
   `source_findings`.
 - Documentation site: `site-docs/` (MkDocs Material, strict build, no
-  external assets) published at https://docs.democracyroutes.com by
+  external assets) published at https://docs.democracyroutes.com by Rewritten 2026-11-16 to read as one person's manual: no page talks about itself, no project history or decision dates on user pages, one warning box per page at most, bold only for on-screen labels, American spelling; the Docker Compose install comes before the Nextcloud one.
   `scripts/docs-build.sh`, with a generated API reference from the OpenAPI
   document. The site documents the whole platform: Citizens, the Polis fork
   (Citizen-polis-orbis: concepts, organizer pages, self-hosting kit,

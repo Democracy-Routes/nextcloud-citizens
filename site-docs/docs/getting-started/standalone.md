@@ -1,8 +1,8 @@
-# Run standalone
+# Install with Docker Compose
 
-Standalone mode is the same app in one Docker container. It has its own sign-in, keeps
-its Settings in its own database, and serves its own organizer page. You put a reverse
-proxy with HTTPS in front of it. Requirements are in [Requirements](requirements.md).
+This page installs Citizens as a single Docker container, without Nextcloud, and puts it
+behind your reverse proxy. The container has its own sign-in, keeps its Settings in its own
+database and serves its own organizer page. Check the [requirements](requirements.md) first.
 
 ## The reverse proxy
 
@@ -13,9 +13,10 @@ does not do HTTPS. Your proxy must:
 * pass `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`;
 * allow request bodies of at least **6 MB**. One audio chunk is 5 MB, and the app refuses
   anything above 6 MB (`MAX_REQUEST_BYTES` in `citizens/api/limits.py`). nginx refuses more
-  than 1 MB by default, so set it.
+  than 1 MB by default, so raise the limit.
 
-WebSocket upgrade is not needed. The app has no WebSocket endpoint for browsers.
+The proxy does not need to upgrade WebSocket connections, because the app has no WebSocket
+endpoint for browsers.
 
 === "nginx"
 
@@ -70,8 +71,8 @@ status. The first build takes a few minutes.
 
 !!! danger "Back up APP_SECRET"
     `APP_SECRET` signs the login cookies and encrypts stored API keys and QR tokens. If you
-    change it, everyone is signed out and the stored API keys become unreadable (enter them
-    again in Settings). Keep a copy of `.env.standalone` with your backups.
+    change it, everyone is signed out and the stored API keys become unreadable, so you must
+    enter them again in Settings. Keep a copy of `.env.standalone` with your backups.
 
 ## Accounts
 
@@ -154,11 +155,11 @@ Files are in the volume under `logs/` (`citizens.jsonl`, 10 MB x 5). Change the 
 
 ## Troubleshooting
 
-* **The container restarts and the log says `mode_invalid`.** `CITIZENS_MODE` is not exactly
-  `standalone` (or `nextcloud`). Fix the typo.
-* **The log says `missing_required_environment`.** The log lists the variables:
+* The container restarts and the log says `mode_invalid`. `CITIZENS_MODE` is not exactly
+  `standalone` (or `nextcloud`). Correct the value.
+* The log says `missing_required_environment`. The log lists the variables:
   `APP_SECRET` or `CITIZENS_PUBLIC_URL` is empty.
-* **Sign-in works but you are signed out at once.** When `CITIZENS_PUBLIC_URL` starts with
+* Sign-in works but you are signed out at once. When `CITIZENS_PUBLIC_URL` starts with
   `https`, the session cookie is marked Secure. If the browser reaches the app over plain
   HTTP, it drops the cookie. Make sure the browser uses the HTTPS address, and that the
   proxy is what serves it.
@@ -166,18 +167,16 @@ Files are in the volume under `logs/` (`citizens.jsonl`, 10 MB x 5). Change the 
   visitors.** Rate limiting sees only the proxy. Set `CITIZENS_TRUSTED_PROXIES` to the proxy
   address as the container sees it (for a proxy on the host, the Docker network gateway),
   then run `sh scripts/standalone-up.sh`.
-* **Uploads fail with 413.** The proxy body limit is below 6 MB.
-* **The QR codes show the wrong address.** Fix `CITIZENS_PUBLIC_URL`.
-* **No mail arrives.** Check `CITIZENS_SMTP_URL` and `CITIZENS_MAIL_FROM`; the log shows the
+* Uploads fail with 413. The proxy body limit is below 6 MB.
+* The QR codes show the wrong address. Fix `CITIZENS_PUBLIC_URL`.
+* No mail arrives. Check `CITIZENS_SMTP_URL` and `CITIZENS_MAIL_FROM`; the log shows the
   send error. The invitation link is also in the log.
-* **A large Vosk model is refused.** The container does not have enough free memory. Raise
+* A large Vosk model is refused. The container does not have enough free memory. Raise
   `mem_limit` and `memswap_limit`.
 
 ## How it differs from Nextcloud mode
 
-* Organizers have accounts in the app, not Nextcloud users.
-* Settings are kept in the app database, not in Nextcloud's app config.
-* There is no app store install and no AppAPI. You run the container yourself.
-* No Nextcloud notifications yet.
-* OpenID Connect sign-in is planned, not built.
-* Recording, transcription, analysis and reports work the same way.
+Organizers have accounts in the app, not Nextcloud users, and Settings are kept in the app
+database, not in Nextcloud's app config. There is no app store install and no AppAPI: you
+run the container yourself. There are no Nextcloud notifications, and OpenID Connect sign-in
+is not available. Recording, transcription, analysis and reports work the same way.

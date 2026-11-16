@@ -1,11 +1,11 @@
 # Testing
 
-Testing is part of implementation, not a final phase. The repository's `docs/testing.md` is the source for this page.
+Tests are written together with the code they cover. This page lists the layers, how to run them and the guard tests every change has to pass.
 
 ## Layers
 
 1. **Unit** (`tests/unit/`, pytest): pure logic such as configuration, log redaction, storage layout, migrations, token validation, state machines,
-   chunk ordering, deduplication and checksums, and provider normalisation.
+   chunk ordering, deduplication and checksums, and provider normalization.
 2. **Integration** (`tests/integration/`, pytest): API flows against a real app instance with a temporary SQLite database and mocked providers.
 3. **Frontend** (`tests/frontend/`, vitest with happy-dom): components and the logic inside them, mounted without a browser.
 4. **Browser** (`tests/browser/`, Playwright): the recorder driven for real in Firefox with a fake microphone against a throwaway instance. Network loss,
@@ -81,7 +81,7 @@ Several tests stop a whole class of defect from coming back. They scan the sourc
     and analysis. Run `--smoke` first (one device, about a minute), which proves the key and the whole path for pennies. `--yes` is required for the full run.
     It leaves a `TEST Carico ...` assembly behind and prints the command to delete it.
 
-The first full run of test H (2026-09-08, 10 devices, 30 minutes) uploaded 1803 chunks with zero failures, peaked at 368 MiB while recording and 465 MiB
+The first full run of test H (10 devices, 30 minutes) uploaded 1803 chunks with zero failures, peaked at 368 MiB while recording and 465 MiB
 while transcribing, and showed that 512 MB is not enough for ten tables.
 
 Test I needs no access to the server it measures: it replays real speech through the public routes from QR links, proving every table reached AUDIO_READY, that

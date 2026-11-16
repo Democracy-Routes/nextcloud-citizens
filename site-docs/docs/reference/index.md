@@ -1,6 +1,6 @@
 # Reference
 
-Lookup material, as opposed to guides.
+These pages are for looking things up: routes, variables, report and export formats.
 
 | Page | Contents |
 |---|---|
@@ -11,4 +11,5 @@ Lookup material, as opposed to guides.
 | [Polis bridge contract](polis-contract.md) | Pointer to the contract in [Citizens + Polis](../bridge/contract.md); the Polis routes are in the [Polis API reference](../polis/api.md) |
 | [Changelog](changelog.md) | Release notes from 0.7 onward |
 
-The version these pages describe is the `feature/0.9` line (`0.9.0-alpha.1` in `appinfo/info.xml` at the time of writing).
+The pages describe the `feature/0.9` line (`0.9.0-alpha.1` in `appinfo/info.xml` at the time of
+writing).

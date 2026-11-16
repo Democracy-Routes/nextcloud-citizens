@@ -1,17 +1,18 @@
 # Deployment (self-hosting kit)
 
-The repository carries everything needed to run Polis: a script for the local or the production stack, an image build script,
-overrides, an nginx site, account and key scripts, and SQL for database changes. This page is the runbook, from
-`docs/production.md`, `docs/host.md` and the `deploy/` directory.
+This page shows how to build, start, expose and upgrade a Polis instance with the scripts in the `deploy/` directory: a script
+for the local or the production stack, an image build script, overrides, an nginx site, account and key scripts, and SQL for
+database changes.
 
-!!! warning "Backups do not exist, and the purge once deleted data"
-    Read [Backups](#backups) and [the purge](#the-purge-and-the-data-loss-of-2-november-2026) before putting data you care about
-    on an instance.
+!!! warning "No backups exist"
+    Neither the instance at polis.democracyroutes.com nor the kit makes backups, and the purge described below once deleted data
+    that could not be recovered. Arrange your own dumps (see [Backups](#backups)) before you put data you care about on an
+    instance.
 
 ## Components and images
 
-`deploy/polis.sh` starts four services; upstream's `nginx-proxy` is never started (the Polis server already serves the clients
-through `file-server`, and TLS comes from the host's front proxy).
+`deploy/polis.sh` starts four services. It never starts upstream's `nginx-proxy`, because the Polis server already serves the
+clients through `file-server` and TLS comes from the host's front proxy.
 
 | Service | Image | Memory cap | Notes |
 |---|---|---|---|
@@ -20,8 +21,8 @@ through `file-server`, and TLS comes from the host's front proxy).
 | `postgres` | `registry.gitlab.com/copernicani/polisorbis/codebase/postgres:1.5.0` | 256 MB | volumes `postgres` and `backups` |
 | `file-server` | `citizens-polis/file-server:1.5.0-dr1` (built here) | 128 MB | serves the three web clients |
 
-Every container has `mem_limit` equal to `memswap_limit`, so none can swap. The caps total about 1.7 GB; the prod stack uses about
-600 MB in practice. Production containers have `restart: unless-stopped`. The compose project names are `citizens-polis-prod`
+Every container has `mem_limit` equal to `memswap_limit`, so none can swap. The caps total about 1.7 GB, and the prod stack uses
+about 600 MB in practice. Production containers have `restart: unless-stopped`. The compose project names are `citizens-polis-prod`
 and `citizens-polis-local`.
 
 ## polis.sh
@@ -36,7 +37,7 @@ Run from the repository root:
 * **Local** listens on `127.0.0.1:8190`; from a laptop use `ssh -L 8190:127.0.0.1:8190 <host>` and open
   `http://localhost:8190/home`. Use `localhost`: the server's domain whitelist refuses `127.0.0.1`.
 * **Prod** listens on `127.0.0.1:8192` behind the host nginx.
-* Both listen on `127.0.0.1` only. **Run one at a time**: the host is short of RAM.
+* Both listen on `127.0.0.1` only. Run one at a time, because the host is short of RAM.
 * On first run the script writes `deploy/<target>/.env` (git-ignored, mode `umask 077`) with fresh random database and math
   passwords and every outbound service off: no e-mail, translation, analytics, spam check or social login, `PRUNE_ENABLED=false`,
   and the AI provider blank. In prod it also sets `DEV_MODE=false` and `DOMAIN_OVERRIDE`, `API_PROD_HOSTNAME` and
@@ -50,8 +51,8 @@ Run from the repository root:
 ./deploy/build-images.sh [server|file-server|all] [tag]   # tag defaults to 1.5.0-dr1
 ```
 
-Builds run with `--memory 1500m --memory-swap 3000m` because the host is short of RAM; image builds need about 1.5 GB, so **stop
-the local stack first**. The file-server image is built with the public values of `deploy/branding.env` passed as build arguments
+Builds run with `--memory 1500m --memory-swap 3000m` because the host is short of RAM; image builds need about 1.5 GB, so stop
+the local stack first. The file-server image is built with the public values of `deploy/branding.env` passed as build arguments
 plus the short git hash.
 
 ## Branding and operator values
@@ -64,7 +65,7 @@ supervisory authority, retention, governing law) show as "[not set]" on the priv
 
 ## The nginx site
 
-`deploy/prod/nginx/polis.democracyroutes.com` is the **reference** site file. It is copied to `/etc/nginx/sites-available/` and
+`deploy/prod/nginx/polis.democracyroutes.com` is the reference site file. It is copied to `/etc/nginx/sites-available/` and
 linked from `sites-enabled`. It:
 
 * returns 403 on `POST /api/v3/auth/new` and redirects `/createuser` to `/signin`, so only the team has accounts (voting stays
@@ -74,17 +75,16 @@ linked from `sites-enabled`. It:
   timeout, `X-Content-Type-Options: nosniff` and a `Referrer-Policy`;
 * redirects port 80 to HTTPS.
 
-!!! note "On the Democracy Routes host the TLS listener is not port 443"
-    On this host, port 443 belongs to a stream SNI demux (`/etc/nginx/streams.d/turn443.conf`) that sends every HTTPS name to
-    `127.0.0.1:8443` with `proxy_protocol`. The site file therefore has `listen 127.0.0.1:8443 ssl proxy_protocol;`, and the real
-    client address comes from a global setting (`conf.d/00-realip-proxy-protocol.conf`). A host with a plain nginx would listen on
-    `443 ssl` instead; keep the three `location` blocks that refuse sign-up and the purge.
+On the Democracy Routes host, port 443 belongs to a stream SNI demux (`/etc/nginx/streams.d/turn443.conf`) that sends every HTTPS
+name to `127.0.0.1:8443` with `proxy_protocol`. The site file therefore has `listen 127.0.0.1:8443 ssl proxy_protocol;`, and the
+real client address comes from a global setting (`conf.d/00-realip-proxy-protocol.conf`). A host with a plain nginx listens on
+`443 ssl` instead. Keep the three `location` blocks that refuse sign-up and the purge.
 
-The route `POST /api/v3/citizens/import` is **not** blocked by the proxy: a wrong or missing key gets 401 or 403.
+The proxy does not block `POST /api/v3/citizens/import`: a wrong or missing key gets 401 or 403.
 
 ## Certificates
 
-Let's Encrypt, renewed by the host's certbot timer. First activation:
+Certificates come from Let's Encrypt and are renewed by the host's certbot timer. For the first activation:
 
 1. `./deploy/build-images.sh all`
 2. `./deploy/polis.sh prod up`, then `curl -s http://127.0.0.1:8192/api/v3/testConnection`
@@ -95,7 +95,7 @@ Let's Encrypt, renewed by the host's certbot timer. First activation:
 
 ## Team accounts and API keys
 
-Run these on the host, in a terminal. Sign-up only works from the host, against `127.0.0.1:8192`.
+Run these scripts in a terminal on the host. Sign-up only works from the host, against `127.0.0.1:8192`.
 
 | Script | Purpose |
 |---|---|
@@ -117,31 +117,25 @@ needs afterwards live in `deploy/sql/*.sql` (idempotent, applied in name order) 
 ./deploy/prod/migrate.sh                  # POLIS_ENV=local for the local stack
 ```
 
-Run it after `polis.sh prod up` whenever the changelog mentions a database change. There is one file today,
+Run it after `polis.sh prod up` whenever the changelog mentions a database change. The one file is
 `001_is_listed.sql`: `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_listed BOOLEAN NOT NULL DEFAULT FALSE;`. Running the
 script twice is harmless.
 
 ## The purge and the data loss of 2 November 2026
 
 PolisOrbis is built for a sandbox. `server/startup.sh` installs a cron job (`PRUNE_SCHEDULE`, default 03:00 daily) that posts to
-`/api/v3/prune`, which deletes every conversation not modified for `PRUNE_OLDER_THAN` seconds (default 172800, 48 hours) and the
-users left without conversations or votes. It ran unnoticed on polis.democracyroutes.com from 29 October and removed the first
-conversations on **2 November**. It was found on 2026-11-04. **No backups existed; the data is not recoverable.**
-
-Since 4 November the job and the route exist only when `PRUNE_ENABLED=true`. Both compose overrides and the generated `.env` set
-it to `false`, and the nginx site answers 403 on the route as well. **Never set it to `true` on an installation whose data
-matters.** After a server image rebuild the container must log "Prune job off" at start.
+`/api/v3/prune`. That route deletes every conversation not modified for `PRUNE_OLDER_THAN` seconds (default 172800, 48 hours) and
+the users left without conversations or votes. The job ran unnoticed on polis.democracyroutes.com from 29 October and removed the
+first conversations on 2 November. No backups existed, so that data is not recoverable. The job and the route now exist only
+when `PRUNE_ENABLED=true`. Both compose overrides and the generated `.env` set it to `false`, and the nginx site answers 403 on
+the route as well. Never set it to `true` on an installation whose data matters. After a server image rebuild, the container must
+log "Prune job off" at start.
 
 ## Backups
 
-State of the sources, exactly:
-
-* **No backups exist** for polis.democracyroutes.com. This is why the purge was unrecoverable.
-* The Postgres container mounts a volume named `backups` at `/backups`, but nothing in the repository writes to it.
-* The next planned step (recorded as open in `docs/decisions.md`): a nightly `pg_dump` into the `backups` volume plus a copy off
-  the host. Retention is undecided.
-
-Until that exists, an installation should arrange its own dump of the `polis` database and of the `postgres` volume.
+No backups exist for polis.democracyroutes.com. The Postgres container mounts a volume named `backups` at `/backups`, but nothing
+in the repository writes to it. The planned step is a nightly `pg_dump` into the `backups` volume plus a copy off the host, with
+retention still to decide. Until that exists, arrange your own dump of the `polis` database and of the `postgres` volume.
 
 ## Upgrading
 
@@ -153,12 +147,10 @@ Until that exists, an installation should arrange its own dump of the `polis` da
 
 ## Host limits
 
-From `docs/host.md` (measured 2026-10-28, to be re-measured before relying on it): the shared host has 4 cores and 5.9 GB of RAM
-with a 16 GB swap file; memory is the constraint and CPU is idle. Rules for the Polis stacks on it:
+The shared host has 4 cores and 5.9 GB of RAM with a 16 GB swap file. Memory is the constraint and CPU is idle. Re-measure before
+you rely on these figures. Rules for the Polis stacks on it:
 
 * every container gets `--memory` and `--memory-swap`;
 * check `free -m` before starting a stack, and stop the local stack when a session ends;
 * check `docker ps` and `ss -ltn` before binding a port; ports 80 and 443 belong to the host nginx;
 * do not touch the Citizens or Nextcloud containers.
-
-Polis was planned for its own VM; it runs on the shared host by the owner's decision of 2026-10-29.

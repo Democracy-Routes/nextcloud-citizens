@@ -1,7 +1,8 @@
 # On the day
 
-The organizer runs the day from the assembly's **Live** tab on a laptop. Keep it open the
-entire time: the battery levels, readiness warnings and timers all report there.
+This page covers running the event from the assembly's **Live** tab on a laptop: joining phones,
+watching tables, replacing a phone and ending a round. Keep the tab open the entire time,
+because battery levels, readiness warnings and timers all report there.
 
 ## Starting and joining
 
@@ -10,7 +11,7 @@ Phones scan the table's QR code, pass the information screen and register for co
 warns, never blocks, when you start with tables missing. In live mode a round must be started
 by you; a closed session refuses new recordings.
 
-Phones that scan a **single-use** code a second time on the same phone return to their
+Phones that scan a single-use code a second time on the same phone return to their
 existing session instead of "This code has already been used". A different phone scanning the
 same spent code still gets that error.
 
@@ -26,7 +27,7 @@ The Live tab polls the round monitor and shows, per table:
   `NO_RECORDER`, `RECORDER_OFFLINE`, `MIC_UNAVAILABLE`, `LOW_STORAGE`, `LOW_BATTERY`,
   `UPLOAD_STALLED`, `LIVE_STT_UNAVAILABLE` and `PARTICIPANT_REFUSED`. One healthy recorder with
   no backup is READY; the only recorder offline is BLOCKED;
-* an **Elapsed** column, highlighting any table that started more than a minute after the
+* an Elapsed column, highlighting any table that started more than a minute after the
   earliest one;
 * a coverage percentage per recording (a recorder's badge turns red below 95%), "no audio has
   reached the server for N s" in red with an optional tone (the Sound button), and "in
@@ -41,11 +42,11 @@ WebSockets.
 ## Recorders
 
 Each phone shows the recorder app: a hero table number, a pulsing record ring, a checklist and
-caption bubbles. A table that matters can have a **second recorder phone** from the start:
+caption bubbles. A table that matters can have a second recorder phone from the start:
 on a joined phone tap **Add Recorder to this Table** and scan the code with the second phone
 (it joins as Recorder B). Both record; only one feeds the live captions; if either dies the
 other carries on. **Add new Table** on any joined phone, or **Add a table** on the QR tab,
-creates the next numbered, coloured table with its own printed code. These added codes live
+creates the next numbered, colored table with its own printed code. These added codes live
 fifteen minutes and work once.
 
 ## Live captions
@@ -62,17 +63,17 @@ depends on the Live/Final switches; see [Settings reference](../admin/settings.m
 The server cannot tell a dead battery from dead Wi-Fi: both stop sending chunks. A dead phone
 has stopped recording; a disconnected one is still recording locally and will upload later.
 
-* **Hand over table** (Live tab): you looked at the phone and it is finished. The recording so
+* Hand over table (Live tab): you looked at the phone and it is finished. The recording so
   far is finished and transcribed, and the table carries on by scanning the same QR code on any
-  other phone. The half already recorded is analysed with the rest, and the report notes the
+  other phone. The half already recorded is analyzed with the rest, and the report notes the
   device changed.
-* **Automatic takeover:** if nobody does anything, a replacement phone is let in after two
+* Automatic takeover: if nobody does anything, a replacement phone is let in after two
   minutes of silence. The original recording is left open, because a timer only guesses.
-* **Silent close:** a recorder that sends no chunk for five minutes is finished by the server
+* Silent close: a recorder that sends no chunk for five minutes is finished by the server
   with the audio already received (the Live tab says *Finished by the server after 5 minutes
   of silence*). You can also press **Finish recording** next to a recorder: it asks the phone
   first and finishes server-side after ninety seconds of no answer.
-* **Late audio is kept.** If that phone keeps recording afterwards, the next chunk opens a new
+* Late audio is kept. If that phone keeps recording afterwards, the next chunk opens a new
   recording of the same table and slot (*Audio that arrived after the close, kept*), which is
   transcribed and folded back into the table's analysis, keeping approved findings.
 * A phone heading below about 20% battery is a handover now, not a dead table in twenty
@@ -81,7 +82,7 @@ has stopped recording; a disconnected one is still recording locally and will up
 
 A phone that loses the microphone mid-round (screen off, a call) notices within about forty
 seconds, shows "interrupted", asks for the microphone again every five seconds and, when it
-returns, continues in the **same** recording. After ten minutes without a microphone it
+returns, continues in the same recording. After ten minutes without a microphone it
 finishes with what it has.
 
 ## Ending a round
