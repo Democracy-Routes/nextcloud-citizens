@@ -169,6 +169,7 @@
 		"confirmUnpublish": {
 			"title": "¿Dejar de compartir el informe con las mesas?",
 			"message": "Todos los teléfonos de mesa que están leyendo el informe pierden el acceso de inmediato. Puedes volver a publicarlo en cualquier momento.",
+			"messageIndependent": "El aviso de publicación desaparece de los teléfonos de mesa. En una asamblea independiente los teléfonos conservan el informe una vez completada la asamblea, porque el informe forma parte de lo que cada mesa grabó; dejar de publicar solo retira el acceso anticipado.",
 			"confirm": "Dejar de publicar"
 		},
 		"confirmReopen": {

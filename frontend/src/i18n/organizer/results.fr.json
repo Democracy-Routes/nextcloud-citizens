@@ -169,6 +169,7 @@
 		"confirmUnpublish": {
 			"title": "Arrêter de partager le rapport avec les tables ?",
 			"message": "Chaque téléphone de table qui lit actuellement le rapport en perd immédiatement l'accès. Vous pourrez le publier à nouveau à tout moment.",
+			"messageIndependent": "L'avis de publication disparaît des téléphones de table. Dans une assemblée indépendante, les téléphones conservent le rapport une fois l'assemblée terminée, car le rapport fait partie de ce que chaque table a enregistré ; dépublier ne retire que l'accès anticipé.",
 			"confirm": "Dépublier"
 		},
 		"confirmReopen": {

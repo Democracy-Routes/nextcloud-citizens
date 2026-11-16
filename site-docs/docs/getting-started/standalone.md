@@ -9,7 +9,7 @@ database and serves its own organizer page. Check the [requirements](requirement
 The container listens on `127.0.0.1:23000` (change the port with `CITIZENS_PORT`). It
 does not do HTTPS. Your proxy must:
 
-* terminate HTTPS;
+* terminate HTTPS, and send `Strict-Transport-Security` itself: the app does not add it;
 * pass `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`;
 * allow request bodies of at least **6 MB**. One audio chunk is 5 MB, and the app refuses
   anything above 6 MB (`MAX_REQUEST_BYTES` in `citizens/api/limits.py`). nginx refuses more

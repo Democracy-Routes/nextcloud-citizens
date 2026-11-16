@@ -5,7 +5,7 @@ memory to plan for.
 
 ## Health
 
-`GET /api/v1/health` (through the proxy in Nextcloud mode) reports the database, storage, free disk and
+`GET /api/v1/health` (through the proxy in Nextcloud mode; in standalone mode an anonymous call gets only `app` and `status`) reports the database, storage, free disk and
 any missing configuration. `/heartbeat` answers once the container is up and is what the image health
 check uses. In Nextcloud mode:
 
@@ -68,6 +68,10 @@ bytes freed, never content.
 Plan for about 10 MB per table per hour of recording plus the assembled copy. A 40-minute round of ten
 tables is roughly 400 MB. A table stuck in ASSEMBLING is almost always a full disk. Unfinished upload
 parts have no automatic expiry and use disk until verified assembly or explicit audio deletion.
+
+A recording may hold 2 GiB of audio and an assembly 24 GiB; a chunk past the ceiling is refused with
+413 and the phone keeps its local copy. Organizer uploads keep 1 GiB free on every part written and an
+organizer may have three uploads open at a time.
 
 On a full ten-device, half-hour run, peak container memory was 368 MiB while recording and 465 MiB
 while transcribing. A 512 MB container is therefore not enough for ten tables; keep the live container

@@ -7,7 +7,7 @@ set -eu
 . "$(dirname "$0")/dev-env.sh"
 
 TEST_CONTAINER="citizens-browser-test"
-TEST_PORT="23100"
+TEST_PORT="${TEST_PORT:-23100}"  # 23100 is taken when the standalone instance runs here
 
 case "${1:-}" in
     start)

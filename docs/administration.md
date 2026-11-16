@@ -797,4 +797,12 @@ grid. If it says "Reconnecting", the numbers on screen are from the time shown
 and the server is unreachable; the view dims to make that unmistakable.
 
 Health endpoint: `GET /api/v1/health` through the proxy reports the database,
-storage, free disk and any missing configuration.
+storage, free disk and any missing configuration. In standalone mode an
+anonymous call gets only `app` and `status`; sign in for the full body.
+
+Storage allowances: a recording may hold 2 GiB of audio and an assembly 24 GiB,
+far above any real round; a chunk past the ceiling is refused with 413 and the
+phone keeps its local copy. Organizer uploads keep 1 GiB of free space on every
+part written, count the space promised to uploads still open, and an organizer
+may have three uploads open at a time. Session import accepts at most 200
+recordings and probes every audio member before accepting it.

@@ -36,7 +36,8 @@ const report = ref<ReportData | null>(null)
 const error = ref('')
 const includeDrafts = ref(false)
 const confirmPublish = ref(false)
-// unpublishing removes the report from every table phone that is reading it
+// unpublishing removes the report from every table phone that is reading it;
+// in an independent assembly the phones keep it once the assembly is complete
 const confirmUnpublish = ref(false)
 // reopening undoes "final", which participants have already been shown
 const confirmReopen = ref(false)
@@ -526,7 +527,7 @@ const hasContent = () =>
 		<CzConfirm
 			v-if="confirmUnpublish"
 			:title="t('organizer.results.report.confirmUnpublish.title')"
-			:message="t('organizer.results.report.confirmUnpublish.message')"
+			:message="t(props.assembly.recording_mode === 'independent' ? 'organizer.results.report.confirmUnpublish.messageIndependent' : 'organizer.results.report.confirmUnpublish.message')"
 			:confirm-label="t('organizer.results.report.confirmUnpublish.confirm')"
 			tone="danger"
 			@confirm="confirmUnpublish = false; togglePublish()"

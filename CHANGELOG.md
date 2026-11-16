@@ -4,6 +4,55 @@ All notable changes to Nextcloud Citizens.
 
 ## Unreleased (0.9)
 
+### Security
+
+A security audit of this branch (2026-11-16) found one high, one medium and
+five low issues. All are fixed here; none had been exploited, and no data
+left the instances.
+
+- Session import no longer takes file names from the archive. Each staged
+  recording gets a server-chosen name and a whitelisted audio suffix, the
+  staged path is checked to stay inside the import folder, and every audio
+  member is probed before it is accepted; a member that is not audio is
+  skipped with a note. A crafted archive could previously write files
+  anywhere the app can write, the database included.
+- Session import is bounded: at most 200 recordings, each audio member used
+  once, the declared size of all members checked against free space before
+  anything is written, and a member that grows past its declared size is
+  refused.
+- "Revoke all invites" now also ends facilitator sessions and participant
+  sessions (migration 0043 adds the participant column). Before, a phone
+  that had become its table's facilitator kept working and could let new
+  phones in.
+- Standalone sign-in cookies carry a per-account generation: a password
+  change or reset, sign-out, and an administrator disabling or changing the
+  role of an account all invalidate every earlier cookie. Updating to this
+  version signs everyone out once.
+- A closed assembly refuses late audio for a recording the server had
+  already finished, instead of opening a continuation that no purge would
+  remove. The phone keeps its local copy and shows the "server rejected the
+  upload" notice; close an assembly only after the tables have caught up.
+- Audio upload has ceilings: 2 GiB per recording and 24 GiB per assembly,
+  far above a real round. A chunk past the ceiling gets 413 and the phone
+  keeps its copy.
+- Organizer uploads (export archives, transcripts, audio) keep the 1 GiB
+  free-space floor on every part written, count the space promised to open
+  uploads, and allow three open uploads per organizer.
+- CSV exports (consent register, Polis seeds) prefix an apostrophe to any
+  cell that starts with a character a spreadsheet would read as a formula.
+- In standalone mode the anonymous health check answers only "app" and
+  "status"; the full body needs a signed-in session.
+- Links returned by Polis are stored only when they are http or https.
+- The participant search on a table phone is rate-limited and empty once
+  the assembly is closed; "record another session" refuses after close.
+- The "Unpublish" confirmation for an independent assembly now says what it
+  does: the phones keep the report once the assembly is complete.
+
+Left for a later release, documented in the audit report: remuxing imported
+audio, pinning the release workflow's actions by commit, a hashed Python
+lockfile, stronger scrypt parameters, separate encryption subkeys, an
+absolute lifetime for recorder sessions.
+
 ### For the organizer
 
 - Polis statements are written faster and more reliably: the calls of each

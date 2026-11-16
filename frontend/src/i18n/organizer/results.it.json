@@ -169,6 +169,7 @@
 		"confirmUnpublish": {
 			"title": "Smettere di condividere il report con i tavoli?",
 			"message": "Ogni telefono di tavolo che sta leggendo il report ne perde subito l'accesso. Potrai pubblicarlo di nuovo in qualsiasi momento.",
+			"messageIndependent": "L'avviso di pubblicazione scompare dai telefoni di tavolo. In un'assemblea indipendente i telefoni conservano il report una volta che l'assemblea è completa, perché il report fa parte di ciò che ogni tavolo ha registrato; ritirare la pubblicazione toglie solo l'accesso anticipato.",
 			"confirm": "Ritira la pubblicazione"
 		},
 		"confirmReopen": {

@@ -169,6 +169,7 @@
 		"confirmUnpublish": {
 			"title": "Den Bericht nicht mehr mit den Tischen teilen?",
 			"message": "Jedes Tisch-Telefon, das den Bericht gerade liest, verliert sofort den Zugriff darauf. Sie können ihn jederzeit erneut veröffentlichen.",
+			"messageIndependent": "Der Hinweis auf die Veröffentlichung verschwindet von den Tisch-Telefonen. In einer unabhängigen Versammlung behalten die Telefone den Bericht, sobald die Versammlung abgeschlossen ist, weil der Bericht Teil dessen ist, was jeder Tisch aufgenommen hat; das Zurücknehmen entzieht nur den vorzeitigen Zugriff.",
 			"confirm": "Veröffentlichung zurücknehmen"
 		},
 		"confirmReopen": {

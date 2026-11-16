@@ -169,6 +169,7 @@
 		"confirmUnpublish": {
 			"title": "Stop sharing the report with the tables?",
 			"message": "Every table phone currently reading the report loses access to it immediately. You can publish it again at any time.",
+			"messageIndependent": "The \"published\" notice disappears from the table phones. In an independent assembly the phones keep the report once the assembly is complete, because the report is part of what each table recorded; unpublishing only withdraws the early access.",
 			"confirm": "Unpublish"
 		},
 		"confirmReopen": {

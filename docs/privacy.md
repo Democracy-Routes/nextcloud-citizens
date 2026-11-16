@@ -333,7 +333,8 @@ Stated plainly, because an organisation deploying this should know:
 * **A QR code is a secret printed on a poster in a public room.** Anyone who
   photographs it can join that table until the invite is revoked or expires,
   and could occupy the table's recording slot or contribute audio. Keep sheets
-  with the facilitator and revoke after the event.
+  with the facilitator and revoke after the event. "Revoke all invites" ends
+  every recorder, facilitator and participant session of the assembly at once.
 * **An administrator can point transcription at any endpoint**, including one
   that is not the provider participants were told about. This is an
   administrative trust boundary, not a technical one.
