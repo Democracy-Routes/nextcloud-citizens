@@ -416,3 +416,91 @@ def test_proxy_has_a_route_for_every_import_verb():
     verbs = {method for route in router.routes for method in route.methods}
     assert verbs <= {"GET", "POST", "PUT", "DELETE"}
     assert not any(re.search(r"\{.*\}", r.path) and "PATCH" in r.methods for r in router.routes)
+
+
+# --- hostile archives --------------------------------------------------------
+
+def _with_audio(archive: bytes, members: dict[str, bytes]) -> bytes:
+    buffer = io.BytesIO(archive)
+    with zipfile.ZipFile(buffer, "a") as zf:
+        for name, data in members.items():
+            zf.writestr(name, data)
+    return buffer.getvalue()
+
+
+def _audio_recording(old_id, table, member, data):
+    item = _recording(old_id, table, "2026-10-01T18:26:45+00:00", "2026-10-01T18:53:25+00:00")
+    item["audio_file"] = member
+    item["sha256"] = hashlib.sha256(data).hexdigest()
+    return item
+
+
+def _import(client, archive: bytes):
+    upload_id = _upload(client, archive, "session_export")
+    return client.post("/api/v1/assemblies/import", json={"upload_id": upload_id})
+
+
+def test_a_recording_id_that_climbs_out_of_the_staging_directory_is_refused(client, settings_env):
+    root = settings_env.app_persistent_storage
+    root.mkdir(parents=True, exist_ok=True)
+    sentinel = root / "pwned.db"
+    sentinel.write_bytes(b"SENTINEL")
+    before = {p for p in root.rglob("*") if "temp" not in p.relative_to(root).parts}
+    for bad_id in ("../../../pwned", str(root / "pwned")):
+        data = b"PWNED"
+        archive = _with_audio(
+            _format1_archive([_audio_recording(bad_id, 1, "a/x.db", data)], {}), {"a/x.db": data}
+        )
+        refused = _import(client, archive)
+        assert refused.status_code == 422, refused.text
+        assert "plain name" in refused.json()["detail"]
+        assert sentinel.read_bytes() == b"SENTINEL"
+    after = {p for p in root.rglob("*") if "temp" not in p.relative_to(root).parts}
+    assert after - before == set()
+    staged = root / "temp" / "imports"
+    assert not staged.exists() or not any(staged.iterdir())
+
+
+def test_audio_that_cannot_be_decoded_is_skipped_not_kept(client):
+    data = b"not audio" * 100
+    archive = _with_audio(
+        _format1_archive([_audio_recording("rec-x", 1, "audio/x.webm", data)], {}), {"audio/x.webm": data}
+    )
+    response = _import(client, archive)
+    assert response.status_code == 201, response.text
+    result = response.json()
+    assert result["audio_files"] == 0
+    assert any("not decodable" in note for note in result["skipped"])
+    entry = _entries(client, result["assembly_id"])[0]
+    assert not entry["audio_available"]
+
+
+def test_an_audio_member_may_be_referenced_once(client, tmp_path):
+    data = _audio(tmp_path)
+    recordings = [_audio_recording(f"rec-{n}", n, "audio/a.webm", data) for n in (1, 2)]
+    refused = _import(client, _with_audio(_format1_archive(recordings, {}), {"audio/a.webm": data}))
+    assert refused.status_code == 422
+    assert "referenced twice" in refused.json()["detail"]
+
+
+def test_an_archive_with_too_many_recordings_is_refused(client):
+    recordings = [
+        _recording(f"rec-{n}", 1, "2026-10-01T18:26:45+00:00", "2026-10-01T18:53:25+00:00")
+        for n in range(201)
+    ]
+    refused = _import(client, _format1_archive(recordings, {}))
+    assert refused.status_code == 422
+    assert "too many" in refused.json()["detail"]
+
+
+def test_extraction_stops_when_the_disk_has_no_room_for_the_audio(client, tmp_path, monkeypatch):
+    from citizens.storage import space
+
+    data = _audio(tmp_path)
+    archive = _with_audio(
+        _format1_archive([_audio_recording("rec-1", 1, "audio/a.webm", data)], {}), {"audio/a.webm": data}
+    )
+    upload_id = _upload(client, archive, "session_export")
+    monkeypatch.setattr(space, "free_bytes", lambda root: space.MIN_FREE_BYTES + len(data) - 1)
+    refused = client.post("/api/v1/assemblies/import", json={"upload_id": upload_id})
+    assert refused.status_code == 507

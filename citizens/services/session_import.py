@@ -47,6 +47,7 @@ from citizens.services.recording_states import transition
 from citizens.services.transcription import store_transcript
 from citizens.storage.durable import sync_directory
 from citizens.storage.paths import assembled_dir, temp_dir
+from citizens.storage.space import require_room
 
 log = get_logger(__name__)
 
@@ -63,6 +64,8 @@ TRANSCRIPT_ATTACHABLE = (
 )
 #: audio from outside only where the server has none of its own
 AUDIO_ATTACHABLE = ("AUDIO_INVALID", "UPLOAD_INCOMPLETE", "TRANSCRIPTION_FAILED")
+ALLOWED_AUDIO_SUFFIXES = {".webm", ".ogg", ".oga", ".opus", ".mp3", ".m4a", ".mp4", ".wav"}
+MAX_IMPORT_RECORDINGS = 200
 _EXTENSIONS = {"mp4": ".m4a", "ogg": ".ogg", "mpeg": ".mp3", "wav": ".wav", "x-wav": ".wav"}
 
 
@@ -275,8 +278,23 @@ def stage_archive(archive_path: Path) -> StagedArchive:
             staged.manifest = read_manifest(archive)
             names = set(archive.namelist())
             language = staged.manifest["assembly"].get("language") or "en"
-            for item in staged.manifest.get("recordings") or []:
+            items = staged.manifest.get("recordings") or []
+            if len(items) > MAX_IMPORT_RECORDINGS:
+                raise ImportError_("too many recordings in the archive")
+            seen_members = set()
+            total = 0
+            for item in items:
+                member = item.get("audio_file")
+                if member and member in names:
+                    if member in seen_members:
+                        raise ImportError_("an audio member is referenced twice")
+                    seen_members.add(member)
+                    total += archive.getinfo(member).file_size
+            require_room(root, total, context="session_import")
+            for item in items:
                 old_id = str(item.get("id") or "")
+                if "/" in old_id or "\\" in old_id or old_id in (".", ".."):
+                    raise ImportError_("recording id is not a plain name")
                 number = int(item.get("table_number") or 0)
                 row = StagedRecording(
                     old_id=old_id,
@@ -289,10 +307,25 @@ def stage_archive(archive_path: Path) -> StagedArchive:
                 )
                 audio_name = item.get("audio_file")
                 if audio_name and audio_name in names:
-                    target = staging / f"{old_id}{Path(audio_name).suffix or '.webm'}"
+                    declared = archive.getinfo(audio_name).file_size
+                    subtype = row.mime_type.split(";")[0].split("/")[-1].strip().lower()
+                    member_suffix = Path(audio_name).suffix.lower()
+                    if subtype in _EXTENSIONS:
+                        suffix = _EXTENSIONS[subtype]
+                    elif member_suffix in ALLOWED_AUDIO_SUFFIXES:
+                        suffix = member_suffix
+                    else:
+                        suffix = ".webm"
+                    target = staging / f"rec_{len(staged.recordings):04d}{suffix}"
+                    if not target.resolve().is_relative_to(staging.resolve()):
+                        raise ImportError_("an archive member tried to escape the staging directory")
                     digest = hashlib.sha256()
+                    written = 0
                     with archive.open(audio_name) as src, target.open("wb") as dst:
                         while chunk := src.read(1024 * 1024):
+                            written += len(chunk)
+                            if written > declared:
+                                raise ImportError_("archive member is larger than declared")
                             digest.update(chunk)
                             dst.write(chunk)
                     expected = (item.get("sha256") or "").lower()
@@ -302,9 +335,17 @@ def stage_archive(archive_path: Path) -> StagedArchive:
                             f"table {number}: the audio file's checksum does not match the manifest"
                         )
                     else:
-                        row.audio = target
-                        row.audio_sha256 = digest.hexdigest()
-                        row.audio_extension = target.suffix
+                        try:
+                            _ffprobe(target)
+                        except AudioAssemblyError:
+                            target.unlink(missing_ok=True)
+                            staged.skipped.append(
+                                f"audio of recording {old_id[:8]} is not decodable"
+                            )
+                        else:
+                            row.audio = target
+                            row.audio_sha256 = digest.hexdigest()
+                            row.audio_extension = suffix
                 elif audio_name:
                     staged.skipped.append(
                         f"table {number}: audio file {audio_name} is missing from the archive"

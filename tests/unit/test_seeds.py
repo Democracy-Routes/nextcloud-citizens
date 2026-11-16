@@ -60,6 +60,16 @@ def test_csv_quotes_commas_and_quotes_like_rfc_4180():
     ]
 
 
+def test_csv_keeps_a_formula_looking_statement_as_text():
+    rows = [
+        _seed("-1 is not a statement", "APPROVED"),
+        _seed("=SUM(A1)", "APPROVED"),
+        _seed("Fine", "APPROVED"),
+    ]
+    parsed = list(csv.reader(io.StringIO(seeds.render_csv(rows))))
+    assert [r[1] for r in parsed[1:]] == ["'-1 is not a statement", "'=SUM(A1)", "Fine"]
+
+
 def test_json_carries_statement_text_only():
     assembly = Assembly(name="Comune di Prova", language="it", created_by="anna")
     rows = [_seed("Più autobus la sera", "APPROVED", position=2)]

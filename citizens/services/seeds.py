@@ -29,6 +29,7 @@ from citizens.db.models.seeds import EXPORTABLE_STATUSES, SEED_MAX_CHARS
 from citizens.logging_setup import get_logger
 from citizens.services import provider_config, seed_pipeline
 from citizens.services.analysis import APPROVED_STATUSES, LANGUAGE_NAMES, _analysis_config
+from citizens.services.csv_safe import neutralize
 
 log = get_logger(__name__)
 
@@ -341,7 +342,7 @@ def render_csv(seeds: list[StatementSeed]) -> str:
     writer = csv.writer(out, lineterminator="\r\n")
     writer.writerow(["position", "statement"])
     for number, seed in enumerate(seeds, start=1):
-        writer.writerow([number, seed.text])
+        writer.writerow([number, neutralize(seed.text)])
     return out.getvalue()
 
 

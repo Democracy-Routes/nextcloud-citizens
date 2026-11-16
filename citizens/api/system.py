@@ -5,18 +5,19 @@
 import shutil
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from sqlalchemy import text
 
 from citizens.config import get_settings
 from citizens.db.session import get_engine, pool_status
+from citizens.security import sessions
 from citizens.storage.paths import temp_dir
 
 router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict:
+def health(request: Request) -> dict:
     settings = get_settings()
 
     db_ok = False
@@ -46,10 +47,14 @@ def health() -> dict:
     # that would otherwise fail silently at invite time
     missing_env = settings.missing_required()
 
+    status = "ok" if (db_ok and storage_ok and not missing_env) else "degraded"
+    if settings.is_standalone() and not sessions.session_from(request):
+        return {"app": settings.app_id, "status": status}
+
     return {
         "app": settings.app_id,
         "version": settings.app_version,
-        "status": "ok" if (db_ok and storage_ok and not missing_env) else "degraded",
+        "status": status,
         "database": "ok" if db_ok else "error",
         "storage": "ok" if storage_ok else "error",
         "disk_free_gb": disk_free_gb,

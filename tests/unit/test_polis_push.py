@@ -82,3 +82,25 @@ def test_ping_reports_the_key_owner_and_never_the_key(monkeypatch):
 @pytest.mark.parametrize("value", ["", "not-a-list"])
 def test_positions_tolerate_odd_details(value):
     assert polis._positions(value) == []
+
+
+def test_a_link_that_is_not_http_is_dropped_and_the_others_kept(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    body = {
+        "conversation_id": "abc", "url": "javascript:alert(1)",
+        "moderation_url": "https://polis.example/m", "report_url": "//no-scheme.example/r",
+        "statements": {"results": []},
+    }
+    monkeypatch.setattr(polis.provider_config, "polis_config", lambda store: ("https://polis.example", "k"))
+    monkeypatch.setattr(polis.seeds_svc, "list_seeds", lambda session, assembly_id: [object()])
+    monkeypatch.setattr(polis.seeds_svc, "exportable", lambda rows: rows)
+    monkeypatch.setattr(polis.seeds_svc, "render_json", lambda assembly, chosen, now: "{}")
+    monkeypatch.setattr(polis.seeds_svc, "mark_exported", lambda chosen, now: None)
+    monkeypatch.setattr(polis.httpx, "post", lambda *a, **k: FakeResponse(200, body))
+    assembly = SimpleNamespace(id="a1", name="A", description="")
+    polis.push(MagicMock(), object(), assembly)
+    assert assembly.polis_url is None
+    assert assembly.polis_moderation_url == "https://polis.example/m"
+    assert assembly.polis_report_url is None

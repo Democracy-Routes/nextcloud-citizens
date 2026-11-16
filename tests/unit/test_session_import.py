@@ -129,6 +129,39 @@ def test_upload_refusals(settings_env):
         uploads.begin("anna", "video", "v.mp4", 10)
 
 
+def test_an_owner_may_hold_three_open_uploads(settings_env):
+    for _ in range(uploads.MAX_OPEN_UPLOADS_PER_OWNER):
+        uploads.begin("anna", "audio", "a.webm", 3)
+    with pytest.raises(uploads.UploadError) as refused:
+        uploads.begin("anna", "audio", "a.webm", 3)
+    assert refused.value.status == 409
+    assert uploads.begin("bob", "audio", "b.webm", 3)
+
+
+def test_open_uploads_reserve_the_room_they_will_need(settings_env, monkeypatch):
+    from citizens.storage import space
+
+    size = 100 * 1024**2
+    # room for one upload (twice its size) but not for a second on top of it
+    monkeypatch.setattr(space, "free_bytes", lambda root: space.MIN_FREE_BYTES + size * 3 - 1)
+    assert uploads.begin("anna", "audio", "a.webm", size)
+    with pytest.raises(uploads.UploadError) as refused:
+        uploads.begin("bob", "audio", "b.webm", size)
+    assert refused.value.status == 507
+
+
+def test_a_part_below_the_free_space_floor_is_refused(settings_env, monkeypatch):
+    from fastapi import HTTPException
+
+    from citizens.storage import space
+
+    meta = uploads.begin("anna", "audio", "a.webm", 3)
+    monkeypatch.setattr(space, "free_bytes", lambda root: 0)
+    with pytest.raises(HTTPException) as refused:
+        uploads.store_part(meta.upload_id, "anna", 0, b"abc")
+    assert refused.value.status_code == 507
+
+
 def test_sweep_forgets_uploads_nobody_finished_within_a_day(settings_env):
     old = uploads.begin("anna", "audio", "a.webm", 3)
     fresh = uploads.begin("anna", "audio", "b.webm", 3)

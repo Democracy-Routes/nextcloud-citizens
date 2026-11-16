@@ -27,7 +27,7 @@ from pathlib import Path
 from citizens.config import get_settings
 from citizens.logging_setup import get_logger
 from citizens.storage.paths import temp_dir
-from citizens.storage.space import has_room_for
+from citizens.storage.space import has_room_for, require_room
 
 log = get_logger(__name__)
 
@@ -36,6 +36,7 @@ KINDS = ("session_export", "transcript", "audio")
 #: a transcript is text; an export carries every table's audio
 MAX_BYTES = {"session_export": 4 * 1024**3, "transcript": 64 * 1024**2, "audio": 2 * 1024**3}
 UPLOAD_TTL_SECONDS = 24 * 3600
+MAX_OPEN_UPLOADS_PER_OWNER = 3
 
 
 class UploadError(Exception):
@@ -100,8 +101,25 @@ def begin(owner: str, kind: str, filename: str, size_bytes: int) -> UploadMeta:
         raise UploadError(413, f"A {kind.replace('_', ' ')} may be at most {MAX_BYTES[kind] >> 20} MB")
     root = get_settings().app_persistent_storage
     _root().mkdir(parents=True, exist_ok=True)
-    # the parts plus the file they become, both on this disk for a while
-    if not has_room_for(root, size_bytes * 2):
+    open_mine = 0
+    reserved = 0
+    for directory in _root().iterdir():
+        if not directory.is_dir():
+            continue
+        try:
+            other = _read_meta(directory)
+        except UploadError:
+            continue
+        if other.complete:
+            continue
+        reserved += other.size_bytes
+        if other.owner == owner:
+            open_mine += 1
+    if open_mine >= MAX_OPEN_UPLOADS_PER_OWNER:
+        raise UploadError(409, "Finish or discard an open upload first")
+    # the parts plus the file they become, both on this disk for a while,
+    # and what every other open upload has still to take
+    if not has_room_for(root, size_bytes * 2 + reserved):
         raise UploadError(507, "Not enough free storage for this file")
     meta = UploadMeta(
         upload_id=str(uuid.uuid4()),
@@ -139,6 +157,7 @@ def store_part(upload_id: str, owner: str, index: int, body: bytes) -> dict:
     expected = PART_BYTES if index < meta.parts - 1 else meta.size_bytes - PART_BYTES * (meta.parts - 1)
     if len(body) != expected:
         raise UploadError(422, f"Part {index} should be {expected} bytes, got {len(body)}")
+    require_room(get_settings().app_persistent_storage, len(body), context="upload_part")
     _part_path(directory, index).write_bytes(body)
     received = [p for p in range(meta.parts) if _part_path(directory, p).is_file()]
     return {
@@ -156,6 +175,7 @@ def complete(upload_id: str, owner: str, sha256: str) -> UploadMeta:
     missing = [p for p in range(meta.parts) if not _part_path(directory, p).is_file()]
     if missing:
         raise UploadError(422, f"{len(missing)} of {meta.parts} parts never arrived")
+    require_room(get_settings().app_persistent_storage, meta.size_bytes, context="upload_join")
     target = directory / "file"
     digest = hashlib.sha256()
     with target.open("wb") as whole:

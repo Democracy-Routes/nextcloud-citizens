@@ -20,6 +20,7 @@ request or inside a database transaction.
 import json
 import re
 from datetime import datetime
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy.orm import Session
@@ -32,6 +33,22 @@ from citizens.services import provider_config
 from citizens.services import seeds as seeds_svc
 
 log = get_logger(__name__)
+
+
+def _safe_url(value):
+    """A link Polis returned, kept only if it is a plain http(s) address."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parts = urlsplit(text)
+        ok = parts.scheme in ("http", "https") and bool(parts.netloc)
+    except ValueError:
+        ok = False
+    if not ok:
+        log.warning("polis_url_dropped")
+        return None
+    return text[:500]
 
 IMPORT_PATH = "/api/v3/citizens/import"
 PING_PATH = "/api/v3/citizens/ping"
@@ -165,9 +182,9 @@ def push(session: Session, store: provider_config.ConfigStore, assembly: Assembl
         raise PolisError("Polis returned an unexpected payload", permanent=True) from exc
 
     assembly.polis_conversation_id = conversation_id
-    assembly.polis_url = str(data.get("url") or "")[:500] or None
-    assembly.polis_moderation_url = str(data.get("moderation_url") or "")[:500] or None
-    assembly.polis_report_url = str(data.get("report_url") or "")[:500] or None
+    assembly.polis_url = _safe_url(data.get("url"))
+    assembly.polis_moderation_url = _safe_url(data.get("moderation_url"))
+    assembly.polis_report_url = _safe_url(data.get("report_url"))
     assembly.polis_pushed_at = now
     by_position = {number: seed for number, seed in enumerate(chosen, start=1)}
     results = (data.get("statements") or {}).get("results") or []
