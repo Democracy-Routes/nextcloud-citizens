@@ -171,7 +171,9 @@
 		"closed": "cierra",
 		"days": "Días para conservar el audio tras el cierre",
 		"deletedAfter": "El audio se elimina {days} días después de cerrar una asamblea. Los teléfonos de las mesas lo saben antes de grabar.",
-		"keptForever": "El audio se conserva hasta que alguien lo elimine. Los teléfonos de las mesas lo saben antes de grabar."
+		"keptForever": "El audio se conserva hasta que alguien lo elimine. Los teléfonos de las mesas lo saben antes de grabar.",
+		"recordNowIdleClose": "Grabar ahora: cerrar sola tras … minutos de silencio",
+		"recordNowIdleCloseHint": "Cuando nadie graba durante este tiempo, la sesión se cierra y se genera el informe. 0 = no cerrar nunca sola."
 	},
 	"org": {
 		"title": "Datos de la organización",

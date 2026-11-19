@@ -277,7 +277,7 @@ const hasContent = () =>
 				:icon="mdiCheckCircleOutline"
 				:disabled="closing"
 				@click="confirmClose = true">
-				{{ t('organizer.results.report.close', noun) }}
+				{{ props.assembly.auto_organized ? t('organizer.shell.detail.closeAuto') : t('organizer.results.report.close', noun) }}
 			</CzButton>
 			<div v-else class="cz-row" style="flex-wrap: nowrap">
 				<CzButton

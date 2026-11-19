@@ -31,6 +31,7 @@ function summary() {
 	return {
 		organization_name: 'Acme',
 		audio_retention_days: 0,
+		record_now_idle_close_minutes: 10,
 		consent_controller: '',
 		consent_contact: '',
 		org_address: '',
@@ -160,6 +161,17 @@ describe('Settings cards', () => {
 		expect(updateProviders).toHaveBeenCalledTimes(1)
 		expect(updateProviders.mock.calls[0][0]).toEqual({ audio_retention_days: 30 })
 		expect(saveIn(wrapper, 'card-retention').attributes('disabled')).toBeDefined()
+	})
+
+	it('the Record now idle-close field shows the summary value and its Save sends it', async () => {
+		const wrapper = await mountSettings()
+		await openTab(wrapper, catalogue.tabs.organisation)
+		const input = wrapper.get('[data-test="record-now-idle-close"]')
+		expect((input.element as HTMLInputElement).value).toBe('10')
+		await input.setValue(25)
+		await saveIn(wrapper, 'card-retention').trigger('click')
+		await flushPromises()
+		expect(updateProviders.mock.calls[0][0]).toMatchObject({ record_now_idle_close_minutes: 25 })
 	})
 
 	it('a typed API key goes with its own card and is cleared after', async () => {

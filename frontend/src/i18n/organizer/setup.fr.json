@@ -116,9 +116,9 @@
 		"endBeforeDelete": "Terminez la session avant de la supprimer",
 		"promote": {
 			"title": "Ajouter une autre session",
-			"body": "Une Session est une discussion. Avec une deuxième, elle devient une Assemblée — un événement de plusieurs sessions avec les mêmes personnes — et reçoit un nom.",
+			"body": "Une session est une discussion. Avec une deuxième, elle devient un événement multi-sessions — plusieurs sessions avec les mêmes personnes — et reçoit un nom.",
 			"eventName": "Nom de l'événement",
-			"confirm": "En faire une Assemblée et ajouter une session",
+			"confirm": "En faire un événement multi-sessions et ajouter une session",
 			"addAnother": "Ajouter une autre session"
 		},
 		"add": "Ajouter une session",

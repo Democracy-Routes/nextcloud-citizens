@@ -231,6 +231,8 @@ const nextRound = ref<RoundInfo | null>(null)
 // only way in, a finished recording is never restarted by itself.
 const currentRoundOpen = ref(false)
 const reportAvailable = ref(false)
+// a Record-now container: the server writes the report by itself
+const autoOrganized = ref(false)
 const pollUrl = ref<string | null>(null)
 // the organizer ended the assembly (possibly mid-round): stop advancing, and
 // offer the report rather than roll into a round that will never come
@@ -318,6 +320,7 @@ function watchForNextRound(): void {
 			help.value = status.help
 			if (status.assembly?.language) setLocale(status.assembly.language)
 			reportAvailable.value = status.report_available ?? false
+			autoOrganized.value = status.assembly?.auto_organized ?? false
 			pollUrl.value = status.poll_url ?? null
 			assemblyClosed.value = status.assembly_closed ?? false
 			currentRoundOpen.value =
@@ -1203,7 +1206,10 @@ async function recordAnother(): Promise<void> {
 								</p>
 							</template>
 						</div>
-						<p class="rc-muted rc-center" style="margin-top: 14px; font-size: 0.845rem">
+						<p v-if="autoOrganized && !reportAvailable" class="rc-muted rc-center" style="margin-top: 14px; font-size: 0.845rem" data-test="auto-report-pending">
+							{{ t('recorder.recording.autoReportPending') }}
+						</p>
+						<p v-else class="rc-muted rc-center" style="margin-top: 14px; font-size: 0.845rem">
 							{{ assemblyClosed ? t('recorder.assembly.overBody') : t('recorder.recording.reportPending') }}
 						</p>
 					</template>

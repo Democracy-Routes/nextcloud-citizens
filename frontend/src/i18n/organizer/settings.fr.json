@@ -171,7 +171,9 @@
 		"closed": "clôturée",
 		"days": "Jours de conservation de l'audio après la clôture",
 		"deletedAfter": "L'audio est supprimé {days} jours après la clôture d'une assemblée. Les téléphones des tables en sont informés avant d'enregistrer.",
-		"keptForever": "L'audio est conservé jusqu'à ce que quelqu'un le supprime. Les téléphones des tables en sont informés avant d'enregistrer."
+		"keptForever": "L'audio est conservé jusqu'à ce que quelqu'un le supprime. Les téléphones des tables en sont informés avant d'enregistrer.",
+		"recordNowIdleClose": "Enregistrer maintenant : fermer d'elle-même après … minutes de silence",
+		"recordNowIdleCloseHint": "Quand plus personne n'enregistre pendant cette durée, la session se ferme et le rapport est généré. 0 = ne jamais fermer d'elle-même."
 	},
 	"org": {
 		"title": "Données de l'organisation",

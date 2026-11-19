@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * How a session is named on screen, mirroring round_heading() on the server,
- * and the noun the Report tab closes and reopens — an organized assembly or
+ * and the noun the Report tab closes and reopens — a multi-session event or
  * a standalone Session — in both spellings.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -40,12 +40,12 @@ describe('roundHeading', () => {
 })
 
 describe('kindNoun', () => {
-	it('names the assembly or the Session, with the article, in both spellings', () => {
-		expect(kindNoun('assembly')).toEqual({ thing: 'the assembly', Thing: 'The assembly' })
+	it('names the multi-session event or the Session, with the article, in both spellings', () => {
+		expect(kindNoun('assembly')).toEqual({ thing: 'the multi-session event', Thing: 'The multi-session event' })
 		expect(kindNoun('session')).toEqual({ thing: 'the Session', Thing: 'The Session' })
-		expect(kindNoun(undefined)).toEqual({ thing: 'the assembly', Thing: 'The assembly' })
+		expect(kindNoun(undefined)).toEqual({ thing: 'the multi-session event', Thing: 'The multi-session event' })
 		i18n.global.locale.value = 'it'
-		expect(kindNoun('assembly')).toEqual({ thing: "l'assemblea", Thing: "L'assemblea" })
+		expect(kindNoun('assembly')).toEqual({ thing: "l'evento multisessione", Thing: "L'evento multisessione" })
 		expect(kindNoun('session')).toEqual({ thing: 'la Sessione', Thing: 'La Sessione' })
 	})
 })

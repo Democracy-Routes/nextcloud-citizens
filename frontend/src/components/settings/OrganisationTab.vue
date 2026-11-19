@@ -159,6 +159,19 @@ async function removeLogo(): Promise<void> {
 					}}
 				</p>
 			</div>
+			<div class="cz-field" style="max-width: 260px; margin-top: 14px">
+				<label>{{ t('organizer.settings.retention.recordNowIdleClose') }}</label>
+				<input
+					v-model.number="form.record_now_idle_close_minutes"
+					type="number"
+					min="0"
+					max="180"
+					step="1"
+					data-test="record-now-idle-close" />
+				<p class="cz-muted" style="font-size: 0.78rem; margin-top: 6px">
+					{{ t('organizer.settings.retention.recordNowIdleCloseHint') }}
+				</p>
+			</div>
 		</SettingsCard>
 
 		<SettingsCard

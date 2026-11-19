@@ -70,6 +70,7 @@ export interface SettingsForm {
 	facilitator_silence_seconds: number
 	organization_name: string
 	audio_retention_days: number
+	record_now_idle_close_minutes: number
 	consent_controller: string
 	consent_contact: string
 	org_address: string
@@ -140,7 +141,7 @@ export const CARD_KEYS: Record<Exclude<CardId, 'limits'>, PayloadKey[]> = {
 		'facilitator_api_key',
 	],
 	org: ['consent_controller', 'consent_contact', 'org_address', 'org_dpo', 'org_hosting', 'org_authority'],
-	retention: ['audio_retention_days'],
+	retention: ['audio_retention_days', 'record_now_idle_close_minutes'],
 	branding: ['organization_name'],
 }
 
@@ -192,6 +193,7 @@ function emptyForm(): SettingsForm {
 		facilitator_silence_seconds: 90,
 		organization_name: '',
 		audio_retention_days: 0,
+		record_now_idle_close_minutes: 0,
 		consent_controller: '',
 		consent_contact: '',
 		org_address: '',
@@ -242,6 +244,7 @@ export function payloadOf(form: SettingsForm): Record<PayloadKey, unknown> {
 		facilitator_silence_seconds: Number(form.facilitator_silence_seconds) || 90,
 		organization_name: form.organization_name.trim(),
 		audio_retention_days: Number(form.audio_retention_days) || 0,
+		record_now_idle_close_minutes: Math.min(180, Math.max(0, Math.round(Number(form.record_now_idle_close_minutes) || 0))),
 		consent_controller: form.consent_controller.trim(),
 		consent_contact: form.consent_contact.trim(),
 		org_address: form.org_address.trim(),
@@ -331,6 +334,7 @@ export function createSettingsForm() {
 		}
 		form.organization_name = s.organization_name ?? ''
 		form.audio_retention_days = s.audio_retention_days ?? 0
+		form.record_now_idle_close_minutes = s.record_now_idle_close_minutes ?? 0
 		form.consent_controller = s.consent_controller ?? ''
 		form.consent_contact = s.consent_contact ?? ''
 		form.org_address = s.org_address ?? ''

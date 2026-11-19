@@ -9,7 +9,6 @@ import { api, ApiError } from './api'
 import AccountMenu from './components/auth/AccountMenu.vue'
 import { isStandalone } from './auth'
 import AssemblyDetail from './components/AssemblyDetail.vue'
-import AssemblyWizard from './components/AssemblyWizard.vue'
 import HomeView from './components/HomeView.vue'
 import ImportSessionDialog from './components/ImportSessionDialog.vue'
 import SessionWizard from './components/SessionWizard.vue'
@@ -23,7 +22,6 @@ import type { Assembly, InviteGenerated } from './types'
 
 type View =
 	| { name: 'home' }
-	| { name: 'create' }
 	| { name: 'create-session' }
 	| { name: 'detail'; id: string }
 	| { name: 'settings' }
@@ -33,8 +31,8 @@ const { t, te } = useI18n()
 
 const assemblies = ref<Assembly[]>([])
 const loaded = ref(false)
-// Home is where everyone lands: Record now, Start a Session, Create an
-// Assembly. The app used to open the first assembly, which presumed there
+// Home is where everyone lands: Record now or Create a session (a second
+// session in the wizard makes it a multi-session event). The app used to open the first assembly, which presumed there
 // was one to configure.
 const view = ref<View>({ name: 'home' })
 const isAdmin = ref(false)
@@ -58,7 +56,7 @@ function toggleSidebar(): void {
 	}
 }
 
-type SidebarFilter = 'all' | 'sessions' | 'assemblies' | 'closed'
+type SidebarFilter = 'all' | 'closed'
 
 // Which chip is chosen and what the facilitator typed into the search box,
 // remembered per browser like the collapse state above — losing either on a
@@ -70,7 +68,8 @@ try {
 	const saved = JSON.parse(localStorage.getItem('citizens-sidebar-filter') ?? 'null') as
 		| { chip?: string; search?: string }
 		| null
-	if (saved && (['all', 'sessions', 'assemblies', 'closed'] as const).includes(saved.chip as SidebarFilter)) {
+	// an older build also stored 'sessions' / 'assemblies': those fall back to All
+	if (saved && (['all', 'closed'] as const).includes(saved.chip as SidebarFilter)) {
 		sidebarFilter.value = saved.chip as SidebarFilter
 	}
 	if (typeof saved?.search === 'string') sidebarSearch.value = saved.search
@@ -131,13 +130,10 @@ const recordings = computed(() =>
 	}),
 )
 
-// Chip + search narrow that list. Closed rows are hidden for All/Sessions/
-// Assemblies UNLESS hiding them would leave nothing to show for that kind —
-// an assembly wrapping up its only Session must not vanish from "Sessions".
+// Chip + search narrow that list. All hides closed rows UNLESS hiding them
+// would leave nothing to show; Closed shows exactly the closed ones.
 const visibleRecordings = computed(() => {
-	let scoped = recordings.value
-	if (sidebarFilter.value === 'sessions') scoped = scoped.filter((item) => isSession(item))
-	else if (sidebarFilter.value === 'assemblies') scoped = scoped.filter((item) => !isSession(item))
+	const scoped = recordings.value
 
 	let list: Assembly[]
 	if (sidebarFilter.value === 'closed') {
@@ -192,12 +188,6 @@ function open(id: string): void {
 
 function goHome(): void {
 	view.value = { name: 'home' }
-	sidebarOpen.value = false
-}
-
-function openCreate(): void {
-	freshInvites.value = null
-	view.value = { name: 'create' }
 	sidebarOpen.value = false
 }
 
@@ -276,12 +266,6 @@ async function recordNow(): Promise<void> {
 		<div class="cz-sidebar__filterbar">
 			<CzChip :active="sidebarFilter === 'all'" @click="setSidebarFilter('all')">
 				{{ t('organizer.shell.app.filter.all') }}
-			</CzChip>
-			<CzChip :active="sidebarFilter === 'sessions'" @click="setSidebarFilter('sessions')">
-				{{ t('organizer.shell.app.filter.sessions') }}
-			</CzChip>
-			<CzChip :active="sidebarFilter === 'assemblies'" @click="setSidebarFilter('assemblies')">
-				{{ t('organizer.shell.app.filter.assemblies') }}
 			</CzChip>
 			<CzChip :active="sidebarFilter === 'closed'" @click="setSidebarFilter('closed')">
 				{{ t('organizer.shell.app.filter.closed') }}
@@ -368,17 +352,11 @@ async function recordNow(): Promise<void> {
 			:recorder-url="recorderUrl"
 			:error="recordNowError"
 			@record-now="recordNow"
-			@start-session="openCreateSession"
-			@create-assembly="openCreate"
+			@create-session="openCreateSession"
 			@import-session="importOpen = true" />
 
 		<SessionWizard
 			v-else-if="view.name === 'create-session'"
-			@cancel="goHome"
-			@created="onCreated" />
-
-		<AssemblyWizard
-			v-else-if="view.name === 'create'"
 			@cancel="goHome"
 			@created="onCreated" />
 

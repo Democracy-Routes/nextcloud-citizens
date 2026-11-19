@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
  * The sidebar's single Recordings list: in-progress rows before closed ones,
- * newest first within each group; the All/Sessions/Assemblies/Closed chips
- * narrow it without ever emptying a kind's view just because every row of
- * that kind happens to be closed; a name search narrows further; and the
+ * newest first within each group; the All/Closed chips
+ * narrow it without ever emptying the view just because every row is closed; a name search narrows further; and the
  * chosen chip plus the search text persist per browser, like the sidebar's
  * collapse state already does, so reopening mid-event lands on the same view.
  */
@@ -85,13 +84,10 @@ describe('the Recordings list', () => {
 		expect(names(wrapper)).toEqual(['Latest open', 'Middle open', 'Earliest open'])
 	})
 
-	it('never empties a chip just because every row of that kind is closed', async () => {
+	it('All hides closed rows, Closed shows exactly them, and neither empties the list', async () => {
 		listAssemblies.mockResolvedValue([
 			session('s-1', 'Closed session one', {
 				status: 'COMPLETE', closed_at: '2026-02-01T00:00:00Z', created_at: '2026-02-01T00:00:00Z',
-			}),
-			session('s-2', 'Closed session two', {
-				status: 'COMPLETE', closed_at: '2026-05-01T00:00:00Z', created_at: '2026-05-01T00:00:00Z',
 			}),
 			assembly('a-1', 'Open assembly', { created_at: '2026-01-01T00:00:00Z' }),
 			assembly('a-2', 'Closed assembly', {
@@ -101,21 +97,35 @@ describe('the Recordings list', () => {
 		const wrapper = mountWithI18n(App)
 		await flushPromises()
 
-		// every session is closed: the exception shows them rather than nothing
-		await clickChip(wrapper, 'Sessions')
-		expect(names(wrapper)).toEqual(['Closed session two', 'Closed session one'])
+		// only two chips: the kind is a badge on the row, not a filter
+		expect(wrapper.findAll('.cz-chip').map((c) => c.text())).toEqual(['All', 'Closed'])
 
-		// one assembly is still open, so the closed assembly is hidden here
-		await clickChip(wrapper, 'Assemblies')
+		// something is open, so All hides every closed row
 		expect(names(wrapper)).toEqual(['Open assembly'])
+		expect(wrapper.findAll('.cz-kind-badge')[0].text()).toBe('Multi-session')
 
-		// something is open somewhere, so All hides every closed row
-		await clickChip(wrapper, 'All')
-		expect(names(wrapper)).toEqual(['Open assembly'])
-
-		// Closed: exactly the closed rows, newest first, whatever their kind
 		await clickChip(wrapper, 'Closed')
-		expect(names(wrapper)).toEqual(['Closed session two', 'Closed assembly', 'Closed session one'])
+		expect(names(wrapper)).toEqual(['Closed assembly', 'Closed session one'])
+	})
+
+	it('shows closed rows under All when nothing is open', async () => {
+		listAssemblies.mockResolvedValue([
+			session('s-1', 'Closed session', { status: 'COMPLETE', closed_at: '2026-02-01T00:00:00Z' }),
+		])
+		const wrapper = mountWithI18n(App)
+		await flushPromises()
+		expect(names(wrapper)).toEqual(['Closed session'])
+	})
+
+	it('an old stored Sessions or Assemblies chip falls back to All', async () => {
+		localStorage.setItem('citizens-sidebar-filter', JSON.stringify({ chip: 'assemblies', search: '' }))
+		listAssemblies.mockResolvedValue([session('s-1', 'Open session')])
+		const wrapper = mountWithI18n(App)
+		await flushPromises()
+
+		const allChip = wrapper.findAll('.cz-chip').find((c) => c.text() === 'All')
+		expect(allChip?.attributes('aria-pressed')).toBe('true')
+		expect(names(wrapper)).toEqual(['Open session'])
 	})
 
 	it('filters by name, case-insensitively, on top of the chosen chip', async () => {

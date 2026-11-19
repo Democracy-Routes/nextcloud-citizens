@@ -171,7 +171,9 @@
 		"closed": "geschlossen",
 		"days": "Tage, die das Audio nach dem Schließen aufbewahrt wird",
 		"deletedAfter": "Das Audio wird {days} Tage nach dem Schließen einer Versammlung gelöscht. Die Tisch-Telefone werden darüber vor der Aufnahme informiert.",
-		"keptForever": "Das Audio wird aufbewahrt, bis jemand es löscht. Die Tisch-Telefone werden darüber vor der Aufnahme informiert."
+		"keptForever": "Das Audio wird aufbewahrt, bis jemand es löscht. Die Tisch-Telefone werden darüber vor der Aufnahme informiert.",
+		"recordNowIdleClose": "Jetzt aufnehmen: von selbst schließen nach … Minuten Stille",
+		"recordNowIdleCloseHint": "Wenn so lange niemand mehr aufnimmt, schließt die Sitzung und der Bericht wird erstellt. 0 = nie von selbst schließen."
 	},
 	"org": {
 		"title": "Daten der Organisation",

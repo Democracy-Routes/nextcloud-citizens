@@ -40,6 +40,8 @@ export interface AssemblyInfo {
 	/** true only for a Record-now Session before any recording exists — the
 	 * language can still change, so the consent screen offers the switch */
 	language_changeable?: boolean
+	/** a Record-now container: the server finishes it and generates the report by itself */
+	auto_organized?: boolean
 }
 
 export type RecorderLanguage = 'en' | 'it' | 'de' | 'fr' | 'es'
@@ -375,6 +377,8 @@ export interface RecorderStatus {
 }
 
 export interface PublishedReport {
+	/** the report was produced without a person reviewing it */
+	auto_generated?: boolean
 	assembly: {
 		name: string
 		/** "session" for a Session on its own (absent before 0.7.0-beta.1) */

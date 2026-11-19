@@ -53,6 +53,10 @@ export interface Assembly {
 	auto_purge_device_audio: boolean
 	redact_names: string
 	closed_at: string | null
+	/** Record now: the findings are approved and the report published by the server itself, without review (0.9) */
+	auto_organized?: boolean
+	/** when that automatic finalization ran, if it has */
+	auto_finalized_at?: string | null
 	created_by: string
 	created_at: string
 }
@@ -547,6 +551,8 @@ export interface AboutInfo {
 export interface ProvidersSummary {
 	organization_name: string
 	audio_retention_days: number
+	/** Record now: minutes of total silence after which the server closes by itself; 0 = never (0.9) */
+	record_now_idle_close_minutes?: number
 	/** the organization data the consent notice prints (0.7) */
 	consent_controller?: string
 	consent_contact?: string

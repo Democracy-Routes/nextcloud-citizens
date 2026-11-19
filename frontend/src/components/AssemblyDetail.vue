@@ -242,6 +242,14 @@ async function deleteAssembly(): Promise<void> {
 				</div>
 			</div>
 
+			<!-- Record now: the server finishes by itself, and the organizer should know -->
+			<p v-if="assembly.auto_organized" class="cz-muted" data-test="detail-auto-notice" style="margin: 0 0 8px">
+				{{ t('organizer.shell.detail.autoNotice') }}
+				<template v-if="assembly.auto_finalized_at">
+					{{ t('organizer.shell.detail.autoFinalized', { time: new Date(assembly.auto_finalized_at).toLocaleString() }) }}
+				</template>
+			</p>
+
 			<!-- the event at a glance; a session opens the Run space on it -->
 			<AssemblyTimeline :assembly="assembly" @open="tab = 'monitor'" />
 

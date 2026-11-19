@@ -1,15 +1,16 @@
 <!-- SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
      SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { mdiAccountGroup, mdiMicrophone, mdiPackageDown, mdiPlayCircleOutline } from '@mdi/js'
+import { mdiMicrophone, mdiPlayCircleOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import CzButton from './ui/CzButton.vue'
 import SvgIcon from './ui/SvgIcon.vue'
 
 const { t } = useI18n()
 
-/** The three ways in. Record now is the fastest: a Session with one table,
- * and this very device as its recorder. Nothing here asks for an assembly. */
+/** Two ways in, and Import as a footer link. Record now is the fastest: a
+ * Session with one table, and this very device as its recorder. Create a
+ * session is the one wizard; a second session in it makes a multi-session event. */
 defineProps<{
 	/** a Record now request is in flight */
 	recording: boolean
@@ -19,7 +20,7 @@ defineProps<{
 	error: string
 }>()
 
-const emit = defineEmits<{ recordNow: []; startSession: []; createAssembly: []; importSession: [] }>()
+const emit = defineEmits<{ recordNow: []; createSession: []; importSession: [] }>()
 </script>
 
 <template>
@@ -45,25 +46,15 @@ const emit = defineEmits<{ recordNow: []; startSession: []; createAssembly: []; 
 				<span class="cz-home__action-name">{{ recording ? t('organizer.shell.home.preparing') : t('organizer.shell.home.recordNow') }}</span>
 				<span class="cz-home__action-hint">{{ t('organizer.shell.home.recordNowHint') }}</span>
 			</button>
-			<button class="cz-home__action" @click="emit('startSession')">
+			<button class="cz-home__action" @click="emit('createSession')">
 				<SvgIcon :path="mdiPlayCircleOutline" :size="28" />
-				<span class="cz-home__action-name">{{ t('organizer.shell.home.startSession') }}</span>
-				<span class="cz-home__action-hint">{{ t('organizer.shell.home.startSessionHint') }}</span>
-			</button>
-			<button class="cz-home__action" @click="emit('createAssembly')">
-				<SvgIcon :path="mdiAccountGroup" :size="28" />
-				<span class="cz-home__action-name">{{ t('organizer.shell.home.createAssembly') }}</span>
-				<span class="cz-home__action-hint">{{ t('organizer.shell.home.createAssemblyHint') }}</span>
-			</button>
-			<button class="cz-home__action" data-test="home-import" @click="emit('importSession')">
-				<SvgIcon :path="mdiPackageDown" :size="28" />
-				<span class="cz-home__action-name">{{ t('organizer.shell.home.importSession') }}</span>
-				<span class="cz-home__action-hint">{{ t('organizer.shell.home.importSessionHint') }}</span>
+				<span class="cz-home__action-name">{{ t('organizer.shell.home.createSession') }}</span>
+				<span class="cz-home__action-hint">{{ t('organizer.shell.home.createSessionHint') }}</span>
 			</button>
 		</div>
 
 		<div class="cz-home__foot">
-			<CzButton variant="tertiary" small @click="emit('createAssembly')">{{ t('organizer.shell.home.openWizard') }}</CzButton>
+			<CzButton variant="tertiary" small data-test="home-import" :title="t('organizer.shell.home.importSessionHint')" @click="emit('importSession')">{{ t('organizer.shell.home.importSession') }}</CzButton>
 		</div>
 	</div>
 </template>

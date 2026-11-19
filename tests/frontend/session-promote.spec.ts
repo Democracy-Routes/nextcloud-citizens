@@ -49,10 +49,10 @@ describe('adding a second session', () => {
 		const wrapper = mountWithI18n(RoundsTab, { props: { assembly: assembly('session') } })
 		const add = wrapper.findAll('button').find((b) => b.text() === 'Add another session')!
 		await add.trigger('click')
-		expect(wrapper.text()).toContain('this becomes an Assembly')
+		expect(wrapper.text()).toContain('this becomes a multi-session event')
 
 		await wrapper.find('#cz-event-name').setValue('Milan Mobility')
-		await wrapper.findAll('button').find((b) => b.text().includes('Make it an Assembly'))!.trigger('click')
+		await wrapper.findAll('button').find((b) => b.text().includes('Make it a multi-session event'))!.trigger('click')
 		await flushPromises()
 
 		expect(promoteSession).toHaveBeenCalledWith('r1', 'Milan Mobility')

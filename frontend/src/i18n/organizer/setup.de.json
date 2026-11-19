@@ -116,9 +116,9 @@
 		"endBeforeDelete": "Beenden Sie die Sitzung, bevor Sie sie löschen",
 		"promote": {
 			"title": "Weitere Sitzung hinzufügen",
-			"body": "Eine Sitzung ist eine Diskussion. Mit einer zweiten wird daraus eine Versammlung – eine Veranstaltung aus mehreren Sitzungen mit denselben Personen – und sie erhält einen Namen.",
+			"body": "Eine Sitzung ist eine Diskussion. Mit einer zweiten wird daraus eine Mehrsitzungs-Veranstaltung – mehrere Sitzungen mit denselben Personen – und sie erhält einen Namen.",
 			"eventName": "Name der Veranstaltung",
-			"confirm": "Zur Versammlung machen und Sitzung hinzufügen",
+			"confirm": "Zur Mehrsitzungs-Veranstaltung machen und Sitzung hinzufügen",
 			"addAnother": "Weitere Sitzung hinzufügen"
 		},
 		"add": "Sitzung hinzufügen",

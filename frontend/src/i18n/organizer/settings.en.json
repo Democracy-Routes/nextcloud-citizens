@@ -171,7 +171,9 @@
 		"closed": "closed",
 		"days": "Days to keep audio after closing",
 		"deletedAfter": "Audio is deleted {days} days after an assembly is closed. Table phones are told this before recording.",
-		"keptForever": "Audio is kept until someone deletes it. Table phones are told this before recording."
+		"keptForever": "Audio is kept until someone deletes it. Table phones are told this before recording.",
+		"recordNowIdleClose": "Record now: close by itself after … minutes of silence",
+		"recordNowIdleCloseHint": "When nobody records any more for this long, the session closes and the report is generated. 0 = never close by itself."
 	},
 	"org": {
 		"title": "Organization data",

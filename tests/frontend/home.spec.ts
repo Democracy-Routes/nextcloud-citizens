@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Philip <philip@decentsoftwa.re>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /**
- * Home is where everyone lands: Record now, Start a Session, Create an
- * Assembly. Nobody is made to configure an assembly to record a discussion,
- * and a standalone Session is listed as a Session, never as an assembly —
- * the sidebar now says which with a kind badge rather than a group heading.
+ * Home is where everyone lands: Record now and Create a session, with Import
+ * as a small footer link. Nobody is made to configure a multi-session event
+ * to record a discussion, and a standalone Session is listed as a Session,
+ * never as a multi-session event — the sidebar says which with a kind badge.
  */
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../frontend/src/App.vue'
+import ImportSessionDialog from '../../frontend/src/components/ImportSessionDialog.vue'
 import { mountWithI18n } from './support/mount'
 
 const listAssemblies = vi.fn()
@@ -46,13 +47,16 @@ afterEach(() => {
 })
 
 describe('the home screen', () => {
-	it('offers the four ways in, and does not open an assembly by itself', async () => {
+	it('offers two cards and a small import link, and does not open an assembly by itself', async () => {
 		listAssemblies.mockResolvedValue([assembly])
 		const wrapper = mountWithI18n(App)
 		await flushPromises()
 
 		const names = wrapper.findAll('.cz-home__action-name').map((n) => n.text())
-		expect(names).toEqual(['Record now', 'Start a Session', 'Create an Assembly', 'Import a session'])
+		expect(names).toEqual(['Record now', 'Create a session'])
+		const importLink = wrapper.find('.cz-home__foot [data-test="home-import"]')
+		expect(importLink.exists()).toBe(true)
+		expect(importLink.text()).toBe('Import a session')
 		// the first assembly used to be opened automatically on load
 		expect(wrapper.find('.cz-pagehead').exists()).toBe(false)
 	})
@@ -104,22 +108,23 @@ describe('the home screen', () => {
 		expect(wrapper.find('.cz-home__action-name').text()).toBe('Record now')
 	})
 
-	it('Start a Session opens the session wizard, Create an Assembly the assembly wizard', async () => {
+	it('Create a session opens the one wizard, and the footer link opens the import dialog', async () => {
 		const wrapper = mountWithI18n(App)
 		await flushPromises()
 
 		await wrapper.findAll('.cz-home__action')[1].trigger('click')
-		expect(wrapper.find('h2').text()).toBe('Start a Session')
+		expect(wrapper.find('h2').text()).toBe('Create a session')
 		expect(wrapper.find('#cz-session-objective').exists()).toBe(true)
 
 		// the sidebar's Home button leads back; the home view is mounted afresh
 		await wrapper.find('.cz-sidebar__top button').trigger('click')
 		expect(wrapper.find('.cz-home__title').exists()).toBe(true)
-		await wrapper.findAll('.cz-home__action')[2].trigger('click')
-		expect(wrapper.find('h2').text()).toBe('Create assembly')
+		await wrapper.find('[data-test="home-import"]').trigger('click')
+		await flushPromises()
+		expect(wrapper.findComponent(ImportSessionDialog).exists()).toBe(true)
 	})
 
-	it('lists a standalone Session as a Session under its question, badged apart from assemblies', async () => {
+	it('lists a standalone Session as a Session under its question, badged apart from multi-session events', async () => {
 		listAssemblies.mockResolvedValue([session, assembly])
 		const wrapper = mountWithI18n(App)
 		await flushPromises()
@@ -129,7 +134,7 @@ describe('the home screen', () => {
 		expect(items[0].find('.cz-navitem__name').text()).toBe('How should local mobility improve?')
 		expect(items[0].find('.cz-navitem__meta').text()).toBe('Session · 3 tables')
 		expect(items[0].text()).not.toContain('participants')
-		expect(items[1].find('.cz-kind-badge').text()).toBe('Assembly')
+		expect(items[1].find('.cz-kind-badge').text()).toBe('Multi-session')
 		expect(items[1].find('.cz-navitem__name').text()).toBe('Milan Mobility')
 		expect(items[1].find('.cz-navitem__meta').text()).toContain('50 participants')
 	})
@@ -140,6 +145,6 @@ describe('the home screen', () => {
 		await flushPromises()
 
 		const items = wrapper.findAll('.cz-navitem')
-		expect(items[0].find('.cz-kind-badge').text()).toBe('Assembly')
+		expect(items[0].find('.cz-kind-badge').text()).toBe('Multi-session')
 	})
 })

@@ -194,7 +194,7 @@ const add = () =>
 					</div>
 				</template>
 			</div>
-			<!-- a Session has one discussion; a second one makes it an Assembly -->
+			<!-- a Session has one discussion; a second one makes it a multi-session event -->
 			<template v-if="standalone">
 				<div v-if="promoting" class="cz-card">
 					<h3 style="margin-top: 0">{{ t('organizer.setup.rounds.promote.title') }}</h3>

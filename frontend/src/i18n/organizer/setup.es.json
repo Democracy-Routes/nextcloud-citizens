@@ -116,9 +116,9 @@
 		"endBeforeDelete": "Termina la sesión antes de eliminarla",
 		"promote": {
 			"title": "Añadir otra sesión",
-			"body": "Una Sesión es una discusión. Con una segunda pasa a ser una Asamblea —un evento de varias sesiones con las mismas personas— y recibe un nombre.",
+			"body": "Una sesión es una discusión. Con una segunda pasa a ser un evento multisesión —varias sesiones con las mismas personas— y recibe un nombre.",
 			"eventName": "Nombre del evento",
-			"confirm": "Convertir en Asamblea y añadir una sesión",
+			"confirm": "Convertir en evento multisesión y añadir una sesión",
 			"addAnother": "Añadir otra sesión"
 		},
 		"add": "Añadir sesión",

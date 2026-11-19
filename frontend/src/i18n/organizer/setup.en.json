@@ -116,9 +116,9 @@
 		"endBeforeDelete": "End the session before deleting it",
 		"promote": {
 			"title": "Add another session",
-			"body": "A Session is one discussion. With a second one this becomes an Assembly — an event of several sessions with the same people — and gets a name.",
+			"body": "A session is one discussion. With a second one this becomes a multi-session event — several sessions with the same people — and gets a name.",
 			"eventName": "Event name",
-			"confirm": "Make it an Assembly and add a session",
+			"confirm": "Make it a multi-session event and add a session",
 			"addAnother": "Add another session"
 		},
 		"add": "Add session",

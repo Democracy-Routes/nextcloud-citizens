@@ -171,7 +171,9 @@
 		"closed": "chiusa",
 		"days": "Giorni di conservazione dell'audio dopo la chiusura",
 		"deletedAfter": "L'audio viene eliminato {days} giorni dopo la chiusura di un'assemblea. I telefoni dei tavoli ne vengono informati prima di registrare.",
-		"keptForever": "L'audio viene conservato finché qualcuno non lo elimina. I telefoni dei tavoli ne vengono informati prima di registrare."
+		"keptForever": "L'audio viene conservato finché qualcuno non lo elimina. I telefoni dei tavoli ne vengono informati prima di registrare.",
+		"recordNowIdleClose": "Registra ora: chiudi da sola dopo … minuti di silenzio",
+		"recordNowIdleCloseHint": "Quando nessuno registra più per tutto questo tempo, la sessione si chiude e il resoconto viene generato. 0 = non chiudere mai da sola."
 	},
 	"org": {
 		"title": "Dati dell'organizzazione",
