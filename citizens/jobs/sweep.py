@@ -465,6 +465,20 @@ def _stale_uploads_sweep() -> int:
     return uploads.sweep_stale()
 
 
+def _auto_organized_sweep() -> int:
+    """Record now sessions: close when nobody records any more, approve and
+    publish once the analysis is in. The settings come from the snapshot,
+    read here before any transaction opens."""
+    from citizens.services import auto_organized, provider_config
+
+    return auto_organized.sweep_idle_close(
+        utcnow(),
+        minutes=provider_config.record_now_idle_close_minutes_cached(),
+        analysis_on=provider_config.analysis_ready_cached(),
+        polis_on=provider_config.polis_ready_cached(),
+    )
+
+
 def run_sweeps() -> None:
     global LAST_SWEEP_AT
     from citizens.services import provider_config, public_url
@@ -483,6 +497,7 @@ def run_sweeps() -> None:
         ("superseded_partials", sweep_superseded_partials),
         ("missed_enqueues", sweep_missed_enqueues),
         ("expired_audio", sweep_expired_audio),
+        ("auto_organized", _auto_organized_sweep),
         ("zero_retention", _zero_retention_sweep),
         ("expired_sessions", sweep_expired_sessions),
         ("stale_exports", sweep_stale_exports),

@@ -109,6 +109,25 @@ def test_defaults(admin_client):
     assert summary["analysis"]["configured"] is False
 
 
+def test_the_idle_close_setting_round_trips_with_bounds(admin_client):
+    client, store = admin_client
+    assert client.get("/api/v1/admin/providers").json()["record_now_idle_close_minutes"] == 10
+    assert client.put(
+        "/api/v1/admin/providers", json={"record_now_idle_close_minutes": 0}
+    ).status_code == 200
+    assert store.values["record_now_idle_close_minutes"] == "0"
+    assert client.get("/api/v1/admin/providers").json()["record_now_idle_close_minutes"] == 0
+    assert client.put(
+        "/api/v1/admin/providers", json={"record_now_idle_close_minutes": 180}
+    ).status_code == 200
+    assert client.put(
+        "/api/v1/admin/providers", json={"record_now_idle_close_minutes": 181}
+    ).status_code == 422
+    assert client.put(
+        "/api/v1/admin/providers", json={"record_now_idle_close_minutes": -1}
+    ).status_code == 422
+
+
 def test_store_keys_returns_hints_only(admin_client):
     client, store = admin_client
     response = client.put(

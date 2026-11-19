@@ -127,6 +127,9 @@ def record_now(session: Session, user_id: str, language: str = "en") -> schemas.
     # nobody chose this language — the UI's is a guess until the first
     # transcript says what was actually spoken
     created.container.language_auto = True
+    # the server closes it when nobody records any more and publishes the
+    # report without review (services/auto_organized.py)
+    created.container.auto_organized = True
     [card] = created.invites
     return schemas.RecordNowOut(
         session_id=created.session_id,
@@ -156,6 +159,7 @@ def record_another(session: Session, container: Assembly, round_: Round) -> sche
     if not round_.question:
         created.container.name = _record_now_name(utcnow())
     created.container.language_auto = container.language_auto
+    created.container.auto_organized = container.auto_organized
     created.container.auto_purge_device_audio = container.auto_purge_device_audio
     record_audit_event(
         session, "session_followed", "round", created.round_.id,
@@ -196,11 +200,13 @@ def promote_to_assembly(
     if container.kind != SESSION_KIND:
         return schemas.PromotedOut(container_id=container.id, kind=container.kind, name=container.name)
     container.kind = ASSEMBLY_KIND
+    # a person took over: the event is theirs to close and review
+    container.auto_organized = False
     container.name = " ".join(name.split())[:200] or container.name
     session.flush()
     record_audit_event(
         session, "session_promoted", "assembly", container.id, actor=actor,
-        data={"round_id": round_.id, "name": container.name},
+        data={"round_id": round_.id, "name": container.name, "auto_organized": False},
     )
     log.info("session_promoted", container_id=container.id, round_id=round_.id)
     return schemas.PromotedOut(container_id=container.id, kind=container.kind, name=container.name)

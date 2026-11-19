@@ -51,9 +51,35 @@ def frozen_report(assembly: Assembly) -> dict | None:
         return None
 
 
-def close_assembly(session: Session, assembly: Assembly) -> dict:
+def _ask_recordings_to_finish(session: Session, assembly: Assembly) -> None:
+    """The account closed a Record now session while phones still record: ask
+    each to finish; sweep_server_closes finishes what does not answer after
+    FINISH_REQUEST_GRACE_SECONDS."""
+    now = utcnow()
+    for recording in session.execute(
+        select(Recording).where(
+            Recording.assembly_id == assembly.id,
+            Recording.state == "RECORDING",
+            Recording.finish_requested_at.is_(None),
+        )
+    ).scalars():
+        recording.finish_requested_at = now
+        record_audit_event(
+            session, "recording_finish_requested", "recording", recording.id,
+            actor="system", data={"reason": "close"},
+        )
+
+
+def close_assembly(
+    session: Session, assembly: Assembly, *,
+    analysis_on: bool | None = None, polis_on: bool | None = None,
+) -> dict:
     """Finish the session: stop recordings, analyze what exists, freeze the
-    report. Reversible with reopen_assembly()."""
+    report. Reversible with reopen_assembly().
+
+    `analysis_on` / `polis_on` matter for a Record now session only: a caller
+    that already read them outside its transaction (the idle sweep) passes
+    them; the route leaves them None and the snapshot's memory is used."""
     for round_ in assembly.rounds:
         if round_.status == "ACTIVE":
             round_.status = "ENDED"
@@ -73,6 +99,8 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
             enqueue_job(session, "ANALYZE_ROUND", {"round_id": round_.id})
     assembly.closed_at = utcnow()
     assembly.status = "COMPLETE"
+    if assembly.auto_organized:
+        _ask_recordings_to_finish(session, assembly)
     # how the discussion developed across sessions, once the sessions'
     # analyses are in (a pending round analysis re-enqueues it when it lands)
     from citizens.jobs.handlers import maybe_enqueue_synthesis
@@ -97,6 +125,19 @@ def close_assembly(session: Session, assembly: Assembly) -> dict:
         assembly_id=assembly.id,
         progress=assembly_progress(session, assembly),
     )
+    if assembly.auto_organized:
+        # Record now: approve and publish as soon as nothing is processing
+        # (otherwise the analysis hook or the minute sweep does). Memory-only
+        # config reads: this runs inside the caller's transaction.
+        from citizens.services import auto_organized, provider_config
+
+        auto_organized.finalize_if_ready(
+            session, assembly,
+            analysis_on=(
+                provider_config.analysis_ready_cached() if analysis_on is None else analysis_on
+            ),
+            polis_on=provider_config.polis_ready_cached() if polis_on is None else polis_on,
+        )
     # an assembly that keeps nothing but its report: now, if everything is
     # processed; otherwise the sweep does it once the last job is through
     from citizens.services import zero_retention

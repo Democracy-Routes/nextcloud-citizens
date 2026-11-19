@@ -16,6 +16,7 @@ from citizens.db.models import (
     TranscriptSegment,
 )
 from citizens.services import tables as tables_svc
+from citizens.services.findings_review import AUTO_REVIEWER
 from citizens.services.recording import assembly_progress as progress
 from citizens.services.report_text import (
     POWERED_BY,
@@ -240,13 +241,17 @@ def _quotes(cited: list[TranscriptSegment]) -> list[dict]:
 
 def _methodology_note(
     session: Session, assembly: Assembly, quotations_withheld: bool = False,
-    reviewed: bool = False,
+    reviewed: bool = False, automatic: bool = False,
 ) -> str:
     """The standing note, plus whatever was unusual about THIS assembly.
-    "Findings were reviewed by a human organizer" only when one was."""
+    "Findings were reviewed by a human organizer" only when one was; when the
+    server approved them all itself (a Record now session) the note says no
+    person reviewed them."""
     language = assembly.language
     parts = [text(language, "methodology_note")]
-    if reviewed:
+    if automatic:
+        parts.insert(1, text(language, "methodology_automatic"))
+    elif reviewed:
         parts.insert(1, text(language, "methodology_reviewed"))
     if quotations_withheld:
         parts.append(text(language, "quotations_withheld_note"))
@@ -425,6 +430,11 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
             table_summaries[(recording.round_id, recording.table_number)] = recording.analysis_summary
 
     language = assembly.language
+    approved_findings = [f for f in findings if f.status in APPROVED]
+    # approved by the server itself, never by a person
+    automatic = bool(approved_findings) and all(
+        f.reviewed_by == AUTO_REVIEWER for f in approved_findings
+    )
 
     from citizens.services import consent as consent_svc
 
@@ -573,8 +583,10 @@ def build_report(session: Session, assembly: Assembly, include_drafts: bool = Fa
         # now, and "(A + B) if cond else A" does not extend to a third
         "methodology_note": _methodology_note(
             session, assembly, quotations_withheld=any_withheld,
-            reviewed=any(f.status in APPROVED for f in findings),
+            reviewed=bool(approved_findings), automatic=automatic,
         ),
+        # a Record now session published by the server without review
+        "auto_generated": bool(assembly.auto_organized),
         "include_drafts": include_drafts,
         # when set, table phones can view/download this report
         "published_at": (

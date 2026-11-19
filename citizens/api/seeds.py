@@ -149,20 +149,9 @@ def approve_all_seeds(assembly_id: str, user: CurrentUser, session: DB):
     assembly = get_owned_assembly(session, assembly_id, user)
     if has_live_job(session, JOB_TYPE, "assembly_id", assembly.id):
         raise HTTPException(status_code=409, detail="Statements are still being generated")
-    rows = seeds_svc.list_seeds(session, assembly.id)
-    drafts = [s for s in rows if s.status == "DRAFT"]
-    now = utcnow()
-    for seed in drafts:
-        seed.status = "APPROVED"
-        seed.reviewed_by = user
-        seed.reviewed_at = now
-    if drafts:
-        record_audit_event(
-            session, "seeds_approved_all", "assembly", assembly.id, actor=user,
-            data={"approved": len(drafts)},
-        )
+    approved = seeds_svc.approve_all(session, assembly, actor=user)
     listing = _listing(session, assembly)
-    listing["approved"] = len(drafts)
+    listing["approved"] = approved
     return listing
 
 

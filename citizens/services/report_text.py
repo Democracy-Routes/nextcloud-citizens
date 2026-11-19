@@ -90,6 +90,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
         ),
         # only when at least one finding was approved (report._methodology_note)
         "methodology_reviewed": "Findings were reviewed by a human organizer.",
+        "methodology_automatic": (
+            "The findings were selected by the AI analysis and "
+            "were not reviewed by a person."
+        ),
         "transcript_engines": "Speech-to-text: {engines}.",
         "analysis_models": "Analysis: {models}.",
         "source_live": "live captions",
@@ -223,6 +227,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "un tema; non è una misura del sostegno dei partecipanti."
         ),
         "methodology_reviewed": "I risultati sono stati revisionati da un organizzatore.",
+        "methodology_automatic": (
+            "I risultati sono stati selezionati dall'analisi dell'IA e "
+            "non sono stati revisionati da una persona."
+        ),
         "transcript_engines": "Trascrizione automatica: {engines}.",
         "analysis_models": "Analisi: {models}.",
         "source_live": "sottotitoli in tempo reale",
@@ -356,6 +364,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "Teilnehmenden."
         ),
         "methodology_reviewed": "Die Ergebnisse wurden von einer organisierenden Person geprüft.",
+        "methodology_automatic": (
+            "Die Ergebnisse wurden von der KI-Analyse ausgewählt "
+            "und nicht von einer Person geprüft."
+        ),
         "transcript_engines": "Spracherkennung: {engines}.",
         "analysis_models": "Auswertung: {models}.",
         "source_live": "Live-Untertitel",
@@ -487,6 +499,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "soulevé ; ce n'est pas une mesure du soutien des participants."
         ),
         "methodology_reviewed": "Les résultats ont été relus par une personne de l'organisation.",
+        "methodology_automatic": (
+            "Les résultats ont été sélectionnés par l'analyse de l'IA "
+            "et n'ont pas été relus par une personne."
+        ),
         "transcript_engines": "Reconnaissance vocale : {engines}.",
         "analysis_models": "Analyse : {models}.",
         "source_live": "sous-titres en direct",
@@ -616,6 +632,10 @@ CATALOGUE: dict[str, dict[str, str]] = {
             "no es una medida del apoyo de los participantes."
         ),
         "methodology_reviewed": "Los resultados fueron revisados por una persona de la organización.",
+        "methodology_automatic": (
+            "Los resultados fueron seleccionados por el análisis de la "
+            "IA y no fueron revisados por una persona."
+        ),
         "transcript_engines": "Reconocimiento de voz: {engines}.",
         "analysis_models": "Análisis: {models}.",
         "source_live": "subtítulos en directo",

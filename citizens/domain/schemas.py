@@ -5,7 +5,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RoundIn(BaseModel):
@@ -135,8 +135,16 @@ class AssemblyOut(BaseModel):
     language_auto: bool = False
     # off / light / normal / active, or None: the instance default applies
     ai_facilitator: str | None = None
+    # a Record now session: it closes by itself and publishes without review
+    auto_organized: bool = False
+    auto_finalized_at: datetime | None = None
     created_by: str
     created_at: datetime
+
+    @field_validator("auto_organized", mode="before")
+    @classmethod
+    def _null_is_false(cls, value):
+        return bool(value)
 
 
 class AssemblyDetail(AssemblyOut):

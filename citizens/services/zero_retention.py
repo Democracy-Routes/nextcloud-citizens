@@ -18,50 +18,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from citizens.config import get_settings
-from citizens.db.models import Assembly, Recording
+from citizens.db.models import Assembly
 from citizens.db.models.base import utcnow
 from citizens.logging_setup import get_logger
 from citizens.services.audit import record_audit_event
-from citizens.services.jobs import has_live_job
+from citizens.services.processing import still_processing
 from citizens.storage.paths import exports_dir
 
 log = get_logger(__name__)
 
-#: states in which a recording is still being made or uploaded: nothing is
-#: deleted under it
-TRANSIENT_STATES = (
-    "CREATED", "RECORDING", "FINALIZING", "WAITING_FOR_CHUNKS", "ASSEMBLING",
-    "TRANSCRIBING", "ANALYZING",
-)
-PROCESSING_JOBS = ("ASSEMBLE_AUDIO", "TRANSCRIBE_FINAL", "TRANSCRIBE_FROM_LIVE", "ANALYZE_TABLE")
-ROUND_JOBS = ("ANALYZE_ROUND",)
-ASSEMBLY_JOBS = ("ANALYZE_ASSEMBLY",)
 PDF_NAME = "final-report.pdf"
 
 
 def retained_pdf_path(assembly_id: str) -> Path:
     return exports_dir(get_settings().app_persistent_storage, assembly_id) / PDF_NAME
-
-
-def _still_processing(session: Session, assembly: Assembly) -> str | None:
-    """Why it is too early, or None."""
-    recordings = list(
-        session.execute(select(Recording).where(Recording.assembly_id == assembly.id)).scalars()
-    )
-    for recording in recordings:
-        if recording.state in TRANSIENT_STATES:
-            return f"recording {recording.id} is {recording.state}"
-        for kind in PROCESSING_JOBS:
-            if has_live_job(session, kind, "recording_id", recording.id):
-                return f"{kind} live for recording {recording.id}"
-    for round_ in assembly.rounds:
-        for kind in ROUND_JOBS:
-            if has_live_job(session, kind, "round_id", round_.id):
-                return f"{kind} live for round {round_.id}"
-    for kind in ASSEMBLY_JOBS:
-        if has_live_job(session, kind, "assembly_id", assembly.id):
-            return f"{kind} live"
-    return None
 
 
 def apply_if_ready(session: Session, assembly: Assembly) -> dict | None:
@@ -74,7 +44,11 @@ def apply_if_ready(session: Session, assembly: Assembly) -> dict | None:
         or assembly.zero_retention_done_at is not None
     ):
         return None
-    reason = _still_processing(session, assembly)
+    # a Record now session publishes its approved report first: freezing it
+    # before that would keep an empty one (the minute sweep retries)
+    if assembly.auto_organized and assembly.auto_finalized_at is None:
+        return None
+    reason = still_processing(session, assembly)
     if reason is not None:
         log.info("zero_retention_waiting", assembly_id=assembly.id, reason=reason)
         return None

@@ -150,6 +150,9 @@ def _refusal(response: httpx.Response) -> PolisError:
     return PolisError(f"Polis returned HTTP {status}: {detail}", status=status)
 
 
+AUTOMATIC_NOTE = "Statements selected automatically from the AI analysis, not reviewed by a person."
+
+
 def push(session: Session, store: provider_config.ConfigStore, assembly: Assembly) -> dict:
     """Send the approved statements; record the conversation and each
     statement's Polis id. The caller commits before this runs (the config
@@ -168,6 +171,11 @@ def push(session: Session, store: provider_config.ConfigStore, assembly: Assembl
     body = json.loads(seeds_svc.render_json(assembly, chosen, now))
     body["topic"] = assembly.name
     body["description"] = (assembly.description or "")[:2000]
+    if getattr(assembly, "auto_organized", False):
+        # said where the voters read it: nobody reviewed these statements
+        body["description"] = (
+            f"{body['description']}\n\n{AUTOMATIC_NOTE}" if body["description"] else AUTOMATIC_NOTE
+        )
     log.info("polis_push_started", assembly_id=assembly.id, statements=len(chosen))
     try:
         response = httpx.post(f"{base}{IMPORT_PATH}", headers=_headers(key), json=body, timeout=TIMEOUT)

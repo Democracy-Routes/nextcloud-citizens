@@ -14,7 +14,7 @@ from citizens.db.models import AppJob, Finding, Recording, TranscriptSegment
 from citizens.db.models.base import utcnow
 from citizens.db.session import get_db
 from citizens.security.identity import CurrentUser
-from citizens.services import job_failures, provider_config
+from citizens.services import findings_review, job_failures, provider_config
 from citizens.services.assemblies import get_owned_round
 from citizens.services.audit import record_audit_event
 from citizens.services.jobs import LIVE_JOB_STATES, enqueue_job
@@ -274,8 +274,9 @@ def approve_drafts(round_id: str, data: BulkApproveIn, user: CurrentUser, sessio
 
     Reviewing findings one at a time is what an organizer does after an
     assembly, and they said it was tedious enough to want a way to skip review
-    entirely. That is the one thing this must not offer: human approval is what
-    the report's methodology note asserts. It is a statement about THIS
+    entirely. A person pressing this button is the review the report's
+    methodology note records; when the server approves findings by itself (a
+    Record now session) the note says so instead. It is a statement about THIS
     generation of findings — a later analysis run replaces the generation,
     approvals included (services/analysis._delete_existing), and the
     organizer confirms that before re-running.
@@ -284,27 +285,11 @@ def approve_drafts(round_id: str, data: BulkApproveIn, user: CurrentUser, sessio
     quietly reversing it in a bulk action would be the worst kind of surprise.
     """
     round_ = get_owned_round(session, round_id, user)
-    query = select(Finding).where(Finding.round_id == round_.id, Finding.status == "DRAFT")
-    if data.table_number is not None:
-        table_ids = [t.id for t in round_.tables if t.number == data.table_number]
-        if not table_ids:
-            raise HTTPException(status_code=404, detail="This round has no table with that number")
-        query = query.where(Finding.table_id.in_(table_ids))
-
-    now = utcnow()
-    approved = 0
-    for finding in session.execute(query).scalars():
-        finding.status = "APPROVED"
-        finding.reviewed_by = user
-        finding.reviewed_at = now
-        approved += 1
-        # one row per finding, as the single-finding path writes: it is what
-        # makes an individual finding's review history reconstructable
-        record_audit_event(
-            session, "finding_reviewed", "finding", finding.id, actor=user,
-            data={"status": "APPROVED", "edited": False, "bulk": True},
-        )
-    session.flush()
+    if data.table_number is not None and not any(t.number == data.table_number for t in round_.tables):
+        raise HTTPException(status_code=404, detail="This round has no table with that number")
+    approved = findings_review.approve_drafts(
+        session, round_, actor=user, table_number=data.table_number
+    )
     return {"approved": approved}
 
 

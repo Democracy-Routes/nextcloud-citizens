@@ -14,7 +14,7 @@ from citizens.logging_setup import get_logger
 from citizens.providers.analysis.openai_compat import AnalysisError
 from citizens.providers.transcription.base import TranscriptionError
 from citizens.services import analysis as analysis_svc
-from citizens.services import provider_config, round_analysis, stt_capacity
+from citizens.services import findings_review, provider_config, round_analysis, stt_capacity
 from citizens.services import transcription as transcription_svc
 from citizens.services.audio import (
     AudioAssemblyError,
@@ -22,6 +22,7 @@ from citizens.services.audio import (
     assemble_recording,
     reclaim_chunks,
 )
+from citizens.services.audit import record_audit_event
 from citizens.services.jobs import enqueue_job, has_live_job
 from citizens.services.recording_states import transition
 from citizens.storage.paths import live_caption_path
@@ -453,6 +454,19 @@ def handle_analyze_round(session: Session, payload: dict) -> None:
     round_analysis.record_run_applied(session, round_.id, captured)
     if round_.status in ("ENDED", "PROCESSING"):
         round_.status = "READY_FOR_REVIEW"
+    # a Record now session that was closed waits for exactly this analysis:
+    # approve and publish before the frozen report is refreshed. The cached
+    # flags are memory reads; the config was read before the analysis call.
+    assembly = round_.assembly
+    if assembly is not None and assembly.closed_at is not None and assembly.auto_organized:
+        from citizens.services import auto_organized
+
+        auto_organized.finalize_if_ready(
+            session, assembly,
+            analysis_on=provider_config.analysis_ready_cached(),
+            polis_on=provider_config.polis_ready_cached(),
+            running_round_id=round_.id,
+        )
     _refresh_frozen_report_if_closed(session, round_)
     # a closed assembly's synthesis follows its last session analysis
     if round_.assembly is not None and round_.assembly.closed_at is not None:
@@ -509,6 +523,20 @@ def handle_seed_statements(session: Session, payload: dict) -> None:
         if exc.permanent:
             raise PermanentJobError(str(exc)) from exc
         raise
+    if assembly.auto_organized and payload.get("automatic"):
+        # nobody is there to review the statements: approve and send them on
+        approved = seeds_svc.approve_all(
+            session, assembly, actor=findings_review.AUTO_REVIEWER, automatic=True
+        )
+        rows = seeds_svc.list_seeds(session, assembly.id)
+        if seeds_svc.exportable(rows) and not has_live_job(
+            session, "PUSH_POLIS", "assembly_id", assembly.id
+        ):
+            enqueue_job(
+                session, "PUSH_POLIS", {"assembly_id": assembly.id, "automatic": True},
+                max_attempts=3,
+            )
+        log.info("seeds_auto_approved", assembly_id=assembly.id, approved=approved)
 
 
 def handle_push_polis(session: Session, payload: dict) -> None:
@@ -529,6 +557,14 @@ def handle_push_polis(session: Session, payload: dict) -> None:
         if exc.permanent:
             raise PermanentJobError(str(exc)) from exc
         raise
+    if assembly.auto_organized and payload.get("automatic") and assembly.polis_url:
+        # the voting link goes onto the phones with the report
+        if assembly.polis_published_at is None:
+            assembly.polis_published_at = utcnow()
+        record_audit_event(
+            session, "polis_poll_published", "assembly", assembly.id,
+            actor="system", data={"automatic": True},
+        )
 
 
 HANDLERS = {

@@ -71,6 +71,9 @@ class ConfigSnapshot:
     facilitator: dict = field(default_factory=dict)
     # the built-in Vosk engine should be running (services/vosk_builtin.reconcile)
     vosk_builtin: bool = False
+    # minutes of total silence after which a Record now session closes by itself
+    # (0 = never); read by the minute sweep, never inside a transaction
+    record_now_idle_close_minutes: int = 10
     refreshed_at: float = 0.0
     # False: the refresh failed and these are defaults (or the previous values)
     ok: bool = False
@@ -192,6 +195,13 @@ def organization_data() -> dict:
     return data
 
 
+def _idle_close_minutes(store: "ConfigStore") -> int:
+    try:
+        return max(0, int(get_setting(store, "record_now_idle_close_minutes") or 0))
+    except ValueError:
+        return 10
+
+
 def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
     """Read Nextcloud's config once, for everybody. The ONLY OCS reader the
     request path can ever reach, and it is never called from a request.
@@ -226,6 +236,7 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 summary=providers_summary(store) if with_summary else previous_summary,
                 facilitator=_read_facilitator(store),
                 vosk_builtin=vosk_builtin(store),
+                record_now_idle_close_minutes=_idle_close_minutes(store),
                 refreshed_at=time.monotonic(),
                 ok=True,
                 store_id=id(default_store()),
@@ -247,6 +258,10 @@ def refresh_config_snapshot(with_summary: bool = False) -> ConfigSnapshot:
                 summary=dict(previous.summary) if previous else {},
                 facilitator=dict(previous.facilitator) if previous else {},
                 vosk_builtin=previous.vosk_builtin if previous else False,
+                polis_ready=previous.polis_ready if previous else False,
+                record_now_idle_close_minutes=(
+                    previous.record_now_idle_close_minutes if previous else 10
+                ),
                 refreshed_at=time.monotonic(),
                 ok=False,
                 store_id=previous.store_id if previous else 0,
@@ -325,6 +340,12 @@ def analysis_ready_cached() -> bool:
     """Analysis is switched on and has a key — from the snapshot, for request
     handlers that hold a database transaction while they ask."""
     return config_snapshot().analysis_ready
+
+
+def record_now_idle_close_minutes_cached() -> int:
+    """Minutes of silence after which a Record now session closes (0 = never);
+    from the snapshot."""
+    return config_snapshot().record_now_idle_close_minutes
 
 
 def polis_ready_cached() -> bool:
@@ -620,6 +641,9 @@ DEFAULTS = {
     # indefinitely. Transcripts, findings and reports are never affected — only
     # the recordings. Individual assemblies can override this.
     "audio_retention_days": "0",
+    # a Record now session closes by itself after this many minutes in which
+    # nobody records; 0 = never
+    "record_now_idle_close_minutes": "10",
 }
 
 # reads of the new split keys fall back to the pre-split stored values
@@ -798,6 +822,7 @@ def providers_summary(store: ConfigStore) -> dict:
     return {
         "organization_name": get_setting(store, "organization_name"),
         "audio_retention_days": int(get_setting(store, "audio_retention_days") or 0),
+        "record_now_idle_close_minutes": _idle_close_minutes(store),
         "consent_controller": get_setting(store, "consent_controller"),
         "consent_contact": get_setting(store, "consent_contact"),
         "org_address": get_setting(store, "org_address"),

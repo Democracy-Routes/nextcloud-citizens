@@ -29,6 +29,7 @@ from citizens.db.models.seeds import EXPORTABLE_STATUSES, SEED_MAX_CHARS
 from citizens.logging_setup import get_logger
 from citizens.services import provider_config, seed_pipeline
 from citizens.services.analysis import APPROVED_STATUSES, LANGUAGE_NAMES, _analysis_config
+from citizens.services.audit import record_audit_event
 from citizens.services.csv_safe import neutralize
 
 log = get_logger(__name__)
@@ -332,6 +333,29 @@ def payload(seed: StatementSeed, finding_title: str | None = None) -> dict:
 
 
 # --- export ---------------------------------------------------------------
+
+def approve_all(
+    session: Session, assembly: Assembly, *, actor: str, automatic: bool = False
+) -> int:
+    """Every DRAFT statement becomes APPROVED; rejected and exported ones are
+    left alone. Automatic: the server, for a Record now session."""
+    drafts = [s for s in list_seeds(session, assembly.id) if s.status == "DRAFT"]
+    now = utcnow()
+    for seed in drafts:
+        seed.status = "APPROVED"
+        seed.reviewed_by = actor
+        seed.reviewed_at = now
+    if drafts:
+        data = {"approved": len(drafts)}
+        if automatic:
+            data["automatic"] = True
+        record_audit_event(
+            session, "seeds_approved_all", "assembly", assembly.id,
+            actor="system" if automatic else actor, data=data,
+        )
+        session.flush()
+    return len(drafts)
+
 
 def exportable(seeds: list[StatementSeed]) -> list[StatementSeed]:
     return [s for s in seeds if s.status in EXPORTABLE_STATUSES]

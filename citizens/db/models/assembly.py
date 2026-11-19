@@ -61,6 +61,11 @@ class Assembly(Base):
     # report becomes final (a snapshot is frozen so reopening cannot change
     # what participants already read)
     closed_at: Mapped[datetime | None] = mapped_column(TZDateTime())
+    # Record now: the session closes when nobody records any more and is
+    # approved and published by the server (services/auto_organized.py);
+    # NULL reads as false
+    auto_organized: Mapped[bool | None] = mapped_column(Boolean)
+    auto_finalized_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     final_report_json: Mapped[str | None] = mapped_column(Text)
     final_report_at: Mapped[datetime | None] = mapped_column(TZDateTime())
     # how the discussion developed across sessions (services/analysis.py

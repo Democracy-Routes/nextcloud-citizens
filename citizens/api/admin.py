@@ -174,6 +174,7 @@ class ProvidersUpdate(BaseModel):
     facilitator_silence_seconds: int | None = Field(default=None, ge=20, le=600)
     organization_name: str | None = Field(default=None, max_length=200)
     audio_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    record_now_idle_close_minutes: int | None = Field(default=None, ge=0, le=180)
     consent_controller: str | None = Field(default=None, max_length=200)
     consent_contact: str | None = Field(default=None, max_length=300)
     org_address: str | None = Field(default=None, max_length=300)

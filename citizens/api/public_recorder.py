@@ -1092,6 +1092,7 @@ def _assembly_state(
             # the consent screen offers a language control only while it works
             "language_changeable": _language_changeable(session, assembly),
             "recording_mode": assembly.recording_mode,
+            "auto_organized": bool(assembly.auto_organized),
         },
         # phones learn about report availability through the status poll
         "report_available": _report_available(session, assembly, analysis_enabled),
@@ -1243,6 +1244,10 @@ def _report_available(
         return True
     if assembly.recording_mode != "independent":
         return False
+    # a Record now session publishes itself once its findings are approved
+    # (services/auto_organized): until then the frozen report would be empty
+    if assembly.auto_organized:
+        return assembly.auto_finalized_at is not None
     # a closed session with a frozen report stays readable through a reopen
     if assembly.final_report_json:
         return True
