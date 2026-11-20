@@ -137,6 +137,7 @@ for a rehearsal or a smoke test that cannot wait for the clock.
 | `facilitator_silence_seconds` | integer or null | no | Facilitator Silence Seconds |
 | `organization_name` | string or null | no | Organization Name |
 | `audio_retention_days` | integer or null | no | Audio Retention Days |
+| `record_now_idle_close_minutes` | integer or null | no | Record Now Idle Close Minutes |
 | `consent_controller` | string or null | no | Consent Controller |
 | `consent_contact` | string or null | no | Consent Contact |
 | `org_address` | string or null | no | Org Address |

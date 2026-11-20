@@ -333,7 +333,7 @@ that must never wobble — so the bridge is:
 
 ## Standalone Sessions (0.7)
 
-"Record now" and "Start a Session" create a Session with no assembly to name
+"Record now" and "Start a Session" (since 0.9 "Create a session" with one session) create a Session with no assembly to name
 or configure: `services/sessions.py` builds a container `Assembly(kind=
 "session")` named after the question, one round, its tables and QR codes, and
 for Record now returns Table 1's join link in independent mode so the phone
@@ -344,6 +344,44 @@ an assembly, and nothing new asks the caller for one. Rounds carry an optional
 `objective` ("produce three concrete proposals") beside the `question`; it
 reaches the phone, the analysis prompts and the reports, and is NULL on every
 pre-0.7 round.
+
+### Record now finishes by itself (0.9)
+
+A Record now container carries `assemblies.auto_organized` (migration 0044;
+`record_another` copies it, promoting the Session to a multi-session event
+clears it). It is the self-organized mode, so nothing waits for an organizer:
+
+- **Idle close.** The minute sweep (`services/auto_organized.sweep_idle_close`,
+  registered in `jobs/sweep.run_sweeps`) closes an open auto-organized
+  container when no recording is open or in flight and the newest
+  `Recording.ended_at`/`updated_at` is older than
+  `record_now_idle_close_minutes` (Settings, default 10, 0 = never). A
+  container that only ever had one recorder session closes 60 s after its
+  recording finished. The clock is read from existing columns: the chunk
+  upload path writes nothing new. Closing from the organizer route does the
+  same and, for these containers, stamps `finish_requested_at` on every
+  recording still RECORDING so `sweep_server_closes` finishes them after the
+  usual grace. Phones have no close route; the account is the only closer.
+- **Finalize.** `auto_organized.finalize_if_ready` runs at the end of
+  `handle_analyze_round`, inside `close_assembly`, and from the sweep as a
+  backstop (analysis off or failed). When the container is closed, nothing
+  is processing and every round's analysis is applied, it approves every
+  DRAFT finding (table and round scope, `reviewed_by="system:auto"`, through
+  `services/findings_review.approve_drafts`, the same function the bulk
+  approve route uses), snapshots the frozen report, sets
+  `report_published_at` and `auto_finalized_at`. Zero retention waits for
+  that stamp, so it never freezes an empty report. The report dict carries
+  `auto_generated` and its methodology note says the findings were selected
+  by the AI and not reviewed by a person; the human-review sentence is
+  printed only when a person approved something.
+- **Polis cycle.** When `polis_ready`, finalize enqueues `SEED_STATEMENTS`
+  with `automatic: true`; the seeds handler then approves every draft
+  statement (`seeds.approve_all`, actor `system:auto`) and enqueues
+  `PUSH_POLIS automatic`; the push handler, on success, sets
+  `polis_published_at`, which is what puts `poll_url` on the phones. The
+  Polis conversation description notes that no person reviewed the
+  statements. Config flags reach the sweep and the handlers from the config
+  snapshot, outside any transaction.
 
 ## Tables: number, colour, growth (0.7)
 

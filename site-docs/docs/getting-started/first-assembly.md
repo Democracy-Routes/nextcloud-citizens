@@ -20,11 +20,11 @@ follow [Before the day](../organizers/before-the-day.md).
 
 ## 1. Create a session
 
-On **Home** the three actions are **Record now**, **Start a Session** and **Create an
-Assembly**. For a first run, choose **Start a Session**. A Session is one question discussed
-at one or more tables; an Assembly is an optional container around several Sessions. Enter
-the question, the number of tables and, optionally, a planned time and an objective. See
-[Concepts](../organizers/concepts.md).
+On **Home** the two actions are **Record now** and **Create a session**. For a first run,
+choose **Create a session**. A Session is one question discussed at one or more tables; adding
+a second session in the same wizard turns it into a multi-session event with one report across
+them. Enter the question, the number of tables and, optionally, a planned time and an
+objective. See [Concepts](../organizers/concepts.md).
 
 ## 2. Print the QR sheet
 

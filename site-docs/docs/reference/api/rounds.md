@@ -225,8 +225,9 @@ Approve every draft finding in a round, or in one of its tables.
 
 Reviewing findings one at a time is what an organizer does after an
 assembly, and they said it was tedious enough to want a way to skip review
-entirely. That is the one thing this must not offer: human approval is what
-the report's methodology note asserts. It is a statement about THIS
+entirely. A person pressing this button is the review the report's
+methodology note records; when the server approves findings by itself (a
+Record now session) the note says so instead. It is a statement about THIS
 generation of findings — a later analysis run replaces the generation,
 approvals included (services/analysis._delete_existing), and the
 organizer confirms that before re-running.

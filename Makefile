@@ -64,7 +64,7 @@ test-frontend:
 .PHONY: test-browser
 test-browser:
 	sh scripts/browser-test-env.sh start
-	cd frontend && npx playwright test; status=$$?; \
+	cd frontend && CITIZENS_TEST_URL="$${CITIZENS_TEST_URL:-http://127.0.0.1:$${TEST_PORT:-23100}}" npx playwright test; status=$$?; \
 		sh ../scripts/browser-test-env.sh stop; \
 		exit $$status
 

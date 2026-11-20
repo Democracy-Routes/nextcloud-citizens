@@ -186,6 +186,9 @@ See [Polis consultation](../organizers/polis.md), [Connecting an installation](.
 * **Retention** sets how many days after an assembly is closed its audio is deleted; `0` keeps it
   indefinitely. Each assembly can override it, and *Zero retention* is a per-assembly choice; see
   [After the assembly](../organizers/after.md#retention).
+* **Record now: close by itself after … minutes** (default `10`, `0` = never): when no phone at a
+  Record now session has recorded for this long, the server closes it, approves the findings and
+  publishes the report; see [Concepts](../organizers/concepts.md#record-now).
 * **Users** (standalone mode only): invite organizers by mail or with a link copied from the log,
   resend links, change roles, disable and delete accounts. See
   [Install with Docker Compose](../getting-started/standalone.md).
@@ -229,6 +232,7 @@ These are the keys behind the cards, with the defaults set in `citizens/services
 | `polis_url` | empty | Polis instance |
 | `organization_name`, `consent_controller`, `consent_contact`, `org_address`, `org_dpo`, `org_hosting`, `org_authority` | empty | Organization and consent-notice data |
 | `audio_retention_days` | `0` | Days after closing before audio is deleted; `0` keeps it |
+| `record_now_idle_close_minutes` | `10` | Silence before a Record now session closes by itself; `0` never |
 
 Secret keys, stored as sensitive and never returned by any API: `mistral_api_key`, `deepgram_api_key`,
 `whisper_api_key`, `analysis_api_key`, `facilitator_api_key`, `polis_api_key`.

@@ -14,7 +14,9 @@ background jobs (see [Jobs and background work](../architecture/jobs.md)).
 ## 2. Review the findings
 
 Open the **Analysis** tab. AI findings are drafts until you approve them, and the report states
-that a person approved its findings. For each finding you can approve, edit or reject; filters
+that a person approved its findings. (A Record now session is the exception: its findings are
+approved automatically when it closes and its report says that no person reviewed them; see
+[Concepts](concepts.md#record-now).) For each finding you can approve, edit or reject; filters
 for review status and finding type help, and **Approve N draft(s)** approves everything still
 waiting in the round (rejected findings are left alone, and anything approved can still be
 edited or rejected later). Each finding shows its evidence: speaker, timestamp and exact words.

@@ -467,8 +467,21 @@ and is audit-logged. It removes **audio only** — transcripts, findings and
 reports are the record of the assembly and are never touched by retention.
 Deleting those is still manual, from the Files tab.
 
+**Record now closes by itself (0.9).** Settings → Organisation → *Record now:
+close by itself after … minutes of silence* (default 10, `0` = never). A
+Record now session is the self-organized mode: when no phone at it has
+recorded for that long, the server closes it, approves every finding once
+the analysis has run, freezes and publishes the report, and, with Polis
+configured, generates, approves and sends the statements and publishes the
+voting link on the phones. A session that only ever had one phone closes a
+minute after that phone finished. Closing from the app does the same and
+first asks every phone still recording to finish. Phones never close a
+session; the account does. The report states that its findings were
+selected by the AI and not reviewed by a person — a Session keeps human
+review, so use a Session for an organized event.
+
 **Zero retention (0.7).** A third choice on the same Overview control, and in
-the assembly-creation wizard, beside the instance default and a day count:
+the session wizard once a second session is added, beside the instance default and a day count:
 *Zero retention — keep only the report*. Once the assembly is **closed** and
 every transcription and analysis has finished, the audio, every transcript
 and the live-caption files are all deleted, and a PDF of the frozen report is

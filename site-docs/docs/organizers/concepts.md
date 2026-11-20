@@ -10,9 +10,12 @@ more tables, and it is the unit you start from, on its own or inside an Assembly
 one discussion within a Session, numbered and colored. A Recorder is a phone recording a
 Table; a Table has one or more.
 
-Home opens on three actions: **Record now**, **Start a Session** and **Create an Assembly**. A
-Session can grow into an Assembly later without losing its tables, codes or report. An
-assembly's tabs are grouped as Plan, Run and Results under a timeline of its sessions.
+Home opens on two actions: **Record now** and **Create a session**, with *Import a session* as a
+small link underneath. The session wizard has **Add another session**: with two or more sessions
+it asks for a name and the event options and creates a **multi-session** event (the interface's
+name for what the code calls an assembly). A Session can also grow into a multi-session event
+later without losing its tables, codes or report. An event's tabs are grouped as Plan, Run and
+Results under a timeline of its sessions.
 
 The schema, the routes and parts of the code still spell a Session as a Round (`rounds`,
 `round_id`, `/rounds/{id}`). Newer product and API surfaces say Session (`POST /sessions`,
@@ -78,6 +81,16 @@ on its own clock and drops near-duplicate utterances.
 One phone, one table, no set-up and no planned time. It records until the table is done. The
 Live tab and the phone show no countdown and never finish it automatically. Its done screen
 offers **Record another session**.
+
+Record now is the **self-organized** mode (0.9). When no phone at the session has recorded for
+the configured minutes (Settings → Organisation, default 10; a session with a single phone closes
+a minute after it finished), the server closes it, approves every finding once the analysis has
+run, freezes and publishes the report, and the phone opens it with its PDF. With Polis
+configured, the statements are then generated, approved and sent, and the voting QR appears on
+the phones. Phones that joined by code only stop their own recording; only the organizer account
+closes the session for everyone, and closing from the app first asks every phone still recording
+to finish. The report says that its findings were selected by the AI and not reviewed by a
+person. A Session is the organized-event mode and keeps human review.
 
 ## Findings and review
 

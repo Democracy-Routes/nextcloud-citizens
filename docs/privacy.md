@@ -18,7 +18,7 @@ Everything Citizens stores lives under the ExApp's own persistent storage
 | Upload chunks | `recordings/` | **deleted automatically** once the assembled file is verified; `manifest.json` keeps each chunk's checksum as the audit trail |
 | Transcripts | `transcripts/` + database | segments and words, with speaker labels |
 | Live captions | `live_captions/` | what a caption session heard, written when it ends; becomes the transcript when final transcription is off |
-| Findings and reports | database | AI drafts plus human review decisions |
+| Findings and reports | database | AI drafts plus review decisions; in a Record now session the approval is automatic (`reviewed_by = system:auto`) and the report says so |
 | Device diagnostics | `logs/devices/` | phone-side event log, capped at 5 MB per session |
 | Application log | `logs/citizens.jsonl` | rotated, 10 MB × 5 |
 
@@ -244,6 +244,17 @@ captions: the facilitator's page reads the same roster (names only) and
 messages the table's phones read, and what it writes (a prompt, a hand
 raised) is audited under the session id. Registering for consent from that
 phone goes through the ordinary registration code and record.
+
+**Reports nobody reviewed (0.9).** A Record now session is the self-organized
+mode: when it closes, its findings are approved automatically and the report
+is published to the phones and the app without a person reading it. This is
+labelled wherever the report appears — the phone's report screen, the
+organizer's detail view and the methodology note printed in the PDF all say
+that the findings were selected by the AI and were not reviewed by a person;
+the sentence claiming human review is printed only when a person approved
+something. With Polis configured, the statements sent from such a session
+carry the same note in the conversation description. A Session (the
+organized-event mode) keeps human review before anything is published.
 
 The **AI facilitator** (0.7, off unless an administrator or organizer turns
 it on) sends a language model, once a minute at most, the last ~40 live

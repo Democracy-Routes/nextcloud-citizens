@@ -94,7 +94,11 @@ ends by itself. In independent mode tables finish themselves from the phone's cl
 end the round every table must reach `AUDIO_READY`; check that, not the phone's "synchronized".
 
 **Record now** sessions have no planned time and no countdown; the table finishes when the
-people at it press Finish.
+people at it press Finish. They also close by themselves: when no phone has recorded for the
+configured minutes (default 10; a single phone, one minute after it finished), the session is
+closed, the findings approved and the report published on the phones without anyone at a
+desk — see [Concepts](concepts.md#record-now). Close it from the app earlier if you want: the
+phones still recording are asked to finish first.
 
 ## Watching the job queue
 
